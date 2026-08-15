@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 
 // European roulette wheel numbers in order (37 pockets: 0 and 1-36)
 const EUROPEAN_WHEEL_NUMBERS = [
@@ -21,11 +21,27 @@ export default function EuropeanRouletteWheel({
     winningNumber,
     onSpinComplete
 }: EuropeanRouletteWheelProps) {
-    const [rotation, setRotation] = useState(0);
-    const [ballAngle, setBallAngle] = useState(0);
-    const [isAnimating, setIsAnimating] = useState(false);
+    // The continuous spin is driven straight into the DOM rather than through
+    // React state. Calling setState per animation frame re-rendered all 74 SVG
+    // nodes (37 pockets + 37 labels) at 60fps, which visibly janked the casino
+    // dialog on low-end mobile. Transforms are cheap; re-renders are not.
+    const wheelRef = useRef<HTMLDivElement | null>(null);
+    const ballRef = useRef<HTMLDivElement | null>(null);
+    const rotationRef = useRef(0);
+    const ballAngleRef = useRef(0);
     const animationRef = useRef<number | null>(null);
     const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const applyTransforms = useCallback((transition: string) => {
+        if (wheelRef.current) {
+            wheelRef.current.style.transition = transition;
+            wheelRef.current.style.transform = `rotate(${rotationRef.current}deg)`;
+        }
+        if (ballRef.current) {
+            ballRef.current.style.transition = transition;
+            ballRef.current.style.transform = `rotate(${ballAngleRef.current}deg)`;
+        }
+    }, []);
 
     // Get pocket color
     const getPocketColor = (num: number): string => {
@@ -59,19 +75,19 @@ export default function EuropeanRouletteWheel({
         if (!spinning || animationRef.current !== null) return;
 
         clearSettleTimer();
-        setIsAnimating(true);
 
         const animate = () => {
             // Continuous fast spin while waiting for result
-            setRotation(prev => (prev + 12) % 360);
+            rotationRef.current = (rotationRef.current + 12) % 360;
             // Ball spins opposite
-            setBallAngle(prev => (prev - 12) % 360);
+            ballAngleRef.current = (ballAngleRef.current - 12) % 360;
+            applyTransforms('none');
 
             animationRef.current = requestAnimationFrame(animate);
         };
 
         animationRef.current = requestAnimationFrame(animate);
-    }, [clearSettleTimer, spinning]);
+    }, [applyTransforms, clearSettleTimer, spinning]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -86,7 +102,6 @@ export default function EuropeanRouletteWheel({
 
         cancelContinuousSpin();
         clearSettleTimer();
-        setIsAnimating(false);
     }, [cancelContinuousSpin, clearSettleTimer, spinning, winningNumber]);
 
     // Handle landing on winning number
@@ -95,38 +110,31 @@ export default function EuropeanRouletteWheel({
             // Stop continuous animation before settling on the winning pocket.
             cancelContinuousSpin();
             clearSettleTimer();
-            setIsAnimating(true);
 
             // Calculate final position to land on winning number
             const targetAngle = getNumberAngle(winningNumber);
             const extraSpins = 3 * 360; // 3 full rotations for effect
             const finalRotation = extraSpins + (360 - targetAngle);
 
-            // Animate to final position
-            // Wheel spins clockwise to put winning number at top (0deg)
-            setRotation(finalRotation);
-
-            // Ball spins counter-clockwise
-            // To land on the winning number (which is now at top), ball must also end at top (0deg)
-            // We give it slightly more "distance" than the wheel for relative motion, but ensure it ends at mult of 360
+            // Animate to final position.
+            // Wheel spins clockwise to put winning number at top (0deg).
+            // Ball spins counter-clockwise and must also end at top (0deg), so it
+            // gets a whole number of extra turns for relative motion.
             const ballSpins = 5 * 360; // 5 full rotations relative to start
-            setBallAngle(-ballSpins);
+            rotationRef.current = finalRotation;
+            ballAngleRef.current = -ballSpins;
+
+            // The transition runs from whatever transform the RAF loop last wrote,
+            // so the settle continues smoothly out of the continuous spin.
+            applyTransforms('transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)');
 
             // Notify completion after animation
             settleTimeoutRef.current = setTimeout(() => {
-                setIsAnimating(false);
                 settleTimeoutRef.current = null;
                 onSpinComplete?.();
             }, 3000);
         }
-    }, [cancelContinuousSpin, clearSettleTimer, winningNumber, onSpinComplete]);
-
-    // Reset when not spinning
-    useEffect(() => {
-        if (!spinning && !isAnimating && winningNumber === null) {
-            // Keep current rotation, ready for next spin
-        }
-    }, [spinning, isAnimating, winningNumber]);
+    }, [applyTransforms, cancelContinuousSpin, clearSettleTimer, winningNumber, onSpinComplete]);
 
     const pocketAngle = 360 / 37;
 
@@ -137,11 +145,9 @@ export default function EuropeanRouletteWheel({
 
             {/* Wheel with numbers */}
             <div
+                ref={wheelRef}
                 className="absolute inset-[4%] rounded-full overflow-hidden shadow-inner"
-                style={{
-                    transform: `rotate(${rotation}deg)`,
-                    transition: isAnimating && winningNumber !== null ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
-                }}
+                style={{ transform: 'rotate(0deg)', transition: 'none' }}
             >
                 {/* Colored pockets */}
                 <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -197,11 +203,9 @@ export default function EuropeanRouletteWheel({
 
             {/* Ball */}
             <div
+                ref={ballRef}
                 className="absolute inset-[8%] rounded-full pointer-events-none"
-                style={{
-                    transform: `rotate(${ballAngle}deg)`,
-                    transition: isAnimating && winningNumber !== null ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
-                }}
+                style={{ transform: 'rotate(0deg)', transition: 'none' }}
             >
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[8%] h-[8%] rounded-full bg-white shadow-md border border-gray-300" />
             </div>

@@ -6,8 +6,20 @@ const LOCAL_TEST_WALLET_KEY = "local-test:pixotchi-wallet";
 const AUTH_SURFACE_KEY = "pixotchi:authSurface";
 const AUTOLOGIN_KEY = "pixotchi:autologin";
 const DEFAULT_LOCAL_TEST_ADDRESS = "0x000000000000000000000000000000000000dEaD" as Address;
-const ENV_LOCAL_TEST_PRIVATE_KEY = process.env.NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY;
-const ENV_LOCAL_TEST_CREATED_AT = process.env.NEXT_PUBLIC_LOCAL_TEST_WALLET_CREATED_AT;
+// NEXT_PUBLIC_* values are inlined into the client bundle at build time, so a
+// bare reference here would ship the test wallet's private key to every browser
+// even though isLocalTestAuthAllowed() refuses to use it outside localhost/dev.
+// Guarding on NODE_ENV lets the minifier fold this to `undefined` and drop the
+// literal entirely from production builds. Local test mode is dev-only anyway
+// (see isLocalTestAuthAllowed), so this changes no behaviour.
+const ENV_LOCAL_TEST_PRIVATE_KEY =
+  process.env.NODE_ENV === "production"
+    ? undefined
+    : process.env.NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY;
+const ENV_LOCAL_TEST_CREATED_AT =
+  process.env.NODE_ENV === "production"
+    ? undefined
+    : process.env.NEXT_PUBLIC_LOCAL_TEST_WALLET_CREATED_AT;
 
 type LocalTestWallet = {
   address: Address;

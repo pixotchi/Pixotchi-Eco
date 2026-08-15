@@ -931,7 +931,24 @@ const buildPolicyStatus = (
   };
 };
 
-export const listBaseRpcEndpoints = (): string[] => getRpcConfig().endpoints;
+/**
+ * Path of the server-side JSON-RPC proxy (app/api/rpc/route.ts).
+ *
+ * The keyed provider URLs are server-only. In the browser every Base call goes
+ * through this same-origin proxy, so no provider API key is ever shipped to the
+ * client; endpoint ranking, hedging and failover all happen server-side behind it.
+ */
+export const BASE_RPC_PROXY_PATH = '/api/rpc';
+
+const getBrowserRpcEndpoint = (): string =>
+  typeof window === 'undefined'
+    ? BASE_RPC_PROXY_PATH
+    : new URL(BASE_RPC_PROXY_PATH, window.location.origin).toString();
+
+export const listBaseRpcEndpoints = (): string[] =>
+  typeof window === 'undefined'
+    ? getRpcConfig().endpoints
+    : [getBrowserRpcEndpoint()];
 
 export const getPrimaryRpcEndpoint = (): string =>
   listBaseRpcEndpoints()[0] || 'https://base-rpc.publicnode.com';

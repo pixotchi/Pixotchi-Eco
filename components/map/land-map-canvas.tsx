@@ -80,6 +80,10 @@ export function LandMapCanvas({
 
   // Load sprites on mount
   useEffect(() => {
+    // The canvas mounts/unmounts with the map dialog. Closing it before the WebP
+    // sprites resolve would otherwise setState on an unmounted component.
+    let cancelled = false;
+
     const loadSprites = async () => {
       const loadedSprites: UntypedValue = {};
 
@@ -112,6 +116,8 @@ export function LandMapCanvas({
         console.error("Failed to load map sprites", e);
       }
 
+      if (cancelled) return;
+
       // Simple Avatar Placeholder (keep procedural for now or load if exists)
       const avCanvas = document.createElement('canvas');
       avCanvas.width = 20;
@@ -131,32 +137,50 @@ export function LandMapCanvas({
         loadedSprites.avatar = img;
       }
 
+      if (cancelled) return;
+
       setSprites(prev => ({ ...prev, ...loadedSprites }));
     };
 
     loadSprites();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Resize handler
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
-        // Use getBoundingClientRect for precise sub-pixel values if needed, 
+        // Use getBoundingClientRect for precise sub-pixel values if needed,
         // but round them for canvas clarity
         const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({
-          width: rect.width,
-          height: rect.height
-        });
+        setDimensions(prev =>
+          prev.width === rect.width && prev.height === rect.height
+            ? prev
+            : { width: rect.width, height: rect.height }
+        );
       }
     };
 
     // Initial delay to let dialog animation settle
     const timer = setTimeout(updateSize, 100);
 
+    // A single delayed measurement plus window 'resize' misses the cases that
+    // actually matter on mobile: the dialog's own open animation still settling,
+    // the URL bar showing/hiding, and the on-screen keyboard - none of which
+    // reliably fire 'resize'. Observing the container catches all of them.
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      observer = new ResizeObserver(updateSize);
+      observer.observe(containerRef.current);
+    }
+
     window.addEventListener('resize', updateSize);
     return () => {
       window.removeEventListener('resize', updateSize);
+      observer?.disconnect();
       clearTimeout(timer);
     };
   }, []);

@@ -97,18 +97,28 @@ export const CLIENT_ENV = {
   SOLANA_RPC_URL: process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '',
 } as const;
 
-// RPC configuration with fallback handling
+// RPC configuration with fallback handling.
+//
+// SERVER-ONLY. These names deliberately have no NEXT_PUBLIC_ prefix: the URLs
+// embed paid provider API keys (Ankr / Alchemy / Coinbase CDP), and anything
+// prefixed NEXT_PUBLIC_ is inlined verbatim into the browser bundle. The browser
+// reaches Base through the /api/rpc proxy instead - see listBaseRpcEndpoints().
+// Either naming works: BASE_RPC_NODE* or the shorter RPC_NODE*. What matters is
+// only that there is no NEXT_PUBLIC_ prefix, so the value stays server-side.
+const rpcEndpointFromEnv = (suffix: string): string | undefined =>
+  process.env[`BASE_RPC_NODE${suffix}`] || process.env[`RPC_NODE${suffix}`];
+
 export const getRpcConfig = () => {
   const endpoints = [
-    process.env.NEXT_PUBLIC_RPC_NODE,
-    process.env.NEXT_PUBLIC_RPC_NODE_FALLBACK,
-    process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_1,
-    process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_2,
-    process.env.NEXT_PUBLIC_RPC_NODE_BACKUP_3,
+    rpcEndpointFromEnv(''),
+    rpcEndpointFromEnv('_FALLBACK'),
+    rpcEndpointFromEnv('_BACKUP_1'),
+    rpcEndpointFromEnv('_BACKUP_2'),
+    rpcEndpointFromEnv('_BACKUP_3'),
   ].filter((endpoint): endpoint is string => Boolean(endpoint));
 
   if (endpoints.length === 0) {
-    throw new Error('Base RPC configuration missing: set NEXT_PUBLIC_RPC_NODE and backup endpoints.');
+    throw new Error('Base RPC configuration missing: set RPC_NODE (or BASE_RPC_NODE) and backup endpoints.');
   }
 
   if (new Set(endpoints).size !== endpoints.length) {
@@ -219,7 +229,7 @@ if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
 
   const required: Array<{ key: string; present: boolean }> = [
     { key: 'NEXT_PUBLIC_URL', present: Boolean(process.env.NEXT_PUBLIC_URL) },
-    { key: 'NEXT_PUBLIC_RPC_NODE', present: Boolean(process.env.NEXT_PUBLIC_RPC_NODE) },
+    { key: 'RPC_NODE (or BASE_RPC_NODE)', present: Boolean(rpcEndpointFromEnv('')) },
     { key: 'INDEXER_UPSTREAM_URL', present: Boolean(process.env.INDEXER_UPSTREAM_URL || process.env.NEXT_PUBLIC_PONDER_API_URL) },
     { key: 'INDEXER_SHARED_SECRET', present: Boolean(process.env.INDEXER_SHARED_SECRET) },
     { key: 'NEXT_PUBLIC_CDP_CLIENT_API_KEY', present: Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY) },

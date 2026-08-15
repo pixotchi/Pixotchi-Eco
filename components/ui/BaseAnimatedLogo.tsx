@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface BaseAnimatedLogoProps {
@@ -28,39 +28,29 @@ export function BaseAnimatedLogo({ className }: BaseAnimatedLogoProps) {
     box3: getRandomColor(), // Random starting color
     box4: getRandomColor()  // Random starting color
   })
-  const [colorInterval, setColorInterval] = useState<NodeJS.Timeout | null>(null)
+  // Timers live in refs, not state: they must survive re-renders without causing
+  // them, and they must be clearable from an unmount cleanup.
+  const colorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const initialChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Touch devices synthesize mouseenter after touchstart; ignore that echo so a
+  // single tap doesn't both toggle on and immediately restart the animation.
+  const lastTouchAtRef = useRef(0)
 
-  const handleMouseEnter = () => {
-    setIsHovered(true)
-    // Start color changing animation
-    startColorAnimation()
-  }
-
-  const handleMouseLeave = () => {
-    setIsHovered(false)
-    // Clear interval
-    if (colorInterval) {
-      clearInterval(colorInterval)
-      setColorInterval(null)
+  const stopColorAnimation = useCallback(() => {
+    if (colorIntervalRef.current !== null) {
+      clearInterval(colorIntervalRef.current)
+      colorIntervalRef.current = null
     }
-    // Reset to random colors
-    setBoxColors({
-      box1: getRandomColor(),
-      box2: getRandomColor(), 
-      box3: getRandomColor(),
-      box4: getRandomColor()
-    })
-  }
-
-  const handleTouchStart = () => {
-    if (!isHovered) {
-      handleMouseEnter()
-    } else {
-      handleMouseLeave()
+    if (initialChangeTimeoutRef.current !== null) {
+      clearTimeout(initialChangeTimeoutRef.current)
+      initialChangeTimeoutRef.current = null
     }
-  }
+  }, [])
 
   const startColorAnimation = () => {
+    // Never stack timers: a second start must replace the first, not orphan it.
+    stopColorAnimation()
+
     const changeColors = () => {
       setBoxColors({
         box1: getRandomColor(),
@@ -69,19 +59,60 @@ export function BaseAnimatedLogo({ className }: BaseAnimatedLogoProps) {
         box4: getRandomColor()
       })
     }
-    
+
     // Initial color change
-    setTimeout(changeColors, 100)
-    
+    initialChangeTimeoutRef.current = setTimeout(() => {
+      initialChangeTimeoutRef.current = null
+      changeColors()
+    }, 100)
+
     // Continuous color changes while hovered
     const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const interval = setInterval(() => {
+    colorIntervalRef.current = setInterval(() => {
       changeColors()
     }, prefersReduced ? 2000 : 1500)
-
-    // Store interval to clear on mouse leave
-    setColorInterval(interval)
   }
+
+  const handleMouseEnter = () => {
+    if (Date.now() - lastTouchAtRef.current < 700) return
+    setIsHovered(true)
+    // Start color changing animation
+    startColorAnimation()
+  }
+
+  const handleMouseLeave = () => {
+    if (Date.now() - lastTouchAtRef.current < 700) return
+    setIsHovered(false)
+    stopColorAnimation()
+    // Reset to random colors
+    setBoxColors({
+      box1: getRandomColor(),
+      box2: getRandomColor(),
+      box3: getRandomColor(),
+      box4: getRandomColor()
+    })
+  }
+
+  const handleTouchStart = () => {
+    lastTouchAtRef.current = Date.now()
+    if (!isHovered) {
+      setIsHovered(true)
+      startColorAnimation()
+    } else {
+      setIsHovered(false)
+      stopColorAnimation()
+      setBoxColors({
+        box1: getRandomColor(),
+        box2: getRandomColor(),
+        box3: getRandomColor(),
+        box4: getRandomColor()
+      })
+    }
+  }
+
+  // Unmount cleanup: without this the interval keeps calling setBoxColors after
+  // the component is gone (e.g. navigating away from the About tab while hovered).
+  useEffect(() => stopColorAnimation, [stopColorAnimation])
 
   return (
     <div className={cn('flex justify-center', className)}>

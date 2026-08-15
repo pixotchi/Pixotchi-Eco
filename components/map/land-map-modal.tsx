@@ -94,38 +94,62 @@ export function LandMapModal({
   const isUserOwned = tappedLandId ? userLands.some(l => Number(l.tokenId) === tappedLandId) : false;
   const isTappedLandMinted = tappedLandId !== null && tappedLandId > 0 && tappedLandId < totalSupply;
   
+  // Owners we can resolve without an RPC call, reduced to plain strings so the
+  // effect below doesn't re-run (and re-fetch) every time the parent re-renders
+  // and hands us new `userLands` / `neighborData` object identities.
+  const knownOwnerAddress =
+    isUserOwned && userLands.length > 0 ? userLands[0].owner : null;
+  const neighborOwnerAddress =
+    neighbor?.owner && neighbor.owner !== '' && neighbor.owner !== '0x0000000000000000000000000000000000000000'
+      ? neighbor.owner
+      : null;
+
   // Fetch owner on demand
   useEffect(() => {
     if (tappedLandId) {
       // If user owned, we know the owner
-      if (isUserOwned && userLands.length > 0) {
-        setFetchedOwner(userLands[0].owner);
-        return;
-      }
-      
-      // If neighbor has owner field (future proof), use it
-      if (neighbor?.owner && neighbor.owner !== '' && neighbor.owner !== '0x0000000000000000000000000000000000000000') {
-        setFetchedOwner(neighbor.owner);
+      if (knownOwnerAddress) {
+        setFetchedOwner(knownOwnerAddress);
         return;
       }
 
-      // Otherwise fetch from contract
+      // If neighbor has owner field (future proof), use it
+      if (neighborOwnerAddress) {
+        setFetchedOwner(neighborOwnerAddress);
+        return;
+      }
+
+      // Otherwise fetch from contract.
+      // Without this guard, tapping land A then land B races: if A's lookup
+      // resolves last it overwrites B's owner, and the tooltip then shows
+      // land B while the Profile button opens land A's owner.
+      let ignore = false;
+
       setIsOwnerLoading(true);
       setFetchedOwner(null);
       getLandOwner(tappedLandId)
         .then(owner => {
+          if (ignore) return;
           setFetchedOwner(owner);
         })
         .catch(err => {
+          if (ignore) return;
           console.error('Error fetching owner', err);
           setFetchedOwner(null);
         })
-        .finally(() => setIsOwnerLoading(false));
+        .finally(() => {
+          if (ignore) return;
+          setIsOwnerLoading(false);
+        });
+
+      return () => {
+        ignore = true;
+      };
     } else {
       setFetchedOwner(null);
       setIsOwnerLoading(false);
     }
-  }, [tappedLandId, isUserOwned, userLands, neighbor]);
+  }, [tappedLandId, knownOwnerAddress, neighborOwnerAddress]);
 
   const ownerAddress = fetchedOwner || '';
   
