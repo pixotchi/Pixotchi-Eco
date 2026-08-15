@@ -92,6 +92,11 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleGoHome = () => {
+    // A full document navigation is intentional here. This is an error boundary,
+    // so the React tree has already crashed — a soft router navigation would run
+    // through that same broken tree and fail to recover. Router hooks are also
+    // unavailable in a class component.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/';
   };
 
