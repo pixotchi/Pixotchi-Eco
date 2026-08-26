@@ -59,6 +59,18 @@ const PlantCard = React.memo(function PlantCard({
     return SHOP_ITEM_ICONS[name] || '/icons/Fence.png';
   }, []);
 
+  // Add error handling for Image component
+<Image 
+  src={getShopItemIcon(item.name)} 
+  alt={item.name} 
+  width={16} 
+  height={16} 
+  className="w-4 h-4"
+  onError={(e) => {
+    e.currentTarget.src = '/icons/Fence.png';
+  }}
+/>
+
   // Memoize formatted values
   const formattedScore = React.useMemo(() => formatScore(plant.score), [plant.score]);
   const plantStatusColor = React.useMemo(() => getPlantStatusColor(plant.status), [plant.status]);
