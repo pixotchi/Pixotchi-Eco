@@ -1,7 +1,7 @@
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { stakingAbi } from '@/public/abi/staking-abi';
 import UniswapAbi from '@/public/abi/Uniswap.json';
-import { encodeFunctionData,formatUnits,getAddress,parseUnits,WalletClient } from 'viem';
+import { encodeFunctionData,formatUnits,getAddress,keccak256,parseUnits,toBytes,toHex,WalletClient } from 'viem';
 import { base } from 'viem/chains';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
@@ -4480,3 +4480,244 @@ export const buildBlackjackActionWithRandomCall = (
   functionName: 'blackjackActionWithRandom' as const,
   args: [landId, handIndex, action, randomSeed as `0x${string}`, BigInt(nonce), signature as `0x${string}`],
 });
+
+// ============================================================================
+// FARMER HOUSE QUESTS — BATCH READS, CALL BUILDERS, REWARD SOURCE RESOLUTION
+// ============================================================================
+
+/**
+ * Quest difficulty levels, matching the onchain `QuestDifficultyLevel` enum.
+ * Durations mirror `LibQuestStorage.initializeQuestStorage()` at Base 2s blocks.
+ */
+export const QUEST_DIFFICULTIES = [
+  { id: 0, label: 'Easy', durationHours: 3 },
+  { id: 1, label: 'Med', durationHours: 6 },
+  { id: 2, label: 'Hard', durationHours: 12 },
+] as const;
+
+export type QuestDifficultyId = (typeof QUEST_DIFFICULTIES)[number]['id'];
+
+export const isQuestDifficultyId = (value: unknown): value is QuestDifficultyId =>
+  value === 0 || value === 1 || value === 2;
+
+/**
+ * Lifecycle state of a single farmer slot.
+ *
+ * Ordering mirrors the require() chain in LibQuest, so the UI can never offer an
+ * action the contract would reject. Every one of these preconditions is
+ * monotonic in block.number - once a slot is startable it stays startable -
+ * which is what makes it safe to bundle a whole scan atomically without the
+ * batch reverting on timing drift between simulation and inclusion.
+ */
+export type QuestSlotState =
+  | 'available'
+  | 'in_progress'
+  | 'ready_to_commit'
+  | 'committed'
+  | 'cooldown';
+
+export type QuestSlotSnapshot = QuestSlot & {
+  landId: bigint;
+  slotIndex: number;
+  state: QuestSlotState;
+};
+
+export const getQuestSlotState = (slot: QuestSlot, currentBlock: bigint): QuestSlotState => {
+  if (slot.coolDownBlock !== BigInt(0) && currentBlock < slot.coolDownBlock) return 'cooldown';
+  if (slot.startBlock === BigInt(0)) return 'available';
+  if (slot.pseudoRndBlock !== BigInt(0)) return 'committed';
+  if (currentBlock <= slot.endBlock) return 'in_progress';
+  return 'ready_to_commit';
+};
+
+const normalizeQuestSlot = (raw: UntypedValue): QuestSlot => ({
+  difficulty: Number(raw?.difficulty ?? raw?.[0] ?? 0),
+  startBlock: BigInt(raw?.startBlock ?? raw?.[1] ?? 0),
+  endBlock: BigInt(raw?.endBlock ?? raw?.[2] ?? 0),
+  pseudoRndBlock: BigInt(raw?.pseudoRndBlock ?? raw?.[3] ?? 0),
+  coolDownBlock: BigInt(raw?.coolDownBlock ?? raw?.[4] ?? 0),
+});
+
+/**
+ * Read every farmer slot across many lands in one multicall sweep.
+ *
+ * questGetByLandId already returns exactly the unlocked slots (the array is
+ * sized to the Farmer House level, and empty when there is no Farmer House), so
+ * no separate building-level read is needed.
+ */
+export const getQuestSlotsBatch = async (
+  landIds: bigint[],
+  options: { chunkSize?: number; readClient?: PixotchiReadClient } = {},
+): Promise<QuestSlotsBatchEntry[]> => {
+  if (landIds.length === 0) return [];
+
+  const { chunkSize = 40, readClient = getReadClient() } = options;
+  const results: QuestSlotsBatchEntry[] = [];
+
+  for (let i = 0; i < landIds.length; i += chunkSize) {
+    const chunk = landIds.slice(i, i + chunkSize);
+    const chunkResults = await retryWithBackoff(async () =>
+      readClient.multicall({
+        allowFailure: true,
+        contracts: chunk.map((landId) => ({
+          address: LAND_CONTRACT_ADDRESS,
+          abi: landAbi,
+          functionName: 'questGetByLandId' as const,
+          args: [landId],
+        })),
+      }),
+    );
+
+    chunk.forEach((landId, index) => {
+      const entry = chunkResults[index];
+      // A land with no Farmer House legitimately returns an empty array, so a
+      // failed read is indistinguishable from "no slots" unless it is reported
+      // separately. Without `ok`, one flaky multicall entry silently drops that
+      // land's idle farmers out of the batch and nobody can tell.
+      const ok = entry?.status === 'success' && Array.isArray(entry.result);
+      results.push({
+        landId,
+        ok,
+        slots: ok ? (entry.result as UntypedValue[]).map(normalizeQuestSlot) : [],
+      });
+    });
+  }
+
+  return results;
+};
+
+export type QuestSlotsBatchEntry = {
+  landId: bigint;
+  /** False when this land's read failed, so its slots are unknown, not absent. */
+  ok: boolean;
+  slots: QuestSlot[];
+};
+
+/** Flatten a batch read into per-slot snapshots tagged with their lifecycle state. */
+export const toQuestSlotSnapshots = (
+  batch: ReadonlyArray<{ landId: bigint; ok?: boolean; slots: QuestSlot[] }>,
+  currentBlock: bigint,
+): QuestSlotSnapshot[] =>
+  batch.flatMap(({ landId, slots }) =>
+    slots.map((slot, slotIndex) => ({
+      ...slot,
+      landId,
+      slotIndex,
+      state: getQuestSlotState(slot, currentBlock),
+    })),
+  );
+
+export const buildQuestStartCall = (
+  landId: bigint,
+  difficulty: QuestDifficultyId,
+  slotIndex: number,
+) => ({
+  address: LAND_CONTRACT_ADDRESS,
+  abi: landAbi,
+  functionName: 'questStart' as const,
+  args: [landId, difficulty, BigInt(slotIndex)],
+});
+
+// -------------------- QUEST REWARD SOURCE (onchain authority) --------------------
+
+/**
+ * LibConstants.MAINNET_SEED_SEND_ADDRESS / MAINNET_LEAF_SEND_ADDRESS.
+ *
+ * The contract only falls back to this when its storage override is unset. On
+ * Base mainnet the override IS set, so this is a last resort, not the expected
+ * answer - do not treat it as "the quest rewards wallet".
+ */
+export const QUEST_REWARD_FALLBACK_ADDRESS = getAddress('0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB');
+
+/**
+ * LibPaymentStorage.DIAMOND_STORAGE_POSITION.
+ *
+ *   struct Data {
+ *     uint256 initializationNumber;  // slot + 0
+ *     address seedReceiveAddress;    // slot + 1
+ *     address speedUpToken;          // slot + 2
+ *     address speedUpTokenReceiver;  // slot + 3
+ *     address seedRewardAddress;     // slot + 4
+ *     address leafRewardAddress;     // slot + 5
+ *   }
+ *
+ * Two addresses are 40 bytes and cannot share a 32-byte slot, so each field gets
+ * its own slot. Diamond storage structs are append-only by convention, which is
+ * what keeps these offsets stable across facet upgrades.
+ */
+const PAYMENT_STORAGE_BASE_SLOT = keccak256(toBytes('eth.pixotchi.land.payment.storage'));
+const SEED_REWARD_ADDRESS_SLOT_OFFSET = BigInt(4);
+const LEAF_REWARD_ADDRESS_SLOT_OFFSET = BigInt(5);
+
+export type QuestRewardSources = {
+  seed: `0x${string}`;
+  leaf: `0x${string}`;
+  /** False when the storage read failed and a configured fallback was used. */
+  resolvedOnchain: boolean;
+};
+
+export const getPaymentStorageSlot = (offset: bigint): `0x${string}` =>
+  toHex(BigInt(PAYMENT_STORAGE_BASE_SLOT) + offset, { size: 32 });
+
+export const storageWordToAddress = (word: string | null | undefined): `0x${string}` | null => {
+  if (!word || word.length < 42) return null;
+  const candidate = `0x${word.slice(-40)}`;
+  if (/^0x0{40}$/i.test(candidate)) return null;
+  try {
+    return getAddress(candidate);
+  } catch {
+    return null;
+  }
+};
+
+const parseConfiguredAddress = (value: string | undefined): `0x${string}` | null => {
+  if (!value) return null;
+  try {
+    const normalized = getAddress(value.trim());
+    return /^0x0{40}$/i.test(normalized) ? null : normalized;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Resolve the wallets that actually fund Farmer House quest rewards.
+ *
+ * QuestRewardsAdminFacet.setQuestRewardsWallet can rotate these, and the
+ * rotation only lands in diamond storage - there is a setter but no getter. The
+ * NEXT_PUBLIC_QUEST_*_REWARDS_WALLET env vars are an unreliable mirror: when
+ * unset they resolve to the pre-rotation constant, which reads as an empty
+ * wallet and makes the Farmer House look broken. Storage is the only authority;
+ * env is kept purely as break-glass for a storage read failure.
+ */
+export const getQuestRewardSources = async (
+  readClient: PixotchiReadClient = getReadClient(),
+): Promise<QuestRewardSources> => {
+  try {
+    const [seedWord, leafWord] = await Promise.all([
+      readClient.getStorageAt({
+        address: LAND_CONTRACT_ADDRESS,
+        slot: getPaymentStorageSlot(SEED_REWARD_ADDRESS_SLOT_OFFSET),
+      }),
+      readClient.getStorageAt({
+        address: LAND_CONTRACT_ADDRESS,
+        slot: getPaymentStorageSlot(LEAF_REWARD_ADDRESS_SLOT_OFFSET),
+      }),
+    ]);
+
+    // A zero word is the contract own "use the constant" signal, so mirror it
+    // rather than reaching for the env override.
+    return {
+      seed: storageWordToAddress(seedWord) ?? QUEST_REWARD_FALLBACK_ADDRESS,
+      leaf: storageWordToAddress(leafWord) ?? QUEST_REWARD_FALLBACK_ADDRESS,
+      resolvedOnchain: true,
+    };
+  } catch (error) {
+    console.warn('getQuestRewardSources: storage read failed, using configured fallback', error);
+    return {
+      seed: parseConfiguredAddress(CLIENT_ENV.QUEST_SEED_REWARDS_WALLET) ?? QUEST_REWARD_FALLBACK_ADDRESS,
+      leaf: parseConfiguredAddress(CLIENT_ENV.QUEST_LEAF_REWARDS_WALLET) ?? QUEST_REWARD_FALLBACK_ADDRESS,
+      resolvedOnchain: false,
+    };
+  }
+};

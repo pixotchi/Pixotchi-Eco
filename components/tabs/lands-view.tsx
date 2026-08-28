@@ -43,6 +43,9 @@ import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } fr
 const BatchClaimCard = dynamic(() => import("@/components/transactions/batch-claim-card"), {
   ssr: false,
 });
+const BatchQuestStartCard = dynamic(() => import("@/components/transactions/batch-quest-start-card"), {
+  ssr: false,
+});
 const BuildingDetailsPanel = dynamic(() => import("@/components/building-details-panel"), {
   ssr: false,
 });
@@ -55,7 +58,7 @@ const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
 const LAND_SELECTION_STORAGE_KEY = 'pixotchi:selected-land-id';
 const BUILDING_TYPE_STORAGE_KEY = 'pixotchi:selected-building-type';
 const BUILDING_ID_STORAGE_KEY = 'pixotchi:selected-building-id';
-type LandUtilityPanel = 'batch-claim';
+type LandUtilityPanel = 'batch-claim' | 'batch-quests';
 
 function readStoredBigInt(key: string): bigint | null {
   if (typeof window === 'undefined') return null;
@@ -81,20 +84,35 @@ function readStoredBuildingType(): BuildingType {
   return window.localStorage.getItem(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
 }
 
-function BatchClaimBuildingTile({
+/**
+ * A grid tile for a cross-land utility panel, rendered alongside the real
+ * buildings. Markup mirrors BuildingItem in building-grid.tsx (including its
+ * denseLabels variant) so utility tiles line up with buildings on every layout.
+ */
+function UtilityBuildingTile({
+  ariaLabel,
+  denseLabels = false,
+  glyph,
+  label,
+  onSelect,
   selected,
-  onSelect
+  sublabel,
 }: {
-  selected: boolean;
+  ariaLabel: string;
+  denseLabels?: boolean;
+  glyph: string;
+  label: string;
   onSelect: () => void;
+  selected: boolean;
+  sublabel: string;
 }) {
   return (
-    <div className="space-y-1">
+    <div className={`${denseLabels ? 'w-20 min-w-0 ' : ''}space-y-1`}>
       <div className="flex justify-center">
         <button
           type="button"
           onClick={onSelect}
-          aria-label="Open batch claim"
+          aria-label={ariaLabel}
           aria-pressed={selected}
           className={`building-button building-element rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'}`}
         >
@@ -103,14 +121,24 @@ function BatchClaimBuildingTile({
               className={`font-pixel text-[1.35rem] leading-none tracking-normal ${selected ? 'text-primary' : 'text-foreground/80'}`}
               aria-hidden="true"
             >
-              BC
+              {glyph}
             </span>
           </div>
         </button>
       </div>
-      <div className="text-center">
-        <div className="text-xs font-semibold truncate" title="Batch Claim">Batch Claim</div>
-        <div className="text-xs text-muted-foreground">All lands</div>
+      <div className={`${denseLabels ? 'min-w-0 ' : ''}text-center`}>
+        <div
+          className={denseLabels
+            ? "min-h-[1.75rem] text-[11px] font-semibold leading-tight [overflow-wrap:anywhere]"
+            : "text-xs font-semibold truncate"
+          }
+          title={label}
+        >
+          {label}
+        </div>
+        <div className={denseLabels ? "text-[11px] leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
+          {sublabel}
+        </div>
       </div>
     </div>
   );
@@ -564,6 +592,15 @@ function LandsViewContent() {
     setSelectedUtilityPanel('batch-claim');
   }, []);
 
+  const handleBatchQuestUtilitySelect = useCallback(() => {
+    setBuildingType('town');
+    setSelectedUtilityPanel('batch-quests');
+  }, []);
+
+  const handleBatchQuestSuccess = useCallback(() => {
+    fetchBuildingData();
+  }, [fetchBuildingData]);
+
 
   // Only block render if we have NO lands data at all
   if (loading && lands.length === 0) {
@@ -767,16 +804,31 @@ function LandsViewContent() {
                         <BuildingGrid
                           buildings={buildingType === 'village' ? villageBuildings : townBuildings}
                           buildingType={buildingType}
-                          selectedBuilding={selectedUtilityPanel === 'batch-claim' ? null : selectedBuilding}
+                          selectedBuilding={selectedUtilityPanel ? null : selectedBuilding}
                           selectedBuildingType={buildingType}
                           onBuildingSelect={(building) => handleBuildingSelect(buildingType, building)}
                           currentBlock={currentBlock}
                           landId={selectedLand.tokenId}
-                          extraItems={buildingType === 'village' && lands.length > 0 ? (
-                            <BatchClaimBuildingTile
-                              selected={selectedUtilityPanel === 'batch-claim'}
-                              onSelect={handleBatchClaimUtilitySelect}
-                            />
+                          extraItems={lands.length > 0 ? (
+                            buildingType === 'village' ? (
+                              <UtilityBuildingTile
+                                ariaLabel="Open batch claim"
+                                glyph="BC"
+                                label="Batch Claim"
+                                onSelect={handleBatchClaimUtilitySelect}
+                                selected={selectedUtilityPanel === 'batch-claim'}
+                                sublabel="All lands"
+                              />
+                            ) : (
+                              <UtilityBuildingTile
+                                ariaLabel="Open batch quests"
+                                glyph="BQ"
+                                label="Batch Quests"
+                                onSelect={handleBatchQuestUtilitySelect}
+                                selected={selectedUtilityPanel === 'batch-quests'}
+                                sublabel="All lands"
+                              />
+                            )
                           ) : null}
                         />
                       </div>
@@ -793,7 +845,7 @@ function LandsViewContent() {
                           <BuildingGrid
                             buildings={villageBuildings}
                             buildingType="village"
-                            selectedBuilding={selectedUtilityPanel === 'batch-claim' ? null : selectedBuilding}
+                            selectedBuilding={selectedUtilityPanel ? null : selectedBuilding}
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('village', building)}
                             currentBlock={currentBlock}
@@ -801,9 +853,14 @@ function LandsViewContent() {
                             gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
                             extraItems={lands.length > 0 ? (
-                              <BatchClaimBuildingTile
-                                selected={selectedUtilityPanel === 'batch-claim'}
+                              <UtilityBuildingTile
+                                ariaLabel="Open batch claim"
+                                denseLabels
+                                glyph="BC"
+                                label="Batch Claim"
                                 onSelect={handleBatchClaimUtilitySelect}
+                                selected={selectedUtilityPanel === 'batch-claim'}
+                                sublabel="All lands"
                               />
                             ) : null}
                           />
@@ -820,13 +877,24 @@ function LandsViewContent() {
                           <BuildingGrid
                             buildings={townBuildings}
                             buildingType="town"
-                            selectedBuilding={selectedBuilding}
+                            selectedBuilding={selectedUtilityPanel ? null : selectedBuilding}
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('town', building)}
                             currentBlock={currentBlock}
                             landId={selectedLand.tokenId}
                             gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
+                            extraItems={lands.length > 0 ? (
+                              <UtilityBuildingTile
+                                ariaLabel="Open batch quests"
+                                denseLabels
+                                glyph="BQ"
+                                label="Batch Quests"
+                                onSelect={handleBatchQuestUtilitySelect}
+                                selected={selectedUtilityPanel === 'batch-quests'}
+                                sublabel="All lands"
+                              />
+                            ) : null}
                           />
                         </section>
                       </div>
@@ -839,6 +907,13 @@ function LandsViewContent() {
                   <BatchClaimCard
                     lands={lands}
                     onSuccess={handleBatchClaimSuccess}
+                    variant="embedded"
+                    showWhenEmpty
+                  />
+                ) : selectedUtilityPanel === 'batch-quests' ? (
+                  <BatchQuestStartCard
+                    lands={lands}
+                    onSuccess={handleBatchQuestSuccess}
                     variant="embedded"
                     showWhenEmpty
                   />

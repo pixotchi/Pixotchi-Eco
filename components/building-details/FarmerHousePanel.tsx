@@ -3,16 +3,15 @@
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
-import { ERC20_BALANCE_ABI,getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
-import { CLIENT_ENV } from '@/lib/env-config';
+import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
+import { getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import React from 'react';
 import { toast } from 'react-hot-toast';
-import { parseUnits } from 'viem';
-import { useAccount,useBlockNumber,usePublicClient } from 'wagmi';
+import { useAccount,useBlockNumber } from 'wagmi';
 
 interface FarmerHousePanelProps {
   landId: bigint;
@@ -20,18 +19,12 @@ interface FarmerHousePanelProps {
   onQuestUpdate: () => void;
 }
 
-// Rewards wallet that funds farmer quests
-const QUEST_SEED_REWARDS_WALLET = CLIENT_ENV.QUEST_SEED_REWARDS_WALLET as `0x${string}`;
-const QUEST_LEAF_REWARDS_WALLET = CLIENT_ENV.QUEST_LEAF_REWARDS_WALLET as `0x${string}`;
-const MIN_SEED_REWARDS_BALANCE = parseUnits('300', 18);
-const MIN_LEAF_REWARDS_BALANCE = parseUnits('492750', 18);
 const QUEST_SLOT_SURFACE_CLASS = 'chromatic-white-surface flex flex-col gap-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]';
 const QUEST_START_SURFACE_CLASS = 'building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2';
 const QUEST_STATUS_PILL_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]';
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
-  const publicClient = usePublicClient();
   const { isTabVisible } = useTabVisibility();
   const isDashboardVisible = isTabVisible('dashboard');
   const [slots, setSlots] = React.useState<import('@/lib/contracts').QuestSlot[]>([]);
@@ -39,52 +32,12 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const [error, setError] = React.useState<string | null>(null);
   const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
-  const [seedRewardsWalletBalance, setSeedRewardsWalletBalance] = React.useState<bigint>(BigInt(0));
-  const [seedRewardsWalletAllowance, setSeedRewardsWalletAllowance] = React.useState<bigint>(BigInt(0));
-  const [leafRewardsWalletBalance, setLeafRewardsWalletBalance] = React.useState<bigint>(BigInt(0));
-  const [leafRewardsWalletAllowance, setLeafRewardsWalletAllowance] = React.useState<bigint>(BigInt(0));
-  const [, setBalanceLoading] = React.useState<boolean>(false);
-
-  const fetchRewardsBalance = React.useCallback(async () => {
-    if (!publicClient) return;
-    setBalanceLoading(true);
-    try {
-      const [seedBalance, seedAllowance, leafBalance, leafAllowance] = await Promise.all([
-        publicClient.readContract({
-          address: PIXOTCHI_TOKEN_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'balanceOf',
-          args: [QUEST_SEED_REWARDS_WALLET],
-        }) as Promise<bigint>,
-        publicClient.readContract({
-          address: PIXOTCHI_TOKEN_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'allowance',
-          args: [QUEST_SEED_REWARDS_WALLET, LAND_CONTRACT_ADDRESS],
-        }) as Promise<bigint>,
-        publicClient.readContract({
-          address: LEAF_CONTRACT_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'balanceOf',
-          args: [QUEST_LEAF_REWARDS_WALLET],
-        }) as Promise<bigint>,
-        publicClient.readContract({
-          address: LEAF_CONTRACT_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'allowance',
-          args: [QUEST_LEAF_REWARDS_WALLET, LAND_CONTRACT_ADDRESS],
-        }) as Promise<bigint>,
-      ]);
-      setSeedRewardsWalletBalance(seedBalance);
-      setSeedRewardsWalletAllowance(seedAllowance);
-      setLeafRewardsWalletBalance(leafBalance);
-      setLeafRewardsWalletAllowance(leafAllowance);
-    } catch (error) {
-      console.error('Failed to fetch rewards wallet balance:', error);
-    } finally {
-      setBalanceLoading(false);
-    }
-  }, [publicClient]);
+  // Resolved from diamond storage, not env: setQuestRewardsWallet can rotate the
+  // payer, and the NEXT_PUBLIC_QUEST_* vars silently point at the pre-rotation
+  // constant when unset, which reads as an empty pool and locks the panel.
+  const { isReady: isRewardsReady, isUnavailable: isRewardsUnavailable } =
+    useQuestRewardsAvailability(isDashboardVisible);
+  const questActionsBlocked = isRewardsUnavailable || !isRewardsReady;
 
   const fetchSlots = React.useCallback(async () => {
     setLoading(true);
@@ -101,11 +54,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
 
   React.useEffect(() => {
     fetchSlots();
-    fetchRewardsBalance();
-    // Refresh balance every 30 seconds to stay up-to-date
-    const interval = setInterval(fetchRewardsBalance, 30000);
-    return () => clearInterval(interval);
-  }, [fetchSlots, fetchRewardsBalance]);
+  }, [fetchSlots]);
 
   // Initialize and watch the current block number immediately to avoid transient wrong UI
   const { data: liveBlock } = useBlockNumber({
@@ -169,12 +118,6 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     }
   }
 
-  const isRewardsUnavailable =
-    seedRewardsWalletBalance < MIN_SEED_REWARDS_BALANCE ||
-    seedRewardsWalletAllowance < MIN_SEED_REWARDS_BALANCE ||
-    leafRewardsWalletBalance < MIN_LEAF_REWARDS_BALANCE ||
-    leafRewardsWalletAllowance < MIN_LEAF_REWARDS_BALANCE;
-
   return (
     <div className="space-y-3 pt-2">
       <h4 className="font-semibold text-sm text-center">Quests</h4>
@@ -218,7 +161,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           buttonText="Open now"
                           buttonClassName="h-11 min-h-11 px-3 text-xs"
                           hideStatus
-                          disabled={isRewardsUnavailable}
+                          disabled={questActionsBlocked}
                           onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
                         />
                       </div>
@@ -255,7 +198,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         buttonText="Start"
                         buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
                         hideStatus
-                        disabled={isRewardsUnavailable}
+                        disabled={questActionsBlocked}
                         onSuccess={(tx: UntypedValue) => {
                           handleSuccess({ slotIndex: idx, awaitInProgress: true });
                           try {

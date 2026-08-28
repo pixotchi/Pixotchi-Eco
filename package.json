@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "production-fixes:smoke": "tsx smoke/production-fixes-smoke.ts",
     "activity:smoke": "tsx smoke/activity-filters-smoke.ts",
+    "quest:smoke": "tsx smoke/batch-quest-smoke.ts",
     "ai:smoke:gemini": "node smoke/ai-smoke-gemini.mjs",
     "ai:smoke:real-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-smoke-real-tools.ts",
     "ai:smoke:budget": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-budget-smoke.ts",
