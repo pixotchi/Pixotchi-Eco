@@ -136,6 +136,8 @@ const MANAGED_GAME_QUERY_KEYS = new Set([
   "mintType",
   "activityView",
   "activityPage",
+  "activityFilter",
+  "activityDirection",
   "leaderboardPage",
   "leaderboardFilter",
   "leaderboardMine",
@@ -144,7 +146,7 @@ const MANAGED_GAME_QUERY_KEYS = new Set([
 const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
   dashboard: new Set(["tab", "dashboardView"]),
   mint: new Set(["tab", "mintType"]),
-  activity: new Set(["tab", "activityView", "activityPage"]),
+  activity: new Set(["tab", "activityView", "activityPage", "activityFilter", "activityDirection"]),
   leaderboard: new Set([
     "tab",
     "leaderboardPage",

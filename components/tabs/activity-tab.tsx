@@ -2,15 +2,34 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useAccount } from "wagmi";
+import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { PaginationFooter } from "@/components/ui/pagination-footer";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { getAllActivity, getMyActivity } from "@/lib/activity-client";
+import {
+  ACTIVITY_CATEGORY_EMPTY_LABELS,
+  ACTIVITY_DIRECTION_EMPTY_LABELS,
+  createActivityPerspective,
+  DEFAULT_ACTIVITY_CATEGORY,
+  DEFAULT_ACTIVITY_DIRECTION,
+  EMPTY_ACTIVITY_PERSPECTIVE,
+  filterActivityEvents,
+  hasActivityPerspective,
+  isDirectionalActivityCategory,
+  parseActivityCategory,
+  parseActivityDirection,
+  resolveActivityDirection,
+  type ActivityCategoryId,
+  type ActivityDirectionId,
+  type ActivityPerspective,
+} from "@/lib/activity-filters";
 import { ActivityEvent, ItemConsumedEvent, BundledItemConsumedEvent } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import {
+  ActivityFilterBar,
   AttackEventRenderer,
   KilledEventRenderer,
   MintEventRenderer,
@@ -46,6 +65,14 @@ type ProcessedActivityEvent = Exclude<ActivityEvent, ItemConsumedEvent> | Bundle
 type PaginationConfig = {
   page: number;
   setPage: (nextPage: number | ((previousPage: number) => number)) => void;
+};
+type FilterConfig = {
+  category: ActivityCategoryId;
+  direction: ActivityDirectionId;
+  onCategoryChange: (nextCategory: ActivityCategoryId) => void;
+  onDirectionChange: (nextDirection: ActivityDirectionId) => void;
+  onReset: () => void;
+  showDirection: boolean;
 };
 
 const ITEMS_PER_PAGE = 12;
@@ -87,6 +114,26 @@ function bundleItemConsumedEvents(activities: ActivityEvent[]): ProcessedActivit
   return allProcessedEvents;
 }
 
+function isActivityFilterActive(category: ActivityCategoryId, direction: ActivityDirectionId): boolean {
+  return category !== DEFAULT_ACTIVITY_CATEGORY || direction !== DEFAULT_ACTIVITY_DIRECTION;
+}
+
+function getEmptyFeedMessage(
+  feedView: ActivityView,
+  category: ActivityCategoryId,
+  direction: ActivityDirectionId
+): string {
+  if (isDirectionalActivityCategory(category) && direction !== DEFAULT_ACTIVITY_DIRECTION) {
+    return `No ${ACTIVITY_DIRECTION_EMPTY_LABELS[direction]} in the last 24 hours.`;
+  }
+
+  if (category !== DEFAULT_ACTIVITY_CATEGORY) {
+    return `No recent ${ACTIVITY_CATEGORY_EMPTY_LABELS[category]} in the last 24 hours.`;
+  }
+
+  return `No recent ${feedView === 'my' ? 'personal ' : ''}activity found in the last 24 hours.`;
+}
+
 export default function ActivityTab() {
   const frame = useFrameContext();
   const isMiniApp = Boolean(frame?.isInMiniApp);
@@ -113,6 +160,15 @@ export default function ActivityTab() {
     all: 1,
     my: 1,
   });
+  // Plant/land IDs the personal feed was scoped to, returned by /api/activity/my.
+  // They let us tell an attack on the viewer from one the viewer launched. The
+  // owning address is stored with them so a previous wallet's assets can never be
+  // used to classify the current wallet's feed.
+  const [myAssetIds, setMyAssetIds] = useState<{ address: string | null; landIds: string[]; plantIds: string[] }>({
+    address: null,
+    landIds: [],
+    plantIds: [],
+  });
   const [view, setView] = useWebQueryState<ActivityView>({
     key: "activityView",
     defaultValue: "all",
@@ -130,6 +186,30 @@ export default function ActivityTab() {
       return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     },
     serialize: (value) => (value <= 1 ? null : value.toString()),
+  });
+  const [categoryFilter, setCategoryFilter] = useWebQueryState<ActivityCategoryId>({
+    key: "activityFilter",
+    defaultValue: DEFAULT_ACTIVITY_CATEGORY,
+    enabled: !isMiniApp,
+    parse: parseActivityCategory,
+    serialize: (value) => (value === DEFAULT_ACTIVITY_CATEGORY ? null : value),
+  });
+  const [directionFilter, setDirectionFilter] = useWebQueryState<ActivityDirectionId>({
+    key: "activityDirection",
+    defaultValue: DEFAULT_ACTIVITY_DIRECTION,
+    enabled: !isMiniApp,
+    parse: parseActivityDirection,
+    serialize: (value) => (value === DEFAULT_ACTIVITY_DIRECTION ? null : value),
+  });
+  // The desktop layout shows both feeds at once, so each column keeps its own
+  // filter and page - mirroring how pagination already works here.
+  const [desktopFilterByView, setDesktopFilterByView] = useState<Record<ActivityView, ActivityCategoryId>>({
+    all: DEFAULT_ACTIVITY_CATEGORY,
+    my: DEFAULT_ACTIVITY_CATEGORY,
+  });
+  const [desktopDirectionByView, setDesktopDirectionByView] = useState<Record<ActivityView, ActivityDirectionId>>({
+    all: DEFAULT_ACTIVITY_DIRECTION,
+    my: DEFAULT_ACTIVITY_DIRECTION,
   });
   const { shopItems, gardenItems } = useItemCatalogs();
   const shopItemMap = useMemo<ItemMap>(() => {
@@ -174,14 +254,19 @@ export default function ActivityTab() {
     try {
       const results = await Promise.allSettled(
         feedsToFetch.map(async (feedView) => {
-          const recentActivities =
-            feedView === "my" && myAddress
-              ? await getMyActivity(myAddress)
-              : await getAllActivity();
+          if (feedView === "my" && myAddress) {
+            const { activities, landIds, plantIds } = await getMyActivity(myAddress);
+            return {
+              activities: bundleItemConsumedEvents(activities),
+              assetIds: { address: myAddress, landIds, plantIds },
+              feedView,
+            };
+          }
 
           return {
+            activities: bundleItemConsumedEvents(await getAllActivity()),
+            assetIds: null,
             feedView,
-            activities: bundleItemConsumedEvents(recentActivities),
           };
         })
       );
@@ -198,6 +283,12 @@ export default function ActivityTab() {
           });
 
           return next;
+        });
+
+        results.forEach((result) => {
+          if (result.status === "fulfilled" && result.value.assetIds) {
+            setMyAssetIds(result.value.assetIds);
+          }
         });
 
         setErrorByView(prev => {
@@ -247,6 +338,20 @@ export default function ActivityTab() {
 
     fetchActivities();
   }, [isVisible, fetchActivities]);
+
+  // Only trust the stored assets while they still belong to the connected wallet.
+  const perspective = useMemo<ActivityPerspective>(
+    () => (myAddress && myAssetIds.address === myAddress
+      ? createActivityPerspective(myAssetIds.plantIds, myAssetIds.landIds)
+      : EMPTY_ACTIVITY_PERSPECTIVE),
+    [myAddress, myAssetIds]
+  );
+  const canFilterByDirection = hasActivityPerspective(perspective);
+
+  const getPerspectiveForView = useCallback(
+    (feedView: ActivityView) => (feedView === 'my' ? perspective : EMPTY_ACTIVITY_PERSPECTIVE),
+    [perspective]
+  );
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
@@ -301,10 +406,43 @@ export default function ActivityTab() {
     }
   };
 
-  const selectedActivities = activitiesByView[view];
+  // Direction only applies to combat categories on a feed whose owner we know.
+  const mobileDirection = resolveActivityDirection(
+    categoryFilter,
+    directionFilter,
+    getPerspectiveForView(view)
+  );
+  const mobileActivities = useMemo(
+    () => filterActivityEvents(activitiesByView[view], {
+      category: categoryFilter,
+      direction: mobileDirection,
+      perspective: getPerspectiveForView(view),
+    }),
+    [activitiesByView, categoryFilter, getPerspectiveForView, mobileDirection, view]
+  );
+  const desktopAllActivities = useMemo(
+    () => filterActivityEvents(activitiesByView.all, {
+      category: desktopFilterByView.all,
+    }),
+    [activitiesByView, desktopFilterByView.all]
+  );
+  const desktopMyDirection = resolveActivityDirection(
+    desktopFilterByView.my,
+    desktopDirectionByView.my,
+    perspective
+  );
+  const desktopMyActivities = useMemo(
+    () => filterActivityEvents(activitiesByView.my, {
+      category: desktopFilterByView.my,
+      direction: desktopMyDirection,
+      perspective,
+    }),
+    [activitiesByView, desktopFilterByView.my, desktopMyDirection, perspective]
+  );
+
   const selectedLoading = loadingByView[view];
   const selectedError = errorByView[view];
-  const selectedTotalPages = Math.ceil(selectedActivities.length / ITEMS_PER_PAGE);
+  const selectedTotalPages = Math.ceil(mobileActivities.length / ITEMS_PER_PAGE);
 
   const setDesktopPage = useCallback((
     feedView: ActivityView,
@@ -315,6 +453,44 @@ export default function ActivityTab() {
       [feedView]: typeof nextPage === "function" ? nextPage(prev[feedView]) : nextPage,
     }));
   }, []);
+
+  const setDesktopCategory = useCallback((feedView: ActivityView, nextCategory: ActivityCategoryId) => {
+    setDesktopFilterByView(prev => ({ ...prev, [feedView]: nextCategory }));
+    if (!isDirectionalActivityCategory(nextCategory)) {
+      setDesktopDirectionByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_DIRECTION }));
+    }
+    setDesktopPage(feedView, 1);
+  }, [setDesktopPage]);
+
+  const setDesktopDirection = useCallback((feedView: ActivityView, nextDirection: ActivityDirectionId) => {
+    setDesktopDirectionByView(prev => ({ ...prev, [feedView]: nextDirection }));
+    setDesktopPage(feedView, 1);
+  }, [setDesktopPage]);
+
+  const resetDesktopFilter = useCallback((feedView: ActivityView) => {
+    setDesktopFilterByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_CATEGORY }));
+    setDesktopDirectionByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_DIRECTION }));
+    setDesktopPage(feedView, 1);
+  }, [setDesktopPage]);
+
+  const handleMobileCategoryChange = useCallback((nextCategory: ActivityCategoryId) => {
+    setCategoryFilter(nextCategory);
+    if (!isDirectionalActivityCategory(nextCategory)) {
+      setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
+    }
+    setCurrentPage(1);
+  }, [setCategoryFilter, setCurrentPage, setDirectionFilter]);
+
+  const handleMobileDirectionChange = useCallback((nextDirection: ActivityDirectionId) => {
+    setDirectionFilter(nextDirection);
+    setCurrentPage(1);
+  }, [setCurrentPage, setDirectionFilter]);
+
+  const resetMobileFilter = useCallback(() => {
+    setCategoryFilter(DEFAULT_ACTIVITY_CATEGORY);
+    setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
+    setCurrentPage(1);
+  }, [setCategoryFilter, setCurrentPage, setDirectionFilter]);
 
   const scrollActivityToTop = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -359,13 +535,18 @@ export default function ActivityTab() {
     }
   }, [currentPage, selectedTotalPages, setCurrentPage]);
 
+  const desktopTotalsByView = useMemo(() => ({
+    all: desktopAllActivities.length,
+    my: desktopMyActivities.length,
+  }), [desktopAllActivities.length, desktopMyActivities.length]);
+
   useEffect(() => {
     setDesktopPageByView(prev => {
       let changed = false;
       const next = { ...prev };
 
       (["all", "my"] as ActivityView[]).forEach((feedView) => {
-        const maxPage = Math.max(1, Math.ceil(activitiesByView[feedView].length / ITEMS_PER_PAGE));
+        const maxPage = Math.max(1, Math.ceil(desktopTotalsByView[feedView] / ITEMS_PER_PAGE));
 
         if (next[feedView] > maxPage) {
           next[feedView] = maxPage;
@@ -380,13 +561,14 @@ export default function ActivityTab() {
 
       return changed ? next : prev;
     });
-  }, [activitiesByView]);
+  }, [desktopTotalsByView]);
 
   const renderFeedContent = (
     feedView: ActivityView,
-    activities: ProcessedActivityEvent[],
+    activities: readonly ProcessedActivityEvent[],
     loading: boolean,
     error: string | null,
+    filter: FilterConfig,
     pagination?: PaginationConfig
   ) => {
     const renderFeedState = (content: ReactNode) => (
@@ -429,9 +611,21 @@ export default function ActivityTab() {
     }
 
     if (activities.length === 0) {
+      const filterActive = isActivityFilterActive(filter.category, filter.direction);
+
       return renderFeedState(
-        <div className="text-center text-muted-foreground">
-          <p>No recent {feedView === 'my' ? 'personal' : ''} activity found in the last 24 hours.</p>
+        <div className="space-y-3 text-center text-muted-foreground">
+          <p>{getEmptyFeedMessage(feedView, filter.category, filter.direction)}</p>
+          {filterActive && (
+            <Button
+              variant="compactUtility"
+              size="touchCompact"
+              onClick={filter.onReset}
+              className="text-xs"
+            >
+              Show all activity
+            </Button>
+          )}
         </div>
       );
     }
@@ -456,11 +650,36 @@ export default function ActivityTab() {
     );
   };
 
+  const mobileFilter: FilterConfig = {
+    category: categoryFilter,
+    direction: mobileDirection,
+    onCategoryChange: handleMobileCategoryChange,
+    onDirectionChange: handleMobileDirectionChange,
+    onReset: resetMobileFilter,
+    showDirection: view === 'my' && isDirectionalActivityCategory(categoryFilter) && canFilterByDirection,
+  };
+  const desktopAllFilter: FilterConfig = {
+    category: desktopFilterByView.all,
+    direction: DEFAULT_ACTIVITY_DIRECTION,
+    onCategoryChange: (nextCategory) => setDesktopCategory('all', nextCategory),
+    onDirectionChange: (nextDirection) => setDesktopDirection('all', nextDirection),
+    onReset: () => resetDesktopFilter('all'),
+    showDirection: false,
+  };
+  const desktopMyFilter: FilterConfig = {
+    category: desktopFilterByView.my,
+    direction: desktopMyDirection,
+    onCategoryChange: (nextCategory) => setDesktopCategory('my', nextCategory),
+    onDirectionChange: (nextDirection) => setDesktopDirection('my', nextDirection),
+    onReset: () => resetDesktopFilter('my'),
+    showDirection: isDirectionalActivityCategory(desktopFilterByView.my) && canFilterByDirection,
+  };
+
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
       <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden">
         <CardHeader className="flex-none">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3">
             <div className="min-w-0">
               <CardTitle>Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
@@ -475,6 +694,12 @@ export default function ActivityTab() {
                   return;
                 }
 
+                // Direction needs the viewer's own assets, so it cannot survive a
+                // switch to the public feed.
+                if (nextValue === "all") {
+                  setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
+                }
+
                 setCurrentPage(1);
                 setView(nextValue);
               }}
@@ -484,9 +709,17 @@ export default function ActivityTab() {
               ]}
             />
           </div>
+          <ActivityFilterBar
+            category={mobileFilter.category}
+            className="pt-1"
+            direction={mobileFilter.direction}
+            onCategoryChange={mobileFilter.onCategoryChange}
+            onDirectionChange={mobileFilter.onDirectionChange}
+            showDirection={mobileFilter.showDirection}
+          />
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-visible">
-          {renderFeedContent(view, selectedActivities, selectedLoading, selectedError, {
+          {renderFeedContent(view, mobileActivities, selectedLoading, selectedError, mobileFilter, {
             page: currentPage,
             setPage: setCurrentPage,
           })}
@@ -499,9 +732,17 @@ export default function ActivityTab() {
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
+            <ActivityFilterBar
+              category={desktopAllFilter.category}
+              className="pt-1"
+              direction={desktopAllFilter.direction}
+              onCategoryChange={desktopAllFilter.onCategoryChange}
+              onDirectionChange={desktopAllFilter.onDirectionChange}
+              showDirection={desktopAllFilter.showDirection}
+            />
           </CardHeader>
           <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
-            {renderFeedContent("all", activitiesByView.all, loadingByView.all, errorByView.all, {
+            {renderFeedContent("all", desktopAllActivities, loadingByView.all, errorByView.all, desktopAllFilter, {
               page: desktopPageByView.all,
               setPage: (nextPage) => setDesktopPage("all", nextPage),
             })}
@@ -513,9 +754,17 @@ export default function ActivityTab() {
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
+            <ActivityFilterBar
+              category={desktopMyFilter.category}
+              className="pt-1"
+              direction={desktopMyFilter.direction}
+              onCategoryChange={desktopMyFilter.onCategoryChange}
+              onDirectionChange={desktopMyFilter.onDirectionChange}
+              showDirection={desktopMyFilter.showDirection}
+            />
           </CardHeader>
           <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
-            {renderFeedContent("my", activitiesByView.my, loadingByView.my, errorByView.my, {
+            {renderFeedContent("my", desktopMyActivities, loadingByView.my, errorByView.my, desktopMyFilter, {
               page: desktopPageByView.my,
               setPage: (nextPage) => setDesktopPage("my", nextPage),
             })}
@@ -524,4 +773,4 @@ export default function ActivityTab() {
       </div>
     </div>
   );
-} 
+}

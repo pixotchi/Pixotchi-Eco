@@ -9,10 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { useTabVisibility } from "@/lib/tab-visibility-context";
 import packageJson from '@/package.json';
 import { MessageCircle,PlayCircle,Radio } from "lucide-react";
-import Image from "next/image";
 import { useId,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -37,51 +35,16 @@ const FarcasterBrandIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const ABOUT_SCENE_SPRITES = [
-  { src: "/icons/plantGrowth.gif", alt: "", width: 190, height: 190, className: "left-[6%] top-[4%] w-[30%]", animation: "about-scene-bob 6s ease-in-out infinite" },
-  { src: "/icons/plantGrowth4.gif", alt: "", width: 260, height: 260, className: "left-[36%] top-[26%] w-[41%]", animation: "about-scene-bob 7s ease-in-out infinite -1s" },
-  { src: "/icons/plantGrowth2.gif", alt: "", width: 150, height: 150, className: "right-[8%] top-[10%] w-[24%]", animation: "about-scene-bob 5s ease-in-out infinite -2s" },
-  { src: "/icons/plantGrowth5.gif", alt: "", width: 130, height: 130, className: "bottom-[10%] left-[16%] w-[20%]", animation: "about-scene-bob 8s ease-in-out infinite -3s" },
-  { src: "/icons/plantGrowth6.gif", alt: "", width: 170, height: 170, className: "bottom-[4%] right-[8%] w-[27%]", animation: "about-scene-bob 6.5s ease-in-out infinite -0.5s" },
-  { src: "/icons/farmer-house.svg", alt: "", width: 110, height: 110, className: "left-[28%] top-[18%] w-[17%]", animation: "about-scene-bob 7.5s ease-in-out infinite -1.5s" },
-  { src: "/icons/bee-house.svg", alt: "", width: 140, height: 140, className: "left-[4%] top-[50%] w-[22%]", animation: "about-scene-bob 6.2s ease-in-out infinite -2.4s" },
-  { src: "/icons/stake-house.svg", alt: "", width: 120, height: 120, className: "right-[4%] top-[44%] w-[19%]", animation: "about-scene-bob 7.8s ease-in-out infinite -0.8s" },
-  { src: "/icons/soil-factory.svg", alt: "", width: 100, height: 100, className: "bottom-[20%] left-[44%] w-[16%]", animation: "about-scene-bob 5.6s ease-in-out infinite -3.2s" },
-  { src: "/icons/solar-panels.svg", alt: "", width: 96, height: 96, className: "left-[48%] top-[2%] w-[15%]", animation: "about-scene-bob 6.8s ease-in-out infinite -1.1s" },
-] as const;
-
-const AboutWorldScene = ({ active }: { active: boolean }) => (
-  <div className="hidden lg:flex lg:min-h-[390px] lg:items-center lg:justify-center" aria-hidden="true">
-    <div className="relative aspect-square w-full max-w-[440px]">
-      {active && ABOUT_SCENE_SPRITES.map((sprite) => (
-        <Image
-          key={sprite.src}
-          src={sprite.src}
-          alt={sprite.alt}
-          width={sprite.width}
-          height={sprite.height}
-          className={`absolute h-auto select-none object-contain [image-rendering:pixelated] drop-shadow-[0_14px_22px_rgba(15,23,42,0.18)] ${sprite.className}`}
-          style={{ animation: sprite.animation }}
-          loading="lazy"
-          unoptimized={sprite.src.endsWith(".gif")}
-        />
-      ))}
-    </div>
-  </div>
-);
-
 export default function AboutTab() {
   const feedbackTextId = useId();
   const feedbackHelpId = useId();
   const { address } = useAccount();
   const { start, enabled } = useSlideshow();
   const { walletType, isSmartWallet } = useSmartWallet();
-  const { isTabVisible } = useTabVisibility();
   const frameData = useFrameContext();
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const isVisible = isTabVisible('about');
 
   // Note: Gamification streak/missions now handled by TasksInfoDialog component
 
@@ -152,33 +115,34 @@ export default function AboutTab() {
 
 
   return (
-    <div className="mx-auto max-w-[36rem] space-y-8 lg:max-w-5xl">
+    // The page is short by design. On desktop it centres in the pane so the
+    // remaining space reads as deliberate breathing room rather than the content
+    // having collapsed to the top of an empty screen.
+    <div className="mx-auto w-full max-w-[36rem] lg:flex lg:min-h-[calc(100dvh-13rem)] lg:max-w-4xl lg:items-center xl:min-h-[calc(100dvh-9rem)]">
 
-      <div className="space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-stretch lg:gap-5 lg:space-y-0">
+      <div className="w-full space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-stretch lg:gap-5 lg:space-y-0">
       {/* Description */}
-      <TabCard className="lg:h-fit">
-        <CardContent>
-          <p className="text-muted-foreground mb-4">
-            <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
-          </p>
-          <p className="text-muted-foreground mb-4">
-            Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
-          </p>
+      <TabCard className="lg:h-full">
+        {/* The gap lives on the container, not as a margin on the actions block:
+            `mt-auto` absorbs free space, so when this card is the taller column
+            (free space = 0) a margin there collapses and the rule would sit flush
+            against the last line of prose. Flex `gap` is applied regardless. */}
+        <CardContent className="flex h-full flex-col gap-6">
+          {/* Capped measure: the prose would otherwise run the full column width
+              on desktop and become hard to read. */}
+          <div className="space-y-4 lg:max-w-[62ch]">
+            <p className="leading-relaxed text-foreground/85">
+              <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
+            </p>
+          </div>
 
-          <div className="space-y-3 lg:flex lg:flex-wrap lg:gap-2 lg:space-y-0">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:contents">
-              <Button
-                variant="outline"
-                onClick={() => openExternalUrl('https://status.pixotchi.tech')}
-                className="w-full lg:w-auto"
-                aria-label="Open Pixotchi status"
-              >
-                <Radio className="w-4 h-4 mr-2" />
-                Status
-              </Button>
-            </div>
-            {enabled && (
-              <div className="grid grid-cols-2 gap-2 lg:contents">
+          {/* Actions sit against the bottom of the card so both columns end level. */}
+          <div className="border-t border-border/55 pt-5 lg:mt-auto">
+            <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:gap-2">
+              {enabled && (
                 <Button
                   variant="primary"
                   onClick={() => start({ reset: true })}
@@ -188,18 +152,7 @@ export default function AboutTab() {
                   <PlayCircle className="w-4 h-4 mr-2" />
                   Tutorial
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowFeedbackDialog(true)}
-                  className="lg:w-auto"
-                  aria-label="Open feedback dialog"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Feedback
-                </Button>
-              </div>
-            )}
-            {!enabled && (
+              )}
               <Button
                 variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
@@ -209,7 +162,16 @@ export default function AboutTab() {
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Feedback
               </Button>
-            )}
+              <Button
+                variant="outline"
+                onClick={() => openExternalUrl('https://status.pixotchi.tech')}
+                className={enabled ? "col-span-2 lg:col-span-1 lg:w-auto" : "lg:w-auto"}
+                aria-label="Open Pixotchi status"
+              >
+                <Radio className="w-4 h-4 mr-2" />
+                Status
+              </Button>
+            </div>
           </div>
         </CardContent>
       </TabCard>
@@ -267,16 +229,11 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-4 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-[hsl(var(--border-strong)/0.4)] lg:bg-card lg:bg-[image:var(--gradient-surface-strong)] lg:p-4 lg:[box-shadow:var(--surface-highlight),var(--shadow-raised)] lg:backdrop-blur-md">
-        {/* Version Number */}
-        <div className="text-center lg:order-2 lg:border-t lg:border-border/60 lg:pt-4">
-          <span className="text-xs text-muted-foreground/60 font-mono">
-            v{packageJson.version}
-          </span>
-        </div>
-
-        <div className="text-center lg:order-1 lg:flex lg:flex-1 lg:flex-col lg:justify-center">
-          <h3 className="text-sm font-semibold mb-2">Join our Community</h3>
+      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-5 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-[hsl(var(--border-strong)/0.4)] lg:bg-card lg:bg-[image:var(--gradient-surface-strong)] lg:p-5 lg:[box-shadow:var(--surface-highlight),var(--shadow-raised)] lg:backdrop-blur-md">
+        {/* Community first, version last: `order` only applies in flex/grid, so the
+            previous DOM order left the version stranded above the heading on mobile. */}
+        <div className="text-center lg:flex lg:flex-1 lg:flex-col lg:justify-center">
+          <h3 className="mb-3 text-sm font-semibold">Join our Community</h3>
           <div className="flex justify-center gap-3">
             <button
               type="button"
@@ -306,11 +263,23 @@ export default function AboutTab() {
               <span className="sr-only">Farcaster</span>
             </button>
           </div>
-          <BaseAnimatedLogo className="mx-auto mt-4 w-full" />
+          {/* Caption so the collapsed Base mark reads as a logo rather than a stray square. */}
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+              Built on Base
+            </span>
+            <BaseAnimatedLogo className="w-full" />
+          </div>
+        </div>
+
+        {/* Version Number */}
+        <div className="border-t border-border/55 pt-4 text-center lg:pt-4">
+          <span className="text-xs text-muted-foreground/60 font-mono">
+            v{packageJson.version}
+          </span>
         </div>
       </div>
       </div>
-        <AboutWorldScene active={isVisible} />
     </div>
   );
 }

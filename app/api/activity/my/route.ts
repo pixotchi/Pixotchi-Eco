@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedMyActivity } from '@/lib/activity-service';
+import { getCachedMyActivityFeed } from '@/lib/activity-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -16,9 +16,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const activities = await getCachedMyActivity(address);
+    const { activities, landIds, plantIds } = await getCachedMyActivityFeed(address);
     return NextResponse.json(
-      { activities, count: activities.length },
+      // `plantIds`/`landIds` are the assets this feed was scoped to. The client
+      // uses them to separate incoming attacks from outgoing ones.
+      { activities, count: activities.length, landIds, plantIds },
       {
         headers: {
           'Cache-Control': 'no-store',

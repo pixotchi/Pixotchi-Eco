@@ -12,7 +12,13 @@ pnpm-debug.log*
 out/
 bridge-main/
 contracts/
-scripts/
+# Local one-off scripts stay ignored, but the two runners package.json depends on
+# must be tracked or `npm run lint` cannot work from a fresh clone.
+# Note: `scripts/*` (contents) rather than `scripts/` (the directory), because git
+# cannot re-include a path whose parent directory is excluded.
+scripts/*
+!scripts/check-base-rpc-hardening.mjs
+!scripts/run-eslint-chunked.mjs
 exports/
 pixotchi-onchain/
 tools/

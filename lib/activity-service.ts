@@ -8,19 +8,66 @@ import { fetchIndexerGraphQL } from './indexer-client';
 const ALL_ACTIVITY_CACHE_SECONDS = 3;
 const MY_ACTIVITY_CACHE_SECONDS = 5;
 
+const ACTIVITY_WINDOW_SECONDS = 24 * 60 * 60;
+
+/**
+ * The indexer rejects any limit above this, so it is the hard ceiling for a
+ * single collection in one request.
+ */
+const INDEXER_MAX_LIMIT = 1000;
+
+/**
+ * The public feed is an ambient ticker rather than a record, so it stays
+ * deliberately truncated. Lifting it would push roughly 900 events per visit to
+ * every client on a route that is `no-store`, for events nobody reads
+ * exhaustively.
+ */
+const ALL_ACTIVITY_LIMIT = 100;
+
+/**
+ * The personal feed has to be complete - "who attacked me" is only useful if it
+ * is. Paired with the window filter below the limit is a safety ceiling rather
+ * than a payload driver: the response is exactly the wallet's real 24h activity,
+ * so wallets with light activity pay nothing for the higher ceiling.
+ */
+const MY_ACTIVITY_LIMIT = INDEXER_MAX_LIMIT;
+
+/**
+ * Applied to every collection so the row limit bounds events *inside* the
+ * window. Without it the indexer returns the newest N of all time and the
+ * post-filter discards whatever falls outside, which both wastes payload and
+ * silently truncates busy wallets.
+ */
+const ACTIVITY_WINDOW_FILTER = 'timestamp_gt: $cutoff';
+
+/**
+ * Cutoffs are floored into buckets so the request body stays byte-identical for
+ * the whole bucket, which keeps the fetch cache warm instead of missing on every
+ * request. Flooring only widens the window; `startsAt` trims the overshoot.
+ */
+const WINDOW_CUTOFF_BUCKET_SECONDS = 60;
+
+type ActivityWindow = {
+  /** Bucketed lower bound handed to the indexer as `$cutoff`. */
+  cutoff: string;
+  /** Exact 24h boundary used to trim the response. */
+  startsAt: number;
+};
+
+function getActivityWindow(): ActivityWindow {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const startsAt = nowSeconds - ACTIVITY_WINDOW_SECONDS;
+  const bucketed = Math.floor(startsAt / WINDOW_CUTOFF_BUCKET_SECONDS) * WINDOW_CUTOFF_BUCKET_SECONDS;
+
+  return { cutoff: String(bucketed), startsAt };
+}
+
 function isMissingIncrementalCacheError(error: unknown): boolean {
   return error instanceof Error && /incrementalCache missing/i.test(error.message);
 }
 
-// Filter activities to last 24 hours
-function filterLast24Hours(activities: ActivityEvent[]): ActivityEvent[] {
-  const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
-  const twentyFourHoursAgo = now - (24 * 60 * 60); // 24 hours ago in seconds
-
-  return activities.filter(activity => {
-    const activityTimestamp = Number(activity.timestamp);
-    return activityTimestamp >= twentyFourHoursAgo;
-  });
+function filterToWindow(activities: ActivityEvent[], startsAt: number): ActivityEvent[] {
+  return activities.filter(activity => Number(activity.timestamp) >= startsAt);
 }
 
 function getPlayedRewardWeight(event: PlayedEvent): number {
@@ -66,8 +113,8 @@ function dedupePlayedEvents(activities: ActivityEvent[]): ActivityEvent[] {
 }
 
 const GET_ALL_ACTIVITY_QUERY = `
-  query GetAllActivity {
-    attacks(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+  query GetAllActivity($cutoff: BigInt!) {
+    attacks(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -81,7 +128,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         scoresWon
       }
     }
-    killeds(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    killeds(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -93,7 +140,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         reward
       }
     }
-    mints(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    mints(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -101,7 +148,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         nftId
       }
     }
-    playeds(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    playeds(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -116,7 +163,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         player
       }
     }
-    itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -126,7 +173,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         itemId
       }
     }
-    shopItemPurchaseds(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    shopItemPurchaseds(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -136,7 +183,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         itemId
       }
     }
-    landTransferEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    landTransferEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -147,7 +194,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    landMintedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    landMintedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -158,7 +205,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    landNameChangedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    landNameChangedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -168,7 +215,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    villageUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -180,7 +227,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    villageSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -192,7 +239,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    townUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    townUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -204,7 +251,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    townSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    townSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -216,7 +263,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    questStartedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    questStartedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -229,7 +276,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -242,7 +289,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageProductionClaimedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    villageProductionClaimedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -252,7 +299,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    casinoBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    casinoBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -264,7 +311,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    rouletteSpinResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    rouletteSpinResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -278,7 +325,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    blackjackResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    blackjackResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -293,7 +340,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -314,8 +361,8 @@ const GET_ALL_ACTIVITY_QUERY = `
 `;
 
 const GET_MY_ACTIVITY_QUERY = `
-  query GetMyActivity($plantIds: [BigInt!], $landIds: [BigInt!], $playerAddress: String!) {
-    attacks(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { OR: [{ attacker_in: $plantIds }, { loser_in: $plantIds }]}) {
+  query GetMyActivity($plantIds: [BigInt!], $landIds: [BigInt!], $playerAddress: String!, $cutoff: BigInt!) {
+    attacks(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, OR: [{ attacker_in: $plantIds }, { winner_in: $plantIds }, { loser_in: $plantIds }]}) {
       items {
         __typename
         id
@@ -329,7 +376,7 @@ const GET_MY_ACTIVITY_QUERY = `
         scoresWon
       }
     }
-    killeds(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { OR: [{ nftId_in: $plantIds }, { deadId_in: $plantIds }]}) {
+    killeds(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, OR: [{ nftId_in: $plantIds }, { deadId_in: $plantIds }]}) {
       items {
         __typename
         id
@@ -341,7 +388,7 @@ const GET_MY_ACTIVITY_QUERY = `
         reward
       }
     }
-    mints(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { nftId_in: $plantIds }) {
+    mints(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, nftId_in: $plantIds }) {
       items {
         __typename
         id
@@ -349,7 +396,7 @@ const GET_MY_ACTIVITY_QUERY = `
         nftId
       }
     }
-    playeds(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { nftId_in: $plantIds }) {
+    playeds(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, nftId_in: $plantIds }) {
         items {
         __typename
         id
@@ -365,7 +412,7 @@ const GET_MY_ACTIVITY_QUERY = `
         player
       }
     }
-    itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { nftId_in: $plantIds }) {
+    itemConsumeds(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, nftId_in: $plantIds }) {
       items {
         __typename
         id
@@ -376,7 +423,7 @@ const GET_MY_ACTIVITY_QUERY = `
         itemId
       }
     }
-    shopItemPurchaseds(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { nftId_in: $plantIds }) {
+    shopItemPurchaseds(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, nftId_in: $plantIds }) {
       items {
         __typename
         id
@@ -387,7 +434,7 @@ const GET_MY_ACTIVITY_QUERY = `
         itemId
       }
     }
-    landTransferEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { OR: [{ from: $playerAddress }, { to: $playerAddress }]}) {
+    landTransferEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, OR: [{ from: $playerAddress }, { to: $playerAddress }]}) {
       items {
         __typename
         id
@@ -398,7 +445,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    landMintedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { to: $playerAddress }) {
+    landMintedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, to: $playerAddress }) {
       items {
         __typename
         id
@@ -409,7 +456,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    landNameChangedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { tokenId_in: $landIds }) {
+    landNameChangedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, tokenId_in: $landIds }) {
       items {
         __typename
         id
@@ -419,7 +466,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    villageUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -431,7 +478,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    villageSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -443,7 +490,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    townUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    townUpgradedWithLeafEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -455,7 +502,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    townSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    townSpeedUpWithSeedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -467,7 +514,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    questStartedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    questStartedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -480,7 +527,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    questFinalizedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -493,7 +540,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    villageProductionClaimedEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { landId_in: $landIds }) {
+    villageProductionClaimedEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }) {
       items {
         __typename
         id
@@ -503,7 +550,7 @@ const GET_MY_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    casinoBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { builder: $playerAddress }) {
+    casinoBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, builder: $playerAddress }) {
         items {
           __typename
           id
@@ -515,7 +562,7 @@ const GET_MY_ACTIVITY_QUERY = `
           blockHeight
         }
       }
-      rouletteSpinResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+      rouletteSpinResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, player: $playerAddress }) {
         items {
           __typename
           id
@@ -529,7 +576,7 @@ const GET_MY_ACTIVITY_QUERY = `
           blockHeight
         }
       }
-      blackjackResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+      blackjackResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, player: $playerAddress }) {
         items {
           __typename
           id
@@ -544,7 +591,7 @@ const GET_MY_ACTIVITY_QUERY = `
           blockHeight
         }
       }
-      baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100, where: { player: $playerAddress }) {
+      baccaratRoundResultEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, player: $playerAddress }) {
         items {
           __typename
           id
@@ -565,8 +612,8 @@ const GET_MY_ACTIVITY_QUERY = `
 `;
 
 const GET_ALL_BARRACKS_ACTIVITY_QUERY = `
-  query GetAllBarracksActivity {
-    barracksBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+  query GetAllBarracksActivity($cutoff: BigInt!) {
+    barracksBuiltEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -578,7 +625,7 @@ const GET_ALL_BARRACKS_ACTIVITY_QUERY = `
         blockHeight
       }
     }
-    barracksRaidEvents(orderBy: "timestamp", orderDirection: "desc", limit: 100) {
+    barracksRaidEvents(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
         id
@@ -594,12 +641,12 @@ const GET_ALL_BARRACKS_ACTIVITY_QUERY = `
 `;
 
 const GET_MY_BARRACKS_ACTIVITY_QUERY = `
-  query GetMyBarracksActivity($landIds: [BigInt!]) {
+  query GetMyBarracksActivity($landIds: [BigInt!], $cutoff: BigInt!) {
     barracksBuiltEvents(
       orderBy: "timestamp",
       orderDirection: "desc",
-      limit: 100,
-      where: { landId_in: $landIds }
+      limit: ${MY_ACTIVITY_LIMIT},
+      where: { ${ACTIVITY_WINDOW_FILTER}, landId_in: $landIds }
     ) {
       items {
         __typename
@@ -615,8 +662,8 @@ const GET_MY_BARRACKS_ACTIVITY_QUERY = `
     barracksRaidEvents(
       orderBy: "timestamp",
       orderDirection: "desc",
-      limit: 100,
-      where: { OR: [{ attackerLandId_in: $landIds }, { defenderLandId_in: $landIds }] }
+      limit: ${MY_ACTIVITY_LIMIT},
+      where: { ${ACTIVITY_WINDOW_FILTER}, OR: [{ attackerLandId_in: $landIds }, { defenderLandId_in: $landIds }] }
     ) {
       items {
         __typename
@@ -636,9 +683,9 @@ async function fetchGraphQLData(query: string, variables?: Record<string, Untype
   return fetchIndexerGraphQL<UntypedValue>(query, variables, { revalidate: ALL_ACTIVITY_CACHE_SECONDS });
 }
 
-async function fetchOptionalBarracksActivity(): Promise<ActivityEvent[]> {
+async function fetchOptionalBarracksActivity(cutoff: string): Promise<ActivityEvent[]> {
   try {
-    const data = await fetchGraphQLData(GET_ALL_BARRACKS_ACTIVITY_QUERY);
+    const data = await fetchGraphQLData(GET_ALL_BARRACKS_ACTIVITY_QUERY, { cutoff });
     return [
       ...(data.barracksBuiltEvents?.items || []),
       ...(data.barracksRaidEvents?.items || []),
@@ -649,9 +696,9 @@ async function fetchOptionalBarracksActivity(): Promise<ActivityEvent[]> {
   }
 }
 
-async function fetchOptionalMyBarracksActivity(landIds: string[]): Promise<ActivityEvent[]> {
+async function fetchOptionalMyBarracksActivity(landIds: string[], cutoff: string): Promise<ActivityEvent[]> {
   try {
-    const data = await fetchGraphQLData(GET_MY_BARRACKS_ACTIVITY_QUERY, { landIds });
+    const data = await fetchGraphQLData(GET_MY_BARRACKS_ACTIVITY_QUERY, { landIds, cutoff });
     return [
       ...(data.barracksBuiltEvents?.items || []),
       ...(data.barracksRaidEvents?.items || []),
@@ -664,10 +711,12 @@ async function fetchOptionalMyBarracksActivity(landIds: string[]): Promise<Activ
 
 
 export async function getAllActivity(): Promise<ActivityEvent[]> {
+  const { cutoff, startsAt } = getActivityWindow();
+
   try {
     const [data, barracksEvents] = await Promise.all([
-      fetchGraphQLData(GET_ALL_ACTIVITY_QUERY),
-      fetchOptionalBarracksActivity(),
+      fetchGraphQLData(GET_ALL_ACTIVITY_QUERY, { cutoff }),
+      fetchOptionalBarracksActivity(cutoff),
     ]);
 
     const allActivities: ActivityEvent[] = [
@@ -707,7 +756,7 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
     });
 
     // Filter to last 24 hours and return all activities
-    return filterLast24Hours(deduped);
+    return filterToWindow(deduped, startsAt);
 
   } catch (error) {
     console.error('Failed to fetch recent activity:', error);
@@ -715,7 +764,18 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
   }
 }
 
-export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
+/**
+ * A personal feed plus the asset IDs it was scoped to. Callers need those IDs to
+ * tell an incoming attack from an outgoing one, and re-deriving them client-side
+ * would mean a second round of contract reads.
+ */
+export type MyActivityFeed = {
+  activities: ActivityEvent[];
+  landIds: string[];
+  plantIds: string[];
+};
+
+export async function getMyActivityFeed(address: string): Promise<MyActivityFeed> {
   const normalizedAddress = address.toLowerCase();
 
   const [plantsResult, landsResult] = await Promise.allSettled([
@@ -733,18 +793,26 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
   const userLands = landsResult.status === 'fulfilled' ? landsResult.value : [];
   const landIds = userLands.map(l => l.tokenId.toString());
 
+  const perspective = {
+    landIds,
+    plantIds: plantIds.map(id => id.toString()),
+  };
+
   if (plantIds.length === 0 && landIds.length === 0) {
-    return [];
+    return { activities: [], ...perspective };
   }
+
+  const { cutoff, startsAt } = getActivityWindow();
 
   try {
     const [data, barracksEvents] = await Promise.all([
       fetchGraphQLData(GET_MY_ACTIVITY_QUERY, {
+        cutoff,
         plantIds,
         landIds,
         playerAddress: normalizedAddress
       }),
-      fetchOptionalMyBarracksActivity(landIds),
+      fetchOptionalMyBarracksActivity(landIds, cutoff),
     ]);
 
     const myActivities: ActivityEvent[] = [
@@ -783,12 +851,16 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
       return timeB - timeA;
     });
 
-    return filterLast24Hours(deduped);
+    return { activities: filterToWindow(deduped, startsAt), ...perspective };
 
   } catch (error) {
     console.error('Failed to fetch personal activity:', error);
-    return [];
+    return { activities: [], ...perspective };
   }
+}
+
+export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
+  return (await getMyActivityFeed(address)).activities;
 }
 
 export const getCachedAllActivity = unstable_cache(
@@ -797,11 +869,11 @@ export const getCachedAllActivity = unstable_cache(
   { revalidate: ALL_ACTIVITY_CACHE_SECONDS, tags: ['activity:all'] },
 );
 
-export function getCachedMyActivity(address: string): Promise<ActivityEvent[]> {
+export function getCachedMyActivityFeed(address: string): Promise<MyActivityFeed> {
   const normalizedAddress = address.toLowerCase();
   const cachedGetter = unstable_cache(
-    async () => getMyActivity(normalizedAddress),
-    ['activity:my:v1', normalizedAddress],
+    async () => getMyActivityFeed(normalizedAddress),
+    ['activity:my:v2', normalizedAddress],
     {
       revalidate: MY_ACTIVITY_CACHE_SECONDS,
       tags: [`activity:${normalizedAddress}`],
@@ -810,8 +882,12 @@ export function getCachedMyActivity(address: string): Promise<ActivityEvent[]> {
 
   return cachedGetter().catch((error) => {
     if (isMissingIncrementalCacheError(error)) {
-      return getMyActivity(normalizedAddress);
+      return getMyActivityFeed(normalizedAddress);
     }
     throw error;
   });
+}
+
+export async function getCachedMyActivity(address: string): Promise<ActivityEvent[]> {
+  return (await getCachedMyActivityFeed(address)).activities;
 }

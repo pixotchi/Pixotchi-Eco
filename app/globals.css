@@ -1509,17 +1509,6 @@ button.profile-follow-button.follow-button p {
   animation: float-soft 4s ease-in-out infinite;
 }
 
-@keyframes about-scene-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-12px);
-  }
-}
-
 /* Port custom keyframes/utilities used by components to ensure v4 support */
 @keyframes accordion-down {
   from {
