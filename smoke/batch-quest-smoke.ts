@@ -13,6 +13,11 @@ import {
   LAND_CONTRACT_ADDRESS,
 } from '../lib/contracts';
 import type { QuestSlot } from '../lib/contracts';
+import {
+  clearBatchQuestRun,
+  isBatchQuestRunPaid,
+  markBatchQuestRunPaid,
+} from '../lib/quest-preferences';
 
 const projectFile = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -164,6 +169,56 @@ assert.equal(storageWordToAddress('0x00'), null);
 assert.equal(QUEST_REWARD_FALLBACK_ADDRESS, '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB');
 
 // ---------------------------------------------------------------------------
+// Run-scoped fee. The flat charge covers a whole run, however many transactions
+// the fleet needs, so a 119-slot wallet pays once rather than once per bundle.
+// ---------------------------------------------------------------------------
+
+// A minimal localStorage stand-in; these helpers are otherwise no-ops off-DOM.
+const store = new Map<string, string>();
+(globalThis as UntypedValue).window = {
+  localStorage: {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    removeItem: (k: string) => { store.delete(k); },
+    setItem: (k: string, v: string) => { store.set(k, v); },
+  },
+};
+
+const RUN_A = '1,2,3';
+const RUN_B = '1,2,3,4';
+const T0 = 1_700_000_000_000;
+
+clearBatchQuestRun();
+assert.equal(isBatchQuestRunPaid(RUN_A, T0), false, 'a fresh run must charge the fee');
+
+markBatchQuestRunPaid(RUN_A, T0);
+assert.equal(isBatchQuestRunPaid(RUN_A, T0), true, 'continuation bundles must be free');
+assert.equal(
+  isBatchQuestRunPaid(RUN_A, T0 + 59 * 60 * 1000),
+  true,
+  'the run must stay open long enough to finish every bundle',
+);
+
+// A different land set is a different run.
+assert.equal(isBatchQuestRunPaid(RUN_B, T0), false, 'changed holdings must start a new run');
+
+// Time-boxed, so a half-finished run cannot hand out free bundles tomorrow.
+assert.equal(
+  isBatchQuestRunPaid(RUN_A, T0 + 61 * 60 * 1000),
+  false,
+  'an expired run must charge again',
+);
+
+// A clock that jumps backwards must not pin a run open forever.
+assert.equal(
+  isBatchQuestRunPaid(RUN_A, T0 - 5_000),
+  false,
+  'a backwards clock must not keep a run open',
+);
+
+clearBatchQuestRun();
+assert.equal(isBatchQuestRunPaid(RUN_A, T0), false, 'clearing must end the run');
+
+// ---------------------------------------------------------------------------
 // Wiring: v1 must batch questStart only, and must not reintroduce the env-based
 // reward wallet gate that made a funded Farmer House look empty.
 // ---------------------------------------------------------------------------
@@ -182,6 +237,12 @@ assert.match(batchCard, /taskId: "s3_send_quest"/);
 assert.match(batchCard, /unreadableLands > 0 &&/);
 assert.match(batchCard, /entry\) => !entry\.ok/);
 assert.match(batchCard, /REFRESH_DEBOUNCE_MS/);
+// The burn must be conditional, recorded on success, and cleared when the run
+// finishes - otherwise a multi-transaction fleet pays the fee more than once.
+assert.match(batchCard, /if \(!shouldBurn\) return startCalls;/);
+assert.match(batchCard, /markBatchQuestRunPaid\(landIdsHash\)/);
+assert.match(batchCard, /clearBatchQuestRun\(\)/);
+assert.match(batchCard, /const hasEnoughTokens = !shouldBurn \|\| pixotchiBalance >= burnAmountWei;/);
 
 // Gate order must match batch claim's semantics: "nothing to do" outranks every
 // other blocker. Batch claim gets this free by returning early when nothing is

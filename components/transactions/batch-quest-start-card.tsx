@@ -19,7 +19,10 @@ import {
 import { postMissionProgress } from "@/lib/mission-tracking";
 import {
   DEFAULT_BATCH_QUEST_DIFFICULTY,
+  clearBatchQuestRun,
+  isBatchQuestRunPaid,
   loadBatchQuestDifficulty,
+  markBatchQuestRunPaid,
   storeBatchQuestDifficulty,
 } from "@/lib/quest-preferences";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -135,6 +138,9 @@ export default function BatchQuestStartCard({
   const [scanBlock, setScanBlock] = useState<bigint>(BigInt(0));
   const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
   const [unreadableLands, setUnreadableLands] = useState(0);
+  // The flat fee is charged once per run, not once per bundle. A fleet larger
+  // than MAX_BATCH_SIZE still costs BURN_AMOUNT_TOKENS in total.
+  const [runPaid, setRunPaid] = useState(false);
   const [totalSentThisSession, setTotalSentThisSession] = useState(0);
   const [txKey, setTxKey] = useState(0);
   const [difficulty, setDifficulty] = useState<QuestDifficultyId>(DEFAULT_BATCH_QUEST_DIFFICULTY);
@@ -153,12 +159,19 @@ export default function BatchQuestStartCard({
 
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
   const burnAmountWei = useMemo(() => parseUnits(BURN_AMOUNT_TOKENS.toString(), 18), []);
-  const hasEnoughTokens = pixotchiBalance >= burnAmountWei;
+  const shouldBurn = !runPaid;
+  const hasEnoughTokens = !shouldBurn || pixotchiBalance >= burnAmountWei;
 
   const landIdsHash = useMemo(
     () => lands.map((land) => land.tokenId.toString()).sort().join(","),
     [lands],
   );
+
+  // Re-read on every land-set change so a different wallet or holdings starts a
+  // fresh, unpaid run.
+  useEffect(() => {
+    setRunPaid(isBatchQuestRunPaid(landIdsHash));
+  }, [landIdsHash]);
 
   const scanQuests = useCallback(async () => {
     if (lands.length === 0) {
@@ -241,6 +254,16 @@ export default function BatchQuestStartCard({
     [snapshots],
   );
 
+  // A run ends once no idle farmers remain, so the next cycle pays again.
+  // Guarded on a non-empty snapshot set because a wholly failed scan also
+  // reports zero idle, and closing the run on that would charge the fee twice
+  // for a single run.
+  useEffect(() => {
+    if (!runPaid || snapshots.length === 0 || idleSlots.length > 0) return;
+    clearBatchQuestRun();
+    setRunPaid(false);
+  }, [idleSlots.length, runPaid, snapshots.length]);
+
   const totalBatches = Math.ceil(idleSlots.length / MAX_BATCH_SIZE);
   const hasMultipleBatches = idleSlots.length > MAX_BATCH_SIZE;
   const currentBatchSlots = useMemo(
@@ -251,6 +274,13 @@ export default function BatchQuestStartCard({
   const calls = useMemo(() => {
     if (currentBatchSlots.length === 0) return [];
 
+    const startCalls = currentBatchSlots.map((slot) =>
+      buildQuestStartCall(slot.landId, difficulty, slot.slotIndex),
+    );
+
+    // Continuation bundles of an already-paid run carry no burn.
+    if (!shouldBurn) return startCalls;
+
     const burnCall = {
       abi: erc20Abi,
       address: CREATOR_TOKEN_ADDRESS,
@@ -258,12 +288,8 @@ export default function BatchQuestStartCard({
       functionName: "transfer",
     };
 
-    const startCalls = currentBatchSlots.map((slot) =>
-      buildQuestStartCall(slot.landId, difficulty, slot.slotIndex),
-    );
-
     return [burnCall, ...startCalls];
-  }, [burnAmountWei, currentBatchSlots, difficulty]);
+  }, [burnAmountWei, currentBatchSlots, difficulty, shouldBurn]);
 
   const handleDifficultyChange = useCallback((nextValue: string | number) => {
     const parsed = Number(nextValue);
@@ -422,8 +448,10 @@ export default function BatchQuestStartCard({
               <div className="flex items-center gap-2 text-xs text-[hsl(var(--info))]">
                 <AlertTriangle className="h-3 w-3 flex-shrink-0" />
                 <span>
-                  Large send split into {totalBatches} batches of {MAX_BATCH_SIZE}. This
-                  batch: {currentBatchSlots.length} farmers.
+                  Large send split into {totalBatches} transactions of {MAX_BATCH_SIZE}.
+                  This one: {currentBatchSlots.length} farmers. The{" "}
+                  {BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI fee is charged once for
+                  the whole run, not per transaction.
                 </span>
               </div>
             </div>
@@ -467,17 +495,23 @@ export default function BatchQuestStartCard({
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1 text-xs">
                 <span className="text-muted-foreground">Cost:</span>
-                <span className="font-mono font-semibold text-primary">
-                  {BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI
-                </span>
+                {shouldBurn ? (
+                  <span className="font-mono font-semibold text-primary">
+                    {BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI
+                  </span>
+                ) : (
+                  <span className="font-semibold text-[hsl(var(--success-strong))]">
+                    Already paid this run
+                  </span>
+                )}
               </div>
               <SmartWalletTransaction
                 key={txKey}
                 calls={calls}
                 buttonText={
                   hasMultipleBatches
-                    ? `Burn & Send Batch (${currentBatchSlots.length})`
-                    : `Burn & Send ${currentBatchSlots.length} Farmer${currentBatchSlots.length === 1 ? "" : "s"}`
+                    ? `${shouldBurn ? "Burn & " : ""}Send Batch (${currentBatchSlots.length})`
+                    : `${shouldBurn ? "Burn & " : ""}Send ${currentBatchSlots.length} Farmer${currentBatchSlots.length === 1 ? "" : "s"}`
                 }
                 buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
                 disabled={!rewards.isReady || smartWalletLoading}
@@ -489,14 +523,23 @@ export default function BatchQuestStartCard({
                   setTotalSentThisSession(newTotalSent);
                   setTxKey((key) => key + 1);
 
+                  // Record the fee before anything else so a follow-up bundle
+                  // can never be charged twice for the same run.
+                  if (shouldBurn) {
+                    markBatchQuestRunPaid(landIdsHash);
+                    setRunPaid(true);
+                  }
+
+                  const feeNote = shouldBurn
+                    ? `Burned ${BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI & sent`
+                    : "Sent";
+
                   if (remainingCount > 0) {
                     toast.success(
-                      `Burned ${BURN_AMOUNT_TOKENS.toLocaleString()} tokens & sent ${sentCount} farmers! ${remainingCount} remaining.`,
+                      `${feeNote} ${sentCount} farmers! ${remainingCount} left - no extra fee.`,
                     );
                   } else {
-                    toast.success(
-                      `Burned ${BURN_AMOUNT_TOKENS.toLocaleString()} tokens & sent all ${newTotalSent} farmers!`,
-                    );
+                    toast.success(`${feeNote} all ${newTotalSent} farmers!`);
                   }
 
                   onSuccess?.();
