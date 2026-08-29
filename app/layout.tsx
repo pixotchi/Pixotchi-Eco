@@ -1,10 +1,9 @@
-import "ethereum-identity-kit/css";
 import type { Metadata, Viewport } from "next";
-import type { CSSProperties } from "react";
 import "./ock-compat.css";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
 import { coinbaseSans, pixelmix } from "./fonts";
+import { getThemeMetaColor } from "@/lib/theme-utils";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -12,11 +11,11 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
-  // Enhanced mobile viewport settings
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#a8d0f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#1f2d42" }
-  ]
+  // A single unscoped theme-color, derived from the palette rather than hardcoded.
+  // Media-scoped values fought the runtime theme sync: themes are class-based and
+  // independent of the OS setting, and defaultTheme is "light" with enableSystem
+  // false, so the pre-hydration paint is always the light palette.
+  themeColor: getThemeMetaColor("light")
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -165,24 +164,11 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={`${coinbaseSans.variable} ${pixelmix.variable}`}
-      style={{
-        "--radius": "1.125rem",
-        "--radius-control": "0.875rem",
-        "--radius-nav": "0.625rem",
-        "--radius-panel": "1.125rem",
-        "--radius-dialog": "1.25rem",
-      } as CSSProperties}
     >
       <head>
         <meta
           name="talentapp:project_verification"
           content="9ffd3d5d956960ca09dd1c00350b652e1dc820b5432f873814fc31be7de4c55518ed297d7a323487459309195296530a333768ca1df75d4bae10e72c8d7e65bc"
-        />
-        <style
-          id="pixotchi-font-prelude"
-          dangerouslySetInnerHTML={{
-            __html: `:root { --font-coinbase: ${coinbaseSans.style.fontFamily}; --font-pixel: ${pixelmix.style.fontFamily}; }`,
-          }}
         />
         {/* Structured Data */}
         <script
@@ -211,8 +197,8 @@ export default function RootLayout({
             })
           }}
         />
-        {/* Theme color */}
-        <meta name="theme-color" content="#1f2d42" />
+        {/* theme-color is emitted by the Viewport export above and kept in sync at
+            runtime by ThemeInitializer; a second hardcoded tag here would be dead. */}
         <meta name="msapplication-TileColor" content="#1f2d42" />
         {/* Fonts are self-hosted via next/font/local */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />

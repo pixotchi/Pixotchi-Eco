@@ -1,4 +1,5 @@
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
+import { formatAddress } from "@/lib/format-address";
 import { stakingAbi } from '@/public/abi/staking-abi';
 import UniswapAbi from '@/public/abi/Uniswap.json';
 import { encodeFunctionData,formatUnits,getAddress,keccak256,parseUnits,toBytes,toHex,WalletClient } from 'viem';
@@ -1645,7 +1646,7 @@ export const getTokenSymbol = async (tokenAddress: `0x${string}`): Promise<strin
       return symbol;
     } catch {
       // Fallback to truncated address if symbol fetch fails
-      return `${tokenAddress.slice(0, 6)}...${tokenAddress.slice(-4)}`;
+      return formatAddress(tokenAddress);
     }
   });
 };

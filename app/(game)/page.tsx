@@ -8,7 +8,9 @@ import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
+import { LoginHero, LoginIntro } from "@/components/login-hero";
 import { WalletProfile } from "@/components/wallet-profile";
+import { FarmViewProvider, useFarmView } from "@/lib/farm-view-context";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
 import { sdk } from "@farcaster/miniapp-sdk";
@@ -16,7 +18,7 @@ import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,t
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type KeyboardEvent } from "react";
+import { Activity,memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
@@ -28,7 +30,7 @@ import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { useFarcaster } from "@/hooks/useFarcaster";
-import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { useWebQueryState, WEB_QUERY_STATE_EVENT } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import type { AuthSurface } from "@/lib/auth-surface";
 import { CLIENT_ENV } from "@/lib/env-config";
@@ -39,7 +41,14 @@ import { cn } from "@/lib/utils";
 
 // Import broadcast component
 import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
-import { ViewportDebugOverlay } from "@/components/viewport-debug-overlay";
+// Developer-only viewport instrumentation. Loaded on demand and only rendered when
+// ?viewportDebug=1 is present, so it stays out of the app-shell chunk. (Not gated on
+// NODE_ENV: the whole point is reading visualViewport / safe-area insets inside the
+// production Mini App webview.)
+const ViewportDebugOverlay = dynamic(
+  () => import("@/components/viewport-debug-overlay").then((mod) => mod.ViewportDebugOverlay),
+  { ssr: false }
+);
 
 // Tab load error fallback component
 function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => void }) {
@@ -71,7 +80,7 @@ const createDynamicTab = (
   importFn: () => Promise<UntypedValue>,
   tabName: string
 ) => {
-  return dynamic(
+  const LazyTab = dynamic(
     () => importFn().catch((error) => {
       console.error(`Failed to load ${tabName} tab:`, error);
       // Return a module with default export as the error component
@@ -84,6 +93,11 @@ const createDynamicTab = (
       ssr: false // Disable SSR for tab components to avoid hydration issues
     }
   );
+
+  LazyTab.displayName = `DynamicTab(${tabName})`;
+  // Memoized once here rather than in each of the six tab modules: these take no
+  // props, so without memo every App render reconciles all six subtrees.
+  return memo(LazyTab);
 };
 
 // Tab content components with optimized code splitting and error handling
@@ -113,6 +127,10 @@ const tabComponents = {
     "Ranking"
   ),
 };
+// Same dynamic imports as tabComponents above. Calling these only warms the module
+// cache — it does not render anything — which is why prefetching composes with the
+// visitedTabs gate further down: the tab still mounts lazily, but by the time the
+// user clicks, the chunk is already in memory and there is no loading fallback.
 const tabPrefetchers: Record<Tab, () => Promise<unknown>> = {
   dashboard: () => import("@/components/tabs/dashboard-tab"),
   mint: () => import("@/components/tabs/mint-tab"),
@@ -158,74 +176,63 @@ const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
   about: new Set(["tab"]),
 };
 
-// Tab prefetching logic with de-duplication
+/**
+ * Warm the chunks for tabs the user is likely to open next.
+ *
+ * Pairs with the visitedTabs gate in App: that gate stops every tab from MOUNTING on
+ * first connect, but without prefetching it also means each tab's first open pays a
+ * cold dynamic import and shows a loading fallback. Prefetching only fetches the
+ * module, so the two together give lazy mount plus an instant first switch.
+ *
+ * Skipped entirely on Save-Data and 2g connections, and deferred to idle time so it
+ * never competes with the active tab's own data fetching.
+ */
 const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
-  const loadedTabs = useRef(new Set<string>());
-  const prefetchingTabs = useRef(new Set<string>());
-  const prefetchPromises = useRef<Map<string, Promise<unknown>>>(new Map());
+  const prefetched = useRef(new Set<Tab>());
 
   useEffect(() => {
     if (!isConnected) return;
-    const prefetchingTabsRef = prefetchingTabs.current;
-    const prefetchPromisesRef = prefetchPromises.current;
-    const connection = (navigator as UntypedValue).connection;
 
-    if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") {
+    const connection = (navigator as UntypedValue).connection;
+    if (
+      connection?.saveData ||
+      connection?.effectiveType === "slow-2g" ||
+      connection?.effectiveType === "2g"
+    ) {
       return;
     }
 
-    // Define tab navigation patterns for prefetching
     const currentIndex = TAB_VALUES.indexOf(activeTab);
+    const adjacent = [currentIndex - 1, currentIndex + 1]
+      .filter((index) => index >= 0 && index < TAB_VALUES.length)
+      .map((index) => TAB_VALUES[index]);
+    const frequentlyAccessed: Tab[] = ["dashboard", "mint", "swap"];
 
-    // Prefetch adjacent tabs (next and previous)
-    const prefetchTabs = [currentIndex - 1, currentIndex + 1]
-      .filter(index => index >= 0 && index < TAB_VALUES.length)
-      .map(index => TAB_VALUES[index]);
+    const targets = [...new Set<Tab>([...adjacent, ...frequentlyAccessed])].filter(
+      (tab) => tab !== activeTab && !prefetched.current.has(tab),
+    );
 
-    // Prefetch frequently accessed tabs
-    const frequentlyAccessedTabs: Tab[] = ["dashboard", "mint", "swap"];
-
-    const tabsToPrefetch = [...new Set([...prefetchTabs, ...frequentlyAccessedTabs])]
-      .filter((tab): tab is Tab => tab !== activeTab);
+    if (targets.length === 0) return;
 
     const runPrefetch = () => {
-      tabsToPrefetch.forEach((tab) => {
-        const key = String(tab);
-        if (key === activeTab) return;
-        if (loadedTabs.current.has(key) || prefetchingTabsRef.has(key)) return;
-        prefetchingTabsRef.add(key);
-
-        const prefetchPromise = tabPrefetchers[tab]()
-          .finally(() => {
-            prefetchingTabsRef.delete(key);
-            loadedTabs.current.add(key);
-            prefetchPromisesRef.delete(key);
-          });
-
-        prefetchPromisesRef.set(key, prefetchPromise);
+      targets.forEach((tab) => {
+        // Mark before awaiting so a re-render mid-flight cannot queue a duplicate;
+        // on failure the mark is released so a later pass can retry.
+        prefetched.current.add(tab);
+        void tabPrefetchers[tab]().catch(() => {
+          prefetched.current.delete(tab);
+        });
       });
     };
 
     const requestIdleCallback = (window as UntypedValue).requestIdleCallback;
-    const scheduler = typeof requestIdleCallback === 'function'
-      ? {
-        kind: 'idle' as const,
-        id: requestIdleCallback(runPrefetch, { timeout: 2500 }) as number,
-      }
-      : {
-        kind: 'timeout' as const,
-        id: window.setTimeout(runPrefetch, 750),
-      };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(runPrefetch, { timeout: 2500 }) as number;
+      return () => (window as UntypedValue).cancelIdleCallback?.(id);
+    }
 
-    return () => {
-      if (scheduler.kind === 'idle') {
-        (window as UntypedValue).cancelIdleCallback?.(scheduler.id);
-      } else {
-        window.clearTimeout(scheduler.id);
-      }
-      prefetchingTabsRef.clear();
-      prefetchPromisesRef.clear();
-    };
+    const id = window.setTimeout(runPrefetch, 750);
+    return () => window.clearTimeout(id);
   }, [activeTab, isConnected]);
 };
 
@@ -258,7 +265,7 @@ function LoginAuthActions({
   if (isRestoringBaseSession) {
     return (
       <div className={className}>
-        <BasePageLoader text="Restoring your Base session…" />
+        <BasePageLoader text="Restoring your Base session..." />
       </div>
     );
   }
@@ -267,14 +274,14 @@ function LoginAuthActions({
     return (
       <div className={className}>
         <div className="space-y-2">
-          <div className="text-muted-foreground text-sm text-center md:text-left">Connecting…</div>
+          <div className="text-muted-foreground text-sm text-center md:text-left">Connecting...</div>
           <Button
             variant="outline"
             className="w-full"
             onClick={handleMiniAppReconnect}
             disabled={isMiniConnectRetrying}
           >
-            {isMiniConnectRetrying ? "Retrying…" : "Retry Connection"}
+            {isMiniConnectRetrying ? "Retrying..." : "Retry Connection"}
           </Button>
         </div>
       </div>
@@ -303,7 +310,7 @@ function LoginAuthActions({
         }}
         disabled={!privyReady}
       >
-        {privyReady ? 'Continue with Privy' : 'Loading Privy…'}
+        {privyReady ? 'Continue with Privy' : 'Loading Privy...'}
       </Button>
       <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
       {isSolanaAuthAvailable() && (
@@ -346,26 +353,11 @@ function LoginAuthActions({
 
 function SharedFarmMintMobileToggle({
   activeTab,
-  isMiniApp,
 }: {
   activeTab: Tab;
-  isMiniApp: boolean;
 }) {
   const isSolana = useIsSolanaWallet();
-  const [dashboardView, setDashboardView] = useWebQueryState<'plants' | 'lands'>({
-    key: 'dashboardView',
-    defaultValue: 'plants',
-    enabled: !isMiniApp,
-    parse: (rawValue) => (rawValue === 'plants' || rawValue === 'lands' ? rawValue : null),
-    serialize: (value) => (value === 'plants' ? null : value),
-  });
-  const [mintType, setMintType] = useWebQueryState<'plant' | 'land'>({
-    key: 'mintType',
-    defaultValue: 'plant',
-    enabled: !isMiniApp,
-    parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
-    serialize: (value) => (value === 'plant' ? null : value),
-  });
+  const { dashboardView, setDashboardView, mintType, setMintType } = useFarmView();
 
   const isFarmOrMint = activeTab === 'dashboard' || activeTab === 'mint';
   const showToggle = isFarmOrMint && !(activeTab === 'mint' && isSolana);
@@ -396,6 +388,7 @@ function SharedFarmMintMobileToggle({
       data-shared-farm-mint-toggle
     >
       <ToggleGroup
+        ariaLabel="Farm view"
         value={value}
         onValueChange={handleValueChange}
         options={[
@@ -531,7 +524,7 @@ function SlidingNavTabs({
         return (
           <Button
             key={tab.id}
-            variant="nav"
+            variant="navSliding"
             onClick={() => onTabChange(tab.id)}
             data-active={isActive}
             onKeyDown={(event) => handleKeyDown(event, index)}
@@ -539,7 +532,7 @@ function SlidingNavTabs({
               tabRefs.current[index] = node;
             }}
             className={cn(
-              "relative z-10 bg-transparent shadow-none data-[active=true]:!border-transparent data-[active=true]:!bg-transparent data-[active=true]:!bg-none data-[active=true]:!shadow-none data-[active=true]:hover:!bg-transparent data-[active=true]:hover:!bg-none data-[active=true]:hover:!shadow-none",
+              "relative z-10",
               mode === "desktop"
                 ? "flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
@@ -548,7 +541,11 @@ function SlidingNavTabs({
             id={`tab-${mode}-${tab.id}`}
             aria-selected={isActive}
             aria-controls={`tabpanel-${tab.id}`}
-            aria-label={`Switch to ${tab.label} tab`}
+            /* No aria-label: the visible span below is the accessible name.
+               Overriding it with "Switch to X tab" made the programmatic name
+               diverge from the visible one (WCAG 2.5.3) and, because
+               aria-labelledby resolves before aria-label, leaked that string
+               into the tabpanel's name too. */
             tabIndex={isActive ? 0 : -1}
           >
             <Icon
@@ -593,6 +590,9 @@ export default function App() {
     key: "tab",
     defaultValue: "dashboard",
     enabled: !isMiniApp,
+    // The only push-history call site: Back should step between tabs rather than
+    // leaving the app. All other query state stays on replace.
+    history: "push",
     parse: (rawValue) => {
       if (!rawValue) {
         return null;
@@ -605,7 +605,7 @@ export default function App() {
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
-  const [isDesktopShell, setIsDesktopShell] = useState(false);
+  const [showViewportDebug, setShowViewportDebug] = useState(false);
   const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
   const [showStandaloneEthBalance, setShowStandaloneEthBalance] = useState(false);
   const [loginThemeState, setLoginThemeState] = useState({
@@ -623,6 +623,16 @@ export default function App() {
     loginThemeState.activeLayer === 1 ? loginTheme : previousLoginTheme,
   ] as const;
 
+  // Only render tabs the user has actually opened. React 19's <Activity mode="hidden">
+  // still RENDERS its children (it defers effects, not rendering), so every
+  // next/dynamic tab chunk was being fetched and evaluated on first connect even if
+  // the user never left Farm. Derived from activeTab rather than the setter because
+  // activeTab is URL-derived and also changes via popstate and the query-state event.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<Tab>>(() => new Set([activeTab]));
+  if (!visitedTabs.has(activeTab)) {
+    setVisitedTabs(new Set(visitedTabs).add(activeTab));
+  }
+
   useTabPrefetching(activeTab, isConnected);
 
   useFarcaster();
@@ -630,10 +640,21 @@ export default function App() {
 
   useEffect(() => {
     setLocalTestAuthAvailable(isLocalTestAuthAllowed());
+    setShowViewportDebug(
+      new URLSearchParams(window.location.search).get("viewportDebug") === "1",
+    );
   }, []);
 
   useEffect(() => {
     if (isConnected) {
+      return;
+    }
+
+    // Stop the cycle entirely for reduced-motion users. The CSS escape hatch only
+    // removes the cross-fade — leaving the timer running would swap the palette in a
+    // hard cut every 4s, which is worse than the fade it was meant to soften.
+    const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (motionQuery?.matches) {
       return;
     }
 
@@ -649,7 +670,17 @@ export default function App() {
       advanceLoginTheme();
     }, LOGIN_THEME_INTERVAL_MS);
 
-    return () => window.clearInterval(intervalId);
+    const handleMotionPreferenceChange = () => {
+      if (motionQuery?.matches) {
+        window.clearInterval(intervalId);
+      }
+    };
+    motionQuery?.addEventListener?.("change", handleMotionPreferenceChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      motionQuery?.removeEventListener?.("change", handleMotionPreferenceChange);
+    };
   }, [isConnected]);
 
   useEffect(() => {
@@ -659,7 +690,6 @@ export default function App() {
     const compactLandscapeQuery = window.matchMedia("(min-width: 54rem) and (max-height: 700px)");
     const roomyPortraitQuery = window.matchMedia("(min-width: 54rem)");
     const syncShellMode = () => {
-      setIsDesktopShell(desktopQuery.matches);
       setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);
       setShowStandaloneEthBalance(roomyPortraitQuery.matches && !desktopQuery.matches && !compactLandscapeQuery.matches);
     };
@@ -705,6 +735,10 @@ export default function App() {
 
     if (nextUrl !== currentPathWithSearch) {
       window.history.replaceState(window.history.state, "", nextUrl);
+      // Announce the rewrite like every other URL writer does. Without this, any
+      // mounted useWebQueryState keeps its old value while the URL no longer
+      // carries it, and the divergence only surfaces on an unrelated later write.
+      window.dispatchEvent(new Event(WEB_QUERY_STATE_EVENT));
     }
   }, [activeTab, isMiniApp]);
 
@@ -907,20 +941,21 @@ export default function App() {
               role="banner"
               aria-label="Application header"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex shrink-0 items-center space-x-1.5">
                   <Image
                     src="/PixotchiKit/Logonotext.svg"
                     alt="Pixotchi Mini Logo"
                     width={24}
                     height={24}
+                    preload
                   />
                   <h1 className="text-sm font-pixel text-foreground">
                     {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
                   </h1>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex min-w-0 items-center space-x-2">
                   {isHeaderStatusPlacement && (
                     <ErrorBoundary
                       variant="inline"
@@ -963,6 +998,7 @@ export default function App() {
                       height={24}
                       className="w-6 h-6"
                       aria-hidden="true"
+                      preload
                     />
                   </Button>
                   <ThemeSelector />
@@ -996,26 +1032,10 @@ export default function App() {
           {(!isConnected) ? (
             <div className="relative z-10 flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
               <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
-                <div className="flex flex-col items-center space-y-3 mb-8">
-	                  <Image
-	                    src="/PixotchiKit/Logonotext.svg"
-	                    alt="Pixotchi Mini Logo"
-	                    width={80}
-	                    height={80}
-	                    preload
-	                    sizes="80px"
-	                    quality={90}
-	                  />
-                  <h1 className="text-2xl font-pixel text-foreground">
-                    {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
-                  </h1>
-                </div>
-                <h2 className="text-xl font-semibold text-foreground mb-2">
-                  Welcome!
-                </h2>
-                <p className="text-muted-foreground mb-6 max-w-xs md:max-w-md">
-                  Connect your wallet, mint a plant and begin your farming journey on Base.
-                </p>
+                {/* Same components the server-rendered fallback uses (see
+                    app/(game)/layout.tsx), so the hand-off is seamless. */}
+                <LoginHero title={fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'} />
+                <LoginIntro />
               </div>
               <LoginAuthActions
                 className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
@@ -1043,19 +1063,20 @@ export default function App() {
               <div
                 ref={contentScrollRef}
                 data-viewport-shell="content"
-                className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y xl:safe-area-bottom"
+                className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y"
                 style={{
                   paddingTop: "var(--app-content-gutter)",
                   paddingRight: "var(--app-content-gutter)",
-                  paddingBottom: "calc(var(--app-content-gutter) + var(--app-content-bottom-offset))",
+                  // Includes the bottom inset directly: `xl:safe-area-bottom` compiled to
+                  // nothing, because .safe-area-bottom is a plain class in @layer utilities
+                  // rather than an @utility, so Tailwind never generated the xl: variant.
+                  paddingBottom:
+                    "calc(var(--app-content-gutter) + var(--app-content-bottom-offset) + var(--app-content-safe-bottom, 0px))",
                   paddingLeft: "var(--app-content-gutter)",
                 }}
-                role="tabpanel"
-                id={`tabpanel-${activeTab}`}
-                aria-labelledby={isDesktopShell ? `tab-desktop-${activeTab}` : `tab-mobile-${activeTab}`}
-                aria-label={`${tabs.find(t => t.id === activeTab)?.label || activeTab} content`}
               >
-                <SharedFarmMintMobileToggle activeTab={activeTab} isMiniApp={isMiniApp} />
+                <FarmViewProvider isMiniApp={isMiniApp}>
+                <SharedFarmMintMobileToggle activeTab={activeTab} />
                 <ErrorBoundary
                   key="tab-boundary"
                   resetKeys={address ? [address] : []}
@@ -1072,10 +1093,25 @@ export default function App() {
                       // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
                       // This preserves scroll position and state (e.g. inputs) when switching tabs.
                       const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
+                      const isVisited = visitedTabs.has(tab.id);
 
                       return (
                         <Activity key={tab.id} mode={activityMode}>
+                          {/*
+                            One tabpanel per tab, not one shared panel, and one for
+                            EVERY tab rather than only visited ones: each of the 12 nav
+                            buttons (6 desktop + 6 mobile) sets
+                            aria-controls="tabpanel-<id>", so all six ids must exist or
+                            those references dangle. Rendering the panel element is not
+                            what costs anything — mounting <TabComponent /> is, because
+                            <Activity mode="hidden"> still renders its children and would
+                            pull every next/dynamic tab chunk on first connect. So the
+                            element is always here and only the contents wait for a visit.
+                          */}
                           <div
+                            role="tabpanel"
+                            id={`tabpanel-${tab.id}`}
+                            aria-labelledby={`tab-desktop-${tab.id}`}
                             className={
                               activeTab === tab.id
                                 ? cn(
@@ -1085,21 +1121,24 @@ export default function App() {
                                 : 'hidden'
                             }
                           >
-                            <ErrorBoundary
-                              resetKeys={[tab.id, ...(address ? [address] : [])]}
-                              variant="card"
-                              onError={(error, errorInfo) => {
-                                console.error(`Error in ${tab.id} tab:`, { error, errorInfo });
-                              }}
-                            >
-                              {TabComponent ? <TabComponent /> : null}
-                            </ErrorBoundary>
+                            {isVisited ? (
+                              <ErrorBoundary
+                                resetKeys={[tab.id, ...(address ? [address] : [])]}
+                                variant="card"
+                                onError={(error, errorInfo) => {
+                                  console.error(`Error in ${tab.id} tab:`, { error, errorInfo });
+                                }}
+                              >
+                                {TabComponent ? <TabComponent /> : null}
+                              </ErrorBoundary>
+                            ) : null}
                           </div>
                         </Activity>
                       );
                     })}
                   </TabVisibilityProvider>
                 </ErrorBoundary>
+                </FarmViewProvider>
               </div>
 
               {/* Bottom Navigation with safe area */}
@@ -1135,7 +1174,7 @@ export default function App() {
           onDismiss={handleDismissBroadcast}
           onImpression={trackImpression}
         />
-        <ViewportDebugOverlay />
+        {showViewportDebug && <ViewportDebugOverlay />}
       </div>
     </div>
   );

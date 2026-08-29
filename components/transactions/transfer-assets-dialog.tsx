@@ -511,7 +511,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           {/* ENS resolution result */}
           {(resolvingEns || resolvedAddress || ensError) && (
             <div className="text-xs">
-              {resolvingEns && <span className="text-muted-foreground">Resolving ENS…</span>}
+              {resolvingEns && <span className="text-muted-foreground">Resolving ENS...</span>}
               {!resolvingEns && resolvedAddress && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Resolved to</span>
@@ -650,7 +650,17 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </label>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" onClick={() => { if (!loading) { setConfirmStep(false); setAck(false); } }} disabled={loading}>Back</Button>
-            <Button onClick={onConfirm} disabled={!ack || loading}>{loading ? 'Transferring…' : 'Confirm & Send'}</Button>
+            {/* Uses Button's own loading prop: it sets aria-busy, forces disabled and
+                renders a spinner. A word-swap alone read as an inert relabelled
+                control on a slow RPC — on an irreversible transfer. */}
+            <Button
+              onClick={onConfirm}
+              disabled={!ack}
+              loading={loading}
+              loadingText="Transferring..."
+            >
+              Confirm &amp; Send
+            </Button>
           </div>
         </div>
         )}

@@ -8,6 +8,12 @@ import {
   useState,
 } from "react";
 import { TransactionProvider, useTransactions } from "ethereum-identity-kit";
+// ethereum-identity-kit's stylesheet (~93 KB) is imported here rather than in the
+// root layout: it only matters once an EFP surface is opened, and a root-layout CSS
+// import is render-blocking on every route including /status, /admin and the login
+// screen. Both EIK consumers import it so it is present whichever one loads first.
+import "ethereum-identity-kit/css";
+
 import { TransactionModalWrapper } from "@/components/transaction-modal-wrapper";
 import { getPrimaryRpcEndpoint } from "@/lib/rpc-transport";
 

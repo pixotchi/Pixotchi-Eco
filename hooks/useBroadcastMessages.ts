@@ -204,12 +204,24 @@ export function useBroadcastMessages() {
     // Initial fetch
     fetchMessagesRef.current();
 
-    // Set up polling interval (only once)
+    // Set up polling interval (only once).
+    // Skip ticks while the tab is hidden — this fired every 90s regardless,
+    // costing ~40 requests/hour per backgrounded session. The chat polls already
+    // gate on visibilityState the same way.
     pollingIntervalRef.current = setInterval(() => {
-      if (mountedRef.current) {
+      if (mountedRef.current && document.visibilityState === 'visible') {
         fetchMessagesRef.current();
       }
     }, POLL_INTERVAL);
+
+    // Catch up as soon as the tab comes back. fetchMessages already enforces its
+    // own 10s floor, so this cannot turn tab-switching into a request storm.
+    const handleVisibility = () => {
+      if (mountedRef.current && document.visibilityState === 'visible') {
+        fetchMessagesRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     // Cleanup on unmount
     return () => {
@@ -217,6 +229,7 @@ export function useBroadcastMessages() {
       if (process.env.NODE_ENV === 'development') {
         console.debug('[Broadcast] Cleaning up polling system');
       }
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import {
@@ -621,17 +622,12 @@ function LandsViewContent() {
 
   if (lands.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
-        <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-          <LandPlot className="w-12 h-12 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">
-          No Lands Yet!
-        </h3>
-        <p className="text-muted-foreground">
-          Head over to the &apos;Mint&apos; tab to get your first plot of land.
-        </p>
-      </div>
+      <EmptyState
+        className="h-[60vh]"
+        icon={LandPlot}
+        title="No Lands Yet!"
+        description="Head over to the 'Mint' tab to get your first plot of land."
+      />
     );
   }
 
@@ -775,6 +771,7 @@ function LandsViewContent() {
                 <CardTitle>Buildings</CardTitle>
                 <div className="xl:hidden">
                   <ToggleGroup
+                    ariaLabel="Land area"
                     value={buildingType}
                     onValueChange={(v) => {
                       const newType = v as 'village' | 'town';

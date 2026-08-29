@@ -6,9 +6,6 @@
 // Provider
 export { SolanaWalletProvider, withSolanaWallet } from './SolanaWalletProvider';
 
-// Transaction UI
-export { SolanaBridgeTransaction } from './SolanaBridgeTransaction';
-
 // Gating components
 export { 
   SolanaGate, 
@@ -31,6 +28,3 @@ export { useSolanaBridge } from '@/hooks/useSolanaBridge';
 
 // Re-export utility functions
 export { isSolanaEnabled } from '@/lib/solana-constants';
-
-// Re-export types
-export type { SolanaBridgeTransactionProps } from './SolanaBridgeTransaction';

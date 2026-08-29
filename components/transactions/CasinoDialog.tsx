@@ -685,7 +685,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <button
                         type="button"
                         aria-label={`Bet street ${streetNums[0]} to ${streetNums[2]}`}
-                        className="absolute top-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
+                        className="absolute top-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.STREET, `Street ${streetNums[0]}-${streetNums[2]}`, streetNums); }}
                     >
                         <div className={`w-6 h-2 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.STREET, streetNums) ? 'bg-purple-500 ring-1 ring-white' : 'hover:bg-purple-400/70'}`} />
@@ -697,7 +697,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <button
                         type="button"
                         aria-label={`Bet split ${numBelow} and ${num}`}
-                        className="absolute bottom-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
+                        className="absolute bottom-0 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${numBelow}-${num}`, [numBelow, num]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [numBelow, num]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
@@ -709,7 +709,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <button
                         type="button"
                         aria-label={`Bet split ${num} and ${numRight}`}
-                        className="absolute right-0 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
+                        className="absolute right-0 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SPLIT, `Split ${num}-${numRight}`, [num, numRight]); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SPLIT, [num, numRight]) ? 'bg-amber-400 ring-1 ring-white' : 'hover:bg-white/60'}`} />
@@ -721,7 +721,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <button
                         type="button"
                         aria-label={`Bet corner ${[numBelow, num, numBelow + 3, numRight].join(', ')}`}
-                        className="absolute bottom-0 right-0 z-30 flex h-11 w-11 translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
+                        className="absolute bottom-0 right-0 z-30 flex h-11 w-11 translate-x-1/2 translate-y-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => {
                             e.stopPropagation();
                             const cornerSet = [numBelow, num, numBelow + 3, numRight];
@@ -737,7 +737,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     <button
                         type="button"
                         aria-label={`Bet six line ${streetNums[0]} to ${streetNums[2] + 3}`}
-                        className="absolute right-0 top-0 z-30 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
+                        className="absolute right-0 top-0 z-30 flex h-11 w-11 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07120d] group"
                         onClick={(e) => { e.stopPropagation(); addBet(CasinoBetType.SIX_LINE, `6-Line ${streetNums[0]}-${streetNums[2] + 3}`, sixLineNums); }}
                     >
                         <div className={`w-3 h-3 rounded-full transition-all shadow-sm ${hasBet(CasinoBetType.SIX_LINE, sixLineNums) ? 'bg-orange-400 ring-1 ring-white' : 'hover:bg-orange-400/70'}`} />

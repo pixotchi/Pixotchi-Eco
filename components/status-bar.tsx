@@ -194,19 +194,23 @@ export default function StatusBar({
     <div
       ref={statusRootRef}
       data-viewport-shell={!isHeaderPlacement ? "status" : undefined}
-      className={isHeaderPlacement ? "shrink-0" : "w-full bg-transparent xl:flex xl:justify-end"}
+      /* In header placement this must be the element that gives way: it used to be
+         shrink-0, so on a compact landscape phone (>=54rem wide, <=700px tall) it
+         pushed the theme selector past the chrome wrapper's overflow:hidden edge
+         once balances grew to 6+ digits. */
+      className={isHeaderPlacement ? "min-w-0 shrink" : "w-full bg-transparent xl:flex xl:justify-end"}
       role="region"
       aria-label="Account balance and staking"
     >
       <div
         className={
           isHeaderPlacement
-            ? "w-fit max-w-full px-0 py-0"
+            ? "w-full min-w-0 max-w-full px-0 py-0"
             : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 max-[380px]:px-2 max-[340px]:px-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-[var(--radius-panel)] xl:border xl:border-[hsl(var(--border-strong)/0.28)] xl:bg-secondary/70"
         }
       >
-        <div className={isHeaderPlacement ? "flex items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:justify-start"}>
-          <div className={isHeaderPlacement ? "flex min-w-0 items-center gap-2" : "flex min-w-0 flex-1 items-center gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:gap-3"} role="group" aria-label="Token balances">
+        <div className={isHeaderPlacement ? "flex w-full min-w-0 items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:justify-start"}>
+          <div className={isHeaderPlacement ? "app-status-scroll flex min-w-0 items-center gap-2 overflow-x-auto" : "flex min-w-0 flex-1 items-center gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className={balanceItemClassName} aria-label={`SOL balance: ${solText} SOL`}>

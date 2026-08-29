@@ -79,8 +79,24 @@ const DialogContent = React.forwardRef<
   stickyFooter = false,
   surface = "default",
   useSafeAreaInset = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
-}, ref) => (
+}, ref) => {
+  /*
+   * Restore focus to whatever opened the dialog.
+   *
+   * Most dialogs here are state-controlled (`open` / `onOpenChange`) rather than
+   * wrapped in a DialogTrigger — 17 of 20 — so Radix has no trigger element to
+   * hand focus back to and it falls through to <body>. Keyboard users lose their
+   * place and have to tab from the top of the page again.
+   *
+   * onOpenAutoFocus fires before focus moves into the dialog, so document.activeElement
+   * is still the opener at that point.
+   */
+  const openerRef = React.useRef<HTMLElement | null>(null);
+
+  return (
   <DialogPortal>
     <DialogOverlay
       className={cn(
@@ -108,6 +124,22 @@ const DialogContent = React.forwardRef<
           : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         frameClassName
       )}
+      onOpenAutoFocus={(event) => {
+        const active = typeof document !== "undefined" ? document.activeElement : null;
+        openerRef.current =
+          active instanceof HTMLElement && active !== document.body ? active : null;
+        onOpenAutoFocus?.(event);
+      }}
+      onCloseAutoFocus={(event) => {
+        onCloseAutoFocus?.(event);
+        const opener = openerRef.current;
+        openerRef.current = null;
+        // Only take over when Radix has nothing to restore to (no DialogTrigger)
+        // and the opener is still in the document.
+        if (event.defaultPrevented || !opener || !opener.isConnected) return;
+        event.preventDefault();
+        opener.focus({ preventScroll: true });
+      }}
       {...props}
     >
       <div
@@ -148,7 +180,8 @@ const DialogContent = React.forwardRef<
       </div>
     </DialogPrimitive.Content>
   </DialogPortal>
-));
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({

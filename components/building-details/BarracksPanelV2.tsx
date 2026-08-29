@@ -50,6 +50,7 @@ import {
   formatLifetimeProduction,
   formatTokenAmount,
   formatTokenAmountPrecise,
+  getFriendlyErrorMessage,
 } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
@@ -936,7 +937,7 @@ export default function BarracksPanelV2({
                   toast.success(`${buildTokenSymbol} approved`);
                   await refreshAfterApproval("build");
                 }}
-                onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
               />
             ) : !hasBuildBalance ? (
               <>
@@ -955,7 +956,7 @@ export default function BarracksPanelV2({
                   toast.success("Barracks built");
                   await refreshAfterSuccess();
                 }}
-                onError={(error) => toast.error(`Build failed: ${error.message || error}`)}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
               />
             )}
           </div>
@@ -1082,7 +1083,7 @@ export default function BarracksPanelV2({
                 toast.success(`${trainingTokenSymbol} approved`);
                 await refreshAfterApproval("training");
               }}
-              onError={(error) => toast.error(`Approval failed: ${error.message || error}`)}
+              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
           ) : !hasTrainingBalance ? (
             <>
@@ -1103,7 +1104,7 @@ export default function BarracksPanelV2({
                 toast.success("Training started");
                 await refreshAfterSuccess();
               }}
-              onError={(error) => toast.error(`Training failed: ${error.message || error}`)}
+              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
           )}
         </div>
@@ -1330,7 +1331,7 @@ export default function BarracksPanelV2({
                 setAttackPhalanx("");
                 await refreshAfterRaidSuccess();
               }}
-              onError={(error) => toast.error(`Raid failed: ${error.message || error}`)}
+              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
           ) : (
             <DisabledTransaction buttonText="Raid Unavailable" buttonClassName="w-full" />

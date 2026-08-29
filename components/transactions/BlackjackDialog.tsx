@@ -948,6 +948,24 @@ export default function BlackjackDialog({
                     newPlayerCards.push(newCard);
                 }
 
+                // A double always ends the hand; so does a hit that busts. When that
+                // happens on hand 1 of a split, the turn moves to hand 2.
+                //
+                // This used to be left entirely to the follow-up onchain sync. That
+                // sync gives up after 3 attempts, and every action button is gated on
+                // `actionButtonsReady`, so losing the race left the player looking at
+                // "Playing Hand 1" with no Double button and the "Please reopen
+                // Blackjack" notice. Advancing locally makes the common path work
+                // without waiting on the RPC; the sync still finalizes the exact flags,
+                // and handleActionClick re-validates every action against a fresh
+                // snapshot before sending, so an optimistic flag cannot submit an
+                // action the contract would reject.
+                const handFinished =
+                    result.actionTaken === BlackjackAction.DOUBLE ||
+                    (result.actionTaken === BlackjackAction.HIT && result.busted === true);
+                const movesToSecondHand =
+                    prev.hasSplit && targetHandIndex === 0 && handFinished;
+
                 return {
                     ...prev,
                     isActive: true,
@@ -957,12 +975,37 @@ export default function BlackjackDialog({
                     // Update value
                     playerValue: targetHandIndex === 0 ? (result.handValue ?? prev.playerValue) : prev.playerValue,
                     splitValue: targetHandIndex === 1 ? (result.handValue ?? prev.splitValue) : prev.splitValue,
+                    currentHandIndex: movesToSecondHand ? 1 : prev.currentHandIndex,
                     // A post-hit hand can no longer double/surrender/split on this turn.
                     // Fresh onchain snapshot will follow and finalize exact action flags.
-                    canDouble: false,
+                    canHit: movesToSecondHand ? true : prev.canHit,
+                    canStand: movesToSecondHand ? true : prev.canStand,
+                    canDouble: movesToSecondHand ? newSplitCards.length === 2 : false,
                     canSplit: false,
                     canSurrender: false,
                     contractPhase: BlackjackPhase.PLAYER_TURN
+                };
+            });
+        }
+
+        // STAND emits no card, so it never reached the optimistic update above and
+        // relied entirely on the sync to move the turn to hand 2 — same failure mode
+        // as double.
+        if (result.actionTaken === BlackjackAction.STAND) {
+            setGameState(prev => {
+                const actedHandIndex = result.handIndex ?? prev.currentHandIndex;
+                if (!prev.hasSplit || actedHandIndex !== 0) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    currentHandIndex: 1,
+                    canHit: true,
+                    canStand: true,
+                    canDouble: prev.splitCards.length === 2,
+                    canSplit: false,
+                    canSurrender: false,
+                    contractPhase: BlackjackPhase.PLAYER_TURN,
                 };
             });
         }

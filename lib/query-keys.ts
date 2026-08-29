@@ -7,6 +7,8 @@ export const queryKeys = {
     ["leaderboard", board, address?.toLowerCase() ?? "all"] as const,
   mint: (mintType: string, address: string | null | undefined) =>
     ["mint", mintType, address?.toLowerCase() ?? "anonymous"] as const,
+  plantsByOwner: (address: string | null | undefined) =>
+    ["plantsByOwner", address?.toLowerCase() ?? "anonymous"] as const,
 } as const;
 
 export type QueryKey = readonly UntypedValue[];

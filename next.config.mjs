@@ -1,7 +1,3 @@
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-
 const rawAppBuildId =
   process.env.NEXT_PUBLIC_APP_BUILD_ID ||
   process.env.VERCEL_DEPLOYMENT_ID ||
@@ -16,28 +12,12 @@ const nextConfig = {
   turbopack: {},
   // NOTE: cacheComponents is NOT enabled because it's incompatible with
   // dynamic/runtime/revalidate segment configs used for fresh onchain data
-  // Silence warnings
-  // https://github.com/WalletConnect/walletconnect-monorepo/issues/1908
-  webpack: (config) => {
-    config.externals.push("pino-pretty", "lokijs", "encoding");
-
-    // Solana/Privy: Add webpack externals for Yarn compatibility
-    // See: https://docs.privy.io/basics/react/setup#solana
-    if (process.env.NEXT_PUBLIC_SOLANA_ENABLED === 'true') {
-      config.externals['@solana/kit'] = 'commonjs @solana/kit';
-      config.externals['@solana-program/memo'] = 'commonjs @solana-program/memo';
-      config.externals['@solana-program/system'] = 'commonjs @solana-program/system';
-      config.externals['@solana-program/token'] = 'commonjs @solana-program/token';
-    }
-
-    // Resolve @solana/kit to a single version to avoid nested dependency issues
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "@solana/kit$": require.resolve("@solana/kit"),
-      "@solana/kit/program-client-core$": require.resolve("@solana/kit/program-client-core"),
-    };
-    return config;
-  },
+  // NOTE: a webpack() config used to live here. Next 16 builds with Turbopack by
+  // default for both `next dev` and `next build`, so it was never invoked — and
+  // the empty `turbopack` key above suppressed the warning that would have said so.
+  // Nothing in it did live work: pino-pretty/lokijs/encoding are already handled by
+  // serverExternalPackages below, and the @solana/kit externals + dedupe alias are
+  // not needed under Turbopack's resolver.
   // External packages for server components
   serverExternalPackages: ["pino", "pino-pretty", "thread-stream", "lokijs", "encoding"],
   // Configure Next.js Image optimization qualities

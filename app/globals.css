@@ -7,6 +7,15 @@
 @source "../**/*.mdx";
 @plugin "tailwindcss-animate";
 
+/*
+ * Bind the `dark:` variant to our theme class instead of the OS setting.
+ * Themes are class-based (next-themes, attribute="class", enableSystem={false}),
+ * so Tailwind v4's default prefers-color-scheme behaviour would decouple
+ * `dark:` utilities from the selected theme entirely.
+ * :where() keeps the variant at zero specificity.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   /* Colors mapped to existing CSS variables so classes like bg-card, text-muted-foreground, ring-ring continue to work */
   --color-background: hsl(var(--background));
@@ -46,6 +55,12 @@
   --radius-nav: var(--radius-nav);
   --radius-panel: var(--radius-panel);
   --radius-dialog: var(--radius-dialog);
+  /* Tailwind's own xl/2xl/3xl defaults (12/16/24px) are smaller than our remapped
+     lg (18px), so the scale ran backwards. Derive them from the panel/dialog radii
+     so the ladder is strictly increasing. */
+  --radius-xl: var(--radius-dialog);
+  --radius-2xl: calc(var(--radius-dialog) + 0.25rem);
+  --radius-3xl: calc(var(--radius-dialog) + 0.75rem);
 
   /* Shadows: expose our elevation language as Tailwind shadow-* utilities */
   --shadow-hairline: var(--shadow-hairline);
@@ -72,7 +87,9 @@
 
 @layer base {
   :root {
-    --radius: 0.75rem;
+    /* Matches the value the root layout used to force via an inline style attribute.
+       Kept here so there is a single source of truth. */
+    --radius: 1.125rem;
     --motion-quick: 140ms;
     --motion-standard: 220ms;
     --motion-modal: 280ms;
@@ -92,6 +109,10 @@
     --app-bottom-nav-height: 0px;
     --app-content-gutter: 1rem;
     --app-content-bottom-offset: 0px;
+    /* At xl the bottom nav is removed and the content pane becomes the bottom-most
+       element, so it has to carry the safe-area inset itself. Zero below xl, where
+       the nav already applies .safe-area-bottom. */
+    --app-content-safe-bottom: 0px;
     --blur-overlay: 4px;
     --blur-surface: 12px;
 
@@ -101,7 +122,10 @@
      */
     --z-base: 0;
     --z-sticky: 1100;
-    --z-dropdown: 1150;
+    /* Above --z-modal-nested: a DropdownMenu opened inside a Dialog portals to
+     * document.body as a sibling of the dialog, so it must outrank it or it
+     * renders behind. Still below --z-transaction. */
+    --z-dropdown: 1350;
     --z-overlay: 1200;
     --z-modal: 1210;
     --z-modal-nested: 1300;
@@ -178,12 +202,16 @@
     --accent: 166 55% 84%;
     --accent-foreground: 181 56% 16%;
     --destructive: 356 76% 44%;
+    /* Ink-weight destructive for text; --destructive stays the fill colour. */
+    --destructive-strong: 356 76% 34%;
     --destructive-foreground: 0 0% 98%;
     --success: 148 76% 24%;
     --success-strong: 148 78% 20%;
     --success-foreground: 0 0% 98%;
     --warning: 38 92% 49%;
     --warning-foreground: 35 70% 12%;
+    /* Ink-weight warning for text on card/background surfaces. */
+    --warning-strong: 38 92% 27%;
     --info: 196 82% 34%;
     --info-foreground: 0 0% 98%;
     --value: 188 90% 20%;
@@ -219,14 +247,18 @@
     --card-foreground: 240 10% 4%;
     --popover-foreground: 240 10% 4%;
     --secondary-foreground: 240 10% 4%;
-    --muted-foreground: 240 4% 38%;
+    /* Darkened from 38% — at 38% the inactive nav labels measured 3.6–3.9:1 on the
+     * nav chrome across violet/pink/blue/red, below the 4.5:1 AA threshold. */
+    --muted-foreground: 240 5% 30%;
     --destructive: 356 28% 58%;
+    --destructive-strong: 356 68% 38%;
     --destructive-foreground: 356 34% 16%;
     --success: 142 72% 36%;
     --success-strong: 142 76% 28%;
     --success-foreground: 0 0% 98%;
     --warning: 38 46% 58%;
     --warning-foreground: 34 50% 13%;
+    --warning-strong: 38 74% 27%;
     --info-foreground: 0 0% 98%;
     --gradient-solana: linear-gradient(135deg, hsl(265 70% 54%), hsl(184 76% 42%));
   }
@@ -272,6 +304,7 @@
     --info: 190 72% 30%;
     --warning: 38 94% 46%;
     --warning-foreground: 35 74% 12%;
+    --warning-strong: 38 88% 26%;
     --value: 188 86% 24%;
     --border: 39 38% 50%;
     --border-strong: 39 40% 38%;
@@ -300,6 +333,7 @@
     --accent: 24 62% 79%;
     --accent-foreground: 356 64% 18%;
     --destructive: 356 76% 46%;
+    --destructive-strong: 356 76% 40%;
     --destructive-foreground: 0 0% 98%;
     --info: 198 74% 32%;
     --value: 198 80% 25%;
@@ -330,6 +364,7 @@
     --accent: 276 48% 83%;
     --accent-foreground: 326 70% 20%;
     --destructive: 344 28% 56%;
+    --destructive-strong: 344 68% 38%;
     --destructive-foreground: 344 34% 16%;
     --info: 276 70% 44%;
     --value: 266 68% 36%;
@@ -388,6 +423,7 @@
     --accent: 294 54% 82%;
     --accent-foreground: 263 74% 20%;
     --destructive: 350 28% 56%;
+    --destructive-strong: 350 68% 38%;
     --destructive-foreground: 350 34% 16%;
     --info: 292 68% 44%;
     --value: 198 80% 25%;
@@ -438,12 +474,14 @@
     --accent: 170 32% 32%;
     --accent-foreground: 174 76% 86%;
     --destructive: 356 72% 50%;
+    --destructive-strong: 356 90% 83%;
     --destructive-foreground: 0 0% 98%;
     --success: 148 68% 48%;
     --success-strong: 148 72% 60%;
     --success-foreground: 150 58% 8%;
     --warning: 38 94% 58%;
     --warning-foreground: 35 70% 10%;
+    --warning-strong: 38 96% 72%;
     --info: 198 92% 66%;
     --info-foreground: 218 45% 10%;
     --value: 188 88% 72%;
@@ -580,6 +618,18 @@
     transition-property: color, background-color;
     transition-timing-function: var(--ease-standard);
     transition-duration: var(--motion-standard);
+  }
+
+  /*
+   * Tailwind v4 dropped Preflight's `cursor: pointer` on buttons in favour of
+   * the browser default. Restore it so interactive controls read as interactive
+   * on pointer devices. Disabled controls keep the default arrow.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for] {
+    cursor: pointer;
   }
 
   /* Respect user preference to reduce motion */
@@ -921,23 +971,7 @@
     fill: hsl(var(--primary));
   }
 
-  /* Interactive Base Logo - Initial colors for individual box interactions */
-  .interactive-base-box-1,
-  .interactive-base-box-2,
-  .interactive-base-box-3,
-  .interactive-base-box-4 {
-    fill: hsl(var(--primary));
-    transition: fill 0.3s ease;
-    cursor: pointer;
-  }
 
-  /* Touch devices - faster tap feedback */
-  .interactive-base-box-1:active,
-  .interactive-base-box-2:active,
-  .interactive-base-box-3:active,
-  .interactive-base-box-4:active {
-    transition: fill 0.1s ease;
-  }
 
 
 }
@@ -1065,6 +1099,18 @@
 
   .app-shell-inner {
     max-width: 28rem;
+    /*
+     * Horizontal safe area. viewportFit: "cover" is set in app/layout.tsx, so on a
+     * notched phone in landscape the display cutout overlaps the left/right edges.
+     *
+     * Applied HERE, on the shell wrapper, precisely because this element sets no
+     * horizontal padding of its own — so the inset composes instead of replacing a
+     * gutter. (Putting an equivalent rule on the header, which carries px-4,
+     * silently collapsed that padding to 0 on every device without a cutout.)
+     * Resolves to 0px when there is no cutout, so it is inert on normal screens.
+     */
+    padding-left: max(0px, env(safe-area-inset-left), var(--safe-area-inset-left), var(--browser-safe-area-left));
+    padding-right: max(0px, env(safe-area-inset-right), var(--safe-area-inset-right), var(--browser-safe-area-right));
   }
 
   .app-shell-inner[data-connected="false"] {
@@ -1099,6 +1145,17 @@
   /* Header safe area helper */
   .safe-area-top {
     padding-top: max(0.5rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top));
+  }
+
+  @media (min-width: 80rem) {
+    :root {
+      --app-content-safe-bottom: max(
+        0px,
+        env(safe-area-inset-bottom),
+        var(--safe-area-inset-bottom),
+        var(--browser-safe-area-bottom)
+      );
+    }
   }
 
   /* Bottom nav safe area helper */
@@ -1251,12 +1308,34 @@
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     position: relative;
-    z-index: var(--z-dropdown);
+    /* Sticky app chrome, not a dropdown. (Bounded by the wrapper's own
+     * z-[var(--z-sticky)] stacking context either way.) */
+    z-index: var(--z-sticky);
   }
 }
 
-/* Mobile scrolling performance optimizations */
 @layer utilities {
+
+  /*
+   * Repoint the destructive/warning TEXT utilities at their ink tokens.
+   *
+   * --destructive and --warning are fill colours: they are tuned to carry
+   * --destructive-foreground / --warning-foreground on top of them. Used as text
+   * on --card / --popover / --background they measured 1.76–3.4:1 in 7 of the 8
+   * themes (dark was worst at 1.84:1), failing AA for the 12px error copy they
+   * are mostly used for.
+   *
+   * Overriding the utility here rather than repointing --color-destructive keeps
+   * bg-/border-/ring-destructive on the fill colour, so the ~45 fill call sites
+   * are untouched while all 68 text call sites are fixed.
+   */
+  .text-destructive {
+    color: hsl(var(--destructive-strong));
+  }
+
+  .hover\:text-destructive:hover {
+    color: hsl(var(--destructive-strong));
+  }
 
   /* Optimize mobile scrolling performance */
   @media (max-width: 768px) {
@@ -1274,114 +1353,57 @@
  * Z-INDEX LAYERING SYSTEM
  * =========================
  * This establishes a predictable stacking order using CSS custom properties.
- * Avoid using arbitrary z-index values - use the --z-* variables instead.
- * 
+ * The convention is to apply them directly on the element as z-[var(--z-*)].
+ *
  * Layer order (lowest to highest):
  * 1. Base content (--z-base: 0)
  * 2. Sticky headers (--z-sticky: 1100)
- * 3. Dropdowns/Popovers (--z-dropdown: 1150)
- * 4. Modal overlays (--z-overlay: 1200)
- * 5. Standard modals (--z-modal: 1210)
- * 6. Nested modals (--z-modal-nested: 1300)
+ * 3. Modal overlays (--z-overlay: 1200)
+ * 4. Standard modals (--z-modal: 1210)
+ * 5. Nested modals (--z-modal-nested: 1300)
+ * 6. Dropdowns/Popovers (--z-dropdown: 1350)
  * 7. Transaction modals (--z-transaction: 3000)
  * 8. Toast notifications (--z-toast: 3100)
  * 9. Tooltips (--z-tooltip: 3200)
+ *
+ * Dropdowns sit ABOVE modals deliberately: Radix portals DropdownMenuContent to
+ * document.body as a sibling of the dialog portal, so a dropdown opened inside a
+ * dialog must outrank it. It closes on outside interaction, so it cannot strand
+ * itself over unrelated surfaces.
  */
 
-/* Data attribute selectors for controlled layering */
-[data-layer="dropdown"] {
-  z-index: var(--z-dropdown);
-}
+/*
+ * Removed: the [data-layer="…"] z-index rules. No component ever set the
+ * attribute (grep found only the rule definitions) — the real convention is
+ * z-[var(--z-*)] applied directly, used at 17 sites. The --z-* scale above
+ * stays; only the unused attribute selectors are gone.
+ */
 
-[data-layer="sticky"] {
-  z-index: var(--z-sticky);
-}
 
-[data-layer="overlay"] {
-  z-index: var(--z-overlay);
-}
-
-[data-layer="modal"] {
-  z-index: var(--z-modal);
-}
-
-[data-layer="modal-nested"] {
-  z-index: var(--z-modal-nested);
-}
-
-[data-layer="transaction"] {
+/*
+ * Third-party overlay layering.
+ *
+ * Removed from this block, each verified against the installed package:
+ *  - .ock-* rules: @coinbase/onchainkit is not a dependency (only cdp-sdk and
+ *    wallet-sdk are), so those selectors matched nothing. NOTE: app/ock-compat.css
+ *    is a different thing and is still live — .ock-compat-font and the
+ *    --ock-compat-* tokens are used by transaction-kit and the swap panel.
+ *  - [data-radix-portal] rules: @radix-ui/react-portal never emits that attribute,
+ *    so the portal-ordering scheme (including two :has() rules) was inert.
+ *  - .react-hot-toast / .__react-hot-toast: react-hot-toast 2.6 emits neither, and
+ *    AppToaster already sets zIndex inline.
+ *  - The [class*="transaction-modal-overlay"|"-content"] variants: EIK ships no such
+ *    classes. It ships backdrop + container, and the container is a positioned CHILD
+ *    of the backdrop, so it lives inside the backdrop's stacking context and giving
+ *    it its own z-index is meaningless.
+ *
+ * What remains is the one rule that does real work: EIK builds the backdrop's
+ * className internally and does not forward a className prop to it, so it cannot be
+ * styled at the call site — and at its own z-index: 1000 it would sit under our
+ * dialogs (--z-modal: 1210).
+ */
+.transaction-modal-backdrop {
   z-index: var(--z-transaction);
-}
-
-[data-layer="toast"] {
-  z-index: var(--z-toast);
-}
-
-[data-layer="tooltip"] {
-  z-index: var(--z-tooltip);
-}
-
-/* Legacy wallet toast containers */
-.ock-transaction-toast,
-.ock-toast-container {
-  z-index: var(--z-toast);
-  position: relative;
-  margin-bottom: max(0.25rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
-}
-
-/* Legacy wallet modal and popup overlays */
-.ock-modal,
-.ock-modal-overlay,
-.ock-popup,
-.ock-wallet-modal {
-  z-index: var(--z-modal);
-}
-
-/* 
- * Ethereum Identity Kit Transaction Modal
- * Must appear above standard dialogs (z-modal: 400) but below toasts
- * Uses --z-transaction (3000) for consistent layering
- */
-[class*="transaction-modal"],
-[class*="TransactionModal"],
-[data-ethereum-identity-kit-transaction-modal],
-.ethereum-identity-kit-transaction-modal {
-  z-index: var(--z-transaction) !important;
-}
-
-/* TransactionModal overlay sits just below the modal content */
-[class*="transaction-modal-overlay"],
-[class*="TransactionModalOverlay"],
-[data-ethereum-identity-kit-transaction-modal-overlay],
-.ethereum-identity-kit-transaction-overlay {
-  z-index: calc(var(--z-transaction) - 1) !important;
-}
-
-/* TransactionModal content sits at the transaction layer */
-[class*="transaction-modal-content"],
-[class*="TransactionModalContent"] {
-  z-index: var(--z-transaction) !important;
-}
-
-/* 
- * Radix Portal ordering for transaction modals
- * When multiple portals exist, ensure transaction-related ones appear above dialogs
- */
-body>div[data-radix-portal] {
-  /* Base portals get modal layer by default */
-  z-index: var(--z-modal);
-}
-
-/* Portals containing transaction modals get elevated */
-body>div[data-radix-portal]:has([class*="transaction-modal"]),
-body>div[data-radix-portal]:has([class*="TransactionModal"]) {
-  z-index: var(--z-transaction) !important;
-}
-
-/* React Hot Toast containers */
-.react-hot-toast,
-.__react-hot-toast {
-  z-index: var(--z-toast);
 }
 
 /* 
@@ -1831,170 +1853,26 @@ button.profile-follow-button.follow-button p {
   animation: coin-flip 3s linear infinite;
 }
 
-/* Ensure semantic color utilities exist even if Tailwind doesn't generate them */
-@utility bg-primary {
-  background-color: var(--color-primary);
-}
+/*
+ * Removed: 21 `@utility` redefinitions of semantic colour utilities.
+ * An @utility with a static name does not replace Tailwind v4's built-in
+ * functional utility — both are emitted and merged, with the built-in last,
+ * so every rule carried a dead duplicate declaration:
+ *   .bg-card { background-color: var(--color-card); background-color: hsl(var(--card)) }
+ * Both resolve identically; the block was pure bloat.
+ */
 
-@utility bg-background {
-  background-color: var(--color-background);
-}
 
-@utility text-primary-foreground {
-  color: var(--color-primary-foreground);
-}
+/*
+ * Removed: hand-written `hover:bg-*`, slash-opacity and `mq-md-*` fallback shims.
+ * They sat OUTSIDE any @layer, so their !important beat every layered Tailwind
+ * utility — which silently killed hover states that used the same property
+ * (e.g. the chat Profile chip's hover:bg-primary/10 never painted).
+ * Verified against the production build: Tailwind v4 generates all of these
+ * correctly on its own (bg-card/90, border-border/60, hover:bg-primary/90, …),
+ * so the shims were redundant as well as harmful.
+ */
 
-@utility text-foreground {
-  color: var(--color-foreground);
-}
-
-@utility bg-secondary {
-  background-color: var(--color-secondary);
-}
-
-@utility text-secondary-foreground {
-  color: var(--color-secondary-foreground);
-}
-
-@utility bg-accent {
-  background-color: var(--color-accent);
-}
-
-@utility text-accent-foreground {
-  color: var(--color-accent-foreground);
-}
-
-@utility text-muted-foreground {
-  color: var(--color-muted-foreground);
-}
-
-@utility bg-muted {
-  background-color: var(--color-muted);
-}
-
-@utility bg-card {
-  background-color: var(--color-card);
-}
-
-@utility text-card-foreground {
-  color: var(--color-card-foreground);
-}
-
-@utility bg-popover {
-  background-color: var(--color-popover);
-}
-
-@utility text-popover-foreground {
-  color: var(--color-popover-foreground);
-}
-
-@utility border-input {
-  border-color: var(--color-input);
-}
-
-@utility border-border {
-  border-color: var(--color-border);
-}
-
-@utility border-border-strong {
-  border-color: var(--color-border-strong);
-}
-
-@utility border-divider {
-  border-color: var(--color-divider);
-}
-
-@utility bg-divider {
-  background-color: var(--color-divider);
-}
-
-@utility ring-ring {
-  --tw-ring-color: var(--color-ring);
-}
-
-@utility ring-offset-background {
-  --tw-ring-offset-color: var(--color-background);
-}
-
-/* Fallback hover utilities used by Button variants */
-@media (hover: hover) {
-  .hover\:bg-primary\/90:hover {
-    background-color: hsl(var(--primary) / 0.9) !important;
-  }
-
-  .hover\:bg-destructive\/90:hover {
-    background-color: hsl(var(--destructive) / 0.9) !important;
-  }
-
-  .hover\:bg-secondary\/80:hover {
-    background-color: hsl(var(--secondary) / 0.8) !important;
-  }
-
-  .hover\:bg-accent:hover {
-    background-color: var(--color-accent) !important;
-  }
-
-  .hover\:text-accent-foreground:hover {
-    color: var(--color-accent-foreground) !important;
-  }
-}
-
-/* Opacity variants for token-based colors used in toggles and highlights */
-.bg-primary\/5 {
-  background-color: hsl(var(--primary) / 0.05) !important;
-}
-
-.bg-primary\/10 {
-  background-color: hsl(var(--primary) / 0.1) !important;
-}
-
-.bg-red-500\/10 {
-  background-color: hsl(0 84% 60% / 0.1) !important;
-}
-
-.bg-green-500\/10 {
-  background-color: hsl(142 72% 29% / 0.1) !important;
-}
-
-.divide-border> :not([hidden])~ :not([hidden]) {
-  border-top-width: 1px;
-  border-color: hsl(var(--divider) / 0.62);
-}
-
-.border-primary\/20 {
-  border-color: hsl(var(--primary) / 0.2) !important;
-}
-
-.border-primary\/30 {
-  border-color: hsl(var(--primary) / 0.3) !important;
-}
-
-/* Fallback responsive helpers when md: classes are not emitted */
-@media (min-width: 48rem) {
-  .mq-md-grid {
-    display: grid !important;
-  }
-
-  .mq-md-hidden {
-    display: none !important;
-  }
-
-  .mq-md-grid-cols-3 {
-    grid-template-columns: 1fr 1.2fr 1fr !important;
-  }
-
-  .mq-md-col-span-1 {
-    grid-column: span 1 / span 1 !important;
-  }
-
-  .mq-md-overflow-auto {
-    overflow: auto !important;
-  }
-
-  .mq-md-max-h-22rem {
-    max-height: 22rem !important;
-  }
-}
 
 /* Admin page scroll override - allows scrolling in admin dashboard while preserving mobile-view UX in main app */
 .admin-page-scrollable {
@@ -2002,10 +1880,9 @@ button.profile-follow-button.follow-button p {
   overflow: auto !important;
 }
 
-.admin-page-scrollable body {
-  height: auto !important;
-  overflow: auto !important;
-}
+/* Removed: `.admin-page-scrollable body`. The class sits on a <div> inside <body>
+   (app/admin/layout.tsx), so a <body> descendant of it can never exist. The rule
+   below on the element itself is the one that does the work. */
 
 .login-theme-cycle {
   --login-theme-transition-duration: 3200ms;
@@ -2019,10 +1896,21 @@ button.profile-follow-button.follow-button p {
   max-width: 100%;
 }
 
-.login-theme-cycle :is(button, [role="alert"], div, p, h1, h2, span) {
-  transition-duration: var(--login-theme-transition-duration) !important;
-  transition-property: background-color, border-color, box-shadow, color, opacity !important;
-  transition-timing-function: ease-in-out !important;
+/*
+ * No !important here. This block is unlayered, so it already outranks Tailwind's
+ * layered transition utilities on its own — and the !important flags meant the
+ * prefers-reduced-motion rule further down (a normal declaration on the identical
+ * selector) could never win before hydration added the .motion-off class.
+ *
+ * Narrowed to the controls that actually need to cross-fade, and box-shadow dropped:
+ * transitioning it on every div/span on the login screen forced a full repaint each
+ * frame for 3.2s. The background cross-fade is carried by .login-theme-layer's
+ * GPU-composited opacity instead.
+ */
+.login-theme-cycle :is(button, [role="alert"], .login-web-app-alert) {
+  transition-duration: var(--login-theme-transition-duration);
+  transition-property: background-color, border-color, color, opacity;
+  transition-timing-function: ease-in-out;
 }
 
 .login-theme-cycle :is(button, [role="button"], .surface-control, .primary-control) {
@@ -2061,7 +1949,7 @@ button.profile-follow-button.follow-button p {
 
 @media (prefers-reduced-motion: reduce) {
   .login-theme-cycle,
-  .login-theme-cycle :is(button, [role="alert"], div, p, h1, h2, span),
+  .login-theme-cycle :is(button, [role="alert"], .login-web-app-alert),
   .login-theme-layer {
     transition: none;
   }

@@ -6,7 +6,7 @@ import { differenceInSeconds, differenceInMinutes, differenceInHours, difference
 import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Bot, User, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatAddress } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
 import { Button } from "@/components/ui/button";
 import ChatProfileDialog from "./chat-profile-dialog";
@@ -79,7 +79,7 @@ export default function ChatMessageComponent({
   } else if (isOwnPublicMessage || isUserAIMessage) {
     displayName = 'You';
   } else {
-    displayName = name || `${message.address.slice(0, 6)}...${message.address.slice(-4)}`;
+    displayName = name || formatAddress(message.address);
   }
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';

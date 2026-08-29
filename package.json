@@ -22,7 +22,9 @@
     "ai:smoke:new-tools": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-new-read-tools-smoke.ts",
     "ai:smoke:lifecycle": "NODE_PATH=./node_modules/next/dist/compiled NODE_OPTIONS=--conditions=react-server tsx smoke/ai-plant-lifecycle-smoke.ts",
     "ai:smoke": "npm run ai:smoke:gemini && npm run ai:smoke:real-tools && npm run ai:smoke:budget && npm run ai:smoke:knowledge && npm run ai:smoke:new-tools",
-    "casino:smoke": "node smoke/casino-hardening-smoke.mjs"
+    "casino:smoke": "node smoke/casino-hardening-smoke.mjs",
+    "swap:smoke": "tsx smoke/swap-bundle-equivalence-smoke.ts",
+    "blackjack:smoke": "tsx smoke/blackjack-split-turn-smoke.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.45",

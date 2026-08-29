@@ -137,7 +137,7 @@ function getArcadeToneClassName(tone: ArcadeTone) {
     default: "text-foreground",
     primary: "text-primary",
     success: "text-[hsl(var(--success-strong))]",
-    warning: "text-[hsl(var(--warning-foreground))]",
+    warning: "text-[hsl(var(--warning-strong))]",
   }[tone];
 }
 

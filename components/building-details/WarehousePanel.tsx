@@ -10,6 +10,7 @@ import { getPlantsByOwner } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { Plant } from '@/lib/types';
+import { getFriendlyErrorMessage } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -194,7 +195,7 @@ export default function WarehousePanel({
               postMissionProgress(payload);
             } catch {}
           }}
-          onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
+          onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
 
@@ -243,7 +244,7 @@ export default function WarehousePanel({
               postMissionProgress(payload);
             } catch {}
           }}
-          onError={(e) => toast.error(`Apply failed: ${e.message || e}`)}
+          onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
       <p className="text-xs text-muted-foreground text-center">PTS up to 4 decimals. TOD input is minutes; converted to seconds onchain.</p>

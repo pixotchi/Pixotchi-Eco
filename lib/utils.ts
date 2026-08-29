@@ -1,7 +1,6 @@
 import { type ClassValue,clsx } from "clsx";
 import { intervalToDuration } from "date-fns";
 import { twMerge } from "tailwind-merge";
-import { ADDRESS_TRUNCATION } from "./constants";
 import { ADDRESS_REGEX,CREATOR_TOKEN_ADDRESS,CRYPTICPOET_TOKEN_ADDRESS,JESSE_TOKEN_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
 import { type Plant } from "./types";
 
@@ -281,13 +280,11 @@ export function formatTokenAmountCompact(amount: bigint, decimals: number = 18):
   return `${sign}${formatTokenAmountPrecise(absAmount, decimals, 2).replace(/^-/, '')}`;
 }
 
-// Standardized address formatting using centralized truncation constants
-export function formatAddress(address: string, prefixLen?: number, suffixLen?: number, full: boolean = false): string {
-  if (full || address.length <= 14) return address;
-  const prefix = prefixLen ?? ADDRESS_TRUNCATION.prefix;
-  const suffix = suffixLen ?? ADDRESS_TRUNCATION.suffix;
-  return `${address.slice(0, prefix)}...${address.slice(-suffix)}`;
-}
+// Standardized address formatting. Defined in ./format-address (a leaf module that
+// imports no contract data) and re-exported here so every existing
+// `from "@/lib/utils"` import keeps working, while lib/contracts.ts can import it
+// without creating a contracts <-> utils cycle.
+export { formatAddress } from "./format-address";
 
 export function getPlantStatusColor(status: number): string {
   switch (status) {
@@ -296,7 +293,7 @@ export function getPlantStatusColor(status: number): string {
     case 2: return 'status-dry'; // Dry
     case 3: return 'status-dying'; // Dying
     case 4: return 'status-dead'; // Dead
-    default: return 'status-UntypedValue';
+    default: return 'status-unknown';
   }
 }
 
@@ -326,7 +323,11 @@ export function getStrainName(strainId: number): string {
 export function getFriendlyErrorMessage(error: UntypedValue): string {
   if (error && typeof error.message === 'string') {
     const message = error.message.toLowerCase();
-    if (message.includes('user rejected') || message.includes('request rejected')) {
+    if (
+      message.includes('user rejected') ||
+      message.includes('request rejected') ||
+      message.includes('user denied')
+    ) {
       return 'You rejected the transaction in your wallet.';
     }
     if (message.includes('insufficient funds')) {
@@ -334,6 +335,12 @@ export function getFriendlyErrorMessage(error: UntypedValue): string {
     }
     if (message.includes('execution reverted')) {
       return 'The transaction failed. Please try again.';
+    }
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return 'The network took too long to respond. Please try again.';
+    }
+    if (message.includes('no wallet') || message.includes('wallet not connected')) {
+      return 'Your wallet is not available. Reconnect it and try again.';
     }
   }
   return 'An unexpected error occurred. Please try again later.';

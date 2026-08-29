@@ -3,7 +3,7 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
 import { BuildingData } from '@/lib/types';
-import { formatProductionRate, formatLifetimeProduction } from '@/lib/utils';
+import { formatProductionRate, formatLifetimeProduction, getFriendlyErrorMessage } from '@/lib/utils';
 import BuildingClaimTransaction from '@/components/transactions/building-claim-transaction';
 import { toast } from 'react-hot-toast';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -84,7 +84,7 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
                   postMissionProgress(payload);
                 } catch {}
               }}
-              onError={(e) => toast.error(`Collect failed: ${e.message || e}`)}
+              onError={(e) => toast.error(getFriendlyErrorMessage(e))}
             />
           </div>
         </div>

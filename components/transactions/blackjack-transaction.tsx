@@ -105,21 +105,30 @@ const normalizeSplitHandEvents = (
     }>,
     totalPayoutWei?: bigint
 ) => {
-    if (events.length <= 2) return events;
+    // A HandResult carrying NONE is not a real hand outcome — it is the placeholder
+    // the contract emits for the split game itself. Letting one through put
+    // BlackjackResult.NONE on a hand, which getResultText maps to '' and the UI then
+    // renders as a neutral yellow "Result" — so a hand that plainly won (e.g. 19 vs a
+    // busted dealer) showed no win. Prefer decided outcomes whenever there are enough
+    // of them, and only fall back to the raw list if filtering would leave too few.
+    const decidedEvents = events.filter((entry) => entry.result !== BlackjackResult.NONE);
+    const pool = decidedEvents.length >= 2 ? decidedEvents : events;
+
+    if (pool.length <= 2) return pool;
 
     // Best-effort: choose two entries whose payouts match total payout when available.
     if (typeof totalPayoutWei === 'bigint') {
-        for (let i = 0; i < events.length; i++) {
-            for (let j = i + 1; j < events.length; j++) {
-                if (events[i].payoutWei + events[j].payoutWei === totalPayoutWei) {
-                    return [events[i], events[j]];
+        for (let i = 0; i < pool.length; i++) {
+            for (let j = i + 1; j < pool.length; j++) {
+                if (pool[i].payoutWei + pool[j].payoutWei === totalPayoutWei) {
+                    return [pool[i], pool[j]];
                 }
             }
         }
     }
 
     // Fallback to first+last to avoid rendering phantom extra hands.
-    return [events[0], events[events.length - 1]];
+    return [pool[0], pool[pool.length - 1]];
 };
 
 export default function BlackjackTransaction({

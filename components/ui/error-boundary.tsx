@@ -101,14 +101,17 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   private renderInlineError = () => {
-    const { error, errorId } = this.state;
+    const { errorId } = this.state;
 
     return (
       <Alert variant="destructive" className="m-2" role="alert" aria-labelledby={`error-title-${errorId}`}>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between">
           <div id={`error-title-${errorId}`}>
-            <strong>This section hit an error:</strong> {error?.message || 'Try again or refresh the page.'}
+            {/* Raw error.message is a JS/runtime string ("Cannot read properties of
+                undefined"), not something a player can act on. Keep it out of the UI;
+                the dev-only <details> below still shows it locally. */}
+            <strong>This section hit an error.</strong> Try again, or refresh the page.
           </div>
           <Button
             variant="outline"
@@ -139,7 +142,7 @@ class ErrorBoundary extends Component<Props, State> {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-muted-foreground">
-            {error?.message || 'An unexpected error occurred'}
+            Something went wrong while loading this section. Try again, or refresh the page.
           </p>
 
           <div className="flex gap-2">
@@ -187,7 +190,7 @@ class ErrorBoundary extends Component<Props, State> {
               We encountered an unexpected error. Don&apos;t worry, your data is safe.
             </p>
 
-            {error && (
+            {error && process.env.NODE_ENV === 'development' && (
               <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
                 {error.message}
               </div>

@@ -2,8 +2,7 @@
 
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Leaf, LandPlot } from "lucide-react";
-import { useFrameContext } from "@/lib/frame-context";
-import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { useFarmView } from "@/lib/farm-view-context";
 import dynamic from "next/dynamic";
 import PlantsView from "./plants-view";
 
@@ -12,21 +11,16 @@ const LandsView = dynamic(() => import("./lands-view"), {
 });
 
 export default function DashboardTab() {
-  const frame = useFrameContext();
-  const isMiniApp = Boolean(frame?.isInMiniApp);
-  const [dashboardView, setDashboardView] = useWebQueryState<'plants' | 'lands'>({
-    key: 'dashboardView',
-    defaultValue: 'plants',
-    enabled: !isMiniApp,
-    parse: (rawValue) => (rawValue === 'plants' || rawValue === 'lands' ? rawValue : null),
-    serialize: (value) => (value === 'plants' ? null : value),
-  });
+  // Shared with the app-shell toggle via FarmViewProvider. Do not re-declare a
+  // local useWebQueryState here — in the Mini App the two instances cannot sync.
+  const { dashboardView, setDashboardView } = useFarmView();
 
   return (
     <div className="space-y-4">
       {/* Switch Toggle */}
       <div className="hidden justify-center min-[54rem]:flex">
         <ToggleGroup
+          ariaLabel="Farm view"
           value={dashboardView}
           onValueChange={(v) => setDashboardView(v as 'plants' | 'lands')}
           options={[

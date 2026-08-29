@@ -216,7 +216,7 @@ export default function AboutTab() {
               {feedbackLoading ? (
                 <>
                   <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-                  Sending…
+                  Sending...
                 </>
               ) : (
                 <>
@@ -265,7 +265,7 @@ export default function AboutTab() {
           </div>
           {/* Caption so the collapsed Base mark reads as a logo rather than a stray square. */}
           <div className="mt-6 flex flex-col items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Built on Base
             </span>
             <BaseAnimatedLogo className="w-full" />
@@ -274,7 +274,7 @@ export default function AboutTab() {
 
         {/* Version Number */}
         <div className="border-t border-border/55 pt-4 text-center lg:pt-4">
-          <span className="text-xs text-muted-foreground/60 font-mono">
+          <span className="text-xs text-muted-foreground font-mono">
             v{packageJson.version}
           </span>
         </div>

@@ -323,10 +323,15 @@ export function getThemeMetaColor(theme: Theme): string {
 export function updateMetaThemeColor(theme: Theme): void {
   if (typeof document === 'undefined') return;
 
-  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-  if (!metaThemeColor) return;
+  // Update every theme-color meta, not just the first match. The layout used to
+  // emit three (a light-media pair from the Viewport API plus a bare one), and a
+  // single querySelector hit the media-scoped light tag — which a device in OS
+  // dark mode never resolves, so the selected theme's colour never applied.
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  if (metas.length === 0) return;
 
-  metaThemeColor.setAttribute('content', getThemeMetaColor(theme));
+  const color = getThemeMetaColor(theme);
+  metas.forEach((meta) => meta.setAttribute('content', color));
 }
 
 export function getThemeColors(theme: Theme) {

@@ -1,6 +1,7 @@
 "use client";
 
 import ChatProfileDialog from "@/components/chat/chat-profile-dialog";
+import { formatAddress } from "@/lib/utils";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
@@ -15,7 +16,7 @@ import { LandMapCanvas } from './land-map-canvas';
 // Helper to truncate address
 const truncateAddress = (address: string) => {
   if (!address || address === '0x0000000000000000000000000000000000000000') return 'Unknown';
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return formatAddress(address);
 };
 
 interface LandMapModalProps {
@@ -246,16 +247,22 @@ export function LandMapModal({
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image 
-                            src={`/icons/${
+                            /* Assets live at /icons/map/*.webp — this pointed at
+                               /icons/*.png, which does not exist, so the thumbnail
+                               404'd. The terminal fallback is 'jungle' because
+                               `type` is typed as string and an unexpected value
+                               previously fell through to the raw type. */
+                            src={`/icons/map/${
                                 tappedWilderness.type === 'water' ? 'lake' :
-                                tappedWilderness.type === 'none' ? 'cemetery' : 
-                                tappedWilderness.type === 'forest' ? 'jungle' : 
-                                tappedWilderness.type === 'mountain' ? 'mountains' : 
-                                tappedWilderness.type
-                            }.png`} 
-                            alt={tappedWilderness.type} 
-                            fill 
-                            className="object-contain p-1" 
+                                tappedWilderness.type === 'none' ? 'cemetery' :
+                                tappedWilderness.type === 'forest' ? 'jungle' :
+                                tappedWilderness.type === 'mountain' ? 'mountains' :
+                                'jungle'
+                            }.webp`}
+                            alt={tappedWilderness.type}
+                            fill
+                            sizes="64px"
+                            className="object-contain p-1"
                         />
                     </div>
                     

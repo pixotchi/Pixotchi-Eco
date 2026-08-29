@@ -10,7 +10,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getTwinAddress, getTwinAddressInfo, isTwinSetup, type TwinAddressInfo } from './solana-twin';
 import { getPixotchiSolanaConfig, isSolanaEnabled, SOLANA_BRIDGE_CONFIG } from './solana-constants';
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+// NOTE: @solana/web3.js is ~321 KB and is imported dynamically below rather than
+// statically. This module is reached from useIsSolanaWallet(), which is called by
+// eager shell modules (the app page, status bar, balance card, wallet profile,
+// chat context), so a static import pulled the whole SDK into the initial bundle
+// for every user on every surface. It is only needed for the SOL balance read.
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
 
@@ -91,6 +95,7 @@ export function SolanaWalletProvider({
       
       // Fetch SOL balance from Solana
       try {
+        const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
         const connection = new Connection(SOLANA_BRIDGE_CONFIG.solana.rpcUrl);
         const walletPubkey = new PublicKey(solanaAddress);
         const balance = await connection.getBalance(walletPubkey);

@@ -1,4 +1,5 @@
 import 'server-only';
+import { formatAddress } from "@/lib/utils";
 
 import { tool } from 'ai';
 import { decodeEventLog, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Hex } from 'viem';
@@ -545,7 +546,7 @@ function shortenTokenAddress(address: string | undefined): string {
   }
 
   return isAddress(address)
-    ? `${address.slice(0, 6)}...${address.slice(-4)}`
+    ? formatAddress(address)
     : address;
 }
 

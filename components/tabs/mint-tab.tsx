@@ -1,6 +1,7 @@
 'use client';
 
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
+import { handleExternalAnchorClick } from "@/lib/open-external";
 import { MintShareModal } from '@/components/mint-share-modal';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { SolanaNotSupported,useIsSolanaWallet,useSolanaBridge,useSolanaWallet,useTwinAddress } from '@/components/solana';
@@ -19,7 +20,7 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { VerifyClaim } from '@/components/verify-claim';
-import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { useFarmView } from '@/lib/farm-view-context';
 import { useBalances } from '@/lib/balance-context';
 import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 import { checkLandMintApproval,checkTokenApproval,getEthQuoteForSeedAmount,getFormattedTokenBalance,getLandBalance,getLandMintPrice,getLandMintStatus,getLandSupply,getStrainInfo,getTokenBalanceForToken,getTokenSymbol,JESSE_TOKEN_ADDRESS,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -31,7 +32,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Strain } from '@/lib/types';
-import { formatNumber,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
+import { formatNumber,formatTokenAmount,getFriendlyErrorMessage, formatAddress } from "@/lib/utils";
 import { usePrivy } from '@privy-io/react-auth';
 import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { ChevronDown, LandPlot, Leaf } from 'lucide-react';
@@ -80,6 +81,24 @@ const getPlantGrowthImage = (strainId: number | undefined) => {
   return PLANT_GROWTH_IMAGES[strainId - 1] || PLANT_STATIC_IMAGES[strainId - 1] || PLANT_GROWTH_IMAGES[0];
 };
 
+/**
+ * Thumbnail variant for the 24-28px list rows.
+ *
+ * The animated GIFs total 1.1 MB (95-393 KB each) and must be served with
+ * `unoptimized` — Next refuses to resize animated images, so a 24px dropdown row
+ * was downloading the full-resolution animation. The static per-strain art already
+ * exists and is 7-19 KB for strains 1-4.
+ *
+ * Strain 5's static is a 218 KB PNG, so it keeps the GIF: swapping would not save
+ * anything meaningful and would lose the animation.
+ */
+const getPlantThumbImage = (strainId: number | undefined) => {
+  if (!strainId) return PLANT_STATIC_IMAGES[0];
+  const staticImage = PLANT_STATIC_IMAGES[strainId - 1];
+  if (staticImage && staticImage.endsWith('.svg')) return staticImage;
+  return getPlantGrowthImage(strainId);
+};
+
 export default function MintTab() {
   const { address: evmAddress, chainId } = useAccount();
   const { isSponsored } = usePaymaster();
@@ -125,13 +144,9 @@ export default function MintTab() {
   const [loading, setLoading] = useState(true);
   const [paymentTokenSymbol, setPaymentTokenSymbol] = useState<string>('SEED');
   const [paymentTokenBalance, setPaymentTokenBalance] = useState<bigint>(BigInt(0));
-  const [mintType, setMintType] = useWebQueryState<'plant' | 'land'>({
-    key: 'mintType',
-    defaultValue: 'plant',
-    enabled: !frameContext?.isInMiniApp,
-    parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
-    serialize: (value) => (value === 'plant' ? null : value),
-  });
+  // Shared with the app-shell toggle via FarmViewProvider. Do not re-declare a
+  // local useWebQueryState here — in the Mini App the two instances cannot sync.
+  const { mintType, setMintType } = useFarmView();
   const [, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
@@ -1012,7 +1027,7 @@ export default function MintTab() {
                   <Button variant="outline" className="w-full justify-between">
                     {selectedStrain ? (
                       <div className="flex items-center space-x-2">
-                        <Image src={getPlantGrowthImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized loading="eager" fetchPriority="high" />
+                        <Image src={getPlantThumbImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized />
                         <span>{selectedStrain.name}</span>
                       </div>
                     ) : (
@@ -1034,7 +1049,7 @@ export default function MintTab() {
                       >
                         <div className="flex items-center justify-between w-full">
                           <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
-                            <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
+                            <Image src={getPlantThumbImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
                             <span>{strain.name}</span>
                           </div>
                           {isSoldOut && <Badge variant="danger">Sold out</Badge>}
@@ -1130,6 +1145,7 @@ export default function MintTab() {
                     href={`https://explorer.solana.com/tx/${bridge.state.signature}`}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(event) => handleExternalAnchorClick(event, `https://explorer.solana.com/tx/${bridge.state.signature}`)}
                     className="underline"
                   >
                     View on Solana Explorer
@@ -1209,7 +1225,7 @@ export default function MintTab() {
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">
-                Twin Address: {twinAddress ? `${twinAddress.slice(0, 6)}...${twinAddress.slice(-4)}` : 'Loading...'}
+                Twin Address: {twinAddress ? formatAddress(twinAddress) : 'Loading...'}
               </p>
             </CardContent>
           </Card>
@@ -1262,7 +1278,7 @@ export default function MintTab() {
                 <Button variant="outline" className="w-full justify-between">
                   {selectedStrain ? (
                     <div className="flex items-center space-x-2">
-                      <Image src={getPlantGrowthImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized loading="eager" fetchPriority="high" />
+                      <Image src={getPlantThumbImage(selectedStrain.id)} alt={selectedStrain.name} width={24} height={24} unoptimized />
                       <span>{selectedStrain.name}</span>
                     </div>
                   ) : (
@@ -1284,7 +1300,7 @@ export default function MintTab() {
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className={`flex items-center space-x-2 ${isSoldOut || isBaseOnly ? 'line-through' : ''}`}>
-                          <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
+                          <Image src={getPlantThumbImage(strain.id)} alt={strain.name} width={24} height={24} unoptimized />
                           <span>{strain.name}</span>
                         </div>
                         {isSoldOut && <Badge variant="danger">Sold out</Badge>}
@@ -1726,7 +1742,7 @@ export default function MintTab() {
                         } ${isSoldOut || isBaseOnly ? 'opacity-50' : ''}`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <Image src={getPlantGrowthImage(strain.id)} alt={strain.name} width={28} height={28} unoptimized />
+                        <Image src={getPlantThumbImage(strain.id)} alt={strain.name} width={28} height={28} unoptimized />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold">{strain.name}</span>
                           <span className="block text-xs text-muted-foreground">
@@ -2062,6 +2078,7 @@ export default function MintTab() {
         {showLandOption && !useCombinedMintLayout && (
           <div className="hidden justify-center min-[54rem]:flex">
             <ToggleGroup
+              ariaLabel="Mint type"
               value={mintType}
               onValueChange={(v) => setMintType(v as 'plant' | 'land')}
               options={[

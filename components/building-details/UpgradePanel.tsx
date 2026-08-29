@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
-import { formatTokenAmount, calculateUpgradeProgress, calculateTimeLeft } from '@/lib/utils';
+import { formatTokenAmount, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
@@ -113,7 +113,7 @@ export default function UpgradePanel({
                     toast.success('PIXOTCHI approval successful!');
                     onSeedApprovalSuccess();
                   }}
-                  onError={(error) => toast.error(`Approval failed: ${error.message}`)}
+                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText="Approve PIXOTCHI"
                   buttonClassName="w-full"
                 />
@@ -130,7 +130,7 @@ export default function UpgradePanel({
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
                 }}
-                onError={(error) => toast.error(`Speed up failed: ${error.message}`)}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
                 buttonClassName="w-full"
                 disabled={hasInsufficientPixotchi}
@@ -141,7 +141,7 @@ export default function UpgradePanel({
               <div className="text-sm text-center text-muted-foreground">Step 1: Approve LEAF spending</div>
               <LeafApproveTransaction
                 onSuccess={() => { toast.success('LEAF approval successful!'); onLeafApprovalSuccess(); }}
-                onError={(error) => toast.error(`Approval failed: ${error.message}`)}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve LEAF"
                 buttonClassName="w-full"
               />
@@ -159,7 +159,7 @@ export default function UpgradePanel({
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
                 }}
-                onError={(error) => toast.error(`Upgrade failed: ${error.message}`)}
+                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}
                 buttonClassName="w-full"
                 disabled={hasInsufficientLeaf || needsLeafApproval}

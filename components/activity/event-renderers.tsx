@@ -249,7 +249,17 @@ export const AttackEventRenderer = React.memo(({
         {' attacked '}
         <PlantName name={opponent.name} id={opponent.id} isYou={!!isOpponentYou} />
         {attackerIsWinner ? ' and won ' : ' and lost '}
-        <span className="font-semibold text-value">{formattedScore}</span>
+        {/* Wins and losses used the same --value cyan, so the feed could not be
+            scanned at a glance; only a small icon distinguished them. */}
+        <span
+          className={
+            attackerIsWinner
+              ? 'font-semibold text-[hsl(var(--success-strong))]'
+              : 'font-semibold text-destructive'
+          }
+        >
+          {formattedScore}
+        </span>
         {' PTS!'}
       </p>
     </EventWrapper>

@@ -79,20 +79,18 @@ export function SolanaSurfaceButton({
       loading={isProcessing}
       loadingText="Loading..."
     >
-      {isProcessing ? (
-        "Loading…"
-      ) : (
-        <span className="flex items-center gap-2">
-          <Image
-            src="/icons/solana.svg"
-            alt="Solana"
-            width={20}
-            height={20}
-            className="w-5 h-5"
-          />
-          Continue with Solana
-        </span>
-      )}
+      {/* No isProcessing branch: Button renders loadingText while loading, so these
+          children are never shown in that state. */}
+      <span className="flex items-center gap-2">
+        <Image
+          src="/icons/solana.svg"
+          alt="Solana"
+          width={20}
+          height={20}
+          className="w-5 h-5"
+        />
+        Continue with Solana
+      </span>
     </Button>
   );
 }

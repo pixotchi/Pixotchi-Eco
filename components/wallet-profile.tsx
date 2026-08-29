@@ -173,7 +173,7 @@ function WalletInfoRow({
           {label}
         </span>
         {description ? (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/80">
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
             {description}
           </span>
         ) : null}
@@ -881,7 +881,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           ) : solanaAddress ? (
                             <>
                               <span className="truncate font-mono text-muted-foreground">
-                                {solanaAddress.slice(0, 6)}...{solanaAddress.slice(-4)}
+                                {formatAddress(solanaAddress)}
                               </span>
                               <WalletCopyButton
                                 onClick={() => copyToClipboard(solanaAddress, "Solana address")}
@@ -902,7 +902,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           ) : twinAddress ? (
                             <>
                               <span className="truncate font-mono text-muted-foreground">
-                                {twinAddress.slice(0, 6)}...{twinAddress.slice(-4)}
+                                {formatAddress(twinAddress)}
                               </span>
                               <WalletCopyButton
                                 onClick={() => copyToClipboard(twinAddress, "Twin address")}
@@ -1068,7 +1068,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               {isExporting ? (
                 <>
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Opening…
+                  Opening...
                 </>
               ) : (
                 "Open Export"

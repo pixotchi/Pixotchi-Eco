@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import type { Hex } from "viem";
+import { handleExternalAnchorClick, openExternalUrl } from "@/lib/open-external";
 import { base } from "viem/chains";
 import { useAccount, useChainId, useWalletClient } from "wagmi";
 import { useShowCallsStatus } from "wagmi/experimental";
@@ -953,7 +954,8 @@ export function TransactionButton({
       url.searchParams.set("contentParams[txHash]", transactionHash);
       url.searchParams.set("contentParams[chainId]", JSON.stringify(chainId));
       url.searchParams.set("contentParams[fromAddress]", address);
-      window.open(url, "_blank", "noopener,noreferrer");
+      // `url` is a URL object here — openExternalUrl takes a string.
+      void openExternalUrl(url.toString());
       return;
     }
 
@@ -967,11 +969,11 @@ export function TransactionButton({
       return;
     }
 
-    window.open(
-      transactionHref,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    // window.open is inert inside the Farcaster / Base Mini App webview, which is
+    // this app's primary surface — the "view your transaction" link silently did
+    // nothing there. openExternalUrl routes through sdk.actions.openUrl in the
+    // webview and falls back to window.open on plain web.
+    void openExternalUrl(transactionHref);
   }, [
     address,
     chainId,
@@ -1120,6 +1122,7 @@ export function TransactionStatusAction({
           href={transactionHref}
           target="_blank"
           rel="noreferrer"
+          onClick={(event) => handleExternalAnchorClick(event, transactionHref)}
         >
           <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </a>
@@ -1310,11 +1313,16 @@ export function TransactionToastAction({
 
   const actionElement = useMemo(() => {
     if (transactionHash) {
+      const viewHref =
+        explorerHref || getExplorerHref(transactionHash, base.blockExplorers?.default.url) || undefined;
       return (
         <a
-          href={explorerHref || getExplorerHref(transactionHash, base.blockExplorers?.default.url) || undefined}
+          href={viewHref}
           target="_blank"
           rel="noreferrer"
+          onClick={(event) => {
+            if (viewHref) handleExternalAnchorClick(event, viewHref);
+          }}
         >
           <span className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>View transaction</span>
         </a>

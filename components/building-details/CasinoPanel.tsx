@@ -31,7 +31,7 @@ import {
   type BlackjackTokenConfig,
   type CasinoTokenConfig,
 } from "@/lib/contracts";
-import { formatTokenAmount, getCasinoTokenImage } from "@/lib/utils";
+import { formatTokenAmount, getCasinoTokenImage, formatAddress } from "@/lib/utils";
 import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
@@ -80,7 +80,7 @@ function CasinoTokenLabel({
   selected?: boolean;
 }) {
   const { symbol } = useTokenMetadata(tokenAddress);
-  const label = symbol || `${tokenAddress.slice(0, 6)}...${tokenAddress.slice(-4)}`;
+  const label = symbol || formatAddress(tokenAddress);
 
   return (
     <div className="flex min-w-0 items-center gap-2">

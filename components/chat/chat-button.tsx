@@ -74,6 +74,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
           height={24}
           className="w-6 h-6"
           aria-hidden="true"
+          preload
         />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-3 w-3" aria-hidden="true">

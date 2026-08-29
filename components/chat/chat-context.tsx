@@ -33,6 +33,12 @@ import {
   useConfirmedMiniAppSession,
 } from '@/lib/confirmed-miniapp-session';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
+import {
+  loadChatLastRead,
+  loadChatMode,
+  storeChatLastRead,
+  storeChatMode,
+} from '@/lib/chat-preferences';
 import { resolvePreferredAuthSurface, SecureSessionState } from '@/lib/auth-surface';
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
@@ -472,18 +478,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [isMiniApp]);
 
   useEffect(() => {
-    localStorage.setItem('chat-mode', mode);
+    storeChatMode(mode);
     modeRef.current = mode;
   }, [mode]);
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('chat-last-read');
-      return saved ? parseInt(saved, 10) : Date.now();
-    }
-    return Date.now();
-  });
+  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(loadChatLastRead);
 
   useEffect(() => {
     const publicMessages = mode === 'public' && isChatOpen
@@ -509,7 +509,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const markAsRead = useCallback(() => {
     const now = Date.now();
     setLastReadTimestamp(now);
-    localStorage.setItem('chat-last-read', now.toString());
+    storeChatLastRead(now);
     setUnreadCount(0);
   }, []);
 
@@ -711,10 +711,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [fetchHistory, isChatOpen, messages, mode, publicChatAuthenticated]);
 
   useEffect(() => {
-    const savedMode = localStorage.getItem('chat-mode') as ChatMode;
-    if (savedMode && ['public', 'ai'].includes(savedMode)) {
-      setMode(savedMode);
-    }
+    // loadChatMode validates the stored value and falls back to the current mode,
+    // so an absent/blocked/garbage entry is a no-op.
+    setMode(loadChatMode(modeRef.current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

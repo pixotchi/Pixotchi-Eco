@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { handleExternalAnchorClick } from "@/lib/open-external";
 import { CardContent, CardHeader, CardTitle, TabCard } from '@/components/ui/card';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -40,9 +41,9 @@ const DEFAULT_TOKEN_INFO = TOKEN_INFO_OPTIONS[0]!;
 
 function SwapLockedState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-[420px] items-center justify-center rounded-[var(--radius-panel)] border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+    <div className="flex min-h-[420px] items-center justify-center rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.36)] bg-[hsl(var(--warning)/0.14)] p-6 text-center">
       <div className="mx-auto max-w-md space-y-4">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-amber-500/30 bg-background/70 text-2xl">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[hsl(var(--warning)/0.36)] bg-background/70 text-2xl text-[hsl(var(--warning-strong))]">
           !
         </div>
         <p className="text-lg font-semibold text-foreground">Swaps temporarily unavailable</p>
@@ -325,6 +326,7 @@ function ChartAttribution() {
         href="https://dexscreener.com/base/0xaa6a81a7df94dab346e2d677225cad47220540c5"
         target="_blank"
         rel="noopener noreferrer"
+        onClick={(event) => handleExternalAnchorClick(event, "https://dexscreener.com/base/0xaa6a81a7df94dab346e2d677225cad47220540c5")}
         className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
       >
         <DexScreenerBrandIcon className="h-4 w-4" />
@@ -334,6 +336,7 @@ function ChartAttribution() {
         href="https://www.tradingview.com/symbols/SEEDWETH_AA6A81.USD/?exchange=BASESWAP"
         target="_blank"
         rel="noopener noreferrer"
+        onClick={(event) => handleExternalAnchorClick(event, "https://www.tradingview.com/symbols/SEEDWETH_AA6A81.USD/?exchange=BASESWAP")}
         className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
       >
         <TradingViewBrandIcon className="h-4 w-4" />
@@ -371,6 +374,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
           href={pairUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={(event) => handleExternalAnchorClick(event, pairUrl)}
           className="shrink-0 rounded-[var(--radius-control)] px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-[hsl(var(--nav-hover-bg))]"
         >
           View pair
@@ -404,7 +408,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
                 <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
                   {row.label}
                 </p>
-                <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground/85">
+                <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
                   {row.detail}
                 </p>
               </div>
@@ -443,7 +447,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
         ))}
       </div>
       {marketData?.stale ? (
-        <p className="mt-2 text-xs text-[hsl(var(--warning-foreground))]">
+        <p className="mt-2 text-xs text-[hsl(var(--warning-strong))]">
           Showing cached market data while DexScreener is unavailable.
         </p>
       ) : null}
@@ -541,6 +545,7 @@ export default function SwapTab() {
           <div className="flex items-center justify-between gap-4">
             <CardTitle>{isChartView ? 'Chart' : isInfoView ? 'Info' : 'Swap'}</CardTitle>
             <ToggleGroup
+              ariaLabel="Swap panel view"
               value={swapView}
               onValueChange={(v) => setSwapView(v as SwapView)}
               options={[

@@ -349,14 +349,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   SEED Balance
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(seedBalance)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(seedBalance)}</div>
               </div>
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.rewards)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.rewards)}</div>
               </div>
             </div>
           ) : (
@@ -366,14 +366,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   Staked SEED
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.staked)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.staked)}</div>
               </div>
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "…" : formatToken(stakeInfo?.rewards)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.rewards)}</div>
               </div>
             </div>
           )}

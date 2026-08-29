@@ -23,6 +23,12 @@ import {
   type ForceFollowingState,
   useTransactions,
 } from 'ethereum-identity-kit';
+// ethereum-identity-kit's stylesheet (~93 KB) is imported here rather than in the
+// root layout: it only matters once an EFP surface is opened, and a root-layout CSS
+// import is render-blocking on every route including /status, /admin and the login
+// screen. Both EIK consumers import it so it is present whichever one loads first.
+import "ethereum-identity-kit/css";
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
@@ -351,7 +357,7 @@ export default function PlantProfileDialog({
               <div className="absolute -bottom-8 left-6 z-[2]">
                 <div className="relative">
                   <div
-                    className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${isWalletVariant ? 'rounded-full' : 'rounded-xl'
+                    className={`w-24 h-24 border-4 border-background bg-background overflow-hidden shadow-lg flex items-center justify-center ${isWalletVariant ? 'rounded-full' : 'rounded-[var(--radius-panel)]'
                       }`}
                   >
                     {showPrimaryLoading ? (

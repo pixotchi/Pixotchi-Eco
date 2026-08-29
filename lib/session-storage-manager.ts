@@ -23,6 +23,29 @@ class SessionStorageManager {
 
   private constructor() {}
 
+  /**
+   * Serialise a storage mutation behind the shared lock.
+   *
+   * The previous form was `this.lock = this.lock.then(fn)` with no catch anywhere
+   * in the file. Once any write rejected — Safari Private Browsing throws on
+   * setItem, as does a full quota or a storage-partitioned webview — the lock was
+   * left in a rejected state and `rejectedPromise.then(cb)` never runs `cb`, so
+   * every later mutation silently became a no-op for the life of the page,
+   * including clearAuthState() on logout.
+   *
+   * The `.catch` before the chain makes the lock self-healing; the second
+   * `.then(ok, err)` keeps the stored lock always-resolved while still returning
+   * the real promise to the caller so genuine failures can still be awaited.
+   */
+  private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.lock.catch(() => {}).then(fn);
+    this.lock = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  }
+
   getPersistentLocalStorageKeys(): string[] {
     return [
       this.KEY_AUTH_SURFACE,
@@ -142,7 +165,7 @@ class SessionStorageManager {
   // Thread-safe setter for auth surface
   async setAuthSurface(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
     // Chain operations to prevent race conditions
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
       
       try {
@@ -153,8 +176,6 @@ class SessionStorageManager {
         throw error;
       }
     });
-    
-    return this.lock;
   }
 
   // Thread-safe getter for autologin flag
@@ -175,7 +196,7 @@ class SessionStorageManager {
 
   // Thread-safe setter for autologin flag
   async setAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
       
       try {
@@ -185,13 +206,11 @@ class SessionStorageManager {
         throw error;
       }
     });
-    
-    return this.lock;
   }
 
   // Thread-safe remover for autologin flag
   async removeAutologin(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
       
       try {
@@ -200,8 +219,6 @@ class SessionStorageManager {
         console.warn('Failed to remove autologin from sessionStorage:', error);
       }
     });
-    
-    return this.lock;
   }
 
   getPrivyAuthenticatedAddress(): string | null {
@@ -219,7 +236,7 @@ class SessionStorageManager {
   async setPrivyAuthenticatedAddress(address: string): Promise<void> {
     const normalized = address.toLowerCase();
 
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -229,12 +246,10 @@ class SessionStorageManager {
         throw error;
       }
     });
-
-    return this.lock;
   }
 
   async removePrivyAuthenticatedAddress(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -243,8 +258,6 @@ class SessionStorageManager {
         console.warn('Failed to remove Privy authenticated address from client storage:', error);
       }
     });
-
-    return this.lock;
   }
 
   getBaseAuthenticatedAddress(): string | null {
@@ -262,7 +275,7 @@ class SessionStorageManager {
   async setBaseAuthenticatedAddress(address: string): Promise<void> {
     const normalized = address.toLowerCase();
 
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -272,12 +285,10 @@ class SessionStorageManager {
         throw error;
       }
     });
-
-    return this.lock;
   }
 
   async removeBaseAuthenticatedAddress(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -286,8 +297,6 @@ class SessionStorageManager {
         console.warn('Failed to remove Base authenticated address from client storage:', error);
       }
     });
-
-    return this.lock;
   }
 
   hasRecentPrivyLogoutIntent(maxAgeMs: number = 10_000): boolean {
@@ -316,7 +325,7 @@ class SessionStorageManager {
   }
 
   async markPrivyLogoutIntent(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -325,12 +334,10 @@ class SessionStorageManager {
         console.warn('Failed to mark Privy logout intent in sessionStorage:', error);
       }
     });
-
-    return this.lock;
   }
 
   async clearPrivyLogoutIntent(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -339,8 +346,6 @@ class SessionStorageManager {
         console.warn('Failed to clear Privy logout intent from sessionStorage:', error);
       }
     });
-
-    return this.lock;
   }
 
   getPendingBaseChatAuth(): PendingBaseChatAuth | null {
@@ -376,7 +381,7 @@ class SessionStorageManager {
       address: payload.address.toLowerCase(),
     };
 
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -386,12 +391,10 @@ class SessionStorageManager {
         throw error;
       }
     });
-
-    return this.lock;
   }
 
   async clearPendingBaseChatAuth(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -400,13 +403,11 @@ class SessionStorageManager {
         console.warn('Failed to clear pending Base chat auth from sessionStorage:', error);
       }
     });
-
-    return this.lock;
   }
 
   // Batch set both auth surface and autologin atomically
   async setAuthSurfaceAndAutologin(surface: 'privy' | 'base' | 'coinbase' | 'privysolana' | 'test'): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
       
       try {
@@ -418,12 +419,10 @@ class SessionStorageManager {
         throw error;
       }
     });
-
-    return this.lock;
   }
 
   async clearAuthState(): Promise<void> {
-    this.lock = this.lock.then(async () => {
+    return this.runExclusive(async () => {
       if (typeof window === 'undefined') return;
 
       try {
@@ -437,8 +436,6 @@ class SessionStorageManager {
         console.warn('Failed to clear auth state from sessionStorage:', error);
       }
     });
-
-    return this.lock;
   }
 }
 

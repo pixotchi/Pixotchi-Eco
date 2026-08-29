@@ -122,7 +122,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     <div className="space-y-3 pt-2">
       <h4 className="font-semibold text-sm text-center">Quests</h4>
       {loading ? (
-        <div className="text-center text-muted-foreground text-sm">Loading…</div>
+        <div className="text-center text-muted-foreground text-sm">Loading...</div>
       ) : error ? (
         <div className="text-center text-destructive text-sm">{error}</div>
       ) : (
@@ -142,7 +142,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   </div>
                   <div className="flex items-center gap-2">
                     {statusOf(s) === 'Loading' && (
-                      <div className={QUEST_STATUS_PILL_CLASS}>Loading…</div>
+                      <div className={QUEST_STATUS_PILL_CLASS}>Loading...</div>
                     )}
                     {statusOf(s) === 'Ready to commit' && (
                       <SponsoredTransaction

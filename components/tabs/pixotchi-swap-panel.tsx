@@ -5,6 +5,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -384,7 +385,12 @@ export default function PixotchiSwapPanel() {
   const quoteRequestRef = useRef(0);
   const backgroundRefreshInFlightRef = useRef(false);
   const quoteActivityAtRef = useRef(0);
-  const messageId = 'pixotchi-swap-message';
+  // swap-tab renders this panel twice (a mobile card and a desktop card, one of
+  // them CSS-hidden), so hardcoded ids collided: getElementById resolved to the
+  // hidden copy and clicking the visible "Sell" label focused nothing.
+  const panelId = useId();
+  const messageId = `pixotchi-swap-message-${panelId}`;
+  const sellAmountId = `pixotchi-swap-sell-amount-${panelId}`;
   const isVisible = isTabVisible('swap');
 
   const {
@@ -1313,13 +1319,13 @@ export default function PixotchiSwapPanel() {
           >
             <label
               className={SWAP_LABEL_CLASS}
-              htmlFor="pixotchi-swap-sell-amount"
+              htmlFor={sellAmountId}
             >
               {S.labels.sell}
             </label>
             <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <input
-                id="pixotchi-swap-sell-amount"
+                id={sellAmountId}
                 value={sellAmount}
                 onChange={(event) => {
                   markQuoteActivity();

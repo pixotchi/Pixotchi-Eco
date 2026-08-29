@@ -1,6 +1,10 @@
 "use client";
 
 import EditPlantName from "@/components/edit-plant-name";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import QuantitySelector from "@/components/quantity-selector";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
@@ -172,6 +176,7 @@ export default function PlantsView() {
   const selectedPlantStatus = selectedPlant?.status ?? null;
 
   // Request deduplication ref to prevent multiple simultaneous calls
+  const queryClient = useQueryClient();
   const fetchDataPendingRef = useRef<string | null>(null);
 
   const fenceStatuses = useMemo(() => {
@@ -195,7 +200,15 @@ export default function PlantsView() {
     return itemQuantities[itemId] || defaultQuantity;
   };
 
-  const fetchData = useCallback(async () => {
+  /**
+   * `force` bypasses the cache. Visibility-driven refetches (tab switches) can be
+   * served from cache — getPlantsByOwner is a raw multicall with nothing in front
+   * of it, so Farm -> Ranking -> Farm used to re-issue it every time.
+   *
+   * Post-transaction callers MUST pass force: a claim/revive/purchase changes
+   * on-chain state, and a cached read would show the user stale plants.
+   */
+  const fetchData = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (!address) {
       fetchDataPendingRef.current = null;
       loadedPlantsAddressRef.current = null;
@@ -216,7 +229,15 @@ export default function PlantsView() {
       }
       setError(null);
 
-      const plantsData = await getPlantsByOwner(address);
+      const plantsQueryKey = queryKeys.plantsByOwner(address);
+      if (force) {
+        await queryClient.invalidateQueries({ queryKey: plantsQueryKey });
+      }
+      const plantsData = await queryClient.fetchQuery({
+        queryKey: plantsQueryKey,
+        queryFn: () => getPlantsByOwner(address),
+        staleTime: 30_000,
+      });
 
       // Only update if address hasn't changed during the fetch
       if (fetchDataPendingRef.current === address) {
@@ -253,7 +274,7 @@ export default function PlantsView() {
         fetchDataPendingRef.current = null;
       }
     }
-  }, [address]); // Selection and initial-load state are handled through refs.
+  }, [address, queryClient]); // Selection and initial-load state are handled through refs.
 
   // Sync ref when selectedPlant changes (so ref is always up to date)
   useEffect(() => {
@@ -320,32 +341,42 @@ export default function PlantsView() {
 
   const onPurchaseSuccess = useCallback(() => {
     toast.success("Purchase successful! Updating plant data...");
-    fetchData(); // Refetch all data
+    fetchData({ force: true }); // Refetch all data — must bypass the cache
     // Manually trigger a balance refresh across the app
     window.dispatchEvent(new Event('balances:refresh'));
   }, [fetchData]);
 
   const renderNoPlantsView = () => (
-    <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
-      <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-        <Flower2 className="w-12 h-12 text-muted-foreground" />
-      </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2">
-        No Plants Yet!
-      </h3>
-      <p className="text-muted-foreground">
-        Head over to the &apos;Mint&apos; tab to grow your first plant.
-      </p>
-    </div>
+    <EmptyState
+      className="h-[60vh]"
+      icon={Flower2}
+      title="No Plants Yet!"
+      description="Head over to the 'Mint' tab to grow your first plant."
+    />
   );
 
   // Only block render if we have NO plants data at all
   // If we have plants, we show them (Activity API maintains state) and update silently
   // Catalogs loading shouldn't block the main view either
   if (loading && plants.length === 0) {
+    // Skeleton shaped like the real layout below (a TabCard wrapping an
+    // aspect-square plant stage, then the name and action rows), so the content
+    // does not jump when it resolves. A centred logo loader in a short box
+    // resolving into a several-hundred-pixel card shifted the whole page.
     return (
-      <div className="flex items-center justify-center py-8">
-        <BaseExpandedLoadingPageLoader text="Loading dashboard..." />
+      <div className="space-y-4" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading Farm...</span>
+        <TabCard>
+          <CardContent className="space-y-4">
+            <Skeleton className="aspect-square w-full rounded-[var(--radius-panel)]" />
+            <Skeleton className="mx-auto h-6 w-40" />
+            <Skeleton className="mx-auto h-4 w-56" />
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </div>
+          </CardContent>
+        </TabCard>
       </div>
     );
   }
@@ -621,7 +652,7 @@ export default function PlantsView() {
                           setClaimOpen(false);
                           setClaimConfirmationText("");
                           toast.success('Rewards claimed via bridge!');
-                          fetchData();
+                          fetchData({ force: true });
                           window.dispatchEvent(new Event('balances:refresh'));
                         }}
                         onError={() => {
@@ -639,7 +670,7 @@ export default function PlantsView() {
                           setClaimOpen(false);
                           setClaimConfirmationText("");
                           toast.success('Rewards claimed!');
-                          fetchData();
+                          fetchData({ force: true });
                           window.dispatchEvent(new Event('balances:refresh'));
                         }}
                         onError={() => {
@@ -725,7 +756,7 @@ export default function PlantsView() {
                           disabled={reviveDataLoading || seedBalance < revivePrice}
                           onSuccess={() => {
                             toast.success('You revived your plant.');
-                            fetchData();
+                            fetchData({ force: true });
                             window.dispatchEvent(new Event('balances:refresh'));
                           }}
                           onError={() => {

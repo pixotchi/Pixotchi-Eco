@@ -205,7 +205,7 @@ function WagmiRouter({
   );
 }
 
-export function Providers(props: { children: ReactNode }) {
+export function Providers(props: { children: ReactNode; fallback?: ReactNode }) {
   // MiniKit API key validation handled internally
 
   // Environment variable validation (fail fast in production, warn in dev)
@@ -240,7 +240,12 @@ export function Providers(props: { children: ReactNode }) {
       search: window.location.search,
       storedSurface: sessionStorageManager.getAuthSurface(),
     });
-    sessionStorageManager.setAuthSurface(resolvedSurface);
+    // Fire-and-forget: persisting the surface is best-effort (storage can be
+    // blocked), and an unhandled rejection here would surface as a console error
+    // on every boot in private-browsing contexts.
+    void sessionStorageManager.setAuthSurface(resolvedSurface).catch((error) => {
+      console.warn('[Providers] Failed to persist auth surface:', error);
+    });
     setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
@@ -354,8 +359,10 @@ export function Providers(props: { children: ReactNode }) {
     }),
   }), [privyWalletConfig]);
 
+  // "page" (not "card"): this boundary wraps the entire provider tower, where a
+  // max-w-md card floating in an unstyled viewport is the wrong treatment.
   return (
-    <ErrorBoundary variant="card" onError={(error) => {
+    <ErrorBoundary variant="page" onError={(error) => {
       console.error('[Providers] Critical error in provider initialization:', error);
     }}>
       <ServerThemeProvider
@@ -375,6 +382,7 @@ export function Providers(props: { children: ReactNode }) {
                   <HostEnvironmentProvider>
                     <ProvidersContent
                       authSurface={authSurface}
+                      fallback={props.fallback}
                       surfaceInitialized={surfaceInitialized}
                     >
                       {props.children}
@@ -440,10 +448,12 @@ function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
 function ProvidersContent({
   authSurface,
   children,
+  fallback,
   surfaceInitialized,
 }: {
   authSurface: AuthSurface;
   children: ReactNode;
+  fallback?: ReactNode;
   surfaceInitialized: boolean;
 }) {
   const hostEnvironment = useHostEnvironment();
@@ -495,11 +505,11 @@ function ProvidersContent({
   ]);
 
   if (!surfaceInitialized || !hostEnvironment.initialized || !hostEnvironmentReady) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse">Preparing wallet login…</div>
-      </div>
-    );
+    // `fallback` is server-rendered markup (the login hero), so `/` ships a real
+    // LCP element instead of the placeholder string this used to return.
+    // The gate itself is unavoidable on the server: surfaceInitialized starts false,
+    // and page.tsx's first hooks require the tower we are still assembling.
+    return <>{fallback ?? null}</>;
   }
 
   return (

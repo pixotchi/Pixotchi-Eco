@@ -1719,7 +1719,7 @@ export default function AdminDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastType(option.value as UntypedValue)}
-                          className={`min-h-11 rounded-[var(--radius-control)] border-2 p-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastType === option.value
+                          className={`min-h-11 rounded-[var(--radius-control)] border-2 p-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastType === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                             }`}
@@ -1743,7 +1743,7 @@ export default function AdminDashboard() {
                           key={option.value}
                           type="button"
                           onClick={() => setBroadcastPriority(option.value as UntypedValue)}
-                          className={`min-h-11 w-full rounded-[var(--radius-control)] border-2 p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastPriority === option.value
+                          className={`min-h-11 w-full rounded-[var(--radius-control)] border-2 p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastPriority === option.value
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/50'
                             }`}
@@ -1775,7 +1775,7 @@ export default function AdminDashboard() {
                           setBroadcastExpiresIn(option.value);
                           setCustomExpiry('');
                         }}
-                        className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === option.value
+                        className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === option.value
                           ? 'border-primary bg-primary/10 font-medium'
                           : 'border-border hover:border-primary/50'
                           }`}
@@ -1789,7 +1789,7 @@ export default function AdminDashboard() {
                         setBroadcastNeverExpires(false);
                         setBroadcastExpiresIn('custom');
                       }}
-                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
+                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
                         ? 'border-primary bg-primary/10 font-medium'
                         : 'border-border hover:border-primary/50'
                         }`}
@@ -1799,7 +1799,7 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => setBroadcastNeverExpires(true)}
-                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastNeverExpires
+                      className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastNeverExpires
                         ? 'border-primary bg-primary/10 font-medium'
                         : 'border-border hover:border-primary/50'
                         }`}
@@ -1854,7 +1854,7 @@ export default function AdminDashboard() {
                     onClick={() => setBroadcastDismissible(!broadcastDismissible)}
                     aria-pressed={broadcastDismissible}
                     aria-label="Toggle broadcast dismissal"
-                    className={`relative inline-flex h-11 w-16 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
+                    className={`relative inline-flex h-11 w-16 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastDismissible ? 'bg-primary' : 'bg-gray-300'
                       }`}
                   >
                     <span
@@ -3007,14 +3007,14 @@ export default function AdminDashboard() {
                     {Object.entries((notifKeys.grouped || {}) as Record<string, UntypedValue[]>).map(([prefix, keys]) => (
                       <div key={prefix} className="border rounded-lg overflow-hidden">
                         <button
-                          className="flex min-h-11 w-full items-center justify-between bg-muted/50 px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-inset"
+                          className="flex min-h-11 w-full items-center justify-between bg-muted/50 px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                           onClick={() => setNotifKeysExpanded(prev => ({ ...prev, [prefix]: !prev[prefix] }))}
                         >
                           <span>{prefix} ({keys.length} keys)</span>
                           <span className="text-xs text-muted-foreground">{notifKeysExpanded[prefix] ? '▼' : '▶'}</span>
                         </button>
                         {notifKeysExpanded[prefix] && (
-                          <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
+                          <div className="divide-y divide-border/55 max-h-[300px] overflow-y-auto">
                             {keys.map((keyInfo: UntypedValue) => (
                               <div key={keyInfo.key} className="p-2 text-xs hover:bg-muted/30 flex items-start gap-2">
                                 <div className="flex-1 min-w-0">

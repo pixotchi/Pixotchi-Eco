@@ -4,6 +4,11 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
+// global-error replaces the root layout, so neither the stylesheet nor the font
+// variables from app/layout.tsx are present. Import both or the crash screen
+// renders as unstyled HTML with system fonts.
+import './globals.css';
+import { coinbaseSans, pixelmix } from './fonts';
 
 export default function GlobalError({
   error,
@@ -23,7 +28,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className={`h-full ${coinbaseSans.variable} ${pixelmix.variable}`}>
       <head>
         <title>Critical Error - Pixotchi</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />

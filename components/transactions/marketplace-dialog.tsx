@@ -704,7 +704,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     }
                     const visibleList = list.slice(0, PRICE_LEVEL_ORDER_LIST_LIMIT);
                     return (
-                      <div className="divide-y divide-border">
+                      <div className="divide-y divide-border/55">
                         {visibleList.map((o) => {
                           const payTokenIsLeaf = o.sellToken === 0;
                           const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;

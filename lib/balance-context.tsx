@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useEffect, ReactNode, useCallback, useMemo } from "react";
 import { useAccount, useReadContracts } from 'wagmi';
 import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi';
@@ -73,14 +73,23 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   }, [refetch]);
 
 
-  const value = {
-    seedBalance,
-    leafBalance,
-    pixotchiBalance,
-    // Show loading only on initial load, not during refetches (optimistic UI)
-    loading: isWagmiLoading && !data,
-    refreshBalances: async () => { await refetch(); },
-  };
+  const refreshBalances = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+
+  // Memoized: this provider sits high in the tower, so a fresh object literal here
+  // re-rendered every consumer on any parent render, not just on a balance change.
+  const value = useMemo(
+    () => ({
+      seedBalance,
+      leafBalance,
+      pixotchiBalance,
+      // Show loading only on initial load, not during refetches (optimistic UI)
+      loading: isWagmiLoading && !data,
+      refreshBalances,
+    }),
+    [seedBalance, leafBalance, pixotchiBalance, isWagmiLoading, data, refreshBalances],
+  );
 
   return (
     <BalanceContext.Provider value={value}>

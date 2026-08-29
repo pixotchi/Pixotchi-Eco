@@ -53,7 +53,21 @@ export type HostEnvironmentState = {
 type HostEnvironmentListener = (state: HostEnvironmentState) => void;
 type TimedMiniAppCheck = (timeoutMs?: number) => Promise<boolean>;
 
-const HOST_ENVIRONMENT_TIMEOUT_MS = 250;
+/*
+ * Matches @farcaster/miniapp-sdk's own default (its isInMiniApp takes a timeout
+ * argument defaulting to 1000ms).
+ *
+ * 250ms was too tight for a cold mini-app launch on a slow device: losing the race
+ * resolved the app as "web", and the late-context listener then upgraded it to
+ * miniapp, which flips WagmiRouter to a different provider component at the same
+ * position and unmounts/remounts the whole tree in front of the user.
+ *
+ * This costs plain web nothing. The SDK short-circuits synchronously before any
+ * timer when there is no webview and no parent frame:
+ *   if (!window.ReactNativeWebView && window === window.parent) return false;
+ * so only a genuine webview/iframe ever waits.
+ */
+const HOST_ENVIRONMENT_TIMEOUT_MS = 1000;
 
 const DEFAULT_HOST_ENVIRONMENT: HostEnvironmentState = {
   initialized: typeof window === "undefined",

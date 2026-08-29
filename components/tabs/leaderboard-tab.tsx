@@ -1,6 +1,7 @@
 "use client";
 
 import { SponsoredBadge } from "@/components/paymaster-toggle";
+import { EmptyState } from "@/components/ui/empty-state";
 import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import PlantImage from "@/components/PlantImage";
@@ -37,7 +38,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
-import { ChevronDown,Skull,Terminal } from "lucide-react";
+import { ChevronDown,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import toast from "react-hot-toast";
@@ -169,6 +170,17 @@ export default function LeaderboardTab() {
   const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
     gamificationDisabled ? gamificationDisabledMessage : null,
   );
+  // Render one layout, not both. renderResponsiveRows used to emit the 12-row
+  // mobile list AND the 20-row desktop grid (plus two paginations) and let CSS hide
+  // one, so every page change built 32 rows to paint at most 20. Each row is ~240
+  // lines of JSX with ~14 <Image> children.
+  //
+  // The CSS min-[54rem] classes below are deliberately kept: during the first frame
+  // after a resize (before the change event lands) they prevent both sets showing.
+  const [isDesktopBoard, setIsDesktopBoard] = useState(false);
+  // Total rows on the currently-selected board, kept in a ref so the resize handler
+  // can clamp the shared page index without re-subscribing on every data change.
+  const activeTotalItemsRef = useRef(0);
   const [currentPage, setCurrentPage] = useWebQueryState<number>({
     key: "leaderboardPage",
     defaultValue: 1,
@@ -180,6 +192,33 @@ export default function LeaderboardTab() {
     },
     serialize: (value) => (value <= 1 ? null : value.toString()),
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 54rem)');
+
+    // Adopt the current breakpoint without clamping. Clamping here would run before
+    // the row data has loaded, when activeTotalItemsRef is still 0 — and
+    // getTotalPages(0, n) is 1, so a deep-linked or refreshed ?leaderboardPage=3
+    // would be rewritten to page 1 (and the param dropped from the URL) before the
+    // page it names could ever render.
+    setIsDesktopBoard(mq.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsDesktopBoard(event.matches);
+      // Page size changes with the breakpoint (12 <-> 20) while currentPage is
+      // shared, so clamp or a user on page 3 of 12 rotates into an empty page.
+      // Only meaningful once rows exist; before that there is nothing to clamp to.
+      const totalItemsForBoard = activeTotalItemsRef.current;
+      if (totalItemsForBoard === 0) return;
+      const nextSize = event.matches ? DESKTOP_ITEMS_PER_PAGE : ITEMS_PER_PAGE;
+      setCurrentPage((page) => Math.max(1, Math.min(page, getTotalPages(totalItemsForBoard, nextSize))));
+    };
+
+    mq.addEventListener('change', handleChange);
+    return () => mq.removeEventListener('change', handleChange);
+  }, [setCurrentPage]);
+
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
   const [targetPlant, setTargetPlant] = useState<LeaderboardPlant | null>(null);
@@ -782,6 +821,12 @@ export default function LeaderboardTab() {
   const desktopStakes = getPageRows(stakeRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   const totalRockItems = rocksRows.length;
+
+  activeTotalItemsRef.current =
+    boardType === 'plants' ? totalItems
+    : boardType === 'lands' ? totalLandItems
+    : boardType === 'stake' ? totalStakeItems
+    : totalRockItems;
   const totalRockPages = getTotalPages(totalRockItems, ITEMS_PER_PAGE);
   const desktopRockPages = getTotalPages(totalRockItems, DESKTOP_ITEMS_PER_PAGE);
   const currentRocks = getPageRows(rocksRows, currentPage, ITEMS_PER_PAGE);
@@ -870,14 +915,16 @@ export default function LeaderboardTab() {
   ) {
     return (
       <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
-        <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
-          {mobileRows.map((row) => renderRow(row))}
-        </div>
+        {!isDesktopBoard && (
+          <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
+            {mobileRows.map((row) => renderRow(row))}
+          </div>
+        )}
 
-        {renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
+        {isDesktopBoard && renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
 
-        {renderPagination(mobilePageCount, "min-[54rem]:hidden")}
-        {renderPagination(desktopPageCount, "hidden min-[54rem]:flex")}
+        {!isDesktopBoard && renderPagination(mobilePageCount, "min-[54rem]:hidden")}
+        {isDesktopBoard && renderPagination(desktopPageCount, "hidden min-[54rem]:flex")}
       </div>
     );
   }
@@ -913,7 +960,7 @@ export default function LeaderboardTab() {
         key={plant.id}
         className={cn(
           compact ? "py-0.5 transition-all" : "py-3 transition-all",
-          isMine && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3",
+          isMine && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3",
           plant.isDead && "opacity-60"
         )}
       >
@@ -930,7 +977,7 @@ export default function LeaderboardTab() {
 
           <div
             className={cn(
-              "relative flex-shrink-0 cursor-pointer rounded-[var(--radius-control)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              "relative flex-shrink-0 cursor-pointer rounded-[var(--radius-control)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               compact && "flex h-11 w-11 items-center justify-center"
             )}
             onClick={() => handlePlantImageClick(plant)}
@@ -1179,7 +1226,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1202,13 +1249,13 @@ export default function LeaderboardTab() {
                     )}
                   </h4>
                   <span className="text-xs text-muted-foreground font-mono truncate">
-                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                    {formatAddress(row.address)}
                   </span>
                 </>
               ) : compact ? (
                 <>
                   <h4 className="font-semibold text-sm font-mono truncate pr-6">
-                    {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                    {formatAddress(row.address)}
                     {isCurrentUser && (
                       <span className="ml-2 text-xs text-primary font-medium">(You)</span>
                     )}
@@ -1217,7 +1264,7 @@ export default function LeaderboardTab() {
                 </>
               ) : (
                 <h4 className={cn("font-semibold font-mono truncate pr-6", compact ? "text-sm" : "text-base")}>
-                  {row.address.slice(0, 6)}...{row.address.slice(-4)}
+                  {formatAddress(row.address)}
                   {isCurrentUser && (
                     <span className="ml-2 text-xs text-primary font-medium">(You)</span>
                   )}
@@ -1244,7 +1291,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address || `rock-${row.rank}`}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 -mx-6 px-6 rounded-lg min-[54rem]:mx-0 min-[54rem]:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1295,7 +1342,7 @@ export default function LeaderboardTab() {
     if (loading && totalItems === 0) {
       return renderRankingState(
         <div className="text-center">
-          <BaseExpandedLoadingPageLoader text="Loading leaderboard..." />
+          <BaseExpandedLoadingPageLoader text="Loading Ranking..." />
         </div>
       );
     }
@@ -1341,9 +1388,11 @@ export default function LeaderboardTab() {
 
       // Default message for 'all' mode or when not connected
       return renderRankingState(
-        <div className="text-center text-muted-foreground">
-          <p>No plants found in the leaderboard.</p>
-        </div>
+        <EmptyState
+          icon={Flower2}
+          title="No plants ranked yet"
+          description="Plants appear here once they have earned points. Go to the Mint tab to grow your first one."
+        />
       );
     }
 
@@ -1361,6 +1410,7 @@ export default function LeaderboardTab() {
             {boardType === 'plants' && (
               <div className="hidden items-center justify-center gap-4 min-[54rem]:flex">
                 <ToggleGroup
+                  ariaLabel="Leaderboard board"
                   value={filterMode}
                   onValueChange={(v) => {
                     if (v !== 'all' && v !== 'attackable' && v !== 'dead') {
@@ -1397,6 +1447,7 @@ export default function LeaderboardTab() {
             )}
             <div className="w-full min-[380px]:w-auto min-[54rem]:col-start-3 min-[54rem]:justify-self-end">
               <ToggleGroup
+                ariaLabel="Leaderboard filter"
                 value={boardType}
                 onValueChange={(nextValue) => {
                   setCurrentPage(1);
@@ -1416,6 +1467,7 @@ export default function LeaderboardTab() {
           {boardType === 'plants' && (
             <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-[54rem]:hidden">
               <ToggleGroup
+                ariaLabel="Leaderboard filter"
                 value={filterMode}
                 onValueChange={(v) => {
                   setCurrentPage(1);
@@ -1460,7 +1512,11 @@ export default function LeaderboardTab() {
               )
             ) : totalLandItems === 0 ? (
               renderRankingState(
-                <div className="text-center text-muted-foreground">No lands found.</div>
+                <EmptyState
+                  icon={LandPlot}
+                  title="No lands ranked yet"
+                  description="Lands appear here once they have been minted and scored."
+                />
               )
             ) : (
               renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow, true)
@@ -1482,7 +1538,11 @@ export default function LeaderboardTab() {
               )
             ) : totalStakeItems === 0 ? (
               renderRankingState(
-                <div className="text-center text-muted-foreground">No stakers found.</div>
+                <EmptyState
+                  icon={Coins}
+                  title="No stakers yet"
+                  description="Stake SEED from the Stake House to appear on this board."
+                />
               )
             ) : (
               renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow, true)

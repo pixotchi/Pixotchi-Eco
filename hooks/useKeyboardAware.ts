@@ -2,17 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+/**
+ * Only `isVisible` is consumed (app/(game)/page.tsx toggles a keyboard-visible /
+ * keyboard-hidden class from it). `height` and `animationDuration` were written and
+ * diffed on every resize but read nowhere, so tracking them only produced state
+ * churn. Re-add them if something actually needs the measurement.
+ */
 interface KeyboardState {
   isVisible: boolean;
-  height: number;
-  animationDuration: number;
 }
 
 export function useKeyboardAware(): KeyboardState {
   const [keyboardState, setKeyboardState] = useState<KeyboardState>({
     isVisible: false,
-    height: 0,
-    animationDuration: 250
   });
   const frameRef = useRef<number | null>(null);
 
@@ -21,17 +23,7 @@ export function useKeyboardAware(): KeyboardState {
 
     const viewport = window.visualViewport;
     if (!viewport) {
-      setKeyboardState((previous) => {
-        if (!previous.isVisible && previous.height === 0 && previous.animationDuration === 250) {
-          return previous;
-        }
-
-        return {
-          isVisible: false,
-          height: 0,
-          animationDuration: 250
-        };
-      });
+      setKeyboardState((previous) => (previous.isVisible ? { isVisible: false } : previous));
       return;
     }
 
@@ -45,23 +37,9 @@ export function useKeyboardAware(): KeyboardState {
       activeElement instanceof HTMLTextAreaElement ||
       (activeElement instanceof HTMLElement && activeElement.isContentEditable);
     const isKeyboardVisible = isTextInputFocused && keyboardHeight > 120;
-    const nextState = {
-      isVisible: isKeyboardVisible,
-      height: Math.max(0, Math.round(keyboardHeight)),
-      animationDuration: 250
-    };
-
-    setKeyboardState((previous) => {
-      if (
-        previous.isVisible === nextState.isVisible &&
-        previous.height === nextState.height &&
-        previous.animationDuration === nextState.animationDuration
-      ) {
-        return previous;
-      }
-
-      return nextState;
-    });
+    setKeyboardState((previous) =>
+      previous.isVisible === isKeyboardVisible ? previous : { isVisible: isKeyboardVisible },
+    );
   }, []);
 
   const scheduleKeyboardStateUpdate = useCallback(() => {

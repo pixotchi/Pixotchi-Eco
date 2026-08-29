@@ -38,6 +38,15 @@ const buttonVariants = cva(
           "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.04]",
         nav:
           "!rounded-[var(--radius-nav)] border border-transparent text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:border-[hsl(var(--border-strong)/0.48)] data-[active=true]:bg-[hsl(var(--nav-active-bg))] data-[active=true]:bg-[image:var(--gradient-nav-active)] data-[active=true]:text-primary data-[active=true]:shadow-[var(--shadow-nav-active)]",
+        /*
+         * Like `nav`, but with no active-state surface of its own: SlidingNavTabs
+         * paints the selected pill as a separate animated indicator element behind
+         * the buttons. The main nav previously used `nav` and then cancelled all
+         * five of its data-[active] styles with !important overrides at the call
+         * site; this variant just never sets them.
+         */
+        navSliding:
+          "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-primary data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
         headerIcon:
           "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         statusAction:

@@ -684,6 +684,7 @@ export default function ActivityTab() {
               <CardTitle>Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
             <ToggleGroup
+              ariaLabel="Activity scope"
               value={view}
               onValueChange={(nextValue) => {
                 if (nextValue !== "all" && nextValue !== "my") {
