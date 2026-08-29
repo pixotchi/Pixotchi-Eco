@@ -7,6 +7,7 @@ import {
     useEffect,
     useRef,
     useCallback,
+    useMemo,
     type ReactNode,
 } from "react";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
@@ -177,16 +178,20 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
         }
     }, [isEnabled, performanceModeEnabled]);
 
-    // Don't render children until mounted to avoid hydration mismatch
-    if (!mounted) {
-        return <>{children}</>;
-    }
-
-    return (
-        <AmbientAudioContext.Provider value={{ isEnabled, isPlaying, toggleAudio }}>
-            {children}
-        </AmbientAudioContext.Provider>
+    /*
+     * Always render the Provider — see the same note in lib/snow-context.tsx. Returning
+     * a fragment until `mounted` changed this slot's element type and remounted the
+     * whole provider tower below it, which also meant `new Audio()` ran twice.
+     *
+     * `mounted` itself stays: the play/pause effect above reads it so it cannot act
+     * before the localStorage preference has landed.
+     */
+    const value = useMemo(
+        () => ({ isEnabled, isPlaying, toggleAudio }),
+        [isEnabled, isPlaying, toggleAudio],
     );
+
+    return <AmbientAudioContext.Provider value={value}>{children}</AmbientAudioContext.Provider>;
 }
 
 export function useAmbientAudio() {

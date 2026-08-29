@@ -100,6 +100,7 @@ const GameSelector = ({
 }) => (
   <div className={cn("flex justify-center", className)}>
     <ToggleGroup
+      ariaLabel="Arcade game"
       value={selected}
       onValueChange={(value) => onSelect(value as GameId)}
       options={[
@@ -118,7 +119,7 @@ const GameSelector = ({
           ariaLabel: "SpinLeaf",
           label: (
             <span className="flex min-w-0 items-center gap-1.5">
-              <Image src="/icons/spinleaf.svg" alt="" width={16} height={16} className="h-4 w-4 shrink-0 object-contain" aria-hidden />
+              <Image src="/icons/spinleaf.png" alt="" width={16} height={16} className="h-4 w-4 shrink-0 object-contain" aria-hidden />
               <span className="truncate">SpinLeaf</span>
             </span>
           ),
@@ -1085,7 +1086,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                             return (
                               <g key={index} transform={`rotate(${rotation} ${cx} ${cy})`}>
                                 <image
-                                  href="/icons/spinleaf.svg"
+                                  href="/icons/spinleaf.png"
                                   x={cx - 18}
                                   y={cy - 18}
                                   width={36}

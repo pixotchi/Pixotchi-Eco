@@ -270,7 +270,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   // Use useLogout hook with callbacks as recommended by Privy guidelines
   const { logout } = useLogout({
     onSuccess: () => {
-      console.log('User successfully logged out from Privy');
       // Post-logout cleanup handled in handleDisconnect
     },
   });
@@ -740,7 +739,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           <Button
                             type="button"
                             onClick={() => openExternalUrl("https://base.org/names")}
-                            variant="compactUtility"
+                            variant="outline"
                             size="compact"
                             className="shrink-0 border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
                           >
@@ -1002,7 +1001,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       </Dialog>
       <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="w-[min(94vw,28rem)] max-w-md" hideCloseButton={isExporting}>
+        <DialogContent
+          className="w-[min(94vw,28rem)] max-w-md"
+          hideCloseButton={isExporting}
+          /* Mirrors hideCloseButton: while the Privy export window is open the user
+             must not be able to dismiss this dialog out from under it. */
+          onPointerDownOutside={(event) => { if (isExporting) event.preventDefault(); }}
+          onEscapeKeyDown={(event) => { if (isExporting) event.preventDefault(); }}
+        >
           <DialogHeader>
             <div className="flex items-center space-x-2">
               <Key className="w-5 h-5 text-primary" />

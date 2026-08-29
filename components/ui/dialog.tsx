@@ -81,6 +81,7 @@ const DialogContent = React.forwardRef<
   useSafeAreaInset = true,
   onOpenAutoFocus,
   onCloseAutoFocus,
+  style,
   ...props
 }, ref) => {
   /*
@@ -124,6 +125,24 @@ const DialogContent = React.forwardRef<
           : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         frameClassName
       )}
+      /*
+       * Let backdrop pointerdowns reach the Overlay.
+       *
+       * This frame spans the viewport and paints above the Overlay, so it used to
+       * swallow every backdrop press before Radix could classify it as "outside":
+       * DismissableLayer's inside test is a React-tree flag set by an
+       * onPointerDownCapture on THIS node, not a contains() check — so a full-screen
+       * Content marks every press as inside and onPointerDownOutside never fires.
+       * Click-outside dismissal was dead for every dialog in the app.
+       *
+       * Making the frame transparent to pointers lets the press land on
+       * DialogOverlay, which Radix registers as a dismissable surface, and the
+       * dismissal path runs normally. The panel below re-enables pointer events.
+       *
+       * Must be an inline style: Radix writes pointerEvents inline on this node and
+       * spreads props.style last, so a utility class would lose the cascade.
+       */
+      style={{ pointerEvents: "none", ...style }}
       onOpenAutoFocus={(event) => {
         const active = typeof document !== "undefined" ? document.activeElement : null;
         openerRef.current =
@@ -145,6 +164,11 @@ const DialogContent = React.forwardRef<
       <div
         data-viewport-debug-dialog-surface=""
         className={cn(
+          // Counterpart to the frame's pointer-events: none above. The second class
+          // restores Radix's nested-layer inertness: when an inner dialog marks this
+          // one aria-hidden, the panel must stop taking pointer events too, which the
+          // frame's inline pointerEvents:none would otherwise have handled.
+          "pointer-events-auto [[data-aria-hidden=true]_&]:pointer-events-none",
           "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
           "max-h-[90dvh]",
           "rounded-[var(--radius-dialog)]",

@@ -181,7 +181,7 @@ export function EditPlantName({
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           className={`hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary ${className}`}
           title="Change plant name"
           aria-label="Change plant name"

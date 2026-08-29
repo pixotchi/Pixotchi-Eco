@@ -320,6 +320,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         {/* Mode switch placed below description with positive spacing */}
         <div className="mb-2 mt-1 flex items-center justify-between">
           <ToggleGroup
+            ariaLabel="Staking action"
             value={mode}
             onValueChange={(v) => setMode((v as 'stake' | 'unstake') || 'stake')}
             options={[

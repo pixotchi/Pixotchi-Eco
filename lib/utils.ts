@@ -369,56 +369,20 @@ const VILLAGE_BUILDINGS: { [key: number]: string } = {
 
 // Static icon mapping for caching
 const BUILDING_ICON_MAP: { [key: string]: string } = {
-  "Solar Panels": "/icons/solar-panels.svg",
-  "Soil Factory": "/icons/soil-factory.svg",
-  "Bee Farm": "/icons/bee-house.svg",
-  "Stake House": "/icons/stake-house.svg",
-  "Ware House": "/icons/ware-house.svg",
-  "Marketplace": "/icons/marketplace.svg",
-  "Casino": "/icons/casino.svg",
-  "Farmer House": "/icons/farmer-house.svg",
+  "Solar Panels": "/icons/solar-panels.png",
+  "Soil Factory": "/icons/soil-factory.png",
+  "Bee Farm": "/icons/bee-house.png",
+  "Stake House": "/icons/stake-house.png",
+  "Ware House": "/icons/ware-house.png",
+  "Marketplace": "/icons/marketplace.png",
+  "Casino": "/icons/casino.png",
+  "Farmer House": "/icons/farmer-house.png",
   "Barracks": "/icons/barracks.webp",
 };
 
 // Building name and icon caching
 const buildingNameCache = new Map<string, string>();
 const buildingIconCache = new Map<string, string>();
-
-// Preload building icons for better performance
-let iconsPreloaded = false;
-let preloadedLinks: HTMLLinkElement[] = [];
-
-export function preloadBuildingIcons(): () => void {
-  if (iconsPreloaded) return () => { }; // Return empty cleanup function
-
-  const iconPaths = Object.values(BUILDING_ICON_MAP);
-  const links: HTMLLinkElement[] = [];
-
-  iconPaths.forEach(iconPath => {
-    if (typeof window !== 'undefined') {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.href = iconPath;
-      link.as = 'image';
-      document.head.appendChild(link);
-      links.push(link);
-    }
-  });
-
-  preloadedLinks = links;
-  iconsPreloaded = true;
-
-  // Return cleanup function to remove preload links
-  return () => {
-    preloadedLinks.forEach(link => {
-      if (link.parentNode) {
-        link.parentNode.removeChild(link);
-      }
-    });
-    preloadedLinks = [];
-    iconsPreloaded = false;
-  };
-}
 
 // Land-specific helper functions with caching
 export function getBuildingName(buildingId: number, isTown: boolean = false): string {
@@ -543,7 +507,7 @@ export function getBuildingIcon(buildingName: string): string {
   }
 
   // Compute icon path
-  const iconPath = BUILDING_ICON_MAP[buildingName] || "/icons/stake-house.svg";
+  const iconPath = BUILDING_ICON_MAP[buildingName] || "/icons/stake-house.png";
 
   // Cache the result
   buildingIconCache.set(buildingName, iconPath);

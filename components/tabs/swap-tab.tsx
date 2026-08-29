@@ -488,6 +488,34 @@ export default function SwapTab() {
   const isVisible = isTabVisible('swap');
   const isChartView = swapView === 'chart';
   const isInfoView = swapView === 'info';
+  /*
+   * Render one layout, not both.
+   *
+   * The four TabCards below all mounted and CSS hid three of them. At 390px that meant
+   * a second PixotchiSwapPanel (with its own wagmi balance observers) plus a
+   * TradingView iframe — a third-party embed, ~1.6s to load — that nobody could see.
+   * 165 of 212 nodes in this tab had a zero-size box.
+   *
+   * The min-[54rem] classes on the cards are deliberately kept: for the frame between
+   * a resize crossing 54rem and the matchMedia change event landing, they stop both
+   * layouts painting at once.
+   *
+   * Lazy initialiser rather than useState(false): tab modules are dynamic(..., {ssr:false}),
+   * so there is no hydration mismatch to avoid, and starting false would mount a whole
+   * swap panel on every desktop first paint just to tear it down a frame later.
+   */
+  const [isDesktopSwapLayout, setIsDesktopSwapLayout] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(min-width: 54rem)');
+    setIsDesktopSwapLayout(mediaQuery.matches);
+    const handleChange = (event: MediaQueryListEvent) => setIsDesktopSwapLayout(event.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
   const { data: seedTotalSupply } = useReadContract({
     address: SEED_ADDRESS,
     abi: erc20Abi,
@@ -537,8 +565,9 @@ export default function SwapTab() {
 
   return (
     <div className="space-y-4 min-[54rem]:grid min-[54rem]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] min-[54rem]:items-stretch min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
+      {!isDesktopSwapLayout && (
       <TabCard
-        className={`${isChartView ? 'flex flex-col' : ''} min-[54rem]:hidden`}
+        className={`${isChartView ? 'flex flex-col' : ''} pb-4 min-[54rem]:hidden`}
         padding={isChartView ? 'none' : 'md'}
       >
         <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
@@ -581,7 +610,10 @@ export default function SwapTab() {
           )}
         </CardContent>
       </TabCard>
+      )}
 
+      {isDesktopSwapLayout && (
+      <>
       <TabCard className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:flex-col">
         <CardHeader>
           <CardTitle>Swap</CardTitle>
@@ -622,6 +654,8 @@ export default function SwapTab() {
           />
         </CardContent>
       </TabCard>
+      </>
+      )}
     </div>
   );
 }

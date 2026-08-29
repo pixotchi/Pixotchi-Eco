@@ -352,7 +352,7 @@ export function LandMapModal({
                                     <Button
                                         type="button"
                                         onClick={() => setProfileOpen(true)}
-                                        variant="compactUtility"
+                                        variant="outline"
                                         size="compact"
                                         className="h-7 min-h-7 gap-1.5 px-2 text-[11px]"
                                         aria-label="Open owner profile"

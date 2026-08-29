@@ -95,14 +95,14 @@ const TROOP_OPTIONS = [
     numericType: 0,
     name: "Swordsman",
     role: "Offense",
-    icon: "/icons/swordsman.svg",
+    icon: "/icons/swordsman.png",
   },
   {
     id: "phalanx" as const,
     numericType: 1,
     name: "Phalanx",
     role: "Defense",
-    icon: "/icons/phalanx.svg",
+    icon: "/icons/phalanx.png",
   },
 ] as const;
 
@@ -338,10 +338,10 @@ function BattleReportTable({
         <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 border-b border-border/40 bg-card/30 items-center">
           <div></div>
           <div className="flex justify-center">
-            <Image src="/icons/swordsman.svg" alt="Swordsman" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
+            <Image src="/icons/swordsman.png" alt="Swordsman" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
           </div>
           <div className="flex justify-center">
-            <Image src="/icons/phalanx.svg" alt="Phalanx" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
+            <Image src="/icons/phalanx.png" alt="Phalanx" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
           </div>
         </div>
         
@@ -980,6 +980,7 @@ export default function BarracksPanelV2({
       </div>
 
       <ToggleGroup
+        ariaLabel="Barracks section"
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as BarracksTab)}
         options={[
@@ -1025,6 +1026,7 @@ export default function BarracksPanelV2({
           />
 
           <ToggleGroup
+            ariaLabel="Troop to train"
             value={selectedTrainTroop}
             onValueChange={(value) => setSelectedTrainTroop((value as BarracksTroopId) || "swordsman")}
             options={TROOP_OPTIONS.map((troop) => ({
@@ -1342,6 +1344,7 @@ export default function BarracksPanelV2({
       {activeTab === "history" && (
         <div className="space-y-3">
           <ToggleGroup
+            ariaLabel="Battle report"
             value={reportView}
             onValueChange={(value) => setReportView(value as ReportMode)}
             options={[

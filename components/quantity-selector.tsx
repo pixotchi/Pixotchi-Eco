@@ -42,7 +42,7 @@ export default function QuantitySelector({
     <div className="flex items-center gap-1">
       <Button
         variant="outline"
-        size="icon-sm"
+        size="icon"
         className={`${buttonSize} ${quantity <= min ? 'opacity-50' : ''}`}
         onClick={handleDecrement}
         disabled={quantity <= min}
@@ -57,7 +57,7 @@ export default function QuantitySelector({
       
       <Button
         variant="outline"
-        size="icon-sm"
+        size="icon"
         className={`${buttonSize} ${quantity >= max ? 'opacity-50' : ''}`}
         onClick={handleIncrement}
         disabled={quantity >= max}

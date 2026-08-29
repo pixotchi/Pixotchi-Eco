@@ -371,13 +371,13 @@ function BarracksInfoContent({ open }: { open: boolean }) {
             <BarracksTroopTile
               title="Swordsman"
               role="Offense"
-              icon="/icons/swordsman.svg"
+              icon="/icons/swordsman.png"
               troop={configV2.swordsman}
             />
             <BarracksTroopTile
               title="Phalanx"
               role="Defense"
-              icon="/icons/phalanx.svg"
+              icon="/icons/phalanx.png"
               troop={configV2.phalanx}
             />
           </div>

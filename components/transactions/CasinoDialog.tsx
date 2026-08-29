@@ -766,6 +766,9 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent
                 hideCloseButton
+                /* Money game with no visible close button: a stray backdrop tap must not
+                   abandon a spin mid-round. */
+                onPointerDownOutside={(event) => event.preventDefault()}
                 mobileMode="center"
                 surface="game"
                 size="full"
@@ -958,7 +961,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                     </div>
 
                     {/* BETTING TABLE - Fully Responsive Fit */}
-                    <div className="w-full select-none overflow-x-auto overscroll-x-contain pb-4 [scrollbar-width:thin]" aria-label="Roulette betting table">
+                    <div className="w-full select-none overflow-x-auto overscroll-x-contain pb-4 [scrollbar-width:thin]" role="group" aria-label="Roulette betting table">
                         <div className="mx-auto min-w-[520px] max-w-[820px] md:min-w-0">
                             {/* Numbers Grid */}
                             <div className="grid w-full grid-cols-[44px_repeat(12,minmax(32px,1fr))_44px] gap-[2px] rounded-lg bg-border p-[1px] md:grid-cols-[48px_repeat(12,1fr)_48px]">

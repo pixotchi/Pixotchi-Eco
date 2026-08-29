@@ -424,15 +424,18 @@ export default function PlantProfileDialog({
                   )}
                   {ownerStatsPending ? (
                     <>
-                      <div className="flex items-center gap-1.5" aria-label="Loading plant count">
+                      <div className="flex items-center gap-1.5">
+                        <span className="sr-only">Loading plant count</span>
                         <Image src="/icons/plant1.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5" aria-label="Loading land count">
-                        <Image src="/icons/bee-house.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
+                      <div className="flex items-center gap-1.5">
+                        <span className="sr-only">Loading land count</span>
+                        <Image src="/icons/bee-house.png" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-8" />
                       </div>
-                      <div className="flex items-center gap-1.5" aria-label="Loading staked SEED">
+                      <div className="flex items-center gap-1.5">
+                        <span className="sr-only">Loading staked SEED</span>
                         <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
                         <Skeleton className="h-4 w-12" />
                         <span className="text-xs text-muted-foreground uppercase">Staked</span>
@@ -445,7 +448,7 @@ export default function PlantProfileDialog({
                         <span className="font-semibold">{ownerStats.totalPlants}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Image src="/icons/bee-house.svg" alt="Lands" width={16} height={16} />
+                        <Image src="/icons/bee-house.png" alt="Lands" width={16} height={16} />
                         <span className="font-semibold">{ownerStats.totalLands}</span>
                       </div>
                       <div className="flex items-center gap-1.5">

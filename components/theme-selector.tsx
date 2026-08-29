@@ -3,12 +3,17 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { THEMES, Theme } from "@/lib/theme-utils";
 import { useSnow } from "@/lib/snow-context";
 import { useAmbientAudio } from "@/lib/ambient-audio-context";
@@ -32,29 +37,40 @@ const themes: Array<{ name: Theme; label: string; color: string }> = [
 const themeMenuButtonClass = "h-8 min-h-8 w-8 min-w-8 !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
 const themeSwatchClass = "h-4 w-4 rounded-[2px]";
 
-function MenuSwitchRow({
+/*
+ * A Radix menu item, not a hand-rolled button.
+ *
+ * The eight swatches and these two toggles used to be a bare <div role="radiogroup">
+ * of <button role="radio"> plus two <button role="switch"> inside DropdownMenuContent
+ * (role="menu"). Radix's roving focus only manages menu ITEMS, so there were none to
+ * manage: focus stopped on the content container, and neither arrow keys nor Tab could
+ * reach any control. The whole menu was keyboard-dead (WCAG 2.1.1, Level A) — and
+ * "menu" may not own "radiogroup"/"switch" in the first place.
+ *
+ * onSelect is prevented on every item so the menu stays open, which the multi-pick
+ * theme sequence depends on. onCheckedChange still fires.
+ */
+function MenuSwitchItem({
   label,
   checked,
-  onClick,
-  ariaLabel,
+  onCheckedChange,
 }: {
   label: string;
   checked: boolean;
-  onClick: () => void;
-  ariaLabel: string;
+  onCheckedChange: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex min-h-11 w-full items-center justify-between gap-4 rounded-[var(--radius-nav)] px-2 py-2 text-left transition-[background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-        checked
-          ? "bg-background/55 shadow-[var(--shadow-hairline)]"
-          : "hover:bg-[hsl(var(--nav-hover-bg))]"
-      }`}
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
+    <DropdownMenuCheckboxItem
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      onSelect={(event) => event.preventDefault()}
+      className={cn(
+        "min-h-11 w-full justify-between gap-4 py-2 pl-2 pr-2 text-left",
+        // Radix renders its own check indicator as the first child; this control
+        // shows state with the pill instead.
+        "[&>span:first-child]:hidden",
+        checked && "bg-background/55 shadow-[var(--shadow-hairline)]",
+      )}
     >
       <span className="text-xs font-medium">{label}</span>
       <span
@@ -75,7 +91,7 @@ function MenuSwitchRow({
           }`}
         />
       </span>
-    </button>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -179,45 +195,57 @@ export function ThemeSelector({
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="p-2" aria-label="Theme selection menu">
-        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Available themes">
+      {/* No aria-label here: Radix already points aria-labelledby at the trigger. */}
+      <DropdownMenuContent align="end" className="p-2">
+        <DropdownMenuRadioGroup
+          className="grid grid-cols-4 gap-2"
+          value={theme ?? ""}
+          onValueChange={handleThemeChange}
+        >
           {themes.map((themeOption) => (
-            <Button
+            <DropdownMenuRadioItem
               key={themeOption.name}
-              variant="outline"
-              size="icon"
+              value={themeOption.name}
               title={themeOption.label}
-              onClick={() => handleThemeChange(themeOption.name)}
-              className={`${themeMenuButtonClass} ${theme === themeOption.name ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""
-                }`}
-              role="radio"
-              aria-checked={theme === themeOption.name}
-              aria-label={`Select ${themeOption.label} theme`}
+              /* Keep the menu open: choosing several themes in sequence is a real
+                 flow here, and a menu that closes on every pick makes it unusable. */
+              onSelect={(event) => event.preventDefault()}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "icon" }),
+                themeMenuButtonClass,
+                // Radix's check indicator is absolutely positioned in the left gutter
+                // this control does not have; the swatch itself carries the state.
+                "[&>span:first-child]:hidden",
+                // Deliberately not a ring: buttonVariants already spends the ring on
+                // focus-visible, so selection and focus must stay distinguishable.
+                "data-[state=checked]:border-primary data-[state=checked]:shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]",
+              )}
             >
               <div className={`${themeSwatchClass} ${themeOption.color}`} />
-            </Button>
+              <span className="sr-only">{themeOption.label}</span>
+            </DropdownMenuRadioItem>
           ))}
-        </div>
+        </DropdownMenuRadioGroup>
         {/* Winter Mode Toggle - only shown when feature is enabled via env */}
         {isSnowFeatureEnabled && (
-          <div className="mt-2 border-t border-[hsl(var(--divider)/0.68)] pt-2">
-            <MenuSwitchRow
+          <>
+            <DropdownMenuSeparator />
+            <MenuSwitchItem
               label="Winter Mode"
               checked={isSnowEnabled}
-              onClick={handleSnowToggle}
-              ariaLabel="Toggle winter snow effect"
+              onCheckedChange={handleSnowToggle}
             />
-          </div>
+          </>
         )}
         {showMusicToggle && (
-          <div className={`${isSnowFeatureEnabled ? 'mt-1' : 'mt-2 border-t border-[hsl(var(--divider)/0.68)] pt-2'}`}>
-            <MenuSwitchRow
+          <>
+            {!isSnowFeatureEnabled && <DropdownMenuSeparator />}
+            <MenuSwitchItem
               label="Music"
               checked={isMusicEnabled}
-              onClick={handleMusicToggle}
-              ariaLabel="Toggle ambient music"
+              onCheckedChange={handleMusicToggle}
             />
-          </div>
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

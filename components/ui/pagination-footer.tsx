@@ -30,7 +30,7 @@ export function PaginationFooter({
     >
       <div className="mx-auto grid w-full max-w-xs grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <Button
-          variant="compactUtility"
+          variant="outline"
           size="touchCompact"
           onClick={onPrevious}
           disabled={currentPage === 1}
@@ -43,7 +43,7 @@ export function PaginationFooter({
           {currentPage} / {totalPages}
         </span>
         <Button
-          variant="compactUtility"
+          variant="outline"
           size="touchCompact"
           onClick={onNext}
           disabled={currentPage === totalPages}

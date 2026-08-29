@@ -104,11 +104,11 @@
     --browser-safe-area-right: 0px;
     --browser-safe-area-bottom: 0px;
     --browser-safe-area-left: 0px;
-    --app-header-height: 0px;
-    --app-status-height: 0px;
-    --app-bottom-nav-height: 0px;
+    /* --app-header-height / --app-status-height / --app-bottom-nav-height /
+       --app-content-bottom-offset lived here for a JS hook that measured the shell on
+       every resize and visualViewport tick. Nothing ever read them. The gutter is the
+       one value that did work, and it is now set entirely by media query. */
     --app-content-gutter: 1rem;
-    --app-content-bottom-offset: 0px;
     /* At xl the bottom nav is removed and the content pane becomes the bottom-most
        element, so it has to carry the safe-area inset itself. Zero below xl, where
        the nav already applies .safe-area-bottom. */
@@ -168,6 +168,17 @@
     --header-control-border-hover: var(--primary) / 0.44;
     --nav-hover-bg: var(--primary) / 0.10;
     --nav-active-bg: var(--primary) / 0.18;
+    /*
+     * Ink for text sitting ON a selected control surface: the bottom-nav / rail label
+     * and every ToggleGroup option. Defaults to --primary; four themes override below.
+     * That surface is a tint of --primary, so using --primary as the ink put it on a
+     * tint of itself. Measured on the composited pill: the active nav label was 4.26:1
+     * (light), 4.09:1 (green), 4.21:1 (yellow), 2.86:1 (dark), and a selected
+     * ToggleGroup option 2.83:1 (dark) — all under 4.5:1, on the two most-used controls
+     * in the app. Only selected-state ink reads this token, so --primary keeps its own
+     * value for fills, rings and links.
+     */
+    --selected-control-foreground: var(--primary);
     --gradient-nav-hover: linear-gradient(180deg, hsl(var(--primary) / 0.12) 0%, hsl(var(--primary) / 0.075) 54%, hsl(var(--primary) / 0.045) 100%);
     --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-selection: linear-gradient(180deg, hsl(var(--primary) / 0.22) 0%, hsl(var(--primary) / 0.1) 100%);
@@ -220,6 +231,7 @@
     --divider: 208 30% 48%;
     --input: 208 32% 50%;
     --ring: 211 82% 34%;
+    --selected-control-foreground: 211 82% 29%; /* 5.16:1 on the selected pill */
     --scene-glow: 190 84% 86%;
     --scene-floor: 166 58% 90%;
     --chromatic-layer-surface: 210 62% 92%;
@@ -280,6 +292,7 @@
     --divider: 137 24% 45%;
     --input: 137 24% 48%;
     --ring: 151 78% 24%;
+    --selected-control-foreground: 151 78% 20%; /* 5.22:1 on the selected pill */
     --scene-glow: 88 72% 82%;
     --scene-floor: 151 52% 86%;
     --chromatic-layer-surface: 116 30% 90%;
@@ -311,6 +324,7 @@
     --divider: 39 38% 43%;
     --input: 39 34% 46%;
     --ring: 33 86% 29%;
+    --selected-control-foreground: 33 86% 25%; /* 5.15:1 on the selected pill */
     --scene-glow: 38 92% 80%;
     --scene-floor: 48 78% 88%;
     --chromatic-layer-surface: 46 56% 90%;
@@ -490,10 +504,15 @@
     --divider: 216 20% 52%;
     --input: 216 20% 50%;
     --ring: 204 92% 74%;
+    --selected-control-foreground: 204 92% 95%; /* 4.64:1 — the dark pill is lighter than the
+                                             chrome, so the ink has to go up, not down */
     --scene-glow: 204 92% 62%;
     --scene-floor: 216 30% 29%;
     --chromatic-layer-surface: 216 28% 40%;
-    --chromatic-layer-highlight: 216 34% 47%;
+    /* 42%, not 47%: this is the top stop of the gradient these panels paint, so it is
+       the lightest pixel any text on them sits over. At 47% it was 16 points lighter
+       than --card, which left no room for a coloured ink at AA. */
+    --chromatic-layer-highlight: 216 34% 42%;
     --status-great: 150 70% 58%;
     --status-okay: 78 68% 58%;
     --status-dry: 32 90% 58%;
@@ -997,6 +1016,39 @@
     box-shadow: var(--surface-highlight), var(--shadow-raised);
   }
 
+  /*
+   * Dark theme: the "white surface" family is a deliberately LIFTED panel — in light
+   * themes it emulates a near-white card, and in dark it sits well above --card
+   * (216 28% 40% against 216 30% 31%). Every semantic ink in the dark palette was
+   * tuned against --card, so on these panels they all measured under AA:
+   * muted-foreground 3.46:1, destructive-strong 3.36:1, success-strong 3.65:1,
+   * warning-strong 3.97:1, value 4.14:1 — measured on the real elements, against the
+   * lightest point of the panel gradient. That is every "Price"/"Cost"/"Effect" label
+   * and every price figure in the marketplace, mint, chat and building panels.
+   *
+   * Treat the family as its own surface with its own foreground scale rather than
+   * darkening it (which would erase the lift the name describes) or lifting the whole
+   * dark palette (which would wash out text on --card). Descendants inherit these
+   * through var(), so one block fixes every ink on every one of these panels.
+   * All values verified >= 4.6:1 against the gradient's top stop.
+   */
+  .dark :is(
+    .marketplace-detail-card,
+    .chromatic-white-surface,
+    .chat-white-surface,
+    .building-detail-surface,
+    .building-subpanel-surface
+  ) {
+    --muted-foreground: 214 22% 89%;
+    /* --primary is ink here too ("+48 PTS", link text). Lightening it also raises
+       the contrast of --primary-foreground on any primary fill inside the panel. */
+    --primary: 204 92% 88%;
+    --destructive-strong: 356 90% 92%;
+    --warning-strong: 38 96% 82%;
+    --success-strong: 148 72% 80%;
+    --value: 188 88% 81%;
+  }
+
   :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) .chromatic-white-inner-glow::before,
   .dark .chromatic-white-inner-glow::before,
   .green .chromatic-white-inner-glow::before,
@@ -1026,7 +1078,9 @@
     border-color: hsl(var(--primary) / 0.5);
     background-color: hsl(var(--card) / 0.95);
     background-image: var(--gradient-selection);
-    color: hsl(var(--primary));
+    /* Not --primary: this surface is a tint of --primary, so primary-as-ink sat on a
+       tint of itself. Measured on the real element it was 2.83:1 in dark. */
+    color: hsl(var(--selected-control-foreground));
     box-shadow:
       inset 0 0 0 1px hsl(var(--primary) / 0.12),
       var(--shadow-control);
@@ -1092,11 +1146,6 @@
     padding-right: max(1rem, env(safe-area-inset-right), var(--safe-area-inset-right), var(--browser-safe-area-right));
   }
 
-  .app-content-shell {
-    padding: var(--app-content-gutter);
-    padding-bottom: var(--app-content-gutter);
-  }
-
   .app-shell-inner {
     max-width: 28rem;
     /*
@@ -1129,16 +1178,14 @@
 
   @media (min-width: 80rem) {
     :root {
-      --app-content-bottom-offset: 0px;
+      /* Was a .app-content-shell { padding: 1.25rem } rule. That rule could never win:
+         app/(game)/page.tsx sets all four paddings inline on the same element. The
+         gutter is the token the inline style actually reads. */
+      --app-content-gutter: 1.25rem;
     }
 
     .app-shell-inner[data-connected="true"] {
       max-width: none;
-    }
-
-    .app-content-shell {
-      padding: 1.25rem;
-      padding-bottom: max(1.25rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
     }
   }
 
@@ -1201,36 +1248,9 @@
     touch-action: manipulation;
   }
 
-  /* Compact visuals can still expose a larger invisible tap affordance. */
-  .tap-target-44,
-  .btn-compact,
-  .btn-touch-compact {
-    position: relative;
-    overflow: visible;
-  }
-
-  .tap-target-44::after,
-  .btn-compact::after,
-  .btn-touch-compact::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: max(100%, 44px);
-    height: max(100%, 44px);
-    transform: translate(-50%, -50%);
-    border-radius: inherit;
-  }
-
-  .btn-compact {
-    min-height: 1.75rem !important;
-    min-width: 1.75rem !important;
-  }
-
-  .btn-touch-compact {
-    min-height: 2.25rem !important;
-    min-width: 2.25rem !important;
-  }
+  /* Removed: .tap-target-44 / .btn-compact / .btn-touch-compact. The three classes
+     and their invisible 44px ::after affordance had zero consumers anywhere in the
+     repo — the Button size scale carries the 44px touch floor directly. */
 
   .app-status-scroll {
     max-width: 100%;

@@ -177,7 +177,9 @@ export default function LeaderboardTab() {
   //
   // The CSS min-[54rem] classes below are deliberately kept: during the first frame
   // after a resize (before the change event lands) they prevent both sets showing.
-  const [isDesktopBoard, setIsDesktopBoard] = useState(false);
+  const [isDesktopBoard, setIsDesktopBoard] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
+  );
   // Total rows on the currently-selected board, kept in a ref so the resize handler
   // can clamp the shared page index without re-subscribing on every data change.
   const activeTotalItemsRef = useRef(0);
@@ -444,7 +446,6 @@ export default function LeaderboardTab() {
       stakeDataCacheRef.current.data &&
       cacheAge < STAKE_CACHE_DURATION
     ) {
-      console.log(`📊 [Stake] Using cached data (age: ${Math.round(cacheAge / 1000)}s)`);
       setStakeRows(stakeDataCacheRef.current.data);
       stakeDataLoadedRef.current = true;
       setStakeError(null);
@@ -459,7 +460,6 @@ export default function LeaderboardTab() {
     }
     setStakeError(null);
     try {
-      console.log(`📊 [Stake] Fetching fresh data from API...`);
       const stakeResponse = await fetch('/api/leaderboard/stake');
       if (!stakeResponse.ok) {
         throw new Error(`Failed to fetch stake leaderboard (${stakeResponse.status})`);
@@ -482,7 +482,6 @@ export default function LeaderboardTab() {
 
         setStakeRows(sortedStakes);
         stakeDataLoadedRef.current = true;
-        console.log(`📊 [Stake] Cached fresh data (${sortedStakes.length} stakers)`);
       }
     } catch (error) {
       setStakeError('Failed to load Stake leaderboard. Please try again.');
@@ -999,7 +998,7 @@ export default function LeaderboardTab() {
             />
             {hasActiveFence(plant) && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
-                <Image src="/icons/Shield.svg" alt="Protected" width={12} height={12} className="h-3 w-3" />
+                <Image src="/icons/Shield.png" alt="Protected" width={12} height={12} className="h-3 w-3" />
               </div>
             )}
             {plant.isDead && (
@@ -1009,7 +1008,15 @@ export default function LeaderboardTab() {
             )}
           </div>
 
-          <div className="flex-1 min-w-0">
+          <div
+            className={cn(
+              "flex-1 min-w-0",
+              // At >=520px the stats sit beside the name instead of under it. This
+              // replaces a second copy of the same three figures that used to live in
+              // the trailing column and be swapped in by CSS.
+              !compact && "min-[520px]:flex min-[520px]:items-center min-[520px]:justify-between min-[520px]:gap-2",
+            )}
+          >
             {compact ? (
               <div className="min-w-0">
                 <h4 className="truncate font-pixel text-sm">
@@ -1022,39 +1029,69 @@ export default function LeaderboardTab() {
               </div>
             ) : (
               <>
-                <div className="flex items-center space-x-2">
-                  <div className="relative min-w-0">
-                    <h4 className="truncate pr-2 font-pixel text-base">
-                      {plant.name || `Plant #${plant.id}`}
-                      {isMine && (
-                        <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                      )}
-                    </h4>
+                <div className="min-w-0 min-[520px]:flex-1">
+                  <div className="flex items-center space-x-2">
+                    <div className="relative min-w-0">
+                      <h4 className="truncate pr-2 font-pixel text-base">
+                        {plant.name || `Plant #${plant.id}`}
+                        {isMine && (
+                          <span className="ml-2 text-xs text-primary font-medium">(You)</span>
+                        )}
+                      </h4>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+                    <span>LvL {plant.level}</span>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                  <span>LvL {plant.level}</span>
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-[520px]:hidden">
-                  <div className="flex items-center gap-1 text-foreground">
-                    <Image src="/icons/pts.svg" alt="Points" width={13} height={13} />
-                    <span className="font-bold">{formatScoreShort(plant.score)}</span>
+                {/*
+                  One stat block, not two. This used to be rendered twice per row —
+                  here for <520px and again in the trailing column for >=520px — with
+                  CSS hiding one. Every row therefore built six next/image components
+                  to paint three. The two copies only ever differed in icon size, text
+                  size and stack direction, all of which a min-[520px]: variant covers.
+                */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-[520px]:mt-0 min-[520px]:shrink-0 min-[520px]:flex-col min-[520px]:items-end min-[520px]:gap-1 min-[520px]:text-sm">
+                  <div className="flex items-center gap-1 text-foreground min-[520px]:gap-1">
+                    <Image
+                      src="/icons/pts.svg"
+                      alt="Points"
+                      width={16}
+                      height={16}
+                      className="h-[13px] w-[13px] min-[520px]:h-4 min-[520px]:w-4"
+                    />
+                    <span className="font-bold min-[520px]:text-base">{formatScoreShort(plant.score)}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Image src="/icons/Star.svg" alt="Stars" width={12} height={12} />
-                    <span>{plant.stars}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={12} height={12} />
-                    <span>{formatEthShort(plant.rewards)}</span>
+                  <div className="flex items-center gap-x-3 gap-y-1">
+                    <div className="flex items-center gap-1">
+                      <Image
+                        src="/icons/Star.svg"
+                        alt="Stars"
+                        width={14}
+                        height={14}
+                        className="h-3 w-3 min-[520px]:h-3.5 min-[520px]:w-3.5"
+                      />
+                      <span>{plant.stars}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Image
+                        src="/icons/ethlogo.svg"
+                        alt="ETH"
+                        width={14}
+                        height={14}
+                        className="h-3 w-3 min-[520px]:h-3.5 min-[520px]:w-3.5"
+                      />
+                      <span>{formatEthShort(plant.rewards)}</span>
+                    </div>
                   </div>
                 </div>
               </>
             )}
           </div>
 
+          {(compact || canShowAttack || canShowKill || canShowRevive) && (
           <div className="flex items-center space-x-2 text-right">
-            {compact ? (
+            {compact && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1 text-foreground">
                   <Image src="/icons/pts.svg" alt="Points" width={12} height={12} />
@@ -1067,23 +1104,6 @@ export default function LeaderboardTab() {
                 <div className="flex items-center gap-1">
                   <Image src="/icons/ethlogo.svg" alt="ETH" width={11} height={11} />
                   <span>{formatEthShort(plant.rewards)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="hidden flex-col items-end space-y-1 min-[520px]:flex">
-                <div className="flex items-center space-x-1">
-                  <Image src="/icons/pts.svg" alt="Points" width={16} height={16} />
-                  <span className="text-base font-bold">{formatScoreShort(plant.score)}</span>
-                </div>
-                <div className="flex items-center space-x-3 text-sm text-muted-foreground">
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} />
-                    <span>{plant.stars}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={14} height={14} />
-                    <span>{formatEthShort(plant.rewards)}</span>
-                  </div>
                 </div>
               </div>
             )}
@@ -1102,7 +1122,7 @@ export default function LeaderboardTab() {
                 className={RANKING_ACTION_BUTTON_CLASS}
               >
                 <Image
-                  src="/icons/Attackwon.svg"
+                  src="/icons/Attackwon.png"
                   alt=""
                   width={24}
                   height={24}
@@ -1181,6 +1201,7 @@ export default function LeaderboardTab() {
               )
             )}
           </div>
+          )}
         </div>
       </div>
     );
@@ -1407,10 +1428,10 @@ export default function LeaderboardTab() {
             <CardTitle>
               Ranking
             </CardTitle>
-            {boardType === 'plants' && (
+            {boardType === 'plants' && isDesktopBoard && (
               <div className="hidden items-center justify-center gap-4 min-[54rem]:flex">
                 <ToggleGroup
-                  ariaLabel="Leaderboard board"
+                  ariaLabel="Filter plants by status"
                   value={filterMode}
                   onValueChange={(v) => {
                     if (v !== 'all' && v !== 'attackable' && v !== 'dead') {
@@ -1438,7 +1459,7 @@ export default function LeaderboardTab() {
                         setShowOnlyMyPlants(e.target.checked);
                         setCurrentPage(1);
                       }}
-                      className="h-5 w-5 rounded border-border accent-primary"
+                      className="h-5 w-5 rounded accent-primary"
                     />
                     <span className="text-muted-foreground">My Plants</span>
                   </label>
@@ -1447,7 +1468,7 @@ export default function LeaderboardTab() {
             )}
             <div className="w-full min-[380px]:w-auto min-[54rem]:col-start-3 min-[54rem]:justify-self-end">
               <ToggleGroup
-                ariaLabel="Leaderboard filter"
+                ariaLabel="Ranking board"
                 value={boardType}
                 onValueChange={(nextValue) => {
                   setCurrentPage(1);
@@ -1464,10 +1485,10 @@ export default function LeaderboardTab() {
               />
             </div>
           </div>
-          {boardType === 'plants' && (
+          {boardType === 'plants' && !isDesktopBoard && (
             <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-[54rem]:hidden">
               <ToggleGroup
-                ariaLabel="Leaderboard filter"
+                ariaLabel="Filter plants by status"
                 value={filterMode}
                 onValueChange={(v) => {
                   setCurrentPage(1);
@@ -1492,7 +1513,7 @@ export default function LeaderboardTab() {
                       setShowOnlyMyPlants(e.target.checked);
                       setCurrentPage(1);
                     }}
-                    className="h-5 w-5 rounded border-border accent-primary"
+                    className="h-5 w-5 rounded accent-primary"
                   />
                   <span className="text-muted-foreground">My Plants</span>
                 </label>

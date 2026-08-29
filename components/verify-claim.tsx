@@ -119,7 +119,6 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       });
 
       const messageText = message.prepareMessage();
-      console.log('[VERIFY] SIWE message:', { domain, uri: appUrl, chainId: BASE_VERIFY_CONFIG.chainId });
       
       const signature = await signMessageAsync({ message: messageText });
 

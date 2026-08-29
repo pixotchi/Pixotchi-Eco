@@ -1463,7 +1463,7 @@ export default function PixotchiSwapPanel() {
 
           <Button
             type="submit"
-            variant="transaction"
+            variant="default"
             fullWidth
             className={SWAP_PRIMARY_ACTION_CLASS}
             disabled={actionDisabled}

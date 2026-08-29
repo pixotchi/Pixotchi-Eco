@@ -1328,6 +1328,9 @@ export default function BlackjackDialog({
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent
                 hideCloseButton
+                /* Money game with no visible close button: a stray backdrop tap must not
+                   abandon a hand mid-round. */
+                onPointerDownOutside={(event) => event.preventDefault()}
                 mobileMode="center"
                 surface="game"
                 className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"

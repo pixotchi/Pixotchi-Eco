@@ -130,7 +130,7 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
             </p>
           </div>
         </div>
-        <Button size="xs" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
+        <Button size="touchCompact" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
           <RefreshIcon refreshing={refreshing} className="mr-1.5 h-3.5 w-3.5" />
           {refreshing ? "Refreshing..." : "Refresh"}
         </Button>

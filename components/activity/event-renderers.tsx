@@ -44,9 +44,9 @@ const EventIcon = React.memo(({
     switch (type) {
       case 'Attack':
         if (event && event.attacker === event.winner) {
-          return { iconSrc: "/icons/Attackwon.svg", altText: "Attack Won" };
+          return { iconSrc: "/icons/Attackwon.png", altText: "Attack Won" };
         } else {
-          return { iconSrc: "/icons/Attacklost.svg", altText: "Attack Lost" };
+          return { iconSrc: "/icons/Attacklost.png", altText: "Attack Lost" };
         }
       case 'Killed':
         return { iconSrc: "/icons/skull.png", altText: "Kill" };
@@ -71,65 +71,65 @@ const EventIcon = React.memo(({
         return { iconSrc: "/icons/BEE.png", altText: "Shop Item" };
       // Land Event Icons
       case 'LandTransferEvent':
-        return { iconSrc: "/icons/ware-house.svg", altText: "Land Transfer" };
+        return { iconSrc: "/icons/ware-house.png", altText: "Land Transfer" };
       case 'LandMintedEvent':
-        return { iconSrc: "/icons/farmer-house.svg", altText: "Land Minted" };
+        return { iconSrc: "/icons/farmer-house.png", altText: "Land Minted" };
       case 'LandNameChangedEvent':
-        return { iconSrc: "/icons/farmer-house.svg", altText: "Land Renamed" };
+        return { iconSrc: "/icons/farmer-house.png", altText: "Land Renamed" };
       case 'VillageUpgradedWithLeafEvent':
       case 'VillageSpeedUpWithSeedEvent':
         if (event && event.buildingId !== undefined) {
           const buildingName = getBuildingName(event.buildingId, false);
           const buildingIcons: { [key: string]: string } = {
-            "Solar Panels": "/icons/solar-panels.svg",
-            "Soil Factory": "/icons/soil-factory.svg",
-            "Bee Farm": "/icons/bee-house.svg"
+            "Solar Panels": "/icons/solar-panels.png",
+            "Soil Factory": "/icons/soil-factory.png",
+            "Bee Farm": "/icons/bee-house.png"
           };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/solar-panels.svg", altText: buildingName };
+          return { iconSrc: buildingIcons[buildingName] || "/icons/solar-panels.png", altText: buildingName };
         }
-        return { iconSrc: "/icons/solar-panels.svg", altText: "Village Building" };
+        return { iconSrc: "/icons/solar-panels.png", altText: "Village Building" };
       case 'TownUpgradedWithLeafEvent':
       case 'TownSpeedUpWithSeedEvent':
         if (event && event.buildingId !== undefined) {
           const buildingName = getBuildingName(event.buildingId, true);
           const buildingIcons: { [key: string]: string } = {
-            "Stake House": "/icons/stake-house.svg",
-            "Ware House": "/icons/ware-house.svg",
-            "Marketplace": "/icons/marketplace.svg",
-            "Farmer House": "/icons/farmer-house.svg"
+            "Stake House": "/icons/stake-house.png",
+            "Ware House": "/icons/ware-house.png",
+            "Marketplace": "/icons/marketplace.png",
+            "Farmer House": "/icons/farmer-house.png"
           };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/marketplace.svg", altText: buildingName };
+          return { iconSrc: buildingIcons[buildingName] || "/icons/marketplace.png", altText: buildingName };
         }
-        return { iconSrc: "/icons/marketplace.svg", altText: "Town Building" };
+        return { iconSrc: "/icons/marketplace.png", altText: "Town Building" };
       case 'QuestStartedEvent':
       case 'QuestFinalizedEvent':
-        return { iconSrc: "/icons/stake-house.svg", altText: "Quest" };
+        return { iconSrc: "/icons/stake-house.png", altText: "Quest" };
       case 'VillageProductionClaimedEvent':
         if (event && event.buildingId !== undefined) {
           const buildingName = getBuildingName(event.buildingId, false);
           const buildingIcons: { [key: string]: string } = {
-            "Solar Panels": "/icons/solar-panels.svg",
-            "Soil Factory": "/icons/soil-factory.svg",
-            "Bee Farm": "/icons/bee-house.svg"
+            "Solar Panels": "/icons/solar-panels.png",
+            "Soil Factory": "/icons/soil-factory.png",
+            "Bee Farm": "/icons/bee-house.png"
           };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/bee-house.svg", altText: buildingName };
+          return { iconSrc: buildingIcons[buildingName] || "/icons/bee-house.png", altText: buildingName };
         }
-        return { iconSrc: "/icons/bee-house.svg", altText: "Production" };
+        return { iconSrc: "/icons/bee-house.png", altText: "Production" };
       case 'BarracksRaidEvent':
         return {
-          iconSrc: event?.attackerWon ? "/icons/Attackwon.svg" : "/icons/Attacklost.svg",
+          iconSrc: event?.attackerWon ? "/icons/Attackwon.png" : "/icons/Attacklost.png",
           altText: event?.attackerWon ? "Raid Won" : "Raid Lost"
         };
       case 'BarracksBuiltEvent':
         return { iconSrc: "/icons/barracks.webp", altText: "Barracks Built" };
       case 'CasinoBuiltEvent':
-        return { iconSrc: "/icons/casino.svg", altText: "Casino Built" };
+        return { iconSrc: "/icons/casino.png", altText: "Casino Built" };
       case 'RouletteSpinResultEvent':
-        return { iconSrc: "/icons/casino.svg", altText: "Roulette Win" };
+        return { iconSrc: "/icons/casino.png", altText: "Roulette Win" };
       case 'BlackjackResultEvent':
-        return { iconSrc: "/icons/casino.svg", altText: "Blackjack" };
+        return { iconSrc: "/icons/casino.png", altText: "Blackjack" };
       case 'BaccaratRoundResultEvent':
-        return { iconSrc: "/icons/casino.svg", altText: "Baccarat" };
+        return { iconSrc: "/icons/casino.png", altText: "Baccarat" };
       default:
         return { iconSrc: null, altText: "Unknown Event" };
     }

@@ -144,7 +144,7 @@ export default function AboutTab() {
             <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:gap-2">
               {enabled && (
                 <Button
-                  variant="primary"
+                  variant="default"
                   onClick={() => start({ reset: true })}
                   className="lg:w-auto"
                   aria-label="Start Pixotchi tutorial"

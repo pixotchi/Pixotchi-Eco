@@ -224,8 +224,21 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
 
   // ===== EARLY SURFACE DETECTION =====
   // Determine surface BEFORE rendering PrivyProvider so we can configure it correctly
-  const [authSurface, setAuthSurface] = useState<AuthSurface>('privy');
-  const [isMobilePrivyBrowser, setIsMobilePrivyBrowser] = useState(false);
+  // Lazy initialisers, not effects. Both inputs are synchronous and available on the
+  // first client render, and resolving them here means PrivyProvider mounts once with
+  // its final config instead of mounting with defaults and being reconfigured a render
+  // later. `surfaceInitialized` deliberately stays an effect — see the gate comment in
+  // ProvidersContent for why that one cannot move.
+  const [authSurface] = useState<AuthSurface>(() =>
+    typeof window === 'undefined'
+      ? 'privy'
+      : resolvePreferredAuthSurface({
+          fallback: DEFAULT_AUTH_SURFACE,
+          search: window.location.search,
+          storedSurface: sessionStorageManager.getAuthSurface(),
+        }),
+  );
+  const [isMobilePrivyBrowser] = useState(() => isMobileWalletBrowser());
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
   const [queryClient] = useState(createQueryClient);
 
@@ -235,25 +248,15 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
       return;
     }
 
-    const resolvedSurface = resolvePreferredAuthSurface({
-      fallback: DEFAULT_AUTH_SURFACE,
-      search: window.location.search,
-      storedSurface: sessionStorageManager.getAuthSurface(),
-    });
-    // Fire-and-forget: persisting the surface is best-effort (storage can be
-    // blocked), and an unhandled rejection here would surface as a console error
-    // on every boot in private-browsing contexts.
-    void sessionStorageManager.setAuthSurface(resolvedSurface).catch((error) => {
+    // The surface itself is resolved in the useState initialiser above; this effect
+    // only persists it. Fire-and-forget: storage can be blocked, and an unhandled
+    // rejection here would log an error on every boot in private-browsing contexts.
+    void sessionStorageManager.setAuthSurface(authSurface).catch((error) => {
       console.warn('[Providers] Failed to persist auth surface:', error);
     });
-    setAuthSurface(resolvedSurface);
 
     setSurfaceInitialized(true);
-  }, []);
-
-  useEffect(() => {
-    setIsMobilePrivyBrowser(isMobileWalletBrowser());
-  }, []);
+  }, [authSurface]);
 
   // Respect user preference for reduced motion (don't arbitrarily disable on touch devices)
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, useEffect, type ReactNode } from "react";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
 
 /**
@@ -26,14 +26,10 @@ export function SnowProvider({ children }: { children: ReactNode }) {
     const isFeatureEnabled = process.env.NEXT_PUBLIC_SNOW_ENABLED === "true";
     const { enabled: performanceModeEnabled } = usePerformanceMode();
     const [isEnabled, setIsEnabled] = useState(false);
-    const [mounted, setMounted] = useState(false);
 
     // Load preference from localStorage on mount
     useEffect(() => {
-        if (!isFeatureEnabled) {
-            setMounted(true);
-            return;
-        }
+        if (!isFeatureEnabled) return;
 
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
@@ -42,18 +38,19 @@ export function SnowProvider({ children }: { children: ReactNode }) {
         } catch {
             setIsEnabled(false);
         }
-        setMounted(true);
     }, [isFeatureEnabled]);
 
-    const toggleSnow = () => {
-        const newValue = !isEnabled;
-        setIsEnabled(newValue);
-        try {
-            localStorage.setItem(STORAGE_KEY, String(newValue));
-        } catch {
-            // Storage unavailable
-        }
-    };
+    const toggleSnow = useCallback(() => {
+        setIsEnabled((previous) => {
+            const newValue = !previous;
+            try {
+                localStorage.setItem(STORAGE_KEY, String(newValue));
+            } catch {
+                // Storage unavailable
+            }
+            return newValue;
+        });
+    }, []);
 
     useEffect(() => {
         if (!performanceModeEnabled || !isEnabled) {
@@ -68,16 +65,25 @@ export function SnowProvider({ children }: { children: ReactNode }) {
         }
     }, [isEnabled, performanceModeEnabled]);
 
-    // Don't render children until mounted to avoid hydration mismatch
-    if (!mounted) {
-        return <>{children}</>;
-    }
-
-    return (
-        <SnowContext.Provider value={{ isEnabled: isFeatureEnabled && isEnabled, isFeatureEnabled, toggleSnow }}>
-            {children}
-        </SnowContext.Provider>
+    /*
+     * Always render the Provider.
+     *
+     * This used to return a bare fragment until a mount effect flipped `mounted`.
+     * Changing the element type at this slot from Fragment to Context.Provider makes
+     * React tear down and rebuild the entire subtree — and everything below here is the
+     * provider tower (Paymaster -> Privy -> QueryClient -> HostEnvironment). Nesting
+     * AmbientAudioProvider, which had the same shape, meant PrivyProvider was
+     * constructed three times on every cold boot.
+     *
+     * There is no hydration mismatch to avoid: isEnabled starts false on both server
+     * and client, and only the effect above raises it.
+     */
+    const value = useMemo(
+        () => ({ isEnabled: isFeatureEnabled && isEnabled, isFeatureEnabled, toggleSnow }),
+        [isEnabled, isFeatureEnabled, toggleSnow],
     );
+
+    return <SnowContext.Provider value={value}>{children}</SnowContext.Provider>;
 }
 
 export function useSnow() {

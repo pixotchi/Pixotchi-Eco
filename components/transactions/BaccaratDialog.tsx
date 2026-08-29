@@ -489,6 +489,9 @@ export default function BaccaratDialog({
         surface="game"
         size="full"
         hideCloseButton
+        /* Money game with no visible close button: a stray backdrop tap must not
+           abandon a round. */
+        onPointerDownOutside={(event) => event.preventDefault()}
       >
         <DialogTitle className="sr-only">Baccarat</DialogTitle>
         <DialogDescription className="sr-only">

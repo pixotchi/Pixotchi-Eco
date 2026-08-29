@@ -449,7 +449,7 @@ export default function PlantsView() {
                     <PlantImage selectedPlant={selectedPlant} width={180} height={180} priority={true} />
                     {hasActiveFence && (
                       <div className="absolute top-0 right-0 z-10">
-                        <Image src="/icons/Shield.svg" alt="Shield" width={28} height={28} className="h-7 w-7" title="Fence protection active" />
+                        <Image src="/icons/Shield.png" alt="Shield" width={28} height={28} className="h-7 w-7" title="Fence protection active" />
                       </div>
                     )}
                   </div>

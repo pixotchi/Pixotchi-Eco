@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useRef, memo } from 'react';
@@ -10,38 +9,37 @@ interface TradingViewWidgetProps {
 
 function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingViewWidgetProps) {
   const container = useRef<HTMLDivElement>(null);
-  const { theme, systemTheme } = useTheme();
+  const { theme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
-  const prevIsDarkThemeRef = useRef<boolean | null>(null);
 
-  // Determine if dark theme is active
-  const isDarkTheme = theme === 'dark' || (theme === 'system' && systemTheme === 'dark');
+  // enableSystem is false on ServerThemeProvider, so `theme` is always one of the
+  // eight explicit palettes — there is no 'system' value to resolve.
+  const isDarkTheme = theme === 'dark';
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!mounted || !container.current) return;
+    const node = container.current;
+    if (!mounted || !node) return;
 
-    // Only update if the dark/light theme actually changed (not just switching between light colors)
-    if (prevIsDarkThemeRef.current === isDarkTheme) {
-      return;
-    }
-
-    prevIsDarkThemeRef.current = isDarkTheme;
-
-    // Clear the entire container to remove old chart and script
-    while (container.current.firstChild) {
-      container.current.removeChild(container.current.firstChild);
-    }
-
+    /*
+     * The host div is rendered with no children on purpose: this effect owns every
+     * node inside it. The previous version rendered a `__widget` child from JSX and
+     * then tore it out with a removeChild loop on the first run (the dark/light guard
+     * it was supposed to be gated behind started at null, so it never short-circuited),
+     * which is a React-owned node being deleted behind React's back.
+     *
+     * The guard is gone as well: it compared only the dark/light boolean, so a `symbol`
+     * change — which is in the dependency list — silently did nothing, and the six
+     * colour themes never re-tinted.
+     */
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
     script.async = true;
 
-    // Theme-aware configuration
     const config = {
       allow_symbol_change: false,
       calendar: false,
@@ -55,7 +53,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       locale: 'en',
       save_image: false,
       style: isDarkTheme ? '1' : '2', // 1 = dark, 2 = light
-      symbol: symbol,
+      symbol,
       theme: isDarkTheme ? 'dark' : 'light',
       timezone: 'Etc/UTC',
       backgroundColor: isDarkTheme ? '#1f2d42' : '#f6fbff',
@@ -68,7 +66,12 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
     };
 
     script.innerHTML = JSON.stringify(config);
-    container.current.appendChild(script);
+    node.replaceChildren(script);
+
+    return () => {
+      // Same node, still uncontrolled by React — safe to empty on the way out.
+      node.replaceChildren();
+    };
   }, [mounted, isDarkTheme, symbol]);
 
   if (!mounted) {
@@ -83,11 +86,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
     <div
       className="tradingview-widget-container bg-card rounded-[var(--radius-panel)] overflow-hidden w-full h-full flex flex-col border border-border/70 shadow-[var(--shadow-hairline)]"
       ref={container}
-    >
-      <div
-        className="tradingview-widget-container__widget flex-1"
-      />
-    </div>
+    />
   );
 }
 

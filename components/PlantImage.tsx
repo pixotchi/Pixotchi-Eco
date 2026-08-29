@@ -62,8 +62,10 @@ const PlantImage = React.memo(({
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
+  // Both imageSrc and fallbackSrc are always `/ipfs/strainN/*.svg`, so the blur
+  // placeholder this used to build could never apply. The pulsing skeleton below
+  // is the loading state.
   const resolvedSrc = imageError ? fallbackSrc : imageSrc;
-  const useBlurPlaceholder = width >= 40 && height >= 40 && !resolvedSrc.endsWith(".svg");
 
   return (
     <div className={`relative ${className}`}>
@@ -85,15 +87,6 @@ const PlantImage = React.memo(({
         preload={priority}
         loading={priority ? undefined : lazy ? "lazy" : "eager"}
         quality={quality}
-        {...(useBlurPlaceholder ? {
-          placeholder: "blur",
-          blurDataURL: `data:image/svg+xml;base64,${(typeof window !== 'undefined' ? btoa : (s: string) => Buffer.from(s).toString('base64'))(`
-            <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-              <rect width="100%" height="100%" fill="#f3f4f6"/>
-              <circle cx="50%" cy="50%" r="20%" fill="#d1d5db" opacity="0.5"/>
-            </svg>
-          `)}`
-        } : {})}
         onError={handleImageError}
         onLoad={handleImageLoad}
         className={`transition-opacity duration-300 ${

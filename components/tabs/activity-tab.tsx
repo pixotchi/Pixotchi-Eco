@@ -618,7 +618,7 @@ export default function ActivityTab() {
           <p>{getEmptyFeedMessage(feedView, filter.category, filter.direction)}</p>
           {filterActive && (
             <Button
-              variant="compactUtility"
+              variant="outline"
               size="touchCompact"
               onClick={filter.onReset}
               className="text-xs"
@@ -650,6 +650,32 @@ export default function ActivityTab() {
     );
   };
 
+  /*
+   * Render one layout, not both.
+   *
+   * The mobile feed and the two-column desktop grid were both mounted and CSS hid one:
+   * at 390px that left 152 of 285 nodes (53%) with a zero-size box, including a second
+   * twelve-row feed and 13 of the 25 activity icons.
+   *
+   * The min-[54rem] classes stay as the first-frame guard for the gap between a resize
+   * crossing the breakpoint and the matchMedia change event landing.
+   *
+   * DOM only: the fetches key off `myAddress`, and the desktop feed memos are
+   * unconditional, so nothing here changes what is requested.
+   */
+  const [isDesktopActivity, setIsDesktopActivity] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(min-width: 54rem)');
+    setIsDesktopActivity(mediaQuery.matches);
+    const handleChange = (event: MediaQueryListEvent) => setIsDesktopActivity(event.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
   const mobileFilter: FilterConfig = {
     category: categoryFilter,
     direction: mobileDirection,
@@ -677,7 +703,8 @@ export default function ActivityTab() {
 
   return (
     <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:hidden">
+      {!isDesktopActivity && (
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden pb-4 min-[54rem]:hidden">
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center gap-3">
             <div className="min-w-0">
@@ -726,7 +753,9 @@ export default function ActivityTab() {
           })}
         </CardContent>
       </TabCard>
+      )}
 
+      {isDesktopActivity && (
       <div className="hidden min-[54rem]:grid min-[54rem]:min-h-0 min-[54rem]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[54rem]:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
@@ -772,6 +801,7 @@ export default function ActivityTab() {
           </CardContent>
         </TabCard>
       </div>
+      )}
     </div>
   );
 }

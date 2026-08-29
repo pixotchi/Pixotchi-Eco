@@ -76,6 +76,7 @@ function ChatDialogContent() {
           </div>
           <div className="xl:hidden">
             <ToggleGroup
+              ariaLabel="Chat mode"
               value={mode}
               onValueChange={(v) => setMode(v as ChatMode)}
               options={[

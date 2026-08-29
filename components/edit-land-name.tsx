@@ -75,7 +75,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"
-					size="icon-sm"
+					size="icon"
 					className={`hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary ${className}`}
 					title="Change land name"
 					aria-label="Change land name"

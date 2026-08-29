@@ -8,45 +8,25 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] text-sm font-semibold leading-none ring-offset-background transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:translate-y-0 disabled:scale-100 disabled:opacity-55",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] text-sm font-semibold leading-none ring-offset-background transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:translate-y-0 disabled:scale-100 disabled:opacity-55 aria-disabled:pointer-events-none aria-disabled:translate-y-0 aria-disabled:scale-100 aria-disabled:opacity-55",
   {
     variants: {
       variant: {
-        default: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
-        primary: "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
+        default:
+          "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
         destructive:
           "bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
-        danger:
-          "bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground shadow-[var(--shadow-control)] hover:brightness-[1.03]",
-        success:
-          "bg-[hsl(var(--success))] bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:brightness-[1.03]",
         warning:
           "bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-control)] hover:brightness-[1.03]",
-        neutral:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         special:
           "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.04]",
-        transaction:
-          "bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
-        transactionSuccess:
-          "bg-[image:var(--gradient-success)] text-[hsl(var(--success-foreground))] shadow-[var(--shadow-control)] hover:brightness-105",
-        gamePrimary:
-          "border border-primary/25 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
-        reward:
-          "border border-[hsl(var(--warning)/0.38)] bg-[hsl(var(--warning)/0.12)] bg-[image:var(--gradient-prize)] text-[hsl(var(--warning-foreground))] shadow-[var(--shadow-hairline)] hover:bg-[hsl(var(--warning)/0.18)]",
-        promo:
-          "border border-primary/25 bg-primary bg-[image:var(--gradient-special)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.04]",
-        nav:
-          "!rounded-[var(--radius-nav)] border border-transparent text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:border-[hsl(var(--border-strong)/0.48)] data-[active=true]:bg-[hsl(var(--nav-active-bg))] data-[active=true]:bg-[image:var(--gradient-nav-active)] data-[active=true]:text-primary data-[active=true]:shadow-[var(--shadow-nav-active)]",
         /*
-         * Like `nav`, but with no active-state surface of its own: SlidingNavTabs
-         * paints the selected pill as a separate animated indicator element behind
-         * the buttons. The main nav previously used `nav` and then cancelled all
-         * five of its data-[active] styles with !important overrides at the call
-         * site; this variant just never sets them.
+         * Like the chrome controls below, but with no active-state surface of its own:
+         * SlidingNavTabs paints the selected pill as a separate animated indicator
+         * element behind the buttons, so an active background here would double up.
          */
         navSliding:
-          "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-primary data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
+          "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-[hsl(var(--selected-control-foreground))] data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
         headerIcon:
           "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         statusAction:
@@ -55,31 +35,29 @@ const buttonVariants = cva(
           "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         imageCardPrimary:
           "border border-white/30 bg-slate-950 bg-[image:linear-gradient(180deg,hsl(222_47%_20%)_0%,hsl(222_47%_11%)_56%,hsl(229_84%_5%)_100%)] text-white shadow-[0_10px_24px_-14px_rgba(2,6,23,0.9)] hover:brightness-[1.06] hover:text-white hover:shadow-[0_14px_30px_-16px_rgba(2,6,23,0.95)]",
-        compactUtility:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        game:
-          "border border-white/20 bg-slate-950/80 text-white shadow-[var(--shadow-raised)] hover:bg-slate-900/90",
         outline:
           "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         secondary:
           "border border-[hsl(var(--border-strong)/0.36)] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        toggleActive:
-          "border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-control)] hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03]",
         ghost: "hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      /*
+       * Heights are deliberate, not a ladder: sm / default / touchCompact / icon all
+       * sit at h-11 (44px), the touch-target floor. compact (32px), status (36px) and
+       * iconCompact (36px) are the explicit exceptions for dense chrome.
+       * Removed: `xs` (h-10 — taller than `compact`, so the name lied), `md` and
+       * `icon-sm` (byte-identical to `default` and `icon`).
+       */
       size: {
-        xs: "h-10 min-h-10 px-2.5 py-1.5 text-xs",
         compact: "h-8 min-h-8 px-2.5 py-1 text-xs",
         status: "h-9 min-h-9 px-2.5 py-1.5 text-xs !gap-1.5",
-        touchCompact: "h-11 min-h-11 px-3 py-2 text-xs",
-        default: "h-11 min-h-11 px-4 py-2",
-        md: "h-11 min-h-11 px-4 py-2",
-        sm: "h-11 min-h-11 px-3 py-2 text-sm",
-        lg: "h-12 min-h-12 px-6 text-base",
-        icon: "h-11 min-h-11 w-11 min-w-11",
         iconCompact: "h-9 min-h-9 w-9 min-w-9",
-        "icon-sm": "h-11 min-h-11 w-11 min-w-11",
+        touchCompact: "h-11 min-h-11 px-3 py-2 text-xs",
+        sm: "h-11 min-h-11 px-3 py-2 text-sm",
+        default: "h-11 min-h-11 px-4 py-2",
+        icon: "h-11 min-h-11 w-11 min-w-11",
+        lg: "h-12 min-h-12 px-6 text-base",
       },
       fullWidth: {
         true: "w-full",
@@ -117,15 +95,18 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     asChild = false,
     ...props
   }, ref) => {
-    const Comp = asChild ? Slot : "button";
-
     if (asChild) {
+      // asChild renders a <span>/<a>/<Link>, where the `disabled` attribute is invalid.
+      // Forward the state as aria-disabled instead — the cva base string carries matching
+      // aria-disabled:* styles. This is hardening, not true disabling: a keyboard user can
+      // still activate an <a>, so do not rely on it to gate a destructive action.
       return (
         <Slot
           {...props}
           className={cn(buttonVariants({ variant, size, fullWidth }), className)}
           ref={ref}
           aria-busy={loading || props["aria-busy"] || undefined}
+          aria-disabled={disabled || loading || undefined}
         >
           {children}
         </Slot>
@@ -133,7 +114,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     return (
-      <Comp
+      <button
         {...props}
         className={cn(buttonVariants({ variant, size, fullWidth }), className)}
         ref={ref}
@@ -143,7 +124,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : leadingIcon}
         {loading && loadingText ? loadingText : children}
         {!loading && trailingIcon}
-      </Comp>
+      </button>
     );
   }
 );

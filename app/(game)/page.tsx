@@ -239,7 +239,6 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
-import { useViewportShellMetrics } from "@/hooks/useViewportShellMetrics";
 
 type LoginAuthActionsProps = {
   className: string;
@@ -553,7 +552,8 @@ function SlidingNavTabs({
                 mode === "desktop"
                   ? "h-5 w-5"
                   : "h-5 w-5 shrink-0 max-[360px]:h-4 max-[360px]:w-4",
-                isActive && "text-primary",
+                // Same ink token as the label beside it (see --selected-control-foreground).
+                isActive && "text-[hsl(var(--selected-control-foreground))]",
               )}
               aria-hidden="true"
             />
@@ -749,7 +749,6 @@ export default function App() {
   // Keyboard and viewport awareness
   const keyboardState = useKeyboardAware();
   useViewportInsets();
-  useViewportShellMetrics();
   const isKeyboardNavigation = useKeyboardNavigation();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
   const miniAppContext = (fc?.context as UntypedValue) ?? null;
@@ -898,7 +897,6 @@ export default function App() {
         !isConnected && "login-theme-cycle",
         !isConnected && loginTheme,
       )}
-      aria-label="Pixotchi Mini Game"
     >
       {!isConnected && (
         <div className="login-theme-background" aria-hidden="true">
@@ -1063,7 +1061,7 @@ export default function App() {
               <div
                 ref={contentScrollRef}
                 data-viewport-shell="content"
-                className="app-content-shell flex-1 overflow-y-auto overscroll-contain touch-pan-y"
+                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y"
                 style={{
                   paddingTop: "var(--app-content-gutter)",
                   paddingRight: "var(--app-content-gutter)",
@@ -1071,7 +1069,7 @@ export default function App() {
                   // nothing, because .safe-area-bottom is a plain class in @layer utilities
                   // rather than an @utility, so Tailwind never generated the xl: variant.
                   paddingBottom:
-                    "calc(var(--app-content-gutter) + var(--app-content-bottom-offset) + var(--app-content-safe-bottom, 0px))",
+                    "calc(var(--app-content-gutter) + var(--app-content-safe-bottom, 0px))",
                   paddingLeft: "var(--app-content-gutter)",
                 }}
               >

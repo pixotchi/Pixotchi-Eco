@@ -92,7 +92,7 @@ const TOKEN_INFO = {
           { body: 'Seasonal reward programs and airdrops may also distribute LEAF when active.' },
         ],
         iconAlt: 'Staking',
-        iconSrc: '/icons/stake-house.svg',
+        iconSrc: '/icons/stake-house.png',
         key: 'leaf-staking',
         title: 'Earned Through Staking',
       },
@@ -106,7 +106,7 @@ const TOKEN_INFO = {
       {
         body: 'LEAF has no external liquidity pool. It is tradable only inside the Marketplace building through player-created SEED/LEAF orders, keeping price discovery inside the game economy.',
         iconAlt: 'Marketplace',
-        iconSrc: '/icons/marketplace.svg',
+        iconSrc: '/icons/marketplace.png',
         key: 'leaf-marketplace',
         title: 'In-Game Marketplace Only',
       },

@@ -24,6 +24,9 @@ export interface ToggleGroupProps {
   orientation?: "horizontal" | "vertical";
 }
 
+// NB: every entry must re-declare its own min-h. These strings are merged AFTER the
+// Button's cva size (`compact`) by tailwind-merge, so an entry without min-h would
+// inherit compact's 32px floor rather than the height it appears to set.
 const sizeClassNames = {
   sm: "h-auto min-h-10 px-2.5 py-1.5 text-xs",
   default: "h-auto min-h-10 px-3 py-1.5 text-xs sm:text-sm",
@@ -136,12 +139,16 @@ export function ToggleGroup({
         <Button
           key={String(opt.value)}
           type="button"
-          size="xs"
+          size="compact"
           variant="ghost"
           role="radio"
           aria-checked={value === opt.value}
-          aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : String(opt.value))}
-          tabIndex={value === opt.value ? 0 : index === selectedIndex ? 0 : -1}
+          // No String(opt.value) fallback: for a ReactNode label that produced an
+          // invented name like "plants" against visible text "Plants", which is a
+          // WCAG 2.5.3 (Label in Name) failure. Undefined lets the accessible name
+          // come from the rendered content, which is what the label already is.
+          aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : undefined)}
+          tabIndex={index === selectedIndex ? 0 : -1}
           onClick={() => selectOption(index)}
           onKeyDown={(event) => handleKeyDown(event, index)}
           ref={(node) => {
@@ -151,8 +158,13 @@ export function ToggleGroup({
             sizeClassNames[size],
             "relative z-10 flex min-w-11 items-center justify-center gap-1 !rounded-[var(--radius-nav)] bg-transparent shadow-none",
             value === opt.value
-              ? "text-primary hover:bg-transparent hover:text-primary"
-              : "text-foreground/80 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+              // Same ink as the pill behind it (see --selected-control-foreground):
+              // --primary as ink on a --primary-tinted surface measured 2.83:1 in dark.
+              ? "text-[hsl(var(--selected-control-foreground))] hover:bg-transparent hover:text-[hsl(var(--selected-control-foreground))]"
+              // dark:text-foreground, not a blanket change: at /80 the unselected ink
+              // measured 3.62:1 on the dark control surface. The seven light-family
+              // themes are 7.7-8.5:1 at /80, so they keep the softer secondary weight.
+              : "text-foreground/80 dark:text-foreground hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
             getButtonClassName?.(opt.value, value === opt.value)
           )}
         >

@@ -18,7 +18,6 @@ DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { InlineBalanceNotice } from '@/components/ui/premium';
-import { ToggleGroup } from '@/components/ui/toggle-group';
 import { VerifyClaim } from '@/components/verify-claim';
 import { useFarmView } from '@/lib/farm-view-context';
 import { useBalances } from '@/lib/balance-context';
@@ -35,7 +34,7 @@ import { Strain } from '@/lib/types';
 import { formatNumber,formatTokenAmount,getFriendlyErrorMessage, formatAddress } from "@/lib/utils";
 import { usePrivy } from '@privy-io/react-auth';
 import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
-import { ChevronDown, LandPlot, Leaf } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -107,7 +106,12 @@ export default function MintTab() {
   const frameContext = useFrameContext();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('mint');
-  const [useCombinedMintLayout, setUseCombinedMintLayout] = useState(false);
+  // Lazy initialiser, not `false`: starting false made every desktop first paint
+  // render the mobile layout for one frame and fire an extra data fetch keyed on the
+  // wrong layout before the media query resolved.
+  const [useCombinedMintLayout, setUseCombinedMintLayout] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
+  );
 
   // ETH Mode for smart wallet users
   const { isEthMode } = useEthModeSafe();
@@ -144,9 +148,10 @@ export default function MintTab() {
   const [loading, setLoading] = useState(true);
   const [paymentTokenSymbol, setPaymentTokenSymbol] = useState<string>('SEED');
   const [paymentTokenBalance, setPaymentTokenBalance] = useState<bigint>(BigInt(0));
-  // Shared with the app-shell toggle via FarmViewProvider. Do not re-declare a
-  // local useWebQueryState here — in the Mini App the two instances cannot sync.
-  const { mintType, setMintType } = useFarmView();
+  // Read-only here: SharedFarmMintMobileToggle in app/(game)/page.tsx is the sole
+  // writer now that the unreachable duplicate toggle in this file is gone. Do not
+  // re-declare a local useWebQueryState — in the Mini App the two cannot sync.
+  const { mintType } = useFarmView();
   const [, setLandBalance] = useState(0);
   const [landSupply, setLandSupply] = useState<{ totalSupply: number; maxSupply: number; } | null>(null);
   const [landMintStatus, setLandMintStatus] = useState<{ canMint: boolean; reason: string; } | null>(null);
@@ -2075,28 +2080,11 @@ export default function MintTab() {
 
     return (
       <div className="space-y-4 min-[54rem]:space-y-3">
-        {showLandOption && !useCombinedMintLayout && (
-          <div className="hidden justify-center min-[54rem]:flex">
-            <ToggleGroup
-              ariaLabel="Mint type"
-              value={mintType}
-              onValueChange={(v) => setMintType(v as 'plant' | 'land')}
-              options={[
-                {
-                  value: 'plant',
-                  ariaLabel: 'Plants',
-                  label: <span className="flex items-center gap-1"><Leaf className="h-4 w-4" /> Plants</span>,
-                },
-                {
-                  value: 'land',
-                  ariaLabel: 'Lands',
-                  label: <span className="flex items-center gap-1"><LandPlot className="h-4 w-4" /> Lands</span>,
-                },
-              ]}
-            />
-          </div>
-        )}
-
+        {/* The Plants/Lands switch below 54rem is SharedFarmMintMobileToggle in
+            app/(game)/page.tsx. A second copy used to live here, gated on
+            `!useCombinedMintLayout` but styled `hidden min-[54rem]:flex` — the two
+            conditions are mutually exclusive at every width, so it only ever
+            flashed for the first frame on desktop before the media query resolved. */}
         {showLandOption && useCombinedMintLayout && (
           <div className="grid grid-cols-[minmax(0,1.48fr)_minmax(300px,0.9fr)] items-start gap-3 xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
             {renderDesktopPlantMinting()}

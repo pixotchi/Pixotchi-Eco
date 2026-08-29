@@ -772,13 +772,19 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div className="text-sm font-medium flex items-center justify-between">
                 <span>Orders</span>
                 <div className="flex items-center gap-2">
+                  {/* The checkbox below was "rounded border-gray-300 text-primary
+                      focus:ring-primary". On a native checkbox the border and text colours do
+                      nothing, focus:ring-primary has no ring width so it never painted, and
+                      border-gray-300 is off-token in all eight themes. Without an explicit
+                      size it also drew at the ~13px OS default. accent-primary is the one
+                      property that actually tints a native control. */}
                   {showUserOrders && (
-                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none mr-2">
+                    <label className="flex min-h-11 items-center gap-2 text-xs cursor-pointer select-none mr-2">
                       <input
                         type="checkbox"
                         checked={showHistory}
                         onChange={(e) => setShowHistory(e.target.checked)}
-                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                        className="h-5 w-5 rounded accent-primary"
                       />
                       Show History
                     </label>

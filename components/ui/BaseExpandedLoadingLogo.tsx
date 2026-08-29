@@ -124,7 +124,3 @@ export function BaseExpandedLoadingPageLoader({ text = "Loading..." }: { text?: 
     </div>
   );
 }
-
-export function BaseExpandedLoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
-  return <BaseExpandedLoadingLogo size={size} className={className} />;
-}

@@ -61,31 +61,6 @@ export const REWARD_TYPES = {
   4: "XP"
 } as const;
 
-// Building icons mapping
-export const BUILDING_ICONS = {
-  "Solar Panels": "/icons/solar-panels.svg",
-  "Soil Factory": "/icons/soil-factory.svg",
-  "Bee Farm": "/icons/bee-house.svg",
-  "Stake House": "/icons/stake-house.svg",
-  "Ware House": "/icons/ware-house.svg",
-  "Marketplace": "/icons/marketplace.svg",
-  "Farmer House": "/icons/farmer-house.svg"
-} as const;
-
-// Land event icons mapping
-export const LAND_EVENT_ICONS = {
-  LandTransfer: "/icons/ware-house.svg",
-  LandMinted: "/icons/farmer-house.svg",
-  LandNameChanged: "/icons/farmer-house.svg",
-  VillageUpgradedWithLeaf: "/icons/solar-panels.svg",
-  VillageSpeedUpWithSeed: "/icons/solar-panels.svg",
-  TownUpgradedWithLeaf: "/icons/marketplace.svg",
-  TownSpeedUpWithSeed: "/icons/marketplace.svg",
-  QuestStarted: "/icons/stake-house.svg",
-  QuestFinalized: "/icons/stake-house.svg",
-  VillageProductionClaimed: "/icons/bee-house.svg"
-} as const;
-
 // Existing item icons
 export const ITEM_ICONS: { [key: string]: string } = {
   "magic soil": "/icons/SOIL.png",
@@ -96,6 +71,6 @@ export const ITEM_ICONS: { [key: string]: string } = {
   pollinator: "/icons/BEE.png",
   fence: "/icons/Fence.png",
   botano: "/icons/botano.svg",
-  moonlight: "/icons/moonlight.svg",
-  nitro: "/icons/Nitro.svg",
+  moonlight: "/icons/moonlight.png",
+  nitro: "/icons/Nitro.png",
 }; 

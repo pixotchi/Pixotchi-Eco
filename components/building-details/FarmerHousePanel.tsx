@@ -178,6 +178,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
                         <ToggleGroup
+                          ariaLabel="Quest difficulty"
                           value={String(difficulty[idx] ?? 0)}
                           onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
                           options={[
