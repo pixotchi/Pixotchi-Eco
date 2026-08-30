@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/contracts";
 import UniversalTransaction from "@/components/transactions/universal-transaction";
 import Image from "next/image";
+import { formatTokenAmount } from "@/lib/utils";
 import { formatUnits, parseUnits } from "viem";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -68,11 +70,12 @@ const formatRewardDisplay = (value: number): string => {
   });
 };
 
+// Grouped, capped fraction digits, BigInt-safe — the dialog used to mix an
+// ungrouped toFixed(4) here with toLocaleString for "Total staked" in the same
+// card stack (and parseFloat loses precision above 2^53).
 function formatToken(amount?: bigint): string {
   if (!amount) return "0";
-  const formatted = formatUnits(amount, 18);
-  const num = parseFloat(formatted);
-  return num.toFixed(4).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return formatTokenAmount(amount);
 }
 
 const MIN_REFRESH_INTERVAL_MS = 1000;
@@ -91,21 +94,28 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [rewardTimeUnit, setRewardTimeUnit] = useState<bigint | null>(null);
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refreshingRef = useRef<boolean>(false);
+  const lastRefreshTime = useRef<number>(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options: { force?: boolean } = {}) => {
     if (!address) return;
     if (refreshingRef.current) {
       return; // drop overlapping calls
     }
     
-    // Rate limiting: prevent refreshes more frequent than MIN_REFRESH_INTERVAL_MS
+    // Rate limiting: prevent refreshes more frequent than MIN_REFRESH_INTERVAL_MS.
+    // Post-transaction refreshes pass force — the gate used to silently swallow
+    // them (onSuccess fires refresh() AND balances:refresh, whichever lands
+    // second was dropped), leaving pre-stake balances on screen.
     const now = Date.now();
-    if (now - lastRefreshTime.current < MIN_REFRESH_INTERVAL_MS) {
+    if (!options.force && now - lastRefreshTime.current < MIN_REFRESH_INTERVAL_MS) {
       return;
     }
     lastRefreshTime.current = now;
     refreshingRef.current = true;
     setLoading(true);
+    setRefreshError(null);
     
     try {
       // Use API routes for consistent RPC handling
@@ -165,13 +175,11 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       }
     } catch (error) {
       console.error('❌ Failed to refresh staking data:', error);
-      // Set safe defaults on error
-      setSeedBalance(BigInt(0));
-      setStakeInfo(null);
-      setApproved(false);
-      setRewardRatio(null);
-      setRewardTimeUnit(null);
-      setTotalStaked(null);
+      // Keep the last-known values. Zeroing them here used to tell a real
+      // holder they had 0 SEED / 0 staked, and flipping `approved` false
+      // swapped the footer back to "Approve SEED for Staking" — inviting a
+      // redundant on-chain approval over a transient API hiccup.
+      setRefreshError('Could not refresh staking data. Showing the last known values.');
     } finally {
       setLoading(false);
       refreshingRef.current = false;
@@ -198,7 +206,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     setManualRefreshing(true);
 
     try {
-      await refresh();
+      await refresh({ force: true });
     } finally {
       const remainingFeedbackMs = MIN_REFRESH_FEEDBACK_MS - (Date.now() - startedAt);
       if (remainingFeedbackMs > 0) {
@@ -207,10 +215,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       setManualRefreshing(false);
     }
   }, [loading, manualRefreshing, refresh]);
-
-  // Note: Removed balances:refresh listener to prevent double refresh with status bar
-  // The staking dialog will only refresh on manual refresh or dialog open
-  // Global balance updates are handled by the status bar
 
   const maxStake = useMemo(() => {
     return seedBalance;
@@ -299,8 +303,6 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     };
   }, [rewardRatio, rewardTimeUnit, stakeInfo?.staked, totalStaked]);
 
-  const refreshingRef = useRef<boolean>(false);
-  const lastRefreshTime = useRef<number>(0);
   const footerTransactionButtonClassName = "max-[340px]:px-2 max-[340px]:text-xs";
 
   return (
@@ -403,7 +405,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                   <div className="flex items-center justify-between gap-2">
                     <span className="shrink-0 text-muted-foreground">Total staked</span>
                     <span className="max-w-[60%] text-right font-semibold leading-tight">
-                      {rewardRateInfo.totalStaked.toLocaleString(undefined, { maximumFractionDigits: 2 })} SEED
+                      {totalStaked !== null ? formatTokenAmount(totalStaked) : '0'} SEED
                     </span>
                   </div>
                 )}
@@ -411,16 +413,25 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </div>
           )}
 
+          {refreshError && (
+            <Alert variant="warning">
+              <AlertDescription>{refreshError}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
-            <label className="text-sm font-medium">Amount to {mode === 'stake' ? 'Stake' : 'Unstake'}</label>
+            <label htmlFor="staking-amount" className="text-sm font-medium">Amount to {mode === 'stake' ? 'Stake' : 'Unstake'}</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
+                  id="staking-amount"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.0"
                   inputMode="decimal"
                   className="pr-10"
+                  aria-invalid={Boolean(helperText) || undefined}
+                  aria-describedby={helperText ? "staking-amount-error" : undefined}
                 />
                 <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">SEED</div>
               </div>
@@ -433,7 +444,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                 Max
               </Button>
             </div>
-            {helperText && <div className="text-xs text-destructive">{helperText}</div>}
+            {helperText && <div id="staking-amount-error" className="text-xs text-destructive">{helperText}</div>}
             <div className="flex items-center justify-end text-xs text-muted-foreground">
               <span>{mode === 'stake' ? `Wallet: ${formatToken(seedBalance)} SEED` : `Staked: ${formatToken(stakeInfo?.staked)} SEED`}</span>
             </div>
@@ -455,7 +466,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    buttonClassName={footerTransactionButtonClassName}
                    onSuccess={() => {
                      setApproved(true);
-                     refresh();
+                     void refresh({ force: true });
                      window.dispatchEvent(new Event('balances:refresh'));
                    }}
                  />
@@ -469,7 +480,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    buttonClassName={footerTransactionButtonClassName}
                    onSuccess={(tx: UntypedValue) => {
                      setAmount("");
-                     refresh();
+                     void refresh({ force: true });
                      window.dispatchEvent(new Event('balances:refresh'));
                      try {
                        const payload: Record<string, UntypedValue> = { address, taskId: 's1_stake_seed' };
@@ -492,7 +503,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  buttonClassName={footerTransactionButtonClassName}
                  onSuccess={() => {
                    setAmount("");
-                   refresh();
+                   void refresh({ force: true });
                    window.dispatchEvent(new Event('balances:refresh'));
                  }}
                />
@@ -507,7 +518,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               disabled={disableClaimRewardsBtn}
               buttonClassName={footerTransactionButtonClassName}
               onSuccess={(tx: UntypedValue) => {
-                refresh();
+                void refresh({ force: true });
                 window.dispatchEvent(new Event('balances:refresh'));
                 try {
                   const payload: Record<string, UntypedValue> = { address, taskId: 's1_claim_stake' };

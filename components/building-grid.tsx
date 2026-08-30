@@ -1,6 +1,8 @@
 "use client";
 
 import { casinoIsBuilt } from '@/lib/contracts';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Building2 } from 'lucide-react';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { BuildingData,BuildingType } from '@/lib/types';
 import { getBuildingIcon,getBuildingName } from '@/lib/utils';
@@ -85,7 +87,7 @@ const BuildingItem = React.memo(({
       </div>
 
       {/* Building Info */}
-      <div className={`${denseLabels ? 'min-w-0 ' : ''}text-center`}>
+      <div className="min-w-0 w-full text-center">
         <div
           className={denseLabels
             ? "min-h-[1.75rem] text-[11px] font-semibold leading-tight [overflow-wrap:anywhere]"
@@ -127,9 +129,18 @@ export default function BuildingGrid({
 
   // Fetch casino built state for town buildings
   useEffect(() => {
+    // Cancellation guard (mirrors LandImage's): switching lands quickly let a
+    // stale resolution overwrite the newer one, showing the previous land's
+    // casino state on the tile.
+    let cancelled = false;
     if (buildingType === 'town' && landId) {
-      casinoIsBuilt(landId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
+      casinoIsBuilt(landId)
+        .then((built) => { if (!cancelled) setCasinoBuiltState(built); })
+        .catch(() => { if (!cancelled) setCasinoBuiltState(false); });
+    } else {
+      setCasinoBuiltState(false);
     }
+    return () => { cancelled = true; };
   }, [buildingType, landId]);
 
   const handleBuildingSelect = useCallback((building: BuildingData) => {
@@ -150,15 +161,11 @@ export default function BuildingGrid({
 
   if (!visibleBuildings || visibleBuildings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-        <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
-          <span className="text-2xl">🏘️</span>
-        </div>
-        <p className="text-base font-semibold text-foreground mb-1">No Buildings Available</p>
-        <p className="text-sm text-muted-foreground">
-          No {buildingType} buildings found
-        </p>
-      </div>
+      <EmptyState
+        icon={Building2}
+        title="No buildings available"
+        description={`No ${buildingType} buildings found.`}
+      />
     );
   }
 

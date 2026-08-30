@@ -32,10 +32,12 @@ export default function QuantitySelector({
   };
 
   const compact = size === 'xs' || size === 'sm';
+  // 36px floor (compact) / 44px (default): the old 20px/28px steppers were
+  // below even WCAG 2.5.8's 24px minimum, on a primary purchase control.
   const buttonSize = compact
-    ? '!h-5 !min-h-5 !w-5 !min-w-5 p-0'
-    : '!h-7 !min-h-7 !w-7 !min-w-7 p-0';
-  const iconSize = compact ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5';
+    ? '!h-9 !min-h-9 !w-9 !min-w-9 p-0'
+    : '!h-11 !min-h-11 !w-11 !min-w-11 p-0';
+  const iconSize = compact ? 'h-3 w-3' : 'h-4 w-4';
   const textSize = compact ? 'text-xs' : 'text-sm';
 
   return (
@@ -43,7 +45,7 @@ export default function QuantitySelector({
       <Button
         variant="outline"
         size="icon"
-        className={`${buttonSize} ${quantity <= min ? 'opacity-50' : ''}`}
+        className={`${buttonSize}`}
         onClick={handleDecrement}
         disabled={quantity <= min}
         aria-label="Decrease quantity"
@@ -51,14 +53,14 @@ export default function QuantitySelector({
         <Minus className={iconSize} />
       </Button>
       
-      <span className={`${textSize} font-semibold min-w-[1rem] text-center`}>
+      <span className={`${textSize} font-semibold min-w-[1rem] text-center tabular-nums`} aria-live="polite">
         {quantity}
       </span>
       
       <Button
         variant="outline"
         size="icon"
-        className={`${buttonSize} ${quantity >= max ? 'opacity-50' : ''}`}
+        className={`${buttonSize}`}
         onClick={handleIncrement}
         disabled={quantity >= max}
         aria-label="Increase quantity"

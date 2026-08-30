@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { copyWithToast } from '@/lib/clipboard';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -329,8 +330,7 @@ export default function PlantProfileDialog({
 
   const handleCopyAddress = () => {
     if (!ownerAddress) return;
-    navigator.clipboard.writeText(ownerAddress);
-    toast.success('Address copied to clipboard');
+    void copyWithToast(ownerAddress, 'Address');
   };
 
   const handleViewOnBlockscout = async () => {

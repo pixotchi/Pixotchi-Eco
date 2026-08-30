@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { BASE_BRAND_BUTTON_CLASSNAME } from '@/components/ui/button';
 import { useAccount, useSignMessage } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Gift, Loader2, CheckCircle, PenTool } from 'lucide-react';
@@ -27,6 +28,12 @@ export function AirdropClaimCard() {
 
     // Fetch eligibility on mount and when address changes
     useEffect(() => {
+        // Cancellation keyed on address: a fast wallet switch could render
+        // wallet A's allocation under wallet B. And a non-ok JSON error body
+        // used to become `status` with eligible undefined, telling an eligible
+        // user "No Allocation".
+        let cancelled = false;
+
         async function fetchStatus() {
             if (!address) {
                 setStatus(null);
@@ -36,18 +43,23 @@ export function AirdropClaimCard() {
 
             try {
                 setLoading(true);
+                setStatus(null);
                 const res = await fetch(`/api/airdrop/status?address=${address}`);
+                if (!res.ok) {
+                    throw new Error(`Airdrop status request failed (${res.status})`);
+                }
                 const data = await res.json();
-                setStatus(data);
+                if (!cancelled) setStatus(data);
             } catch (err) {
                 console.error('[AIRDROP] Failed to fetch status:', err);
-                setStatus(null);
+                if (!cancelled) setStatus(null);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         }
 
         fetchStatus();
+        return () => { cancelled = true; };
     }, [address]);
 
     const handleClaim = async () => {
@@ -127,7 +139,7 @@ export function AirdropClaimCard() {
     const claimedIconClassName =
         "h-8 w-8 shrink-0 text-value drop-shadow-[0_6px_14px_hsl(var(--success)/0.24)]";
     const baseActionClassName =
-        "w-full border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45";
+        `w-full text-xs ${BASE_BRAND_BUTTON_CLASSNAME}`;
 
     // Don't render if loading or no address
     if (loading || !address || !status) {
@@ -156,10 +168,12 @@ export function AirdropClaimCard() {
         );
     }
 
-    // Format token amounts for display
+    // Format token amounts for display. NaN-guarded: a malformed amount used
+    // to fall through every comparison into NaN.toFixed(2) and render
+    // "NaN SEED" on a financial CTA.
     const formatAmount = (amount: string) => {
         const num = parseFloat(amount);
-        if (num === 0) return null;
+        if (!Number.isFinite(num) || num <= 0) return null;
         if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
         if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
         return num.toFixed(2);
@@ -175,7 +189,9 @@ export function AirdropClaimCard() {
         { name: 'PIXOTCHI', amount: pixotchiDisplay },
     ].filter(t => t.amount !== null);
 
-    if (tokens.length === 0 && status.claimed) {
+    // Nothing claimable: never render an empty chip row with a live Claim
+    // button (the old guard only covered the already-claimed case).
+    if (tokens.length === 0) {
         return null;
     }
 

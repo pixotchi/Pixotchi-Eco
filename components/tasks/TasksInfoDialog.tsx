@@ -70,6 +70,8 @@ export default function TasksInfoDialog() {
   const [missionTotal, setMissionTotal] = useState<number>(0);
   const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
   const [serverDisabledMessage, setServerDisabledMessage] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const effectiveDisabled = !gamificationPolicy.enabled || !!serverDisabledMessage;
   const effectiveDisabledMessage =
     serverDisabledMessage ||
@@ -81,25 +83,35 @@ export default function TasksInfoDialog() {
   }, []);
 
   useEffect(() => {
+    // Abort on close/wallet switch (a switch mid-flight used to paint the
+    // previous wallet's streak), track loading so the summary shows skeletons
+    // instead of confident zeros, and surface failures instead of swallowing
+    // them into a "Streak 0 / Tasks 0" card.
+    if (!address || !open || !gamificationPolicy.enabled) return;
+    const controller = new AbortController();
+
     (async () => {
       try {
-        if (!address || !open || !gamificationPolicy.enabled) return;
-
         setServerDisabledMessage(null);
+        setSummaryError(null);
+        setSummaryLoading(true);
 
-        // Fetch streak data
-        const sRes = await fetch(`/api/gamification/streak?address=${address}`);
+        const [sRes, mRes] = await Promise.all([
+          fetch(`/api/gamification/streak?address=${address}`, { signal: controller.signal }),
+          fetch(`/api/gamification/missions?address=${address}`, { signal: controller.signal }),
+        ]);
+
         if (sRes.ok) {
-          const s = await sRes.json();
-          if (s?.disabled) {
-            setServerDisabledMessage(typeof s?.message === 'string' ? s.message : gamificationDisabledMessage);
+          const sPayload = await sRes.json();
+          if (sPayload?.disabled) {
+            setServerDisabledMessage(typeof sPayload?.message === 'string' ? sPayload.message : gamificationDisabledMessage);
             return;
           }
-          setStreak({ current: s.streak.current, best: s.streak.best });
+          setStreak({ current: sPayload.streak.current, best: sPayload.streak.best });
+        } else {
+          throw new Error(`Streak request failed (${sRes.status})`);
         }
 
-        // Fetch missions data
-        const mRes = await fetch(`/api/gamification/missions?address=${address}`);
         if (mRes.ok) {
           const m = await mRes.json();
           if (m?.disabled) {
@@ -109,9 +121,22 @@ export default function TasksInfoDialog() {
           setMissionDay(m.day || null);
           setMissionPts(m.day?.pts ?? 0);
           setMissionTotal(typeof m.total === 'number' && Number.isFinite(m.total) ? m.total : 0);
+        } else {
+          throw new Error(`Missions request failed (${mRes.status})`);
         }
-      } catch { }
+      } catch (error) {
+        if ((error as Error)?.name !== 'AbortError') {
+          console.warn('[Tasks] Failed to load summary:', error);
+          setSummaryError('Could not load your progress. Close and reopen to retry.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSummaryLoading(false);
+        }
+      }
     })();
+
+    return () => controller.abort();
   }, [address, open, gamificationPolicy.enabled, gamificationDisabledMessage]);
 
   useEffect(() => {
@@ -172,14 +197,17 @@ export default function TasksInfoDialog() {
   const dailyProgress = Math.max(0, Math.min(100, missionPts));
   const summaryCard = (
     <div
-      className="chromatic-white-surface mr-[-2.75rem] space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)] sm:mr-[-2.5rem]"
+      className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)]"
       data-task-summary-card
     >
-      <div className="grid grid-cols-3 gap-2">
+      {summaryError && (
+        <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">{summaryError}</p>
+      )}
+      <div className="grid grid-cols-3 gap-2" aria-busy={summaryLoading || undefined}>
         <div>
           <span className="text-xs font-semibold text-muted-foreground">Streak</span>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{streak?.current ?? 0}</span>
+            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : streak?.current ?? 0}</span>
             <span className="text-xs text-muted-foreground">days</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Best {streak?.best ?? 0}</p>
@@ -188,7 +216,7 @@ export default function TasksInfoDialog() {
         <div>
           <span className="text-xs font-semibold text-muted-foreground">Today</span>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{missionPts}</span>
+            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : missionPts}</span>
             <span className="text-xs text-muted-foreground">/100</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Rocks</p>
@@ -197,7 +225,7 @@ export default function TasksInfoDialog() {
         <div>
           <span className="text-xs font-semibold text-muted-foreground">Tasks</span>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{completedTaskCount}</span>
+            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : completedTaskCount}</span>
             <span className="text-xs text-muted-foreground">/{totalTaskCount}</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Done</p>
@@ -230,7 +258,7 @@ export default function TasksInfoDialog() {
 
         <DialogBody className="space-y-4 pr-1">
           {effectiveDisabled ? (
-            <div className="rounded-[var(--radius-panel)] border border-amber-500/30 bg-amber-500/10 p-3.5">
+            <div className="rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.1)] p-3.5">
               <p className="text-sm font-semibold">Temporarily Disabled</p>
               <p className="text-xs text-muted-foreground mt-1">{effectiveDisabledMessage}</p>
             </div>

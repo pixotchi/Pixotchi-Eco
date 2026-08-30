@@ -21,7 +21,7 @@ const statusToneMap: Record<StatusLevel, { icon: typeof CheckCircle2; iconClassN
     iconClassName: "text-destructive",
     tileClassName: "border-destructive/28 bg-destructive/10",
   },
-  UntypedValue: {
+  unknown: {
     icon: Info,
     iconClassName: "text-muted-foreground",
     tileClassName: "border-border/60 bg-background/55",
@@ -34,7 +34,7 @@ interface StatusCardProps {
 
 const formatLatency = (ms?: number) => {
   if (typeof ms !== "number" || Number.isNaN(ms)) return "—";
-  if (ms > 1000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
   return `${ms}ms`;
 };
 
@@ -42,7 +42,7 @@ export function StatusCard({ service }: StatusCardProps) {
   const rpcMetrics = service.id === "rpc"
     ? (service.metrics as { healthyCount?: number; totalCount?: number } | undefined)
     : undefined;
-  const tone = statusToneMap[service.status] ?? statusToneMap.UntypedValue;
+  const tone = statusToneMap[service.status] ?? statusToneMap.unknown;
   const Icon = tone.icon;
   const metricRows = [
     { label: "Latency", value: formatLatency(service.latencyMs) },

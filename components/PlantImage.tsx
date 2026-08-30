@@ -3,7 +3,7 @@
 import { Plant } from '@/lib/types';
 import { calculateImageLevel } from '@/lib/utils';
 import Image from 'next/image';
-import React,{ useMemo,useState } from 'react';
+import React,{ useEffect,useMemo,useState } from 'react';
 
 interface PlantImageProps {
   selectedPlant: Plant;
@@ -25,6 +25,7 @@ const PlantImage = React.memo(({
   quality = 85
 }: PlantImageProps) => {
   const [imageError, setImageError] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
   // Memoize expensive calculations
@@ -53,9 +54,23 @@ const PlantImage = React.memo(({
     [selectedPlant.strain]
   );
 
+  // Reset when the plant (and therefore the source) changes: without this, one
+  // failed load made this memoized instance show the fallback + error overlay
+  // for every later plant it was reused for, and level-ups popped in with no
+  // skeleton or fade because imageLoaded stayed true.
+  useEffect(() => {
+    setImageError(false);
+    setFallbackFailed(false);
+    setImageLoaded(false);
+  }, [imageSrc]);
+
+  // First failure retries with the strain's base art; only when that also
+  // fails does the placeholder replace the image entirely.
   const handleImageError = () => {
     if (!imageError) {
       setImageError(true);
+    } else {
+      setFallbackFailed(true);
     }
   };
 
@@ -78,6 +93,7 @@ const PlantImage = React.memo(({
         />
       )}
 
+      {!fallbackFailed && (
       <Image
         src={resolvedSrc}
         alt={altText}
@@ -89,14 +105,16 @@ const PlantImage = React.memo(({
         quality={quality}
         onError={handleImageError}
         onLoad={handleImageLoad}
-        className={`transition-opacity duration-300 ${
+        className={`transition-opacity duration-[var(--motion-standard)] ${
           imageLoaded ? 'opacity-100' : 'opacity-0'
         }`}
       />
+      )}
 
-      {/* Error state indicator */}
-      {imageError && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-[var(--radius-control)] bg-muted/50">
+      {/* Placeholder, rendered INSTEAD of the image once the fallback also failed
+          (it used to paint semi-transparently OVER a successfully loaded fallback) */}
+      {fallbackFailed && (
+        <div className="flex items-center justify-center rounded-[var(--radius-control)] bg-muted/50" style={{ width, height }}>
           <div className="text-xs text-muted-foreground text-center">
             <div>🌱</div>
             <div>Plant #{selectedPlant.id}</div>

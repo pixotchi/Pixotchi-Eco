@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -37,6 +37,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   const { signMessageAsync } = useSignMessage();
 
   const [loading, setLoading] = useState(false);
+  const claimHandoffRef = useRef(false);
   const [step, setStep] = useState<'idle' | 'verifying' | 'claiming' | 'success' | 'unverified'>('idle');
   const [error, setError] = useState<string | null>(null);
   
@@ -59,10 +60,14 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       try {
         setStatusLoading(true);
         const response = await fetch(`/api/verify/status?address=${address}`);
+        if (!response.ok) {
+          throw new Error(`Verify status request failed (${response.status})`);
+        }
         const data = await response.json();
-        
-        if (!data.enabled) {
-          // Feature disabled server-side
+
+        // Hide only on an EXPLICIT disable: a structured error body without
+        // `enabled` used to hide the free-claim CTA for the session.
+        if (data.enabled === false) {
           setAlreadyClaimed(true); // Treat as claimed to hide the card
         } else {
           setAlreadyClaimed(data.claimed);
@@ -141,8 +146,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           setError('This account has already claimed a free plant.');
           setStep('idle');
         } else {
-          setStep('claiming'); // Auto-proceed to claim? Or let user click?
-          // Let's auto-proceed for smoother UX
+          claimHandoffRef.current = true;
+          setStep('claiming'); // Auto-proceed to claim for smoother UX
           await handleClaim(data.token);
         }
       } else if (response.status === 404) {
@@ -158,7 +163,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       setError(err.message || 'Failed to verify');
       setStep('idle');
     } finally {
-      if (step !== 'claiming') setLoading(false);
+      // Ref, not state: `step` here is captured from the render that created
+      // this handler, so the old guard was always true and meaningless.
+      if (!claimHandoffRef.current) setLoading(false);
+      claimHandoffRef.current = false;
     }
   };
 
@@ -248,7 +256,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     return (
       <Card className="relative overflow-hidden font-sans">
         <div
-          className="absolute inset-0 z-0"
+          className="absolute inset-0 z-0 bg-slate-900"
           style={{
             backgroundImage: 'url(/icons/bgclaim.png)',
             backgroundSize: 'cover',
@@ -296,7 +304,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   return (
     <Card className="relative overflow-hidden">
       <div 
-        className="absolute inset-0 z-0"
+        className="absolute inset-0 z-0 bg-slate-900"
         style={{
           backgroundImage: 'url(/icons/bgclaim.png)',
           backgroundSize: 'cover',
@@ -308,8 +316,9 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-white">
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
-              <Image src="/icons/verified.svg" alt="Verified" width={24} height={24} /> 
+              <Image src="/icons/verified.svg" alt="" aria-hidden="true" width={24} height={24} />
             </div>
+            Claim your free plant
           </CardTitle>
           <CardDescription className="text-white/90">
             Verify your X account to claim {rewardDescription}!

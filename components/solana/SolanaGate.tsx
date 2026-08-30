@@ -61,6 +61,13 @@ export function SolanaGate({
   const isSolana = useIsSolanaWallet();
   const isEnabled = isSolanaEnabled();
   
+  // Solana-only content can never apply when the feature is disabled — check it
+  // BEFORE the enabled bail-out (which used to render Solana-only children to
+  // EVM users whenever the flag was off).
+  if (solanaOnly && (!isEnabled || !isSolana)) {
+    return <>{fallback}</>;
+  }
+
   // If Solana is not enabled, always show children
   if (!isEnabled) {
     return <>{children}</>;

@@ -3,86 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isAddress } from 'viem';
 
-const cache = new Map<string, string | null>();
-const queue = new Set<string>();
-const subscribers = new Map<string, Set<(value: string | null) => void>>();
-let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+import { createBatchedAddressResolver } from './createBatchedAddressResolver';
 
-function notifySubscribers(address: string) {
-  const callbacks = subscribers.get(address);
-  if (!callbacks) return;
-
-  const value = cache.get(address) ?? null;
-  callbacks.forEach((callback) => callback(value));
-  subscribers.delete(address);
-}
-
-async function flushQueue() {
-  if (queue.size === 0) {
-    return;
-  }
-
-  const addresses = Array.from(queue);
-  queue.clear();
-
-  try {
-    const response = await fetch('/api/ens/avatars', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ addresses }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const avatars = data?.avatars ?? {};
-
-    addresses.forEach((address) => {
-      cache.set(address, avatars[address] ?? null);
-      notifySubscribers(address);
-    });
-  } catch (error) {
-    addresses.forEach((address) => {
-      cache.set(address, null);
-      notifySubscribers(address);
-    });
-    console.warn('[useEnsAvatar] Failed to resolve avatars', error);
-  }
-}
-
-function enqueue(address: string) {
-  queue.add(address);
-  if (flushTimeout) {
-    clearTimeout(flushTimeout);
-  }
-  flushTimeout = setTimeout(() => {
-    flushTimeout = null;
-    void flushQueue();
-  }, 50);
-}
-
-function waitForResult(address: string, callback: (value: string | null) => void) {
-  if (cache.has(address)) {
-    callback(cache.get(address) ?? null);
-    return () => {};
-  }
-
-  let callbacks = subscribers.get(address);
-  if (!callbacks) {
-    callbacks = new Set();
-    subscribers.set(address, callbacks);
-  }
-  callbacks.add(callback);
-
-  return () => {
-    callbacks?.delete(callback);
-    if (callbacks?.size === 0) {
-      subscribers.delete(address);
-    }
-  };
-}
+// Own resolver instance (state must NOT be shared with usePrimaryName).
+const resolver = createBatchedAddressResolver({
+  endpoint: '/api/ens/avatars',
+  responseKey: 'avatars',
+  logLabel: 'useEnsAvatar',
+});
 
 type EnsAvatarState = {
   address: string | null;
@@ -95,11 +23,10 @@ function makeInitialState(address: string | null): EnsAvatarState {
   if (!address) {
     return { address: null, avatar: null, loading: false, error: null };
   }
-
-  if (cache.has(address)) {
-    return { address, avatar: cache.get(address) ?? null, loading: false, error: null };
+  const cached = resolver.getCached(address);
+  if (cached.hit) {
+    return { address, avatar: cached.value, loading: false, error: null };
   }
-
   return { address, avatar: null, loading: true, error: null };
 }
 
@@ -125,10 +52,11 @@ export function useEnsAvatar(address?: string | null, options: { enabled?: boole
       };
     }
 
-    if (cache.has(normalized)) {
+    const cached = resolver.getCached(normalized);
+    if (cached.hit) {
       setState({
         address: normalized,
-        avatar: cache.get(normalized) ?? null,
+        avatar: cached.value,
         loading: false,
         error: null,
       });
@@ -138,8 +66,8 @@ export function useEnsAvatar(address?: string | null, options: { enabled?: boole
     }
 
     setState({ address: normalized, avatar: null, loading: true, error: null });
-    enqueue(normalized);
-    cancelRef.current = waitForResult(normalized, (value) => {
+    resolver.enqueue(normalized);
+    cancelRef.current = resolver.waitForResult(normalized, (value) => {
       setState((previous) => {
         if (previous.address !== normalized) {
           return previous;

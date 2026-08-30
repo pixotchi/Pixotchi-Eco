@@ -5,7 +5,7 @@ import { fetchIndexerGraphQL } from './indexer-client';
 import { fetchBaseNotificationUsers } from './notifications/base-api';
 import { getNotificationProviderLabel } from './notifications/provider';
 
-type StatusLevel = 'operational' | 'degraded' | 'outage' | 'UntypedValue';
+type StatusLevel = 'operational' | 'degraded' | 'outage' | 'unknown';
 
 export interface StatusService {
   id: string;
@@ -82,7 +82,7 @@ const measure = async <T>(fn: () => Promise<T>) => {
 };
 
 const deriveStatus = (healthy: number, total: number): StatusLevel => {
-  if (total === 0) return 'UntypedValue';
+  if (total === 0) return 'unknown';
   if (healthy === 0) return 'outage';
   if (healthy < total) return 'degraded';
   return 'operational';
@@ -139,7 +139,7 @@ async function checkAppReachability(): Promise<StatusService> {
     return {
       id: 'app',
       label: 'Mini App',
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'App URL not configured',
     };
   }
@@ -204,7 +204,7 @@ async function checkRedis(): Promise<StatusService> {
     return {
       id: 'redis',
       label: 'Database',
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'Redis not configured',
     };
   }
@@ -240,7 +240,7 @@ async function checkNotifications(): Promise<StatusService> {
       return {
         id: 'notifications',
         label: `Notifications (${getNotificationProviderLabel('base')})`,
-        status: 'UntypedValue',
+        status: 'unknown',
         details: 'API key missing',
       };
     }
@@ -267,7 +267,7 @@ async function checkNotifications(): Promise<StatusService> {
     return {
       id: 'notifications',
       label: `Notifications (${getNotificationProviderLabel('neynar')})`,
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'API key missing',
     };
   }
@@ -307,7 +307,7 @@ async function checkFarcasterMiniApp(): Promise<StatusService> {
     return {
       id: 'miniapp',
       label: 'Farcaster Mini App',
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'Mini App health URL not configured',
     };
   }
@@ -342,7 +342,7 @@ async function checkStakeApp(): Promise<StatusService> {
     return {
       id: 'stake-app',
       label: 'Staking App',
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'Stake app URL not configured',
     };
   }
@@ -384,7 +384,7 @@ const statuspageToStatusLevel = (status?: string): StatusLevel => {
     case 'under_maintenance':
       return 'degraded';
     default:
-      return 'UntypedValue';
+      return 'unknown';
   }
 };
 
@@ -394,7 +394,7 @@ async function checkBaseMainnet(): Promise<StatusService> {
     return {
       id: 'base-mainnet',
       label: 'Base Mainnet',
-      status: 'UntypedValue',
+      status: 'unknown',
       details: 'Base status URL not configured',
     };
   }
@@ -463,7 +463,7 @@ export const runStatusChecks = async (): Promise<StatusSnapshot> => {
       return {
         id: fn.name,
         label: fn.name,
-        status: 'UntypedValue' as StatusLevel,
+        status: 'unknown' as StatusLevel,
         details: error?.message || 'Failed to run check',
       };
     }
@@ -473,7 +473,7 @@ export const runStatusChecks = async (): Promise<StatusSnapshot> => {
     if (services.some(s => s.status === 'outage')) return 'outage';
     if (services.some(s => s.status === 'degraded')) return 'degraded';
     if (services.every(s => s.status === 'operational')) return 'operational';
-    return 'UntypedValue';
+    return 'unknown';
   })();
 
   return {

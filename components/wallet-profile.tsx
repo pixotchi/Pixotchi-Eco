@@ -1,10 +1,12 @@
 "use client";
 
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
+import { Switch } from '@/components/ui/switch';
+import { copyWithToast } from '@/lib/clipboard';
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { SolanaBridgeBadge,useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { BASE_BRAND_BUTTON_CLASSNAME, Button } from "@/components/ui/button";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
 import {
 Dialog,
@@ -129,7 +131,7 @@ function WalletStatusPill({
     info: "border-[hsl(var(--info)/0.26)] bg-[hsl(var(--info)/0.10)] text-[hsl(var(--info))]",
     warning: "border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.13)] text-[hsl(var(--warning-foreground))]",
     muted: "border-border/55 bg-muted/65 text-muted-foreground",
-    base: "border-[#0000ff]/55 bg-[#0000ff] bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] text-white shadow-[0_8px_18px_-14px_rgba(0,0,255,0.9)]",
+    base: BASE_BRAND_BUTTON_CLASSNAME,
   }[tone];
 
   return (
@@ -197,25 +199,7 @@ const EthModeToggleRow = () => {
       label="ETH Mode"
       description="Spend ETH in-game instead of SEED"
     >
-      <button
-        type="button"
-        onClick={toggleEthMode}
-        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        role="switch"
-        aria-checked={isEthMode}
-        aria-label="ETH Mode"
-      >
-        <span
-          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isEthMode ? 'bg-[hsl(var(--success))]' : 'bg-muted'
-            }`}
-          aria-hidden="true"
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isEthMode ? 'translate-x-[22px]' : 'translate-x-[4px]'
-              }`}
-          />
-        </span>
-      </button>
+      <Switch checked={isEthMode} onCheckedChange={() => toggleEthMode()} aria-label="ETH Mode" />
     </WalletInfoRow>
   );
 };
@@ -228,25 +212,7 @@ const PerformanceModeToggleRow = () => {
       label="Performance Mode"
       description="Disable effects and animations"
     >
-      <button
-        type="button"
-        onClick={() => setEnabled((current) => !current)}
-        className="relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0 transition-colors hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        role="switch"
-        aria-checked={enabled}
-        aria-label="Performance Mode"
-      >
-        <span
-          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${enabled ? 'bg-[hsl(var(--success))]' : 'bg-muted'
-            }`}
-          aria-hidden="true"
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-[22px]' : 'translate-x-[4px]'
-              }`}
-          />
-        </span>
-      </button>
+      <Switch checked={enabled} onCheckedChange={() => setEnabled((current) => !current)} aria-label="Performance Mode" />
     </WalletInfoRow>
   );
 };
@@ -536,8 +502,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   };
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied!`);
+    void copyWithToast(text, label);
   };
 
   const handleDisconnect = async () => {
@@ -741,7 +706,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             onClick={() => openExternalUrl("https://base.org/names")}
                             variant="outline"
                             size="compact"
-                            className="shrink-0 border-[#0000ff]/70 !bg-[#0000ff] !bg-[image:linear-gradient(180deg,#2455ff_0%,#0000ff_58%,#0000cc_100%)] px-3 text-xs !text-white shadow-[0_8px_18px_-12px_rgba(0,0,255,0.9)] hover:!brightness-[1.06] hover:!text-white focus-visible:ring-[#0000ff]/45"
+                            className={cn("shrink-0 px-3 text-xs", BASE_BRAND_BUTTON_CLASSNAME)}
                           >
                             Get Basename
                           </Button>
@@ -946,7 +911,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               <BalanceCard variant="wallet-profile" />
             </div>
           </DialogBody>
-          <DialogFooter sticky className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:space-x-0">
+          <DialogFooter sticky className="grid grid-cols-2 gap-2 space-x-0 max-[380px]:grid-cols-1">
             {canExportEmbeddedWallet && (
               <Button
                 variant="outline"
@@ -990,7 +955,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 variant="destructive"
                 size="default"
                 onClick={handleDisconnect}
-                className="w-full border border-red-500/60 !bg-[#dc2626] !bg-[image:linear-gradient(180deg,#ef4444_0%,#dc2626_48%,#b91c1c_100%)] !text-white shadow-[0_10px_22px_-14px_rgba(185,28,28,0.85)] hover:!brightness-[1.04] hover:shadow-[0_12px_26px_-14px_rgba(185,28,28,0.95)] focus-visible:ring-red-500/45"
+                className="w-full !bg-destructive !bg-[image:var(--gradient-danger)] !text-destructive-foreground shadow-[var(--shadow-control)] hover:!brightness-[1.04]"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Disconnect Wallet
