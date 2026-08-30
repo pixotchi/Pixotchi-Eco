@@ -34,8 +34,13 @@ const themes: Array<{ name: Theme; label: string; color: string }> = [
   { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
 ];
 
-const themeMenuButtonClass = "h-8 min-h-8 w-8 min-w-8 !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
-const themeSwatchClass = "h-4 w-4 rounded-[2px]";
+/* 44px hit area (the app's documented touch floor — these were 32px, on the
+   primary theming affordance); the visual swatch stays small inside it. */
+const themeMenuButtonClass = "h-11 min-h-11 w-11 min-w-11 !rounded-[var(--radius-nav)] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
+/* The hairline border keeps the swatch legible when its colour matches the
+   surface behind it (the Light swatch on the light header button, and the Dark
+   swatch in dark theme, both used to read as a blank/broken button). */
+const themeSwatchClass = "h-4 w-4 rounded-[2px] border border-[hsl(var(--border-strong)/0.45)]";
 
 /*
  * A Radix menu item, not a hand-rolled button.
@@ -77,17 +82,17 @@ function MenuSwitchItem({
         className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-[background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] ${
           checked
             ? "border border-primary/35 bg-primary bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
-            : "border border-[hsl(var(--border-strong)/0.34)] bg-muted/75 bg-[image:var(--gradient-panel)] shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.10)]"
+            : "border border-[hsl(var(--edge-panel))] bg-muted/75 bg-[image:var(--gradient-panel)] shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.10)]"
         }`}
         aria-hidden="true"
       >
         <span
-          className={`inline-block h-5 w-5 transform-gpu rounded-full border transition-[translate,background-color,border-color,box-shadow] duration-300 ease-[var(--ease-standard)] motion-reduce:transition-none ${
+          className={`inline-block h-5 w-5 transform-gpu rounded-full border transition-[translate,background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${
             checked ? "translate-x-[18px]" : "translate-x-0.5"
           } ${
             checked
               ? "border-white/55 bg-primary-foreground shadow-[var(--shadow-hairline)]"
-              : "border-[hsl(var(--border-strong)/0.46)] bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.20)]"
+              : "border-[hsl(var(--edge-strong))] bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.20)]"
           }`}
         />
       </span>

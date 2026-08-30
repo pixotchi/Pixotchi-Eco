@@ -767,13 +767,17 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
             <DialogContent
                 hideCloseButton
                 /* Money game with no visible close button: a stray backdrop tap must not
-                   abandon a spin mid-round. */
+                   abandon a spin mid-round — and neither may a stray Escape press
+                   (it used to fall straight through to close). */
                 onPointerDownOutside={(event) => event.preventDefault()}
+                onEscapeKeyDown={(event) => {
+                    if (walletTxPending || pendingGame) event.preventDefault();
+                }}
                 mobileMode="center"
                 surface="game"
                 size="full"
                 stickyFooter
-                className="casino-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino-bg.webp')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
+                className="casino-dialog-surface max-h-full w-[min(96vw,60rem)] overflow-y-auto border-white/15 bg-[url('/icons/casino-bg.webp')] bg-cover bg-center bg-no-repeat !p-3 sm:!p-4 md:!p-6"
             >
                 <DialogTitle className="sr-only">Roulette</DialogTitle>
                 <DialogDescription className="sr-only">
@@ -782,10 +786,10 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                 <Button
                     type="button"
                     variant="headerIcon"
-                    size="iconCompact"
+                    size="icon"
                     onClick={() => handleClose(false)}
                     aria-label="Close Roulette dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
+                    className="absolute right-3 top-3 z-50"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>

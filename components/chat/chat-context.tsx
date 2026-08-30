@@ -10,8 +10,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useChat as useAIChat } from '@ai-sdk/react';
-import { DefaultChatTransport, type UIMessage } from 'ai';
+import dynamic from 'next/dynamic';
 import { useIdentityToken, usePrivy } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -43,23 +42,18 @@ import { resolvePreferredAuthSurface, SecureSessionState } from '@/lib/auth-surf
 import { sessionStorageManager } from '@/lib/session-storage-manager';
 import { AIChatMessage, ChatMessage, ChatMode } from '@/lib/types';
 import { useIsSolanaWallet, useSolanaWallet } from '@/components/solana';
+import {
+  storedAIMessageToUIMessage,
+  uiMessageToAIChatMessage,
+  type AiChatHandle,
+  type AiChatStatus,
+  type AIUIMessage,
+} from './ai-message-utils';
+
+// The AI SDK loads only when chat is first opened; see ai-chat-engine.tsx.
+const AiChatEngine = dynamic(() => import('./ai-chat-engine'), { ssr: false });
 
 type AnyChatMessage = ChatMessage | AIChatMessage;
-type AIMessageMetadata = {
-  address?: string;
-  continuations?: number;
-  conversationId?: string;
-  displayName?: string;
-  finishReason?: string;
-  model?: string;
-  persistedMessageId?: string;
-  provider?: string;
-  recoveredFromLength?: boolean;
-  timestamp?: number;
-  tokensUsed?: number;
-  toolCalls?: AIChatMessage['toolCalls'];
-};
-type AIUIMessage = UIMessage<AIMessageMetadata>;
 
 interface ChatContextState {
   conversationId: string | null;
@@ -81,8 +75,9 @@ interface ChatContextState {
   cancelActiveSend: () => void;
   retryPublicChatSession: () => void;
   fetchHistoryForMode: (mode: ChatMode, showLoading?: boolean) => Promise<void>;
-  sendMessage: (message: string) => Promise<void>;
-  sendMessageForMode: (mode: ChatMode, message: string) => Promise<void>;
+  /** Resolve to true only when the message was actually accepted — callers keep the draft otherwise. */
+  sendMessage: (message: string) => Promise<boolean>;
+  sendMessageForMode: (mode: ChatMode, message: string) => Promise<boolean>;
   setChatOpen: (open: boolean) => void;
   setConversationId: (id: string | null) => void;
   setMode: (mode: ChatMode) => void;
@@ -122,71 +117,6 @@ function getPublicChatFetchGate(): PublicChatFetchGate {
   };
 
   return globalWindow.__pixotchiPublicChatFetchGate;
-}
-
-function getAIUIMessageText(message: AIUIMessage): string {
-  return message.parts
-    .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
-    .map((part) => part.text)
-    .join('');
-}
-
-function storedAIMessageToUIMessage(message: AIChatMessage): AIUIMessage {
-  return {
-    id: message.id,
-    metadata: {
-      address: message.address,
-      continuations: message.continuations,
-      conversationId: message.conversationId,
-      displayName: message.displayName,
-      finishReason: message.finishReason,
-      model: message.model,
-      persistedMessageId: message.id,
-      provider: message.provider,
-      recoveredFromLength: message.recoveredFromLength,
-      timestamp: message.timestamp,
-      tokensUsed: message.tokensUsed,
-      toolCalls: message.toolCalls,
-    },
-    parts: [
-      {
-        text: message.message,
-        type: 'text',
-      },
-    ],
-    role: message.type === 'user' ? 'user' : 'assistant',
-  };
-}
-
-function uiMessageToAIChatMessage(
-  message: AIUIMessage,
-  fallbackAddress: string | null,
-  fallbackConversationId: string | null,
-): AIChatMessage | null {
-  const text = getAIUIMessageText(message);
-  if (!text.trim()) {
-    return null;
-  }
-
-  const metadata = message.metadata || {};
-  const type = message.role === 'assistant' ? 'assistant' : 'user';
-
-  return {
-    address: metadata.address || fallbackAddress || '0x0000000000000000000000000000000000000000',
-    continuations: metadata.continuations,
-    conversationId: metadata.conversationId || fallbackConversationId || '',
-    displayName: metadata.displayName || (type === 'assistant' ? 'Neural Seed' : 'You'),
-    finishReason: metadata.finishReason,
-    id: metadata.persistedMessageId || message.id,
-    message: text,
-    model: metadata.model || '',
-    provider: metadata.provider,
-    recoveredFromLength: metadata.recoveredFromLength,
-    timestamp: metadata.timestamp || Date.now(),
-    tokensUsed: metadata.tokensUsed,
-    toolCalls: metadata.toolCalls,
-    type,
-  };
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -258,34 +188,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ? Boolean(matchingConfirmedMiniAppAddress || matchingVerifiedMiniAppSessionAddress)
     : Boolean(publicChatSession?.authenticated && publicChatAddress);
   const publicIdentityAddress = publicChatAddress ?? null;
-  const aiTransport = useMemo(
-    () => new DefaultChatTransport<AIUIMessage>({
-      api: '/api/chat/ai/send',
-      credentials: 'same-origin',
-      prepareSendMessagesRequest: ({ body, id, messageId, messages, trigger }) => {
-        const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user');
-        return {
-          body: {
-            ...body,
-            id,
-            message: latestUserMessage ? getAIUIMessageText(latestUserMessage) : '',
-            messageId,
-            messages: latestUserMessage ? [latestUserMessage] : [],
-            trigger,
-          },
-        };
-      },
-    }),
-    [],
-  );
-  const aiChat = useAIChat<AIUIMessage>({
-    experimental_throttle: 60,
-    transport: aiTransport,
-  });
-  const aiChatStreaming = aiChat.status === 'submitted' || aiChat.status === 'streaming';
-  const setAIChatMessages = aiChat.setMessages;
-  const sendAIChatMessage = aiChat.sendMessage;
-  const stopAIChat = aiChat.stop;
+  /*
+   * AI engine wiring. The useChat instance lives in <AiChatEngine> (dynamically
+   * imported on first chat open); this provider keeps a stable imperative
+   * handle plus mirrored status, so the rest of the file reads almost as before.
+   */
+  const [hasOpenedChat, setHasOpenedChat] = useState(false);
+  const aiHandleRef = useRef<AiChatHandle | null>(null);
+  const pendingAiHistoryRef = useRef<AIUIMessage[] | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiChatStatus>('ready');
+  const aiChatStreaming = aiStatus === 'submitted' || aiStatus === 'streaming';
+
+  const handleAiEngineReady = useCallback((handle: AiChatHandle) => {
+    aiHandleRef.current = handle;
+    if (pendingAiHistoryRef.current) {
+      handle.setMessages(pendingAiHistoryRef.current);
+      pendingAiHistoryRef.current = null;
+    }
+  }, []);
+
+  const setAIChatMessages = useCallback((next: AIUIMessage[]) => {
+    if (aiHandleRef.current) {
+      aiHandleRef.current.setMessages(next);
+    } else {
+      // Engine not mounted yet (chat never opened): stage the history so the
+      // engine hydrates with it on mount.
+      pendingAiHistoryRef.current = next;
+    }
+  }, []);
+
+  const stopAIChat = useCallback(() => {
+    return aiHandleRef.current?.stop();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -527,12 +461,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updatePublicMessages = useCallback((next: AnyChatMessage[]) => {
+    // Bail when nothing changed: the poll used to replace the array wholesale
+    // every cycle, re-rendering this root provider (and the header ChatButton)
+    // even when the feed was identical.
+    const current = messageCacheRef.current.public;
+    if (
+      current.length === next.length &&
+      current.every((message, index) =>
+        message.id === next[index]?.id && message.timestamp === next[index]?.timestamp)
+    ) {
+      return;
+    }
     writeModeMessages('public', next);
   }, [writeModeMessages]);
 
+  const publicIdentityAddressRef = useRef(publicIdentityAddress);
   useEffect(() => {
-    const next = aiChat.messages
-      .map((message) => uiMessageToAIChatMessage(message, publicIdentityAddress, conversationId))
+    publicIdentityAddressRef.current = publicIdentityAddress;
+  }, [publicIdentityAddress]);
+  const conversationIdRef = useRef(conversationId);
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  const handleAiMessagesChange = useCallback((uiMessages: AIUIMessage[]) => {
+    const next = uiMessages
+      .map((message) => uiMessageToAIChatMessage(message, publicIdentityAddressRef.current, conversationIdRef.current))
       .filter((message): message is AIChatMessage => Boolean(message));
 
     messageCacheRef.current.ai = next;
@@ -542,24 +496,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       .map((message) => message.conversationId)
       .find((id) => Boolean(id));
 
-    if (nextConversationId && nextConversationId !== conversationId) {
+    if (nextConversationId && nextConversationId !== conversationIdRef.current) {
       setConversationId(nextConversationId);
     }
 
     if (modeRef.current === 'ai') {
       setMessages(next);
     }
-  }, [aiChat.messages, conversationId, publicIdentityAddress]);
+  }, []);
 
-  useEffect(() => {
-    if (!aiChat.error) {
-      return;
-    }
-
-    const friendlyMessage = aiChat.error.message || 'AI chat failed to stream a response.';
+  const handleAiError = useCallback((aiError: Error) => {
+    const friendlyMessage = aiError.message || 'AI chat failed to stream a response.';
     setError(friendlyMessage);
     toast.error(friendlyMessage);
-  }, [aiChat.error]);
+  }, []);
 
   useEffect(() => {
     setAiTypingModes((previous) => ({ ...previous, ai: aiChatStreaming }));
@@ -619,8 +569,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to fetch messages');
         }
         const data = await response.json();
-        const next = data.messages || [];
-        updatePublicMessages(next);
+        const next: AnyChatMessage[] = data.messages || [];
+        // Preserve any optimistic bubbles the server hasn't echoed yet — a poll
+        // landing mid-send used to wipe the user's in-flight message and make it
+        // reappear seconds later.
+        const serverIds = new Set(next.map((message) => message.id));
+        const pendingOptimistic = (messageCacheRef.current.public || []).filter(
+          (message) => String(message.id).startsWith('optimistic-') && !serverIds.has(message.id),
+        );
+        updatePublicMessages(pendingOptimistic.length ? [...next, ...pendingOptimistic] : next);
       } else if (requestedMode === 'ai') {
         if (!publicChatAuthenticated) {
           setConversationId(null);
@@ -1027,7 +984,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     refreshPreview();
-    const interval = setInterval(refreshPreview, 15000);
+    // 60s, down from 15s: this poll runs for every logged-in user with the chat
+    // CLOSED, purely to feed the unread badge — 240 requests/hour/user was the
+    // single largest source of idle traffic in the app.
+    const interval = setInterval(refreshPreview, 60000);
 
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', refreshPreview);
@@ -1041,25 +1001,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchPublicPreview, isChatOpen, publicChatAuthenticated]);
 
-  const sendMessageForMode = async (targetMode: ChatMode, messageText: string) => {
+  const sendMessageForMode = async (targetMode: ChatMode, messageText: string): Promise<boolean> => {
     if (!messageText.trim()) {
-      return;
+      return false;
     }
 
     if (targetMode === 'ai' && !publicIdentityAddress) {
-      return;
+      return false;
     }
 
     if ((targetMode === 'public' || targetMode === 'ai') && !publicChatAuthenticated) {
       toast.error(
         targetMode === 'ai' ? 'AI chat is not ready yet.' : 'Public chat is not ready yet.',
       );
-      return;
+      return false;
     }
 
     if (targetMode === 'public' && !publicChatAddress) {
       toast.error('Public chat is not ready yet.');
-      return;
+      return false;
     }
 
     if (targetMode === 'ai') {
@@ -1073,7 +1033,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const authHeaders = await getMiniAppQuickAuthHeaders({
           expectedAddress: publicChatAddress ?? chatAddress,
         });
-        await sendAIChatMessage(
+        const aiHandle = aiHandleRef.current;
+        if (!aiHandle) {
+          throw new Error('Neural Seed is still loading. Try again in a moment.');
+        }
+        await aiHandle.sendMessage(
           { text: messageText },
           {
             body: {
@@ -1082,6 +1046,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             headers: authHeaders,
           },
         );
+        return true;
       } catch (err: UntypedValue) {
         if (/401|unauthorized/i.test(String(err?.message || ''))) {
           await handleChatAuthFailure();
@@ -1090,13 +1055,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const friendlyMessage = err?.message || 'AI chat failed to stream a response.';
         setError(friendlyMessage);
         toast.error(friendlyMessage);
+        return false;
       } finally {
         setIsSending(false);
         setSendingMode(null);
         setIsAITyping(false);
         setAiTypingModes((previous) => ({ ...previous, [targetMode]: false }));
       }
-      return;
     }
 
     if (abortControllerRef.current) {
@@ -1113,7 +1078,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const endpoint = '/api/chat/send';
     const senderAddress = publicChatAddress;
-    const optimisticId = `optimistic-${Date.now()}`;
+    // randomUUID, not Date.now(): two sends in the same millisecond used to
+    // collide on the React key and both bubbles were dropped by reconciliation.
+    const optimisticId = `optimistic-${crypto.randomUUID()}`;
     const optimisticUserMessage: AnyChatMessage = {
       address: senderAddress!,
       displayName: 'You',
@@ -1160,6 +1127,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           newMessage,
         ];
         writeModeMessages('public', next);
+        return true;
     } catch (err: UntypedValue) {
       const next = (messageCacheRef.current[targetMode] || []).filter((message) => message.id !== optimisticId);
       if (err.name === 'AbortError') {
@@ -1170,6 +1138,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         toast.error(friendlyMessage);
         writeModeMessages(targetMode, next);
       }
+      return false;
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
@@ -1202,8 +1171,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setAiTypingModes((previous) => ({ ...previous, ai: false }));
   }, [aiChatStreaming, sendingMode, stopAIChat]);
 
-  const sendMessage = async (messageText: string) => {
-    await sendMessageForMode(modeRef.current, messageText);
+  const sendMessage = async (messageText: string): Promise<boolean> => {
+    return sendMessageForMode(modeRef.current, messageText);
   };
 
   const getMessagesForMode = useCallback((targetMode: ChatMode) => {
@@ -1238,35 +1207,107 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await fetchHistory(showLoading, targetMode);
   }, [fetchHistory]);
 
-  const value = {
-    conversationId,
-    error,
-    fetchHistoryForMode,
-    getLoadingForMode,
-    getMessagesForMode,
-    isAITyping,
-    isAITypingForMode,
-    isSending: isSending || aiChatStreaming,
-    isSendingForMode,
-    loading,
-    markAsRead,
-    messages,
-    mode,
-    publicChatAddress,
-    publicChatAuthenticated,
-    publicChatLoading,
-    publicChatState,
-    cancelActiveSend,
-    retryPublicChatSession,
-    sendMessage,
-    sendMessageForMode,
-    setChatOpen: setIsChatOpen,
-    setConversationId,
-    setMode,
-    unreadCount,
-  };
+  const setChatOpen = useCallback((open: boolean) => {
+    setIsChatOpen(open);
+    if (open) {
+      // First open mounts the (dynamically imported) AI engine.
+      setHasOpenedChat(true);
+    }
+  }, []);
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+  const sendMessageForModeRef = useRef(sendMessageForMode);
+  sendMessageForModeRef.current = sendMessageForMode;
+  const stableSendMessage = useCallback(
+    (messageText: string) => sendMessageRef.current(messageText),
+    [],
+  );
+  const stableSendMessageForMode = useCallback(
+    (targetMode: ChatMode, messageText: string) => sendMessageForModeRef.current(targetMode, messageText),
+    [],
+  );
+  const fetchHistoryForModeRef = useRef(fetchHistoryForMode);
+  fetchHistoryForModeRef.current = fetchHistoryForMode;
+  const stableFetchHistoryForMode = useCallback(
+    (targetMode: ChatMode, showLoading?: boolean) => fetchHistoryForModeRef.current(targetMode, showLoading),
+    [],
+  );
+
+  // Memoized: this used to be a fresh 27-field object literal on every render
+  // of a root-level provider, so every consumer (including the header
+  // ChatButton) re-rendered whenever anything in here moved.
+  const value = useMemo(
+    () => ({
+      conversationId,
+      error,
+      fetchHistoryForMode: stableFetchHistoryForMode,
+      getLoadingForMode,
+      getMessagesForMode,
+      isAITyping,
+      isAITypingForMode,
+      isSending: isSending || aiChatStreaming,
+      isSendingForMode,
+      loading,
+      markAsRead,
+      messages,
+      mode,
+      publicChatAddress,
+      publicChatAuthenticated,
+      publicChatLoading,
+      publicChatState,
+      cancelActiveSend,
+      retryPublicChatSession,
+      sendMessage: stableSendMessage,
+      sendMessageForMode: stableSendMessageForMode,
+      setChatOpen,
+      setConversationId,
+      setMode,
+      unreadCount,
+    }),
+    [
+      aiChatStreaming,
+      cancelActiveSend,
+      conversationId,
+      error,
+      getLoadingForMode,
+      getMessagesForMode,
+      isAITyping,
+      isAITypingForMode,
+      isSending,
+      isSendingForMode,
+      loading,
+      markAsRead,
+      messages,
+      mode,
+      publicChatAddress,
+      publicChatAuthenticated,
+      publicChatLoading,
+      publicChatState,
+      retryPublicChatSession,
+      setChatOpen,
+      setConversationId,
+      setMode,
+      stableFetchHistoryForMode,
+      stableSendMessage,
+      stableSendMessageForMode,
+      unreadCount,
+    ],
+  );
+
+  return (
+    <ChatContext.Provider value={value}>
+      {hasOpenedChat ? (
+        <AiChatEngine
+          onError={handleAiError}
+          onMessagesChange={handleAiMessagesChange}
+          onReady={handleAiEngineReady}
+          onStatusChange={setAiStatus}
+        />
+      ) : null}
+      {children}
+    </ChatContext.Provider>
+  );
 }
 
 export function useChat() {

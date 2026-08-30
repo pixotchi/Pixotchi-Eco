@@ -1329,11 +1329,14 @@ export default function BlackjackDialog({
             <DialogContent
                 hideCloseButton
                 /* Money game with no visible close button: a stray backdrop tap must not
-                   abandon a hand mid-round. */
+                   abandon a hand mid-round — nor may a stray Escape press. */
                 onPointerDownOutside={(event) => event.preventDefault()}
+                onEscapeKeyDown={(event) => {
+                    if (walletTxPending || gameState.isActive) event.preventDefault();
+                }}
                 mobileMode="center"
                 surface="game"
-                className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
+                className="blackjack-dialog-surface max-h-full w-[min(96vw,34rem)] overflow-y-auto overscroll-contain border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
             >
                 <DialogTitle className="sr-only">Blackjack</DialogTitle>
                 <DialogDescription className="sr-only">
@@ -1342,10 +1345,10 @@ export default function BlackjackDialog({
                 <Button
                     type="button"
                     variant="headerIcon"
-                    size="iconCompact"
+                    size="icon"
                     onClick={handleClose}
                     aria-label="Close Blackjack dialog"
-                    className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
+                    className="absolute right-3 top-3 z-50"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
                 </Button>

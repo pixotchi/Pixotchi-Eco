@@ -389,11 +389,11 @@ export default function PlantsView() {
         <div
           className={
             selectedPlant.status === 4
-              ? "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[980px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
-              : "space-y-4 min-[54rem]:mx-auto min-[54rem]:grid min-[54rem]:w-full min-[54rem]:max-w-[1100px] min-[54rem]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:justify-center min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
+              ? "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[980px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
+              : "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[1100px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
           }
         >
-          <div className="space-y-4 min-[54rem]:sticky min-[54rem]:top-0">
+          <div className="space-y-4 tablet:sticky tablet:top-0">
           {plants.length > 1 && (
             <TabCard>
               <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
@@ -695,10 +695,10 @@ export default function PlantsView() {
 
           </div>
 
-          <div className="min-w-0 min-[54rem]:w-full">
+          <div className="min-w-0 tablet:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <TabCard className="min-[54rem]:w-full">
+            <TabCard className="tablet:w-full">
               <CardHeader>
                 <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
@@ -775,14 +775,14 @@ export default function PlantsView() {
               </CardContent>
             </TabCard>
           ) : (
-            <TabCard className="min-[54rem]:h-fit min-[54rem]:w-full">
+            <TabCard className="tablet:h-fit tablet:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Marketplace</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 min-[54rem]:grid-cols-[minmax(220px,260px)_minmax(0,340px)] min-[54rem]:items-start min-[54rem]:justify-center">
+                <div className="grid grid-cols-1 gap-4 tablet:grid-cols-[minmax(220px,260px)_minmax(0,340px)] tablet:items-start tablet:justify-center">
                   {/* Item Selection with Quantity - Grouped by category */}
                   <div className="space-y-2">
                     {(() => {

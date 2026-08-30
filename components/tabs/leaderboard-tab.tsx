@@ -88,7 +88,7 @@ const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the lo
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
 const RANKING_ACTION_BUTTON_CLASS =
-  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]";
+  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]";
 const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
 
 function getTotalPages(itemCount: number, pageSize: number) {
@@ -175,7 +175,7 @@ export default function LeaderboardTab() {
   // one, so every page change built 32 rows to paint at most 20. Each row is ~240
   // lines of JSX with ~14 <Image> children.
   //
-  // The CSS min-[54rem] classes below are deliberately kept: during the first frame
+  // The CSS tablet classes below are deliberately kept: during the first frame
   // after a resize (before the change event lands) they prevent both sets showing.
   const [isDesktopBoard, setIsDesktopBoard] = useState(
     () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
@@ -872,13 +872,13 @@ export default function LeaderboardTab() {
     const columns = splitDesktopRows(rows);
 
     return (
-      <div className={cn("hidden min-[54rem]:grid min-[54rem]:grid-cols-2 min-[54rem]:gap-4", fillHeight && "min-[54rem]:min-h-0 min-[54rem]:flex-1")}>
+      <div className={cn("hidden tablet:grid tablet:grid-cols-2 tablet:gap-4", fillHeight && "tablet:min-h-0 tablet:flex-1")}>
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
             className={cn(
-              "min-[54rem]:flex min-[54rem]:flex-col min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-[hsl(var(--border-strong)/0.32)] min-[54rem]:bg-[image:var(--gradient-scroll-surface)] min-[54rem]:px-3 min-[54rem]:py-2 min-[54rem]:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
-              fillHeight && "min-[54rem]:min-h-0"
+              "tablet:flex tablet:flex-col tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-[hsl(var(--edge-panel))] tablet:bg-[image:var(--gradient-scroll-surface)] tablet:px-3 tablet:py-2 tablet:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
+              fillHeight && "tablet:min-h-0"
             )}
           >
             <div className="flex h-8 flex-none items-center justify-between border-b border-[hsl(var(--divider)/0.66)] text-xs font-semibold text-muted-foreground">
@@ -913,17 +913,17 @@ export default function LeaderboardTab() {
     fillDesktop = false
   ) {
     return (
-      <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col")}>
+      <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col")}>
         {!isDesktopBoard && (
-          <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:hidden">
+          <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:hidden">
             {mobileRows.map((row) => renderRow(row))}
           </div>
         )}
 
         {isDesktopBoard && renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
 
-        {!isDesktopBoard && renderPagination(mobilePageCount, "min-[54rem]:hidden")}
-        {isDesktopBoard && renderPagination(desktopPageCount, "hidden min-[54rem]:flex")}
+        {!isDesktopBoard && renderPagination(mobilePageCount, "tablet:hidden")}
+        {isDesktopBoard && renderPagination(desktopPageCount, "hidden tablet:flex")}
       </div>
     );
   }
@@ -933,7 +933,7 @@ export default function LeaderboardTab() {
       <div className="flex h-full min-h-0 flex-col">
         <div
           data-ranking-scroll
-          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3"
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -959,7 +959,7 @@ export default function LeaderboardTab() {
         key={plant.id}
         className={cn(
           compact ? "py-0.5 transition-all" : "py-3 transition-all",
-          isMine && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3",
+          isMine && "bg-primary/5 rounded-[var(--radius-control)] px-2 tablet:px-3",
           plant.isDead && "opacity-60"
         )}
       >
@@ -1247,7 +1247,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 tablet:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1312,7 +1312,7 @@ export default function LeaderboardTab() {
     return (
       <div
         key={row.address || `rock-${row.rank}`}
-        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 min-[54rem]:px-3")}
+        className={cn(compact ? "py-2" : "py-3", isCurrentUser && "bg-primary/5 rounded-[var(--radius-control)] px-2 tablet:px-3")}
       >
         <div className="flex items-center space-x-2">
           <div className={cn("flex items-center justify-center", compact ? "w-7" : "w-8")}>
@@ -1421,15 +1421,15 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden min-[54rem]:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-7rem)]">
+    <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden tablet:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-7rem)]">
         <CardHeader className="flex-none">
-          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between min-[54rem]:grid min-[54rem]:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
             {boardType === 'plants' && isDesktopBoard && (
-              <div className="hidden items-center justify-center gap-4 min-[54rem]:flex">
+              <div className="hidden items-center justify-center gap-4 tablet:flex">
                 <ToggleGroup
                   ariaLabel="Filter plants by status"
                   value={filterMode}
@@ -1466,7 +1466,7 @@ export default function LeaderboardTab() {
                 )}
               </div>
             )}
-            <div className="w-full min-[380px]:w-auto min-[54rem]:col-start-3 min-[54rem]:justify-self-end">
+            <div className="w-full min-[380px]:w-auto tablet:col-start-3 tablet:justify-self-end">
               <ToggleGroup
                 ariaLabel="Ranking board"
                 value={boardType}
@@ -1486,7 +1486,7 @@ export default function LeaderboardTab() {
             </div>
           </div>
           {boardType === 'plants' && !isDesktopBoard && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-[54rem]:hidden">
+            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap tablet:hidden">
               <ToggleGroup
                 ariaLabel="Filter plants by status"
                 value={filterMode}

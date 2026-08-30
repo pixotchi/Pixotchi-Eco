@@ -125,10 +125,10 @@ function TokenInfoPanel({
   };
 
   return (
-    <div className="space-y-4 text-sm min-[54rem]:grid min-[54rem]:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)] min-[54rem]:items-start min-[54rem]:gap-5 min-[54rem]:space-y-0">
+    <div className="space-y-4 text-sm tablet:grid tablet:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)] tablet:items-start tablet:gap-5 tablet:space-y-0">
       <div className="space-y-3">
         <div
-          className="grid grid-cols-3 gap-2 min-[54rem]:grid-cols-1"
+          className="grid grid-cols-3 gap-2 tablet:grid-cols-1"
           role="radiogroup"
           aria-label="Token information"
         >
@@ -143,7 +143,7 @@ function TokenInfoPanel({
                 aria-label={token.symbol}
                 title={token.symbol}
                 onClick={() => setActiveToken(token.id)}
-                className={`surface-control flex min-w-0 items-center justify-center gap-1 rounded-[var(--radius-nav)] border px-1.5 py-2 text-[10px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background min-[390px]:gap-1.5 min-[390px]:px-2 min-[390px]:text-xs min-[54rem]:justify-start min-[54rem]:px-3 ${
+                className={`surface-control flex min-w-0 items-center justify-center gap-1 rounded-[var(--radius-nav)] border px-1.5 py-2 text-[10px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background min-[390px]:gap-1.5 min-[390px]:px-2 min-[390px]:text-xs tablet:justify-start tablet:px-3 ${
                   isSelected ? 'surface-control-selected' : 'text-foreground/80'
                 }`}
               >
@@ -496,7 +496,7 @@ export default function SwapTab() {
    * TradingView iframe — a third-party embed, ~1.6s to load — that nobody could see.
    * 165 of 212 nodes in this tab had a zero-size box.
    *
-   * The min-[54rem] classes on the cards are deliberately kept: for the frame between
+   * The tablet classes on the cards are deliberately kept: for the frame between
    * a resize crossing 54rem and the matchMedia change event landing, they stop both
    * layouts painting at once.
    *
@@ -564,10 +564,10 @@ export default function SwapTab() {
   }
 
   return (
-    <div className="space-y-4 min-[54rem]:grid min-[54rem]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] min-[54rem]:items-stretch min-[54rem]:gap-5 min-[54rem]:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
+    <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-stretch tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
       {!isDesktopSwapLayout && (
       <TabCard
-        className={`${isChartView ? 'flex flex-col' : ''} pb-4 min-[54rem]:hidden`}
+        className={`${isChartView ? 'flex flex-col' : ''} pb-4 tablet:hidden`}
         padding={isChartView ? 'none' : 'md'}
       >
         <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
@@ -614,7 +614,7 @@ export default function SwapTab() {
 
       {isDesktopSwapLayout && (
       <>
-      <TabCard className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:flex-col">
+      <TabCard className="hidden tablet:flex tablet:h-full tablet:flex-col">
         <CardHeader>
           <CardTitle>Swap</CardTitle>
         </CardHeader>
@@ -630,7 +630,7 @@ export default function SwapTab() {
         </CardContent>
       </TabCard>
 
-      <TabCard className="hidden min-[54rem]:flex min-[54rem]:h-full min-[54rem]:min-h-0 min-[54rem]:flex-col" padding="none">
+      <TabCard className="hidden tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col" padding="none">
         <CardHeader className="px-4 pt-4 pb-3">
           <CardTitle>Chart</CardTitle>
         </CardHeader>
@@ -640,7 +640,7 @@ export default function SwapTab() {
       </TabCard>
 
       {/* Token Info Section */}
-      <TabCard className="hidden min-[54rem]:block min-[54rem]:col-span-2 min-[54rem]:h-fit">
+      <TabCard className="hidden tablet:block tablet:col-span-2 tablet:h-fit">
         <CardHeader>
           <CardTitle>Token Info</CardTitle>
         </CardHeader>

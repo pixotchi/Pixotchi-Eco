@@ -161,7 +161,7 @@ export function LandMapModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-[440px] h-[85vh] p-0 sm:p-0 overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
+        className="max-w-[440px] h-[85dvh] p-0 sm:p-0 overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
         hideCloseButton
       >
         <DialogTitle className="sr-only">World Map</DialogTitle>
@@ -200,7 +200,7 @@ export function LandMapModal({
             userLands={userLands}
             selectedLand={selectedLand}
             totalSupply={totalSupply}
-            neighborData={neighborData}
+            onZoomChange={(nextZoom) => setZoom(Math.min(5, Math.max(0.2, nextZoom)))}
             onLandClick={(tokenId, visualData) => {
               // 1. Handle Wilderness Click
               if (tokenId === null && visualData) {

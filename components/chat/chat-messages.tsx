@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import ChatMessageComponent from "./chat-message";
+import ChatProfileDialog from "./chat-profile-dialog";
 import { useChat } from "./chat-context";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     mode,
     getLoadingForMode,
     getMessagesForMode,
+    publicChatAddress,
     publicChatAuthenticated,
     publicChatLoading,
     publicChatState,
@@ -45,19 +47,59 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
           : 'Connect or refresh your secure session to join public chat.';
   const containerRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
+  const touchActiveRef = useRef(false);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const lastSeenLengthRef = useRef(0);
+  // One dialog for the whole list: each row used to mount its own
+  // ChatProfileDialog (50 dialog instances + caches for 50 messages).
+  const [profileAddress, setProfileAddress] = useState<string | null>(null);
+  const openProfile = useCallback((address: string) => setProfileAddress(address), []);
+  // Slow clock so relative timestamps tick over (AI-mode messages used to stay
+  // on "now" for the whole session).
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    const interval = window.setInterval(() => setClockTick((tick) => tick + 1), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const handleScroll = useCallback(() => {
     const node = containerRef.current;
     if (!node) return;
     const isAtBottom = node.scrollHeight - node.scrollTop - node.clientHeight <= SCROLL_THRESHOLD;
     setStickToBottom(isAtBottom);
+    if (isAtBottom) {
+      lastSeenLengthRef.current = activeMessagesRef.current.length;
+      setUnseenCount(0);
+    }
   }, []);
+
+  const activeMessagesRef = useRef(activeMessages);
+  activeMessagesRef.current = activeMessages;
 
   useEffect(() => {
     const node = containerRef.current;
-    if (!node || !stickToBottom) return;
-    node.scrollTop = node.scrollHeight;
+    if (!node) return;
+    if (stickToBottom) {
+      // Don't fight an in-progress touch fling with a hard scrollTop write.
+      if (!touchActiveRef.current) {
+        node.scrollTop = node.scrollHeight;
+      }
+      lastSeenLengthRef.current = activeMessages.length;
+      setUnseenCount(0);
+      return;
+    }
+    // Scrolled up: surface how many messages arrived below the fold.
+    setUnseenCount(Math.max(0, activeMessages.length - lastSeenLengthRef.current));
   }, [activeMessages, stickToBottom]);
+
+  const jumpToLatest = useCallback(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+    lastSeenLengthRef.current = activeMessagesRef.current.length;
+    setUnseenCount(0);
+    setStickToBottom(true);
+  }, []);
 
   if (activeLoading && activeMessages.length === 0) {
     return (
@@ -142,28 +184,59 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="surface-scroll-fade h-full overflow-y-auto"
-    >
+    <div className="relative h-full min-h-0">
       <div
-        className="p-4 space-y-4"
-        role="log"
-        aria-label={`${isAssistantMode ? 'Assistant conversation' : 'Chat'} messages`}
-        aria-live={isAssistantMode ? "polite" : "off"}
-        aria-atomic="false"
+        ref={containerRef}
+        onScroll={handleScroll}
+        onTouchStart={() => { touchActiveRef.current = true; }}
+        onTouchEnd={() => { touchActiveRef.current = false; }}
+        onTouchCancel={() => { touchActiveRef.current = false; }}
+        className="surface-scroll-fade h-full overflow-y-auto"
       >
-        {activeMessages.map((message, index) => (
-          <ChatMessageComponent
-            key={message.id}
-            message={message}
-            isAIMode={isAssistantMode}
-            aria-setsize={activeMessages.length}
-            aria-posinset={index + 1}
-          />
-        ))}
+        <div
+          className="p-4 space-y-4"
+          role="log"
+          aria-label={`${isAssistantMode ? 'Assistant conversation' : 'Chat'} messages`}
+          aria-live={isAssistantMode ? "polite" : "off"}
+          aria-atomic="false"
+        >
+          {activeMessages.map((message, index) => (
+            <ChatMessageComponent
+              key={message.id}
+              message={message}
+              isAIMode={isAssistantMode}
+              ownAddress={publicChatAddress}
+              clockTick={clockTick}
+              onOpenProfile={openProfile}
+              aria-setsize={activeMessages.length}
+              aria-posinset={index + 1}
+            />
+          ))}
+        </div>
       </div>
+
+      {/* Scrolled-up affordance: new arrivals used to be invisible. */}
+      {!stickToBottom && unseenCount > 0 && (
+        <Button
+          type="button"
+          size="touchCompact"
+          variant="secondary"
+          onClick={jumpToLatest}
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full shadow-[var(--shadow-raised)]"
+        >
+          {unseenCount === 1 ? '1 new message' : `${unseenCount} new messages`} ↓
+        </Button>
+      )}
+
+      {profileAddress && (
+        <ChatProfileDialog
+          address={profileAddress}
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setProfileAddress(null);
+          }}
+        />
+      )}
     </div>
   );
 }

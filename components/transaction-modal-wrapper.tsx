@@ -17,7 +17,14 @@ export function TransactionModalWrapper({ className }: { className?: string }) {
 
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
+
+      // Scope everything to the EIK modal subtree first: this used to inspect
+      // every click on the page, so any app element whose class happened to
+      // contain a matching substring could trigger a spurious close.
+      if (!target.closest('[class*="transaction-modal" i], [class*="TransactionModal" i]')) {
+        return;
+      }
+
       // Only look for explicit close button indicators - be very specific
       // Don't match buttons that might be confirm/action buttons
       const closeButton = target.closest(

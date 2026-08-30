@@ -25,7 +25,7 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { Plant } from '@/lib/types';
 import { formatTokenAmount } from '@/lib/utils';
 import Image from 'next/image';
-import { useEffect,useState } from 'react';
+import { useEffect,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
 
@@ -38,6 +38,7 @@ interface EditPlantNameProps {
 
 const PLANT_NAME_RULE = ASSET_NAME_RULES.plant;
 const WEI_PER_TOKEN = BigInt('1000000000000000000');
+const SUCCESS_AUTO_CLOSE_MS = 1000;
 const FALLBACK_NAME_CHANGE_COST_WEI = BigInt(DEFAULT_PLANT_NAME_CHANGE_COST_SEED) * WEI_PER_TOKEN;
 const renamePanelClassName =
   "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
@@ -57,6 +58,7 @@ export function EditPlantName({
   const [isOpen, setIsOpen] = useState(false);
   const [newName, setNewName] = useState(plant.name || '');
   const [isTransactionPending, setIsTransactionPending] = useState(false);
+  const autoCloseTimerRef = useRef<number | null>(null);
   const [nameChangeCostWei, setNameChangeCostWei] = useState<bigint>(FALLBACK_NAME_CHANGE_COST_WEI);
 
   // ETH Mode state
@@ -68,12 +70,35 @@ export function EditPlantName({
   // Check if this plant belongs to the current user
   const isOwnedByUser = address && plant.owner.toLowerCase() === address.toLowerCase();
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens. The pending flag MUST reset too: it was only
+  // cleared in the success/error handlers, so closing mid-transaction left
+  // canSubmit false forever and the dialog dead-ended on reopen.
   useEffect(() => {
     if (isOpen) {
       setNewName(plant.name || '');
+      setIsTransactionPending(false);
     }
   }, [isOpen, plant.name]);
+
+  // Cancel any pending auto-close on unmount (and clear before scheduling a new
+  // one) so a stale timer can't force-close a freshly reopened dialog.
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimerRef.current !== null) {
+        window.clearTimeout(autoCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleAutoClose = () => {
+    if (autoCloseTimerRef.current !== null) {
+      window.clearTimeout(autoCloseTimerRef.current);
+    }
+    autoCloseTimerRef.current = window.setTimeout(() => {
+      autoCloseTimerRef.current = null;
+      setIsOpen(false);
+    }, SUCCESS_AUTO_CLOSE_MS);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -156,9 +181,7 @@ export function EditPlantName({
     window.dispatchEvent(new Event('balances:refresh'));
 
     // Close dialog after a short delay to show success state
-    setTimeout(() => {
-      setIsOpen(false);
-    }, 1000);
+    scheduleAutoClose();
   };
 
   const handleError = (error: UntypedValue) => {
@@ -251,7 +274,7 @@ export function EditPlantName({
                   onNameChanged(plant.id, newName.trim());
                 }
                 window.dispatchEvent(new Event('balances:refresh'));
-                setTimeout(() => setIsOpen(false), 1000);
+                scheduleAutoClose();
               }}
               onError={(error) => {
                 console.error('Name change transaction failed:', error);
@@ -279,18 +302,17 @@ export function EditPlantName({
               disabled={!isNameValid || isTransactionPending || !canAffordNameChange}
             />
           ) : canSubmit ? (
-            <div onClick={handleTransactionStart}>
-              <PlantNameTransaction
-                plantId={plant.id}
-                newName={newName.trim()}
-                onSuccess={handleSuccess}
-                onError={handleError}
-                buttonText={nameChangeCostWei > BigInt(0) ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)` : 'Change Name (free)'}
-                buttonClassName="w-full"
-                disabled={!canSubmit}
-                hideLabel
-              />
-            </div>
+            <PlantNameTransaction
+              plantId={plant.id}
+              newName={newName.trim()}
+              onSuccess={handleSuccess}
+              onError={handleError}
+              onButtonClick={handleTransactionStart}
+              buttonText={nameChangeCostWei > BigInt(0) ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)` : 'Change Name (free)'}
+              buttonClassName="w-full"
+              disabled={!canSubmit}
+              hideLabel
+            />
           ) : (
             <Button
               disabled

@@ -7,34 +7,44 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import Image from "next/image";
 import type { SyntheticEvent } from "react";
 
+/*
+ * No manual image preloading here any more: the old `new window.Image()` pass
+ * requested the RAW /tutorial/*.png files (0.4-0.6MB each) while the rendered
+ * next/image below requests optimized /_next/image URLs — so the "preload"
+ * warmed nothing and doubled ~1MB of downloads on every new user's first
+ * screen. next/image's own `preload` on the current slide is sufficient.
+ */
 function Art({ type }: { type?: string }) {
   if (!type) return null;
   const map: Record<string, { src: string; alt: string }> = {
-    "token-flow": { src: "/tutorial/swap.png", alt: "Swap ETH to SEED" },
-    "mint-plant": { src: "/tutorial/mint-plant.png", alt: "Mint and feed plant" },
-    "ptstod": { src: "/tutorial/ptstod.png", alt: "PTS and TOD" },
-    "plant-items": { src: "/tutorial/plant-items.png", alt: "Plant Items Marketplace" },
-    "attack": { src: "/tutorial/attack.png", alt: "Attack rules" },
-    "land": { src: "/tutorial/mint-land.png", alt: "Mint land" },
-    "buildings": { src: "/tutorial/buildings.png", alt: "Buildings production" },
-    "staking": { src: "/tutorial/stake.png", alt: "Staking to earn LEAF" },
-    "chat": { src: "/tutorial/chat.png", alt: "Chat and AI assistant" },
-    "base": { src: "/tutorial/based.png", alt: "Use Smart Wallet in the Base app" },
-    "tasks": { src: "/tutorial/tasks.png", alt: "Streaks & Farmer's Tasks" },
+    "token-flow": { src: "/tutorial/swap.webp", alt: "Swap ETH to SEED" },
+    "mint-plant": { src: "/tutorial/mint-plant.webp", alt: "Mint and feed plant" },
+    "ptstod": { src: "/tutorial/ptstod.webp", alt: "PTS and TOD" },
+    "plant-items": { src: "/tutorial/plant-items.webp", alt: "Plant Items Marketplace" },
+    "attack": { src: "/tutorial/attack.webp", alt: "Attack rules" },
+    "land": { src: "/tutorial/mint-land.webp", alt: "Mint land" },
+    "buildings": { src: "/tutorial/buildings.webp", alt: "Buildings production" },
+    "staking": { src: "/tutorial/stake.webp", alt: "Staking to earn LEAF" },
+    "chat": { src: "/tutorial/chat.webp", alt: "Chat and AI assistant" },
+    "base": { src: "/tutorial/based.webp", alt: "Use Smart Wallet in the Base app" },
+    "tasks": { src: "/tutorial/tasks.webp", alt: "Streaks & Farmer's Tasks" },
   };
   const art = map[type];
   if (!art) return null;
   return (
     <div key={type} className="w-full flex items-center justify-center">
-      <div className="aspect-[16/10] w-[90%] max-w-[360px] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/70 shadow-[var(--shadow-hairline)]">
+      <div className="aspect-[16/10] w-[90%] max-w-[360px] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/70 shadow-[var(--shadow-hairline)]">
+        {/* No transition-opacity: the element is keyed by src, so it remounts per
+            slide and a transition can never interpolate — it was inert. */}
         <Image
           key={art.src}
           src={art.src}
           alt={art.alt}
           width={720}
           height={450}
+          sizes="(max-width: 640px) 90vw, 360px"
           preload
-          className="w-full h-full object-cover transition-opacity duration-300"
+          className="w-full h-full object-cover"
           onError={(event: SyntheticEvent<HTMLImageElement>) => {
             try {
               event.currentTarget.style.display = "none";
@@ -49,48 +59,19 @@ function Art({ type }: { type?: string }) {
 export default function SlideshowModal() {
   const { open, index, slides, next, prev, close } = useSlideshow();
 
-  // Preload neighbor slide images for smoother transitions
-  useEffect(() => {
-    if (!open) return;
-    const map: Record<string, string> = {
-      "token-flow": "/tutorial/swap.png",
-      "mint-plant": "/tutorial/mint-plant.png",
-      "ptstod": "/tutorial/ptstod.png",
-      "plant-items": "/tutorial/plant-items.png",
-      "attack": "/tutorial/attack.png",
-      "land": "/tutorial/mint-land.png",
-      "buildings": "/tutorial/buildings.png",
-      "staking": "/tutorial/stake.png",
-      "chat": "/tutorial/chat.png",
-      "base": "/tutorial/based.png",
-      "tasks": "/tutorial/tasks.png",
-    };
-    const preload = (art?: string) => {
-      const src = art ? map[art] : undefined;
-      if (!src) return;
-      const img = new window.Image();
-      img.src = src;
-    };
-    const prevSlide = slides[index - 1];
-    const nextSlide = slides[index + 1];
-    preload(prevSlide?.art);
-    preload(nextSlide?.art);
-  }, [open, index, slides]);
+  /*
+   * Arrow-key navigation only. Escape is deliberately NOT handled here: Radix
+   * already routes Escape through onOpenChange -> close(), and the old window
+   * listener made close() run twice per press (double-persisting completion).
+   */
+  useEffectArrowKeys(open, next, prev);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") next();
-      if (e.key === "ArrowLeft") prev();
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, next, prev, close]);
-
-  if (!open) return null;
+  // No `if (!open) return null` before the Dialog: unmounting in the same
+  // commit that open flips false skipped Radix's exit animation and the
+  // tutorial snapped shut. Radix keeps the closed dialog out of the tree.
   const slide = slides[index];
   const isLast = index === slides.length - 1;
+  if (!slide) return null;
 
   return (
     <Dialog
@@ -106,7 +87,7 @@ export default function SlideshowModal() {
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--border-strong)/0.42)] p-0 sm:p-0 shadow-[var(--shadow-modal)]"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--edge-strong))] p-0 sm:p-0 shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
@@ -123,22 +104,28 @@ export default function SlideshowModal() {
           <Button variant="ghost" size="default" onClick={close} className="px-3 text-sm text-muted-foreground hover:text-foreground">Skip</Button>
         </div>
 
-        {/* Body */}
-        <div className="surface-scroll-fade max-h-[65vh] overflow-y-auto p-6 space-y-5">
+        {/* Body (dvh, matching the panel's own cap — vh over-measures on mobile) */}
+        <div className="surface-scroll-fade max-h-[65dvh] overflow-y-auto p-6 space-y-5">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>
           </div>
           <Art type={slide.art} />
-          <div className="text-foreground transition-opacity duration-300">{slide.content}</div>
+          <div className="text-foreground">{slide.content}</div>
         </div>
 
         {/* Footer */}
         <div className="surface-footer-divider dialog-footer-surface px-4 py-3 safe-area-bottom">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
+              {/* Explicit property list (was transition-all with default easing). */}
               {slides.map((_, i) => (
-                <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? "w-6 bg-primary" : "w-2 bg-muted"}`} />
+                <span
+                  key={i}
+                  className={`h-1.5 rounded-full transition-[width,background-color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] ${
+                    i === index ? "w-6 bg-primary" : "w-2 bg-muted"
+                  }`}
+                />
               ))}
             </div>
             <div className="flex items-center gap-2">
@@ -154,4 +141,16 @@ export default function SlideshowModal() {
       </DialogContent>
     </Dialog>
   );
+}
+
+function useEffectArrowKeys(open: boolean, next: () => void, prev: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, next, prev]);
 }

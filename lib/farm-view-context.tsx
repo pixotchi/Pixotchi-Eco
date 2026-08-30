@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 
+import { useIsSolanaWallet } from '@/components/solana';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
 
 export type DashboardView = 'plants' | 'lands';
@@ -57,6 +58,17 @@ export function FarmViewProvider({
     parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
     serialize: (value) => (value === 'plant' ? null : value),
   });
+
+  // Land minting is EVM-only and the shared toggle is hidden for Solana wallets
+  // on the Mint tab, so a lingering mintType of 'land' (via ?mintType=land or a
+  // mid-session wallet switch) left the tab on a permanent "not supported"
+  // panel with no control to escape it. Coerce back to the supported type.
+  const isSolana = useIsSolanaWallet();
+  useEffect(() => {
+    if (isSolana && mintType === 'land') {
+      setMintType('plant');
+    }
+  }, [isSolana, mintType, setMintType]);
 
   const value = useMemo(
     () => ({ dashboardView, setDashboardView, mintType, setMintType }),

@@ -347,7 +347,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="soft" className="w-[min(94vw,28rem)] max-w-md min-[54rem]:w-[min(92vw,64rem)] min-[54rem]:max-w-5xl">
+      <DialogContent surface="soft" className="w-[min(94vw,28rem)] max-w-md tablet:w-[min(92vw,64rem)] tablet:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Marketplace (Experimental)</DialogTitle>
           <DialogDescription>
@@ -384,7 +384,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             </div>
 
             {/* Mobile: keep orders (asks+bids) together, then trade panel */}
-            <div className="space-y-4 min-[54rem]:hidden">
+            <div className="space-y-4 tablet:hidden">
               <div className={cn(marketplacePanelClassName, "overflow-hidden")}>
                 {/* Asks header and list */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
@@ -531,7 +531,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             </div>
 
             {/* Desktop/tablet: three-column layout */}
-            <div className="hidden items-start gap-4 min-[54rem]:grid min-[54rem]:grid-cols-3">
+            <div className="hidden items-start gap-4 tablet:grid tablet:grid-cols-3">
               {/* Asks */}
                 <div className={cn(marketplacePanelClassName, "overflow-hidden", focusedSide === 'asks' && "ring-1 ring-destructive/50")}>
                 <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
@@ -562,7 +562,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className={cn(marketplacePaddedPanelClassName, "min-h-[18rem] space-y-4 min-[54rem]:max-h-[22rem] min-[54rem]:overflow-y-auto")}>
+              <div className={cn(marketplacePaddedPanelClassName, "min-h-[18rem] space-y-4 tablet:max-h-[22rem] tablet:overflow-y-auto")}>
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
                   <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>

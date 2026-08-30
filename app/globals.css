@@ -2,9 +2,7 @@
 /* Ensure Tailwind v4 sees all class usage across our project on Vercel */
 @source "../components/**/*.{ts,tsx}";
 @source "../app/**/*.{ts,tsx}";
-@source "../pages/**/*.{ts,tsx}";
 @source "../lib/**/*.{ts,tsx}";
-@source "../**/*.mdx";
 @plugin "tailwindcss-animate";
 
 /*
@@ -83,6 +81,11 @@
   /* 1280px */
   --breakpoint-2xl: 96rem;
   /* 1536px */
+  /* The app's single most-used responsive gate (the tablet/two-column switch).
+     Previously written as min-[54rem] at 150+ call sites, which made it
+     impossible to retune safely. */
+  --breakpoint-tablet: 54rem;
+  /* 864px */
 }
 
 @layer base {
@@ -121,17 +124,26 @@
      * Use these variables instead of arbitrary z-index values to maintain a predictable stacking order.
      */
     --z-base: 0;
+    /* Decorative full-screen layers (snow). Below the sticky chrome so ambient
+       effects never paint over the header. */
+    --z-ambient: 1050;
     --z-sticky: 1100;
+    /* App-level banners (update prompt): above chrome, below modal overlays so a
+       dialog always wins the layer fight deterministically. */
+    --z-banner: 1150;
+    --z-overlay: 1200;
+    --z-modal: 1210;
+    --z-modal-nested: 1300;
     /* Above --z-modal-nested: a DropdownMenu opened inside a Dialog portals to
      * document.body as a sibling of the dialog, so it must outrank it or it
      * renders behind. Still below --z-transaction. */
     --z-dropdown: 1350;
-    --z-overlay: 1200;
-    --z-modal: 1210;
-    --z-modal-nested: 1300;
     --z-transaction: 3000;
     --z-toast: 3100;
     --z-tooltip: 3200;
+    /* Full-screen takeovers (Secret Garden). Above everything, including toasts,
+       for the duration of the takeover only. */
+    --z-takeover: 3300;
   }
 
   /* Shared shape, motion, depth, state, and utility gradients. */
@@ -162,10 +174,10 @@
     --status-dying: 356 72% 48%;
     --status-dead: 228 10% 42%;
     --status-unknown: 220 14% 39%;
-    --header-control-bg: var(--secondary) / 0.78;
-    --header-control-hover: var(--secondary) / 0.94;
-    --header-control-border: var(--border-strong) / 0.32;
-    --header-control-border-hover: var(--primary) / 0.44;
+    /* Canonical edge weights. The same panel/control edge used to ship at ten
+       different alphas across two base tokens; these two carry the roles. */
+    --edge-panel: var(--border-strong) / 0.34;
+    --edge-strong: var(--border-strong) / 0.42;
     --nav-hover-bg: var(--primary) / 0.10;
     --nav-active-bg: var(--primary) / 0.18;
     /*
@@ -184,14 +196,20 @@
     --gradient-selection: linear-gradient(180deg, hsl(var(--primary) / 0.22) 0%, hsl(var(--primary) / 0.1) 100%);
     --gradient-control-surface: var(--gradient-surface);
     --gradient-control-track: linear-gradient(180deg, hsl(var(--card) / 0.78), hsl(var(--secondary) / 0.58));
-    --gradient-scroll-surface: linear-gradient(180deg, hsl(var(--background) / 0), hsl(var(--background) / 0));
+    /* Written entirely in color-mix over --card/--background/--secondary so it
+       resolves correctly in all eight themes. It used to be a transparent no-op
+       in light and dark only, with a real surface in the six colourful themes. */
+    --gradient-scroll-surface: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 32%, hsl(var(--background))) 0%, hsl(var(--secondary) / 0.62) 100%);
+    /* Pure functions of --primary — one declaration serves all eight themes.
+       (These were previously duplicated byte-identically in every theme block.) */
+    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
+    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
+    --gradient-solana: linear-gradient(135deg, hsl(265 70% 54%), hsl(184 76% 42%));
     --shadow-nav-hover: inset 0 1px 0 hsl(0 0% 100% / 0.18), 0 1px 2px hsl(var(--foreground) / 0.045);
     --shadow-nav-active: inset 0 1px 0 hsl(0 0% 100% / 0.22), inset 0 -1px 0 hsl(var(--primary) / 0.12), 0 10px 22px -18px hsl(var(--primary) / 0.65);
     --gradient-success: linear-gradient(180deg, hsl(var(--success) / 0.94) 0%, hsl(var(--success)) 100%);
     --gradient-warning: linear-gradient(180deg, hsl(var(--warning) / 0.94) 0%, hsl(var(--warning)) 100%);
     --gradient-danger: linear-gradient(180deg, hsl(var(--destructive) / 0.94) 0%, hsl(var(--destructive)) 100%);
-    --gradient-value: linear-gradient(180deg, hsl(var(--value) / 0.94) 0%, hsl(var(--value)) 100%);
-    --gradient-prize: linear-gradient(180deg, hsl(var(--warning) / 0.22), hsl(var(--warning) / 0.08));
     --gradient-creature-stage: radial-gradient(circle at 50% 34%, hsl(var(--scene-glow) / 0.62) 0%, hsl(var(--scene-glow) / 0.24) 38%, hsl(var(--scene-floor) / 0.66) 76%, hsl(var(--card) / 0.88) 100%);
   }
 
@@ -236,10 +254,6 @@
     --scene-floor: 166 58% 90%;
     --chromatic-layer-surface: 210 62% 92%;
     --chromatic-layer-highlight: 210 72% 95%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-solana: linear-gradient(135deg, hsl(265 70% 54%), hsl(184 76% 42%));
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(210 58% 86% / 0.92), hsl(210 54% 81% / 0.76));
     --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(210 54% 84% / 0.36) 0%, hsl(210 55% 78% / 0) 34%), linear-gradient(180deg, hsl(210 55% 78%) 0%, hsl(210 52% 80%) 44%, hsl(210 48% 85%) 100%);
     --gradient-dialog: linear-gradient(180deg, hsl(210 50% 88%) 0%, hsl(210 48% 86%) 52%, hsl(210 46% 82%) 100%);
@@ -272,7 +286,6 @@
     --warning-foreground: 34 50% 13%;
     --warning-strong: 38 74% 27%;
     --info-foreground: 0 0% 98%;
-    --gradient-solana: linear-gradient(135deg, hsl(265 70% 54%), hsl(184 76% 42%));
   }
 
   .green {
@@ -297,9 +310,6 @@
     --scene-floor: 151 52% 86%;
     --chromatic-layer-surface: 116 30% 90%;
     --chromatic-layer-highlight: 112 34% 92%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(132 54% 91% / 0.92), hsl(138 42% 80% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(88 74% 84% / 0.72) 0%, hsl(88 74% 84% / 0) 36%), linear-gradient(180deg, hsl(137 44% 83%) 0%, hsl(122 42% 87%) 46%, hsl(126 38% 91%) 100%);
   }
@@ -329,9 +339,6 @@
     --scene-floor: 48 78% 88%;
     --chromatic-layer-surface: 46 56% 90%;
     --chromatic-layer-highlight: 48 64% 92%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(47 90% 91% / 0.92), hsl(42 72% 80% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(38 96% 82% / 0.76) 0%, hsl(38 96% 82% / 0) 36%), linear-gradient(180deg, hsl(45 90% 82%) 0%, hsl(43 76% 84%) 48%, hsl(48 70% 92%) 100%);
   }
@@ -356,13 +363,11 @@
     --divider: 352 26% 45%;
     --input: 352 26% 48%;
     --ring: 348 62% 36%;
+    --selected-control-foreground: 348 62% 31%; /* primary darkened ~5pts, mirroring the light/green/yellow fix */
     --scene-glow: 24 74% 82%;
     --scene-floor: 354 48% 89%;
     --chromatic-layer-surface: 12 32% 91%;
     --chromatic-layer-highlight: 8 38% 93%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(8 56% 94% / 0.92), hsl(354 34% 82% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(24 70% 82% / 0.54) 0%, hsl(24 70% 82% / 0) 36%), linear-gradient(180deg, hsl(356 42% 86%) 0%, hsl(354 34% 88%) 48%, hsl(8 38% 92%) 100%);
   }
@@ -387,13 +392,11 @@
     --divider: 326 28% 45%;
     --input: 326 28% 49%;
     --ring: 328 68% 36%;
+    --selected-control-foreground: 328 68% 31%; /* primary darkened ~5pts, mirroring the light/green/yellow fix */
     --scene-glow: 276 66% 84%;
     --scene-floor: 326 56% 90%;
     --chromatic-layer-surface: 326 34% 91%;
     --chromatic-layer-highlight: 326 44% 93%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(326 72% 93% / 0.92), hsl(326 48% 81% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(276 64% 86% / 0.62) 0%, hsl(276 64% 86% / 0) 36%), linear-gradient(180deg, hsl(326 54% 85%) 0%, hsl(326 48% 87%) 48%, hsl(326 42% 92%) 100%);
   }
@@ -415,13 +418,11 @@
     --divider: 216 32% 45%;
     --input: 216 30% 48%;
     --ring: 219 78% 36%;
+    --selected-control-foreground: 219 78% 31%; /* primary darkened ~5pts, mirroring the light/green/yellow fix */
     --scene-glow: 188 76% 84%;
     --scene-floor: 216 60% 90%;
     --chromatic-layer-surface: 212 40% 91%;
     --chromatic-layer-highlight: 210 52% 93%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(213 78% 92% / 0.92), hsl(213 58% 80% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(188 76% 84% / 0.68) 0%, hsl(188 76% 84% / 0) 36%), linear-gradient(180deg, hsl(213 66% 84%) 0%, hsl(213 58% 86%) 48%, hsl(213 52% 92%) 100%);
   }
@@ -446,13 +447,11 @@
     --divider: 260 28% 45%;
     --input: 260 28% 49%;
     --ring: 263 72% 38%;
+    --selected-control-foreground: 263 72% 33%; /* primary darkened ~5pts, mirroring the light/green/yellow fix */
     --scene-glow: 294 62% 86%;
     --scene-floor: 258 54% 91%;
     --chromatic-layer-surface: 260 34% 91%;
     --chromatic-layer-highlight: 260 44% 93%;
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
-    --gradient-nav-active: linear-gradient(180deg, hsl(var(--primary) / 0.28) 0%, hsl(var(--primary) / 0.18) 52%, hsl(var(--primary) / 0.1) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(260 68% 93% / 0.92), hsl(260 46% 82% / 0.74));
     --gradient-content-well: radial-gradient(circle at 50% -14%, hsl(294 62% 86% / 0.62) 0%, hsl(294 62% 86% / 0) 36%), linear-gradient(180deg, hsl(260 50% 86%) 0%, hsl(260 46% 88%) 48%, hsl(260 44% 92%) 100%);
   }
@@ -468,7 +467,6 @@
     --gradient-surface: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 38%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 40%, hsl(var(--secondary))) 52%, hsl(var(--secondary) / 0.82) 100%);
     --gradient-surface-strong: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--background))) 0%, color-mix(in hsl, hsl(var(--card)) 34%, hsl(var(--secondary))) 100%);
     --gradient-panel: linear-gradient(180deg, color-mix(in hsl, hsl(var(--secondary)) 82%, hsl(var(--background))) 0%, hsl(var(--muted) / 0.8) 100%);
-    --gradient-scroll-surface: linear-gradient(180deg, color-mix(in hsl, hsl(var(--card)) 32%, hsl(var(--background))) 0%, hsl(var(--secondary) / 0.62) 100%);
   }
 
   /* Dark mirrors light's shade-selection pattern around #2D3C53. */
@@ -519,10 +517,6 @@
     --status-dying: 356 78% 66%;
     --status-dead: 220 12% 60%;
     --status-unknown: 218 12% 66%;
-    --header-control-bg: 216 32% 38% / 0.92;
-    --header-control-hover: 216 34% 43% / 0.96;
-    --header-control-border: 216 24% 64% / 0.52;
-    --header-control-border-hover: var(--primary) / 0.48;
     --nav-hover-bg: var(--primary) / 0.16;
     --nav-active-bg: var(--primary) / 0.24;
     --gradient-nav-hover: linear-gradient(180deg, hsl(var(--primary) / 0.22) 0%, hsl(216 34% 40% / 0.72) 54%, hsl(216 30% 35% / 0.62) 100%);
@@ -538,9 +532,7 @@
     --shadow-raised: var(--shadow-contact), 0 1px 2px hsl(218 45% 8% / 0.34), 0 22px 48px -30px hsl(218 45% 8% / 0.72);
     --shadow-modal: 0 28px 90px -42px hsl(218 45% 6% / 0.82);
     --shadow-glow: 0 18px 42px -28px hsl(var(--primary) / 0.78);
-    --gradient-special: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-solana: linear-gradient(135deg, hsl(265 80% 66%), hsl(184 82% 54%));
-    --gradient-control-active: linear-gradient(180deg, color-mix(in hsl, hsl(var(--primary)) 86%, white) 0%, hsl(var(--primary)) 52%, color-mix(in hsl, hsl(var(--primary)) 86%, black) 100%);
     --gradient-control-surface: linear-gradient(180deg, hsl(216 32% 43% / 0.98) 0%, hsl(216 31% 39% / 0.94) 54%, hsl(216 30% 34% / 0.88) 100%);
     --gradient-app-chrome: linear-gradient(180deg, hsl(216 30% 33% / 0.94), hsl(216 28% 28% / 0.82));
     --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(204 92% 40% / 0.24) 0%, hsl(216 30% 25% / 0) 34%), linear-gradient(180deg, hsl(216 30% 25%) 0%, hsl(216 29% 27%) 44%, hsl(216 30% 29%) 100%);
@@ -551,45 +543,6 @@
     --gradient-creature-stage: radial-gradient(circle at 50% 34%, hsl(var(--scene-glow) / 0.34) 0%, hsl(var(--scene-glow) / 0.14) 38%, hsl(var(--scene-floor) / 0.82) 76%, hsl(var(--card) / 0.94) 100%);
   }
 
-  /* Tailwind v4 fallback for custom color utilities when @theme is not processed. */
-  :root,
-  .light,
-  .dark,
-  .green,
-  .yellow,
-  .red,
-  .pink,
-  .blue,
-  .violet {
-    --color-background: hsl(var(--background));
-    --color-foreground: hsl(var(--foreground));
-    --color-card: hsl(var(--card));
-    --color-card-foreground: hsl(var(--card-foreground));
-    --color-popover: hsl(var(--popover));
-    --color-popover-foreground: hsl(var(--popover-foreground));
-    --color-primary: hsl(var(--primary));
-    --color-primary-foreground: hsl(var(--primary-foreground));
-    --color-secondary: hsl(var(--secondary));
-    --color-secondary-foreground: hsl(var(--secondary-foreground));
-    --color-muted: hsl(var(--muted));
-    --color-muted-foreground: hsl(var(--muted-foreground));
-    --color-accent: hsl(var(--accent));
-    --color-accent-foreground: hsl(var(--accent-foreground));
-    --color-destructive: hsl(var(--destructive));
-    --color-destructive-foreground: hsl(var(--destructive-foreground));
-    --color-success: hsl(var(--success));
-    --color-success-foreground: hsl(var(--success-foreground));
-    --color-warning: hsl(var(--warning));
-    --color-warning-foreground: hsl(var(--warning-foreground));
-    --color-info: hsl(var(--info));
-    --color-info-foreground: hsl(var(--info-foreground));
-    --color-value: hsl(var(--value));
-    --color-border: hsl(var(--border));
-    --color-border-strong: hsl(var(--border-strong));
-    --color-divider: hsl(var(--divider));
-    --color-input: hsl(var(--input));
-    --color-ring: hsl(var(--ring));
-  }
 }
 
 /* Theme-specific styles will be loaded dynamically */
@@ -651,10 +604,19 @@
     cursor: pointer;
   }
 
-  /* Respect user preference to reduce motion */
+  /*
+   * Respect the OS reduced-motion preference at FIRST PAINT. The .motion-off
+   * class below is added from a useEffect, so on its own every animation ran at
+   * full speed until hydration for reduced-motion users. This block mirrors it
+   * natively so the preference applies before any JS runs.
+   */
   @media (prefers-reduced-motion: reduce) {
-    body {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
       transition: none !important;
+      scroll-behavior: auto !important;
     }
   }
 
@@ -665,6 +627,22 @@
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * Keep progress spinners alive under reduced motion. A frozen spinner glyph is
+   * the app's only "in progress" signal in many flows, and a slow continuous
+   * rotation is generally acceptable under reduced motion. Higher specificity +
+   * equal importance beats the blanket kill switches above.
+   */
+  .motion-off .animate-spin {
+    animation: spin 1.5s linear infinite !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-spin {
+      animation: spin 1.5s linear infinite !important;
+    }
   }
 
   .performance-mode {
@@ -686,7 +664,6 @@
     --gradient-control-track: none;
     --gradient-dialog: none;
     --gradient-panel: none;
-    --gradient-prize: none;
     --gradient-scroll-surface: none;
     --gradient-selection: none;
     --gradient-special: none;
@@ -695,7 +672,6 @@
     --gradient-success: none;
     --gradient-warning: none;
     --gradient-danger: none;
-    --gradient-value: none;
   }
 
   .performance-mode *,
@@ -769,17 +745,6 @@
     min-height: 100vh;
     min-height: 100svh;
     min-height: 100dvh;
-  }
-
-  /* Keyboard-aware adjustments */
-  .keyboard-visible .fixed-bottom {
-    transform: translateY(calc(-1 * max(1rem, var(--safe-area-inset-bottom), var(--browser-safe-area-bottom))));
-    transition: transform var(--motion-modal) var(--ease-standard);
-  }
-
-  .keyboard-hidden .fixed-bottom {
-    transform: translateY(0);
-    transition: transform var(--motion-modal) var(--ease-standard);
   }
 
   /* Improve Coinbase Sans rendering for headers */
@@ -903,11 +868,6 @@
     mask-size: 100% 100%;
   }
 
-  .surface-scroll-fade-soft {
-    --scroll-fade-top: 0.625rem;
-    --scroll-fade-bottom: 1rem;
-  }
-
   .surface-scroll-area[data-scroll-fade-top="true"],
   .surface-scroll-fade[data-scroll-fade-top="true"] {
     --scroll-fade-top-active: var(--scroll-fade-top);
@@ -953,47 +913,7 @@
     background-image: url("/icons/casinobj-bg.webp");
   }
 
-  /* Base Loader Animations - Sequential Box Appearance */
-  .base-box-1 {
-    fill: hsl(var(--primary));
-    opacity: 0;
-    animation: base-load 1.2s ease-in-out infinite;
-    animation-delay: 0s;
   }
-
-  .base-box-2 {
-    fill: hsl(var(--primary));
-    opacity: 0;
-    animation: base-load 1.2s ease-in-out infinite;
-    animation-delay: 0.3s;
-  }
-
-  .base-box-3 {
-    fill: hsl(var(--primary));
-    opacity: 0;
-    animation: base-load 1.2s ease-in-out infinite;
-    animation-delay: 0.6s;
-  }
-
-  .base-box-4 {
-    fill: hsl(var(--primary));
-    opacity: 0;
-    animation: base-load 1.2s ease-in-out infinite;
-    animation-delay: 0.9s;
-  }
-
-  /* Base Loading Logo - Simple static primary color */
-  .base-loading-box-1,
-  .base-loading-box-2,
-  .base-loading-box-3,
-  .base-loading-box-4 {
-    fill: hsl(var(--primary));
-  }
-
-
-
-
-}
 
 /* In-app browser touch optimizations */
 @layer utilities {
@@ -1002,17 +922,13 @@
     letter-spacing: 0;
   }
 
-  :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .dark :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .green :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .yellow :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .red :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .pink :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .blue :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface),
-  .violet :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface) {
+  /* The eight theme branches this used to enumerate covered every possible state,
+     so the union was equivalent to the plain selector. !important is retained: it is
+     what lets this surface beat the bg utilities on the same elements. */
+  :is(.marketplace-detail-card, .chromatic-white-surface, .chat-white-surface) {
     background-color: hsl(var(--chromatic-layer-surface)) !important;
     background-image: linear-gradient(180deg, hsl(var(--chromatic-layer-highlight)) 0%, hsl(var(--chromatic-layer-surface)) 100%) !important;
-    border-color: hsl(var(--border-strong) / 0.34);
+    border-color: hsl(var(--edge-panel));
     box-shadow: var(--surface-highlight), var(--shadow-raised);
   }
 
@@ -1049,19 +965,13 @@
     --value: 188 88% 81%;
   }
 
-  :root:not(.dark):not(.green):not(.yellow):not(.red):not(.pink):not(.blue):not(.violet) .chromatic-white-inner-glow::before,
-  .dark .chromatic-white-inner-glow::before,
-  .green .chromatic-white-inner-glow::before,
-  .yellow .chromatic-white-inner-glow::before,
-  .red .chromatic-white-inner-glow::before,
-  .pink .chromatic-white-inner-glow::before,
-  .blue .chromatic-white-inner-glow::before,
-  .violet .chromatic-white-inner-glow::before {
+  /* Unconditional across all themes (the branches covered every state). */
+  .chromatic-white-inner-glow::before {
     opacity: 0;
   }
 
   .surface-control {
-    border-color: hsl(var(--border-strong) / 0.34);
+    border-color: hsl(var(--edge-panel));
     background-color: hsl(var(--card) / 0.95);
     background-image: var(--gradient-control-surface);
     color: hsl(var(--foreground));
@@ -1127,7 +1037,7 @@
         color-mix(in hsl, hsl(var(--card)) 42%, hsl(var(--chromatic-layer-surface))) 50%,
         color-mix(in hsl, hsl(var(--secondary)) 52%, hsl(var(--chromatic-layer-surface))) 100%
       ) !important;
-    border-color: hsl(var(--border-strong) / 0.36);
+    border-color: hsl(var(--edge-panel));
     box-shadow:
       var(--surface-highlight),
       0 1px 1px hsl(var(--foreground) / 0.06),
@@ -1215,21 +1125,19 @@
     margin-bottom: max(0.25rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
   }
 
-  /* Top offset helper for fixed and floating UI */
-  .safe-area-top-margin {
-    margin-top: max(0.5rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
-  }
-
   /* Touch optimizations for buttons and interactive elements */
   button,
-  [role="button"],
-  .interactive {
+  [role="button"] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
   }
 
   /* Enhanced keyboard focus indicators */
+  /* Fallback focus ring for elements outside the design system. Components built
+     on the cva primitives set focus-visible:outline-none + their own ring, which
+     wins on specificity; this only catches bare [role="button"]s and inputs.
+     (No box-shadow here: it used to REPLACE the element's elevation shadow.) */
   button:focus-visible,
   [role="button"]:focus-visible,
   input:focus-visible,
@@ -1237,15 +1145,6 @@
   select:focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px hsl(var(--ring) / 0.2);
-  }
-
-  /* Keyboard navigation mode adjustments */
-  .keyboard-navigation button,
-  .keyboard-navigation [role="button"],
-  .keyboard-navigation .interactive {
-    /* Keep keyboard focus behavior consistent without changing visual density. */
-    touch-action: manipulation;
   }
 
   /* Removed: .tap-target-44 / .btn-compact / .btn-touch-compact. The three classes
@@ -1532,178 +1431,7 @@ button.profile-follow-button.follow-button p {
   margin: 0;
 }
 
-/* Tutorial art subtle float */
-@keyframes float-soft {
-  0% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-4px);
-  }
-
-  100% {
-    transform: translateY(0);
-  }
-}
-
-.tutorial-art {
-  animation: float-soft 4s ease-in-out infinite;
-}
-
 /* Port custom keyframes/utilities used by components to ensure v4 support */
-@keyframes accordion-down {
-  from {
-    height: 0
-  }
-
-  to {
-    height: var(--radix-accordion-content-height)
-  }
-}
-
-@keyframes accordion-up {
-  from {
-    height: var(--radix-accordion-content-height)
-  }
-
-  to {
-    height: 0
-  }
-}
-
-@keyframes fade-in {
-  0% {
-    opacity: 0
-  }
-
-  100% {
-    opacity: 1
-  }
-}
-
-@keyframes base-load {
-  0% {
-    opacity: 0
-  }
-
-  25% {
-    opacity: 1
-  }
-
-  75% {
-    opacity: 1
-  }
-
-  100% {
-    opacity: 0
-  }
-}
-
-@keyframes base-loading-colors {
-  0% {
-    fill: hsl(var(--primary))
-  }
-
-  12% {
-    fill: hsl(var(--secondary))
-  }
-
-  25% {
-    fill: hsl(var(--accent))
-  }
-
-  37% {
-    fill: hsl(var(--primary))
-  }
-
-  50% {
-    fill: hsl(var(--muted))
-  }
-
-  62% {
-    fill: hsl(var(--secondary))
-  }
-
-  75% {
-    fill: hsl(var(--accent))
-  }
-
-  87% {
-    fill: hsl(var(--primary))
-  }
-
-  100% {
-    fill: hsl(var(--primary))
-  }
-}
-
-/* Theme-independent vibrant color cycle for streak indicator */
-@keyframes streak-colors {
-  0% {
-    fill: #2563eb;
-  }
-
-  /* blue-600 */
-  12% {
-    fill: #10b981;
-  }
-
-  /* emerald-500 */
-  25% {
-    fill: #f59e0b;
-  }
-
-  /* amber-500 */
-  37% {
-    fill: #ef4444;
-  }
-
-  /* red-500 */
-  50% {
-    fill: #8b5cf6;
-  }
-
-  /* violet-500 */
-  62% {
-    fill: #06b6d4;
-  }
-
-  /* cyan-500 */
-  75% {
-    fill: #f43f5e;
-  }
-
-  /* rose-500 */
-  87% {
-    fill: #22c55e;
-  }
-
-  /* green-500 */
-  100% {
-    fill: #2563eb;
-  }
-
-  /* blue-600 */
-}
-
-@keyframes theme-transition {
-  0% {
-    opacity: 1;
-    transform: scale(1)
-  }
-
-  50% {
-    opacity: .8;
-    transform: scale(1.02)
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1)
-  }
-}
-
 @keyframes tab-content-in {
   0% {
     opacity: 0;
@@ -1723,16 +1451,6 @@ button.profile-follow-button.follow-button p {
 
   to {
     transform: rotate(360deg)
-  }
-}
-
-@keyframes coin-flip {
-  0% {
-    transform: rotateY(0deg);
-  }
-
-  100% {
-    transform: rotateY(360deg);
   }
 }
 
@@ -1833,44 +1551,8 @@ button.profile-follow-button.follow-button p {
   animation: deal-card 0.4s ease-out forwards;
 }
 
-@utility animate-accordion-down {
-  animation: accordion-down .2s ease-out;
-}
-
-@utility animate-accordion-up {
-  animation: accordion-up .2s ease-out;
-}
-
-@utility animate-fade-in {
-  animation: fade-in .3s ease-in-out;
-}
-
 @utility animate-tab-content-in {
   animation: tab-content-in var(--motion-standard) var(--ease-standard);
-}
-
-@utility animate-base-load {
-  animation: base-load 1.2s ease-in-out infinite;
-}
-
-@utility animate-base-loading-colors {
-  animation: base-loading-colors 1.2s linear infinite;
-}
-
-@utility animate-theme-transition {
-  animation: theme-transition .3s ease-in-out;
-}
-
-@utility animate-streak-colors {
-  animation: streak-colors 1.2s linear infinite;
-}
-
-@utility animate-spin-slow {
-  animation: spin-slow 5s linear infinite;
-}
-
-@utility animate-coin-flip {
-  animation: coin-flip 3s linear infinite;
 }
 
 /*
@@ -1933,14 +1615,14 @@ button.profile-follow-button.follow-button p {
   transition-timing-function: ease-in-out;
 }
 
-.login-theme-cycle :is(button, [role="button"], .surface-control, .primary-control) {
+.login-theme-cycle :is(button, [role="button"], .surface-control) {
   background-image: none !important;
 }
 
 .login-theme-cycle .login-web-app-alert {
   background-color: hsl(var(--card) / 0.86);
   background-image: none !important;
-  border-color: hsl(var(--border-strong) / 0.34);
+  border-color: hsl(var(--edge-panel));
 }
 
 .login-theme-background {
@@ -1975,17 +1657,4 @@ button.profile-follow-button.follow-button p {
   }
 }
 
-/* Fix for React 19 warning: Prevent mixing background shorthand with backgroundSize */
-/* This warning comes from Privy's internal components setting both background shorthand */
-/* and backgroundSize separately during rerenders. This is a known Privy library issue. */
-/* The warning is harmless but annoying. We can't fix it without modifying Privy's code. */
-/* Note: This CSS rule attempts to mitigate but may not fully resolve the issue */
-[data-privy-root] span,
-[data-privy-root] div,
-[data-privy-root] button {
-  /* Use longhand properties to avoid conflicts with background shorthand */
-  /* This helps but won't completely eliminate the warning if Privy sets inline styles */
-  background-size: auto;
-  background-position: center;
-  background-repeat: no-repeat;
-}
+

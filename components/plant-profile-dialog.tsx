@@ -34,6 +34,12 @@ import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
 
 interface PlantProfileDialogProps {
+  /**
+   * Set when this dialog is opened from INSIDE another dialog (chat profile,
+   * map modal). Stacking used to piggyback on the visual `variant` prop, so any
+   * standalone wallet-variant render silently got nested z-indexes.
+   */
+  nested?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   plant: (Plant & { rank?: number }) | null;
@@ -58,6 +64,7 @@ export default function PlantProfileDialog({
   onOpenChange,
   plant,
   variant = 'plant',
+  nested = false,
   walletAddressOverride = null,
   walletNameOverride = null,
   primaryPlantLoading = false,
@@ -335,14 +342,16 @@ export default function PlantProfileDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          layer={isWalletVariant ? "nested" : "default"}
+          layer={nested ? "nested" : "default"}
           surface="soft"
           className="w-[min(94vw,27.5rem)] max-w-[27.5rem] !p-0"
         >
           <div className="surface-scroll-fade flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
             <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
-              <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              {/* pr-16 clears the primitive's absolute close button (which paints
+                  over x∈[right-3, right-3+44px]) — the EFP link used to sit under it. */}
+              <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pr-16 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 <span className="shrink-0 pt-2">Powered by:</span>
                 <button
                   type="button"

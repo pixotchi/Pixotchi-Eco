@@ -201,7 +201,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </Button>
         </div>
 
-        <StandardContainer className="chromatic-white-surface space-y-3 overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-3 shadow-[var(--shadow-raised)]">
+        <StandardContainer className="chromatic-white-surface space-y-3 overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-3 shadow-[var(--shadow-raised)]">
           <div className="space-y-1">
             <div className={walletGroupLabelClassName}>Tokens</div>
             <div className="divide-y divide-border/55 border-b border-border/55">

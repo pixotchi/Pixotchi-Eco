@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -47,6 +47,12 @@ const priorityLabels = {
   low: '',
 };
 
+// A server flag used to be able to hard-lock the app: dismissible:false meant no
+// close button, Escape and backdrop blocked, and a modal focus trap with no
+// client-side exit. After this delay a "Continue" affordance appears so the
+// message still demands attention but can never strand the user.
+const NON_DISMISSIBLE_UNLOCK_MS = 15_000;
+
 export function BroadcastMessageModal({ 
   message, 
   onDismiss,
@@ -59,38 +65,60 @@ export function BroadcastMessageModal({
     }
   }, [message, onImpression]);
 
-  if (!message) return null;
+  // Keep the last message through the close so Radix can run its exit
+  // animation — the old `if (!message) return null` unmounted the dialog in the
+  // same commit the message cleared and it snapped shut.
+  const lastMessageRef = useRef<BroadcastMessage | null>(null);
+  if (message) {
+    lastMessageRef.current = message;
+  }
+  const renderedMessage = message ?? lastMessageRef.current;
 
-  const config = typeConfig[message.type] || typeConfig.info;
+  const [unlockElapsed, setUnlockElapsed] = useState(false);
+  useEffect(() => {
+    if (!message || message.dismissible) {
+      setUnlockElapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setUnlockElapsed(true), NON_DISMISSIBLE_UNLOCK_MS);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  if (!renderedMessage) return null;
+  const activeMessage = renderedMessage;
+  const canDismiss = activeMessage.dismissible || unlockElapsed;
+
+  const config = typeConfig[activeMessage.type] || typeConfig.info;
   const Icon = config.icon;
-  const priorityLabel = priorityLabels[message.priority];
+  const priorityLabel = priorityLabels[activeMessage.priority];
 
   const handleAction = async () => {
-    if (message.action?.url) {
+    if (activeMessage.action?.url) {
       // Open in new tab for external links (handles both mini app and web)
-      if (message.action.url.startsWith('http')) {
-        await openExternalUrl(message.action.url);
+      if (activeMessage.action.url.startsWith('http')) {
+        await openExternalUrl(activeMessage.action.url);
       } else {
         // Internal navigation
-        window.location.href = message.action.url;
+        window.location.href = activeMessage.action.url;
       }
     }
   };
 
   return (
-    <Dialog open={!!message} onOpenChange={(open) => !open && message.dismissible && onDismiss()}>
+    <Dialog open={!!message} onOpenChange={(open) => !open && canDismiss && onDismiss()}>
       <DialogContent 
         className="max-w-md"
-        onEscapeKeyDown={(e) => !message.dismissible && e.preventDefault()}
-        onPointerDownOutside={(e) => !message.dismissible && e.preventDefault()}
-        hideCloseButton={!message.dismissible}
+        onEscapeKeyDown={(e) => !canDismiss && e.preventDefault()}
+        onPointerDownOutside={(e) => !canDismiss && e.preventDefault()}
+        onInteractOutside={(e) => !canDismiss && e.preventDefault()}
+        hideCloseButton={!canDismiss}
       >
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Icon className={`w-5 h-5 ${config.color} flex-shrink-0`} />
             <div className="flex-1">
               <DialogTitle className="text-left">
-                {message.title || 'Announcement'}
+                {activeMessage.title || 'Announcement'}
               </DialogTitle>
               {priorityLabel && (
                 <span className="text-xs text-muted-foreground mt-1 block">
@@ -108,40 +136,40 @@ export function BroadcastMessageModal({
           {/* Message Content */}
           <Alert className={`${config.bg} ${config.border}`}>
             <AlertDescription className="text-sm whitespace-pre-wrap leading-relaxed">
-              {message.content}
+              {activeMessage.content}
             </AlertDescription>
           </Alert>
 
           {/* Action Button */}
-          {message.action && (
+          {activeMessage.action && (
             <Button
               variant="outline"
               className="w-full"
               onClick={handleAction}
             >
-              {message.action.label}
-              {message.action.url.startsWith('http') && (
+              {activeMessage.action.label}
+              {activeMessage.action.url.startsWith('http') && (
                 <ExternalLink className="w-4 h-4 ml-2" />
               )}
             </Button>
           )}
 
-          {/* Dismiss Button */}
-          {message.dismissible && (
+          {/* Dismiss / delayed-unlock button */}
+          {canDismiss && (
             <Button
               onClick={onDismiss}
               className="w-full"
-              variant={message.type === 'warning' ? 'default' : 'secondary'}
+              variant={activeMessage.type === 'warning' ? 'default' : 'secondary'}
             >
-              Got it
+              {activeMessage.dismissible ? 'Got it' : 'Continue'}
             </Button>
           )}
 
-          {/* Non-dismissible message */}
-          {!message.dismissible && (
+          {/* Non-dismissible message, before the unlock elapses */}
+          {!canDismiss && (
             <div className="text-center">
               <p className="text-xs text-muted-foreground">
-                This message cannot be dismissed
+                Please review this message before continuing
               </p>
             </div>
           )}

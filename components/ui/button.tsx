@@ -7,6 +7,14 @@ import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+/*
+ * One surface, three variant names. headerIcon/statusAction/surfaceControl were
+ * three byte-identical strings that could drift independently; the names are
+ * kept as call-site aliases (16 call sites) but there is a single source now.
+ */
+const CONTROL_SURFACE_VARIANT =
+  "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary";
+
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] text-sm font-semibold leading-none ring-offset-background transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:translate-y-0 disabled:scale-100 disabled:opacity-55 aria-disabled:pointer-events-none aria-disabled:translate-y-0 aria-disabled:scale-100 aria-disabled:opacity-55",
   {
@@ -27,18 +35,15 @@ const buttonVariants = cva(
          */
         navSliding:
           "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-[hsl(var(--selected-control-foreground))] data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
-        headerIcon:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        statusAction:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        surfaceControl:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+        headerIcon: CONTROL_SURFACE_VARIANT,
+        statusAction: CONTROL_SURFACE_VARIANT,
+        surfaceControl: CONTROL_SURFACE_VARIANT,
         imageCardPrimary:
           "border border-white/30 bg-slate-950 bg-[image:linear-gradient(180deg,hsl(222_47%_20%)_0%,hsl(222_47%_11%)_56%,hsl(229_84%_5%)_100%)] text-white shadow-[0_10px_24px_-14px_rgba(2,6,23,0.9)] hover:brightness-[1.06] hover:text-white hover:shadow-[0_14px_30px_-16px_rgba(2,6,23,0.95)]",
         outline:
-          "border border-[hsl(var(--border-strong)/0.34)] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+          "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         secondary:
-          "border border-[hsl(var(--border-strong)/0.36)] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+          "border border-[hsl(var(--edge-panel))] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         ghost: "hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
         link: "text-primary underline-offset-4 hover:underline",
       },
@@ -130,14 +135,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-const IconButton = React.forwardRef<
-  HTMLButtonElement,
-  Omit<ButtonProps, "size" | "children"> & { icon: React.ReactNode }
->(({ icon, variant = "outline", ...props }, ref) => (
-  <Button ref={ref} variant={variant} size="icon" {...props}>
-    {icon}
-  </Button>
-));
-IconButton.displayName = "IconButton";
-
-export { Button, IconButton, buttonVariants }; 
+export { Button, buttonVariants };

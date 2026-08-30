@@ -1377,8 +1377,8 @@ export default function MintTab() {
 
         {/* StatusBar replaces BalanceCard globally under header */}
 
-        <div className="flex flex-col space-y-2 min-[54rem]:space-y-3 min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-border/60 min-[54rem]:bg-card/90 min-[54rem]:bg-[image:var(--gradient-surface)] min-[54rem]:p-4 min-[54rem]:shadow-[var(--shadow-hairline)]">
-          <h3 className="hidden text-base font-semibold leading-none min-[54rem]:block">Mint Plant</h3>
+        <div className="flex flex-col space-y-2 tablet:space-y-3 tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-border/60 tablet:bg-card/90 tablet:bg-[image:var(--gradient-surface)] tablet:p-4 tablet:shadow-[var(--shadow-hairline)]">
+          <h3 className="hidden text-base font-semibold leading-none tablet:block">Mint Plant</h3>
           {/* ETH Mode: Show SwapMintBundle for atomic ETH->SEED->Mint transaction (SEED strains only) */}
           {isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain) && (
             <div className="flex flex-col space-y-2">
@@ -1444,8 +1444,8 @@ export default function MintTab() {
                 <span className="text-sm font-medium">
                   {needsPlantApproval ? 'Approval + Mint' : (
                     <>
-                      <span className="min-[54rem]:hidden">Mint Plant</span>
-                      <span className="hidden min-[54rem]:inline">Confirm Mint</span>
+                      <span className="tablet:hidden">Mint Plant</span>
+                      <span className="hidden tablet:inline">Confirm Mint</span>
                     </>
                   )}
                 </span>
@@ -1551,8 +1551,8 @@ export default function MintTab() {
         </CardContent>
       </TabCard>
       {/* StatusBar replaces BalanceCard globally under header */}
-      <div className="flex flex-col space-y-2 min-[54rem]:space-y-3 min-[54rem]:rounded-[var(--radius-panel)] min-[54rem]:border min-[54rem]:border-border/60 min-[54rem]:bg-card/90 min-[54rem]:bg-[image:var(--gradient-surface)] min-[54rem]:p-4 min-[54rem]:shadow-[var(--shadow-hairline)]">
-        <h3 className="hidden text-base font-semibold leading-none min-[54rem]:block">Mint Land</h3>
+      <div className="flex flex-col space-y-2 tablet:space-y-3 tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-border/60 tablet:bg-card/90 tablet:bg-[image:var(--gradient-surface)] tablet:p-4 tablet:shadow-[var(--shadow-hairline)]">
+        <h3 className="hidden text-base font-semibold leading-none tablet:block">Mint Land</h3>
         {/* ETH Mode: Show SwapLandMintBundle for atomic ETH->SEED->Mint Land transaction */}
         {isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint && (
           <div className="flex flex-col space-y-2">
@@ -1600,8 +1600,8 @@ export default function MintTab() {
               <span className="text-sm font-medium">
                 {landMintAllowance < landMintPrice ? 'Approval + Mint Land' : (
                   <>
-                    <span className="min-[54rem]:hidden">Mint Land</span>
-                    <span className="hidden min-[54rem]:inline">Confirm Mint</span>
+                    <span className="tablet:hidden">Mint Land</span>
+                    <span className="hidden tablet:inline">Confirm Mint</span>
                   </>
                 )}
               </span>
@@ -1687,7 +1687,7 @@ export default function MintTab() {
       : formatNumber(selectedStrain?.mintPrice || 0);
 
     return (
-      <TabCard padding="sm" className="min-[54rem]:min-h-[520px]">
+      <TabCard padding="sm" className="tablet:min-h-[520px]">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -1696,7 +1696,7 @@ export default function MintTab() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 min-[54rem]:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
+        <CardContent className="grid gap-4 tablet:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
           <div className="chromatic-white-surface flex min-h-[372px] flex-col justify-between rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
             <div className="flex flex-1 items-center justify-center">
               <div className="relative flex h-48 w-48 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-card/70 2xl:h-56 2xl:w-56">
@@ -2079,10 +2079,10 @@ export default function MintTab() {
     const showLandOption = !isSolana;
 
     return (
-      <div className="space-y-4 min-[54rem]:space-y-3">
+      <div className="space-y-4 tablet:space-y-3">
         {/* The Plants/Lands switch below 54rem is SharedFarmMintMobileToggle in
             app/(game)/page.tsx. A second copy used to live here, gated on
-            `!useCombinedMintLayout` but styled `hidden min-[54rem]:flex` — the two
+            `!useCombinedMintLayout` but styled `hidden tablet:flex` — the two
             conditions are mutually exclusive at every width, so it only ever
             flashed for the first frame on desktop before the media query resolved. */}
         {showLandOption && useCombinedMintLayout && (
@@ -2137,5 +2137,5 @@ export default function MintTab() {
     );
   };
 
-  return <div className="min-[54rem]:mx-auto min-[54rem]:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
+  return <div className="tablet:mx-auto tablet:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
 } 

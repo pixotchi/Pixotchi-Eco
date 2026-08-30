@@ -38,6 +38,12 @@ export const pixelmix = localFont({
     }
   ],
   variable: "--font-pixel",
-  display: "swap"
+  display: "swap",
+  // A pixel bitmap face shares no metrics with the default Arial-based
+  // adjustment, so the synthesized fallback reflowed every title (several sit
+  // inside truncate containers, moving the ellipsis) when the face landed.
+  // Monospace is the closest honest stand-in for the fixed-advance glyphs.
+  fallback: ["monospace"],
+  adjustFontFallback: false
 });
 

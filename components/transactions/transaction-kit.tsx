@@ -1196,9 +1196,27 @@ export function TransactionToast({
     transactionId,
   });
 
-  if (!isToastVisible || !label) {
+  // Symmetric exit: the toast used to unmount on the very next commit after
+  // dismiss, so its 500ms slide-in was paired with a 0ms disappearance. Keep it
+  // mounted through a short animate-out pass before removal.
+  const shouldShow = Boolean(isToastVisible && label);
+  const [renderState, setRenderState] = React.useState<"hidden" | "visible" | "exiting">(
+    shouldShow ? "visible" : "hidden",
+  );
+  React.useEffect(() => {
+    if (shouldShow) {
+      setRenderState("visible");
+      return;
+    }
+    setRenderState((previous) => (previous === "visible" ? "exiting" : previous));
+    const timer = window.setTimeout(() => setRenderState("hidden"), 220);
+    return () => window.clearTimeout(timer);
+  }, [shouldShow]);
+
+  if (renderState === "hidden") {
     return null;
   }
+  const isExiting = renderState === "exiting";
 
   const positionClassName = {
         "bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
@@ -1207,12 +1225,19 @@ export function TransactionToast({
         "top-right": "top-4 right-4",
   }[position];
 
-  const animationClassName = {
-    "bottom-center": "animate-in fade-in-0 slide-in-from-bottom-8 duration-500",
-    "bottom-right": "animate-in fade-in-0 slide-in-from-right-8 duration-500",
-    "top-center": "animate-in fade-in-0 slide-in-from-top-8 duration-500",
-    "top-right": "animate-in fade-in-0 slide-in-from-right-8 duration-500",
-  }[position];
+  const animationClassName = isExiting
+    ? {
+        "bottom-center": "animate-out fade-out-0 slide-out-to-bottom-8 duration-[var(--motion-standard)] fill-mode-forwards",
+        "bottom-right": "animate-out fade-out-0 slide-out-to-right-8 duration-[var(--motion-standard)] fill-mode-forwards",
+        "top-center": "animate-out fade-out-0 slide-out-to-top-8 duration-[var(--motion-standard)] fill-mode-forwards",
+        "top-right": "animate-out fade-out-0 slide-out-to-right-8 duration-[var(--motion-standard)] fill-mode-forwards",
+      }[position]
+    : {
+        "bottom-center": "animate-in fade-in-0 slide-in-from-bottom-8 duration-[var(--motion-modal)]",
+        "bottom-right": "animate-in fade-in-0 slide-in-from-right-8 duration-[var(--motion-modal)]",
+        "top-center": "animate-in fade-in-0 slide-in-from-top-8 duration-[var(--motion-modal)]",
+        "top-right": "animate-in fade-in-0 slide-in-from-right-8 duration-[var(--motion-modal)]",
+      }[position];
 
   return (
     <div

@@ -1,6 +1,5 @@
 "use client";
 
-import { LandLeaderboardEntry } from "@/lib/contracts";
 import { getTerrainNoise,getTokenIdFromCoordinate,getVisualTerrainType,visualToContract } from '@/lib/land-utils';
 import { Land } from "@/lib/types";
 import React,{ useEffect,useMemo,useRef,useState } from 'react';
@@ -11,9 +10,10 @@ interface LandMapCanvasProps {
   userLands: Land[];
   selectedLand: Land | null;
   totalSupply: number;
-  neighborData: Record<number, LandLeaderboardEntry>;
   onLandClick: (tokenId: number | null, visualData?: { x: number, y: number, type: string }) => void;
   onCenterChange: (center: { x: number; y: number }) => void;
+  /** Enables pinch-to-zoom on touch (the canvas sets touch-none, so native pinch is suppressed). */
+  onZoomChange?: (zoom: number) => void;
 }
 
 function isNormalMintedLandId(tokenId: number, totalSupply: number): boolean {
@@ -27,7 +27,8 @@ export function LandMapCanvas({
   selectedLand,
   totalSupply,
   onLandClick,
-  onCenterChange
+  onCenterChange,
+  onZoomChange
 }: LandMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,6 +40,8 @@ export function LandMapCanvas({
   const centerChangeFrameRef = useRef<number | null>(null);
   const dragDistanceRef = useRef(0);
   const didDragRef = useRef(false);
+  const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchDistanceRef = useRef<number | null>(null);
 
   // Image assets
   const [sprites, setSprites] = useState<{
@@ -366,6 +369,15 @@ export function LandMapCanvas({
 
   // Interaction Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointersRef.current.size === 2) {
+      // Second finger down: switch from pan to pinch.
+      const [a, b] = [...activePointersRef.current.values()];
+      pinchDistanceRef.current = Math.hypot(a.x - b.x, a.y - b.y);
+      isDraggingRef.current = false;
+      didDragRef.current = true; // suppress the synthetic click after a pinch
+      return;
+    }
     isDraggingRef.current = true;
     lastPosRef.current = { x: e.clientX, y: e.clientY };
     pendingCenterRef.current = centerRef.current;
@@ -386,6 +398,22 @@ export function LandMapCanvas({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Two-finger pinch drives zoom (touch-action: none suppresses the native one).
+    if (activePointersRef.current.size === 2 && onZoomChange) {
+      const [a, b] = [...activePointersRef.current.values()];
+      const distance = Math.hypot(a.x - b.x, a.y - b.y);
+      const previous = pinchDistanceRef.current;
+      pinchDistanceRef.current = distance;
+      if (previous && previous > 0) {
+        onZoomChange(zoom * (distance / previous));
+      }
+      return;
+    }
+
     if (!isDraggingRef.current) return;
 
     const dx = e.clientX - lastPosRef.current.x;
@@ -413,8 +441,46 @@ export function LandMapCanvas({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchDistanceRef.current = null;
+    }
     isDraggingRef.current = false;
-    canvasRef.current?.releasePointerCapture(e.pointerId);
+    try {
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  // Keyboard access: the canvas is otherwise a pointer-only surface.
+  const handleCanvasKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 5 : 1;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = step;
+    else if (e.key === 'ArrowDown') dy = -step;
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const x = Math.round(centerRef.current.x);
+      const y = Math.round(centerRef.current.y);
+      const cx = visualToContract(x);
+      const cy = visualToContract(y);
+      if (cx !== null && cy !== null) {
+        const tokenId = getTokenIdFromCoordinate(cx, cy);
+        onLandClick(tokenId > 0 ? tokenId : null, tokenId > 0 ? undefined : { x, y, type: 'none' });
+      } else {
+        onLandClick(null, { x, y, type: getVisualTerrainType(x, y) });
+      }
+      return;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    const next = { x: centerRef.current.x + dx, y: centerRef.current.y + dy };
+    centerRef.current = next;
+    pendingCenterRef.current = next;
+    onCenterChange(next);
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -464,14 +530,22 @@ export function LandMapCanvas({
 
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden cursor-move">
+      {/* pointercancel: OS gestures / browser back-swipes end a captured drag
+          with neither pointerup nor pointerleave — without the handler the map
+          kept panning with no button pressed. */}
       <canvas
         ref={canvasRef}
-        className="block touch-none select-none"
+        className="block touch-none select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ width: '100%', height: '100%' }}
+        tabIndex={0}
+        role="application"
+        aria-label="Land map. Use the arrow keys to pan (Shift for larger steps) and Enter to select the centre plot."
+        onKeyDown={handleCanvasKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onClick={handleClick}
       />
     </div>

@@ -8,15 +8,18 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-[hsl(var(--border-strong)/0.34)]",
+        default: "border-[hsl(var(--edge-panel))]",
+        /* Tonal variants carry bg-none: the base string's --gradient-surface is
+           72-98% opaque and painted the tint invisible (tailwind-merge keeps
+           bg-[image:…] alongside a bg-color override — different groups). */
         info:
-          "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] [&>svg]:text-[hsl(var(--info))]",
+          "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] bg-none [&>svg]:text-[hsl(var(--info))]",
         success:
-          "border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.1)] [&>svg]:text-[hsl(var(--success-strong))]",
+          "border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.1)] bg-none [&>svg]:text-[hsl(var(--success-strong))]",
         warning:
-          "border-[hsl(var(--warning)/0.36)] bg-[hsl(var(--warning)/0.14)] [&>svg]:text-[hsl(var(--warning))]",
+          "border-[hsl(var(--warning)/0.36)] bg-[hsl(var(--warning)/0.14)] bg-none [&>svg]:text-[hsl(var(--warning))]",
         destructive:
-          "border-destructive/35 bg-destructive/10 [&>svg]:text-destructive",
+          "border-destructive/35 bg-destructive/10 bg-none [&>svg]:text-destructive",
       },
     },
     defaultVariants: {
@@ -31,7 +34,10 @@ const Alert = React.forwardRef<
 >(({ className, variant, ...props }, ref) => (
   <div
     ref={ref}
-    role="alert"
+    /* role="alert" is an assertive live region — reserve it for content that
+       warrants interrupting the screen reader. Informational variants use the
+       polite "status" role instead. */
+    role={variant === "destructive" || variant === "warning" ? "alert" : "status"}
     className={cn(alertVariants({ variant }), className)}
     {...props}
   />

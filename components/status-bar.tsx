@@ -105,12 +105,19 @@ export default function StatusBar({
   const { solBalance } = useSolanaWallet();
   const isHeaderPlacement = placement === "header";
   const statusRootRef = React.useRef<HTMLDivElement>(null);
-  const [useCompactStandaloneStatus, setUseCompactStandaloneStatus] = useState(true);
+  // Lazy initial read so the ETH slot doesn't pop in a frame after first paint
+  // (the old useState(true) start was corrected by an effect, shifting the row).
+  const [useCompactStandaloneStatus, setUseCompactStandaloneStatus] = useState(
+    () =>
+      !isHeaderPlacement &&
+      (typeof window === "undefined" ||
+        !window.matchMedia?.("(min-width: 54rem)").matches),
+  );
   const showEthBalance = (
     isHeaderPlacement ||
     (showEthInStandalone && !useCompactStandaloneStatus)
   ) && !isSolana;
-  const { data: ethBalance, isLoading: ethLoading } = useBalance({
+  const { data: ethBalance } = useBalance({
     address,
     query: {
       enabled: showEthBalance && !!address,
@@ -142,8 +149,10 @@ export default function StatusBar({
     const syncCompactStatus = () => {
       const statusWidth = statusRootRef.current?.getBoundingClientRect().width ?? window.innerWidth;
       const isBelowTabletLayout = !window.matchMedia("(min-width: 54rem)").matches;
-      const isPortraitLayout = window.matchMedia("(orientation: portrait)").matches;
-      setUseCompactStandaloneStatus(isBelowTabletLayout || isPortraitLayout || statusWidth < 520);
+      // No orientation check: it unconditionally suppressed the detailed layout
+      // in portrait, which cancelled showEthInStandalone on exactly the roomy
+      // portrait viewports (tablets) it exists for. Width is the real constraint.
+      setUseCompactStandaloneStatus(isBelowTabletLayout || statusWidth < 520);
     };
 
     syncCompactStatus();
@@ -174,7 +183,9 @@ export default function StatusBar({
   const seedText = loading ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
   const leafText = loading ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;
   const pixotchiText = loading ? <Skeleton className={balanceSkeletonClassName} /> : pixotchiValue;
-  const ethText = ethLoading ? <Skeleton className={balanceSkeletonClassName} /> : ethValue;
+  // Gate on undefined, not isLoading: when the query is disabled-then-enabled,
+  // isLoading is briefly false with no data and the row flashed a literal "0".
+  const ethText = ethBalance === undefined ? <Skeleton className={balanceSkeletonClassName} /> : ethValue;
   const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
   const balanceTextClassName = "shrink-0 whitespace-nowrap text-[13px] font-bold leading-none tabular-nums max-[380px]:text-[11px] max-[340px]:text-[10px]";
   const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";

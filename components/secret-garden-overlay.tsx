@@ -183,31 +183,47 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   }, []);
 
   useEffect(() => {
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
     if (open) {
       setShouldRender(true);
       setArtVisible(false);
       setInitialReveal(true);
-      const timer = window.setTimeout(() => setArtVisible(true), 1800);
+      // Under reduced motion, skip the 1.8s black-screen intro entirely — it
+      // held a full-screen overlay with no content and Escape not yet armed.
+      const timer = window.setTimeout(() => setArtVisible(true), reduceMotion ? 0 : 1800);
       return () => window.clearTimeout(timer);
     }
 
     setArtVisible(false);
-    const timer = window.setTimeout(() => setShouldRender(false), 1600);
+    const timer = window.setTimeout(() => setShouldRender(false), reduceMotion ? 0 : 1600);
     return () => window.clearTimeout(timer);
   }, [open]);
 
   useEffect(() => {
-    if (!open) {
+    // Keyed on shouldRender, not open: releasing at open=false let the page
+    // scroll under a backdrop that was still fully opaque and fading for 1.6s.
+    if (!shouldRender) {
       return;
     }
 
     const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    // Scrollbar compensation (Radix dialogs get this from react-remove-scroll;
+    // this bespoke overlay shifted the page ~15px on desktop without it).
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
 
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
     };
-  }, [open]);
+  }, [shouldRender]);
 
   useEffect(() => {
     if (!open) return;
@@ -295,6 +311,20 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     }
   }, [open, artVisible]);
 
+  // Document-level Escape: the dialog-node handler below only fires once focus
+  // is inside the overlay, which used to leave Escape dead during the intro.
+  useEffect(() => {
+    if (!open) return;
+    const onDocKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onDocKey);
+    return () => document.removeEventListener("keydown", onDocKey);
+  }, [open, onClose]);
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Escape") {
@@ -355,7 +385,10 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[var(--z-tooltip)]">
+    // pointer-events-none on the wrapper: during the 1.6s exit fade this used to
+    // be a transparent full-viewport layer that swallowed every tap. The content
+    // layer re-enables pointer events only while actually open.
+    <div className="pointer-events-none fixed inset-0 z-[var(--z-takeover)]" aria-hidden={!open}>
       <div
         className={`absolute inset-0 bg-black transition-opacity duration-[1600ms] ease-in ${
           open ? "opacity-100" : "opacity-0"
@@ -372,6 +405,8 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         className={`relative z-10 flex h-full w-full items-center justify-center px-4 py-6 transition-opacity duration-500 ease-out ${
+          open ? "pointer-events-auto" : ""
+        } ${
           open && artVisible ? "opacity-100" : "opacity-0"
         }`}
       >

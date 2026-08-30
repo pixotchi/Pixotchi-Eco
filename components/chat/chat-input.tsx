@@ -27,18 +27,24 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
   const [message, setMessage] = useState('');
 
   const isAIMode = activeMode === 'ai';
+  const maxLength = isAIMode ? 300 : 200;
   const sharedChatUnavailable = (activeMode === 'public' || isAIMode) && !publicChatAuthenticated;
-  const inputDisabled = isSending || sharedChatUnavailable;
+  // Per-pane, not the global isSending: in the desktop two-pane layout, a
+  // streaming Neural Seed reply used to disable the Public pane's input too.
+  const inputDisabled = activeSending || sharedChatUnavailable;
   const showStopButton = isAIMode && activeSending;
 
   const handleSend = async () => {
-    if (!message.trim()) return;
-    if (modeOverride) {
-      await sendMessageForMode(modeOverride, message.trim());
-    } else {
-      await sendMessage(message.trim());
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    const sent = modeOverride
+      ? await sendMessageForMode(modeOverride, trimmed)
+      : await sendMessage(trimmed);
+    // Keep the draft on failure — clearing unconditionally used to discard the
+    // user's typed text along with the rolled-back optimistic bubble.
+    if (sent) {
+      setMessage('');
     }
-    setMessage('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -65,17 +71,12 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            isAIMode
-              ? (sharedChatUnavailable ? "AI chat unavailable" : "Type a message...")
-              : (sharedChatUnavailable ? "Public chat unavailable" : "Type a message...")
-          }
+          placeholder="Type a message..."
           disabled={inputDisabled}
           className="flex-1"
-          maxLength={isAIMode ? 300 : 200}
+          maxLength={maxLength}
           aria-label={isAIMode ? "Ask Neural Seed a question" : "Type a chat message"}
           aria-describedby="chat-character-count"
-          aria-invalid={message.length > (isAIMode ? 300 : 200)}
         />
         <Button
           onClick={showStopButton ? cancelActiveSend : handleSend}
@@ -95,15 +96,16 @@ export default function ChatInput({ modeOverride }: ChatInputProps = {}) {
           )}
         </Button>
 
-        {/* Character count for screen readers */}
+        {/* Character count for screen readers. (maxLength hard-caps input, so
+            there is no "too long" state to announce — the old warning branch was
+            unreachable.) */}
         <div
           id="chat-character-count"
           className="sr-only"
           aria-live="polite"
           aria-atomic="true"
         >
-          {message.length}/{isAIMode ? 300 : 200} characters
-          {message.length > (isAIMode ? 300 : 200) && " - Message too long"}
+          {message.length}/{maxLength} characters
         </div>
       </div>
     </div>

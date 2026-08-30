@@ -43,11 +43,15 @@ export function LoginIntro() {
 /** The full centred hero, used as the pre-hydration fallback. */
 export function LoginHeroPanel({ title }: { title?: string }) {
   return (
-    <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center p-4 safe-area-bottom md:p-4 xl:p-5">
-      <div className="flex flex-col items-center justify-center text-center md:w-full md:max-w-[24rem] md:rounded-[var(--radius-panel)] md:border md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:py-5">
+    <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center overflow-y-auto overscroll-contain p-4 safe-area-bottom md:p-4 xl:p-5">
+      <div className="flex flex-grow flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-[var(--radius-panel)] md:border md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:py-5">
         <LoginHero title={title} />
         <LoginIntro />
       </div>
+      {/* Reserves the auth-actions block's footprint so the hero doesn't jump up
+          by half that height when hydration mounts the real buttons (the alert +
+          two sign-in buttons measure ~19rem). aria-hidden: it is pure spacing. */}
+      <div className="h-[19rem] w-full max-w-xs shrink-0 md:max-w-[24rem]" aria-hidden="true" />
     </div>
   );
 }

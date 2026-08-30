@@ -18,7 +18,7 @@ export default function DashboardTab() {
   return (
     <div className="space-y-4">
       {/* Switch Toggle */}
-      <div className="hidden justify-center min-[54rem]:flex">
+      <div className="hidden justify-center tablet:flex">
         <ToggleGroup
           ariaLabel="Farm view"
           value={dashboardView}

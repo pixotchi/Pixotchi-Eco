@@ -48,6 +48,9 @@ export default function ChatProfileDialog({
 
     if (cached && now - cached.timestamp < CACHE_DURATION) {
       setPlant(cached.plant);
+      // Clear loading too: a fetch cancelled mid-flight leaves loading=true, and
+      // this early return used to preserve it forever on cache-hit reopens.
+      setLoading(false);
       return;
     }
 
@@ -78,13 +81,18 @@ export default function ChatProfileDialog({
       .catch((err) => {
         if (cancelled) return;
         console.error("[ChatProfileDialog] Failed to fetch plants", err);
+        // Don't leave the previous profile's plant showing for a different
+        // address on failure.
+        if (fetchPendingRef.current === cacheKey) {
+          setPlant(null);
+        }
       })
       .finally(() => {
-        if (cancelled) return;
-        // Clear pending flag only if address hasn't changed
+        // Always release the pending flag for THIS request key, even when the
+        // effect was cancelled — otherwise loading stuck at true forever.
         if (fetchPendingRef.current === cacheKey) {
-          setLoading(false);
           fetchPendingRef.current = null;
+          setLoading(false);
         }
       });
 
@@ -104,6 +112,9 @@ export default function ChatProfileDialog({
         onOpenChange={onOpenChange}
         plant={plant}
         variant="wallet"
+        /* Every current opener (chat dialog, land map) hosts this inside another
+           dialog, so it must sit on the nested modal layer. */
+        nested
         walletAddressOverride={normalisedAddress}
         primaryPlantLoading={loading}
         walletNameOverride={null}

@@ -30,6 +30,7 @@ import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { useFarcaster } from "@/hooks/useFarcaster";
+import { DESKTOP_MEDIA_QUERY, TABLET_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { useWebQueryState, WEB_QUERY_STATE_EVENT } from "@/hooks/useWebQueryState";
 import { requestBalanceRefresh } from "@/lib/app-events";
 import type { AuthSurface } from "@/lib/auth-surface";
@@ -51,7 +52,7 @@ const ViewportDebugOverlay = dynamic(
 );
 
 // Tab load error fallback component
-function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => void }) {
+function TabLoadError({ tabName }: { tabName: string }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
       <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -66,7 +67,7 @@ function TabLoadError({ tabName, onRetry }: { tabName: string; onRetry?: () => v
       <Button
         variant="outline"
         size="sm"
-        onClick={onRetry || (() => window.location.reload())}
+        onClick={() => window.location.reload()}
       >
         <Repeat className="w-4 h-4 mr-2" />
         Retry
@@ -381,13 +382,13 @@ function SharedFarmMintMobileToggle({
   return (
     <div
       className={cn(
-        "flex justify-center pb-3 min-[54rem]:hidden",
+        "flex justify-center pb-3 tablet:hidden",
         !showToggle && "hidden",
       )}
       data-shared-farm-mint-toggle
     >
       <ToggleGroup
-        ariaLabel="Farm view"
+        ariaLabel={activeTab === 'mint' ? 'Mint type' : 'Farm view'}
         value={value}
         onValueChange={handleValueChange}
         options={[
@@ -413,7 +414,18 @@ type AppTabDefinition = {
   icon: LucideIcon;
 };
 
-function SlidingNavTabs({
+// Static — hoisted so the two SlidingNavTabs (memoized below) don't reconcile
+// all 12 nav buttons on every App render.
+const APP_TABS: AppTabDefinition[] = [
+  { id: "dashboard", label: "Farm", icon: Leaf },
+  { id: "mint", label: "Mint", icon: Sparkles },
+  { id: "activity", label: "Activity", icon: History },
+  { id: "leaderboard", label: "Ranking", icon: Trophy },
+  { id: "swap", label: "Swap", icon: Repeat },
+  { id: "about", label: "About", icon: Info },
+];
+
+const SlidingNavTabs = memo(function SlidingNavTabs({
   activeTab,
   mode,
   onTabChange,
@@ -570,7 +582,7 @@ function SlidingNavTabs({
       })}
     </div>
   );
-}
+});
 
 export default function App() {
   const { theme } = useTheme();
@@ -606,8 +618,14 @@ export default function App() {
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const [showViewportDebug, setShowViewportDebug] = useState(false);
-  const [isHeaderStatusPlacement, setIsHeaderStatusPlacement] = useState(false);
-  const [showStandaloneEthBalance, setShowStandaloneEthBalance] = useState(false);
+  // Lazy-initialised media queries (useMediaQuery), not useState(false)+effect:
+  // the old pattern rendered the WRONG StatusBar placement on the first desktop
+  // frame and then swapped it into the header, shifting everything below.
+  const isDesktopShell = useMediaQuery(DESKTOP_MEDIA_QUERY);
+  const isCompactLandscape = useMediaQuery("(min-width: 54rem) and (max-height: 700px)");
+  const isTabletViewport = useMediaQuery(TABLET_MEDIA_QUERY);
+  const isHeaderStatusPlacement = isDesktopShell || isCompactLandscape;
+  const showStandaloneEthBalance = isTabletViewport && !isDesktopShell && !isCompactLandscape;
   const [loginThemeState, setLoginThemeState] = useState({
     current: 0,
     previous: 0,
@@ -615,6 +633,7 @@ export default function App() {
   });
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const previousActiveTabRef = useRef<Tab>(activeTab);
+  const tabScrollPositionsRef = useRef<Partial<Record<Tab, number>>>({});
   const lastDismissedRef = useRef<string | null>(null);
   const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
   const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
@@ -682,29 +701,6 @@ export default function App() {
       motionQuery?.removeEventListener?.("change", handleMotionPreferenceChange);
     };
   }, [isConnected]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-
-    const desktopQuery = window.matchMedia("(min-width: 80rem)");
-    const compactLandscapeQuery = window.matchMedia("(min-width: 54rem) and (max-height: 700px)");
-    const roomyPortraitQuery = window.matchMedia("(min-width: 54rem)");
-    const syncShellMode = () => {
-      setIsHeaderStatusPlacement(desktopQuery.matches || compactLandscapeQuery.matches);
-      setShowStandaloneEthBalance(roomyPortraitQuery.matches && !desktopQuery.matches && !compactLandscapeQuery.matches);
-    };
-
-    syncShellMode();
-    desktopQuery.addEventListener("change", syncShellMode);
-    compactLandscapeQuery.addEventListener("change", syncShellMode);
-    roomyPortraitQuery.addEventListener("change", syncShellMode);
-
-    return () => {
-      desktopQuery.removeEventListener("change", syncShellMode);
-      compactLandscapeQuery.removeEventListener("change", syncShellMode);
-      roomyPortraitQuery.removeEventListener("change", syncShellMode);
-    };
-  }, []);
 
   useEffect(() => {
     if (isMiniApp || typeof window === "undefined") {
@@ -833,8 +829,20 @@ export default function App() {
       return;
     }
 
+    // All six tabpanels share this one scroller, so <Activity> alone cannot
+    // preserve scroll. Save the outgoing tab's position and restore the
+    // incoming one's, so Farm -> Swap -> Farm returns to the marketplace
+    // instead of the top.
+    const scroller = contentScrollRef.current;
+    if (scroller) {
+      tabScrollPositionsRef.current[previousActiveTabRef.current] = scroller.scrollTop;
+    }
     previousActiveTabRef.current = activeTab;
-    contentScrollRef.current?.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    scroller?.scrollTo({
+      left: 0,
+      top: tabScrollPositionsRef.current[activeTab] ?? 0,
+      behavior: "auto",
+    });
   }, [activeTab]);
 
   // Balance refreshes after transactions are handled via events in balance-context.tsx
@@ -852,15 +860,6 @@ export default function App() {
       console.warn('Add mini app prompt failed:', e);
     }
   }, [fc?.isInMiniApp]);
-
-  const tabs = [
-    { id: "dashboard" as Tab, label: "Farm", icon: Leaf },
-    { id: "mint" as Tab, label: "Mint", icon: Sparkles },
-    { id: "activity" as Tab, label: "Activity", icon: History },
-    { id: "leaderboard" as Tab, label: "Ranking", icon: Trophy },
-    { id: "swap" as Tab, label: "Swap", icon: Repeat },
-    { id: "about" as Tab, label: "About", icon: Info },
-  ];
 
   // Show broadcast messages (one at a time, highest priority first)
   useEffect(() => {
@@ -940,15 +939,19 @@ export default function App() {
               aria-label="Application header"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex shrink-0 items-center space-x-1.5">
+                <div className="flex min-w-0 items-center space-x-1.5">
                   <Image
                     src="/PixotchiKit/Logonotext.svg"
                     alt="Pixotchi Mini Logo"
                     width={24}
                     height={24}
+                    className="shrink-0"
                     preload
                   />
-                  <h1 className="text-sm font-pixel text-foreground">
+                  {/* min-w-0 + truncate: at 320px with four 44px header actions the
+                      old shrink-0 group pushed the ThemeSelector past the chrome's
+                      overflow-hidden edge; the title is the element that gives way. */}
+                  <h1 className="min-w-0 truncate text-sm font-pixel text-foreground">
                     {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
                   </h1>
                 </div>
@@ -1028,15 +1031,15 @@ export default function App() {
           aria-label="Main content area"
         >
           {(!isConnected) ? (
-            <div className="relative z-10 flex h-full flex-col items-center justify-center p-4 safe-area-bottom md:w-full md:overflow-y-auto md:overscroll-contain md:p-4 xl:p-5">
-              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pt-5">
+            <div className="relative z-10 flex h-full flex-col items-center justify-center overflow-y-auto overscroll-contain p-4 safe-area-bottom md:w-full xl:p-5">
+              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pt-5">
                 {/* Same components the server-rendered fallback uses (see
                     app/(game)/layout.tsx), so the hand-off is seamless. */}
                 <LoginHero title={fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'} />
                 <LoginIntro />
               </div>
               <LoginAuthActions
-                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--border-strong)/0.34)] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
+                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
                 isMiniConnectRetrying={state.isMiniConnectRetrying}
@@ -1053,7 +1056,7 @@ export default function App() {
                   activeTab={activeTab}
                   mode="desktop"
                   onTabChange={setActiveTab}
-                  tabs={tabs}
+                  tabs={APP_TABS}
                 />
               </nav>
 
@@ -1084,12 +1087,13 @@ export default function App() {
                   }}
                 >
                   <TabVisibilityProvider activeTab={activeTab}>
-                    {tabs.map((tab) => {
+                    {APP_TABS.map((tab) => {
                       const TabComponent = tabComponents[tab.id];
                       const usesContainedTabLayout =
                         tab.id === 'activity' || tab.id === 'leaderboard';
                       // Activity mode: 'visible' means mounted/active effects, 'hidden' means kept in memory but effects unmounted.
-                      // This preserves scroll position and state (e.g. inputs) when switching tabs.
+                      // This preserves component state (inputs, selections); scroll position is
+                      // saved/restored per tab by the effect above, since all panels share one scroller.
                       const activityMode = activeTab === tab.id ? 'visible' : 'hidden';
                       const isVisited = visitedTabs.has(tab.id);
 
@@ -1145,7 +1149,7 @@ export default function App() {
                   activeTab={activeTab}
                   mode="mobile"
                   onTabChange={setActiveTab}
-                  tabs={tabs}
+                  tabs={APP_TABS}
                 />
               </nav>
             </>

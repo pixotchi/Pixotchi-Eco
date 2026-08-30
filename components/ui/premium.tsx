@@ -1,70 +1,34 @@
 import * as React from "react";
 import { CheckCircle2, Info, Sparkles } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export function SectionTitle({
-  children,
-  className,
-  eyebrow,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement> & { eyebrow?: React.ReactNode }) {
-  return (
-    <div className={cn("min-w-0 space-y-1", className)} {...props}>
-      {eyebrow ? (
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {eyebrow}
-        </div>
-      ) : null}
-      <h3 className="text-base font-semibold leading-tight text-foreground">{children}</h3>
-    </div>
-  );
-}
-
-export function MetricCard({
-  icon,
-  label,
-  value,
-  className,
-  supportingText,
-}: {
-  icon?: React.ReactNode;
-  label: React.ReactNode;
-  value: React.ReactNode;
-  className?: string;
-  supportingText?: React.ReactNode;
-}) {
-  return (
-    <div className={cn("rounded-[var(--radius-panel)] border border-border/60 bg-card/90 p-3 shadow-[var(--shadow-hairline)]", className)}>
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="mt-1 text-base font-semibold tabular-nums text-foreground">{value}</div>
-      {supportingText ? <div className="mt-1 text-xs text-muted-foreground">{supportingText}</div> : null}
-    </div>
-  );
-}
+/*
+ * StatusChip is a thin alias over Badge: the two used to be near-duplicate
+ * implementations rendering at 24px vs 28px with drifted tone maps, so chips
+ * and badges never lined up on the same row. Badge is the single source now;
+ * this keeps the `tone` API for the existing call sites.
+ */
+const STATUS_CHIP_TONE_TO_VARIANT = {
+  danger: "danger",
+  info: "info",
+  neutral: "neutral",
+  success: "success",
+  warning: "warning",
+} as const;
 
 export function StatusChip({
   children,
   className,
   tone = "neutral",
 }: React.HTMLAttributes<HTMLSpanElement> & {
-  tone?: "neutral" | "success" | "warning" | "info" | "danger";
+  tone?: keyof typeof STATUS_CHIP_TONE_TO_VARIANT;
 }) {
-  const toneClassName = {
-    danger: "border-destructive/25 bg-destructive/10 text-destructive",
-    info: "border-[hsl(var(--info)/0.25)] bg-[hsl(var(--info)/0.12)] text-[hsl(var(--info))]",
-    neutral: "border-border/70 bg-background/70 text-muted-foreground",
-    success: "border-[hsl(var(--success)/0.25)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]",
-    warning: "border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-foreground))]",
-  }[tone];
-
   return (
-    <span className={cn("inline-flex min-h-6 items-center rounded-[var(--radius-control)] border px-2 py-0.5 text-xs font-semibold leading-none", toneClassName, className)}>
+    <Badge variant={STATUS_CHIP_TONE_TO_VARIANT[tone]} className={className}>
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -83,25 +47,6 @@ export function InlineBalanceNotice({
       aria-live="polite"
     >
       <Info className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
-      {children}
-    </div>
-  );
-}
-
-export function ActionBar({
-  children,
-  className,
-  sticky = true,
-}: React.HTMLAttributes<HTMLDivElement> & { sticky?: boolean }) {
-  return (
-    <div
-      className={cn(
-        sticky
-          ? "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6"
-          : "bg-inherit",
-        className
-      )}
-    >
       {children}
     </div>
   );

@@ -35,6 +35,8 @@ interface PlantNameTransactionProps {
   buttonClassName?: string;
   disabled?: boolean;
   hideLabel?: boolean;
+  /** Fires when the actual transaction button is pressed (not on wrapper clicks). */
+  onButtonClick?: () => void;
 }
 
 export function PlantNameTransaction({
@@ -45,7 +47,8 @@ export function PlantNameTransaction({
   buttonText = "Change Name (350 SEED)",
   buttonClassName,
   disabled = false,
-  hideLabel = false
+  hideLabel = false,
+  onButtonClick
 }: PlantNameTransactionProps) {
 
   const { isSponsored } = usePaymaster();
@@ -97,6 +100,14 @@ export function PlantNameTransaction({
           text={buttonText}
           className={buttonClassName}
           disabled={disabled}
+          onClick={() => {
+            if (disabled) return;
+            try {
+              onButtonClick?.();
+            } catch (error) {
+              console.warn('Pre-transaction handler failed', error);
+            }
+          }}
         />
 
         <GlobalTransactionToast />

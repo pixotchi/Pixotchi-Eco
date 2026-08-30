@@ -128,6 +128,14 @@ export function useViewportInsets() {
       root.style.setProperty('--browser-safe-area-right', `${offsetRight}px`);
       root.style.setProperty('--browser-safe-area-bottom', `${browserBottomInset}px`);
       root.style.setProperty('--browser-safe-area-left', `${offsetLeft}px`);
+      // The KEYBOARD-INCLUSIVE visible height. dvh tracks browser chrome but NOT
+      // the on-screen keyboard on iOS, so any dialog sized in dvh keeps its full
+      // height while the keyboard halves the visual viewport — and sticky-footer
+      // submit buttons land under the keyboard. Dialog panels cap their height
+      // with this variable (see components/ui/dialog.tsx), falling back to dvh
+      // where it is unset. The zeroed-above-threshold safe-area inset above is
+      // deliberate and unchanged; this is the separate keyboard-aware channel.
+      root.style.setProperty('--visual-viewport-height', `${visibleHeight}px`);
     };
 
     const scheduleUpdate = () => {

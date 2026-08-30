@@ -632,7 +632,7 @@ function LandsViewContent() {
   }
 
   return (
-    <div className="space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-[34rem] xl:max-w-none">
+    <div className="space-y-4 tablet:mx-auto tablet:max-w-[34rem] xl:max-w-none">
       {selectedLand && (
         <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
           <div className="space-y-4 xl:sticky xl:top-0">

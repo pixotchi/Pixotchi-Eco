@@ -484,14 +484,17 @@ export default function BaccaratDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : handleClose())}>
       <DialogContent
-        className="blackjack-dialog-surface max-h-[calc(100dvh-1rem)] w-[min(96vw,34rem)] overflow-hidden border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
+        className="blackjack-dialog-surface max-h-full w-[min(96vw,34rem)] overflow-hidden border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
         mobileMode="center"
         surface="game"
         size="full"
         hideCloseButton
         /* Money game with no visible close button: a stray backdrop tap must not
-           abandon a round. */
+           abandon a round — nor may a stray Escape press. */
         onPointerDownOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => {
+          if (walletTxPending || hasPendingGame) event.preventDefault();
+        }}
       >
         <DialogTitle className="sr-only">Baccarat</DialogTitle>
         <DialogDescription className="sr-only">
@@ -500,10 +503,10 @@ export default function BaccaratDialog({
         <Button
           type="button"
           variant="headerIcon"
-          size="iconCompact"
+          size="icon"
           onClick={handleClose}
           aria-label="Close Baccarat dialog"
-          className="absolute right-2 top-2 z-50 h-10 min-h-10 w-10 min-w-10 sm:right-3 sm:top-3"
+          className="absolute right-3 top-3 z-50"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </Button>

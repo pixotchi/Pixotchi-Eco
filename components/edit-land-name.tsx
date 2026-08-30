@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,9 +39,24 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 
 	const isOwnedByUser = address && land.owner.toLowerCase() === address.toLowerCase();
 
+	const autoCloseTimerRef = useRef<number | null>(null);
+
+	// Reset the pending flag alongside the name: it was only cleared in the
+	// success/error handlers, so a mid-transaction close dead-ended the dialog.
 	useEffect(() => {
-		if (isOpen) setNewName(land.name || '');
+		if (isOpen) {
+			setNewName(land.name || '');
+			setIsTransactionPending(false);
+		}
 	}, [isOpen, land.name]);
+
+	useEffect(() => {
+		return () => {
+			if (autoCloseTimerRef.current !== null) {
+				window.clearTimeout(autoCloseTimerRef.current);
+			}
+		};
+	}, []);
 
 	const handleNameChange = (value: string) => {
 		setNewName(truncateUtf8ToMaxBytes(value, LAND_NAME_RULE.maxBytes));
@@ -57,7 +72,14 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 		toast.success(`Land name changed to "${trimmedName}"!`);
 		setIsTransactionPending(false);
 		onNameChanged?.(land.tokenId, trimmedName);
-		setTimeout(() => setIsOpen(false), 800);
+		if (autoCloseTimerRef.current !== null) {
+			window.clearTimeout(autoCloseTimerRef.current);
+		}
+		// Matches the plant rename dialog's delay (they used to differ, 800 vs 1000).
+		autoCloseTimerRef.current = window.setTimeout(() => {
+			autoCloseTimerRef.current = null;
+			setIsOpen(false);
+		}, 1000);
 	};
 
 	const handleError = (error: UntypedValue) => {

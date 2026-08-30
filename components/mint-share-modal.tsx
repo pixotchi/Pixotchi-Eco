@@ -203,14 +203,20 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
     onOpenChange(false);
   }, [isMiniApp, onOpenChange, tweetUrl]);
 
-  // Reset short URL when modal closes
-  const handleOpenChange = useCallback((newOpen: boolean) => {
-    if (!newOpen) {
+  // Reset on close via the `open` PROP, not only inside onOpenChange: when the
+  // parent set open={false} programmatically, onOpenChange never fired, the
+  // stale shortUrl survived, and the next mint showed the previous plant's
+  // share link (the generation effect short-circuits on a truthy shortUrl).
+  useEffect(() => {
+    if (!open) {
       setShortUrl("");
       setIsGeneratingUrl(false);
       generationAttemptKeyRef.current = null;
       setGenerationFailed(false);
     }
+  }, [open]);
+
+  const handleOpenChange = useCallback((newOpen: boolean) => {
     onOpenChange(newOpen);
   }, [onOpenChange]);
 
@@ -229,30 +235,31 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
             {/* Plant Image and Name with celebration animation */}
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-32 h-32 flex items-center justify-center">
-                {/* Celebration sparkles animation */}
+                {/* Celebration sparkles: finite (6 pulses ≈ the bounce's length),
+                    not infinite — five never-ending pulse layers incl. a blurred
+                    gradient repainted this dialog for as long as it stayed open. */}
                 <div className="absolute inset-0 pointer-events-none">
                   <Sparkles
-                    className="absolute top-0 left-0 w-4 h-4 text-yellow-400 animate-pulse"
-                    style={{ animationDelay: '0s', animationDuration: '1.5s' }}
+                    className="absolute top-0 left-0 w-4 h-4 text-yellow-400 animate-[pulse_1.5s_ease-in-out_6]"
+                    style={{ animationDelay: '0s' }}
                   />
                   <Sparkles
-                    className="absolute top-2 right-2 w-5 h-5 text-yellow-300 animate-pulse"
-                    style={{ animationDelay: '0.3s', animationDuration: '2s' }}
+                    className="absolute top-2 right-2 w-5 h-5 text-yellow-300 animate-[pulse_2s_ease-in-out_4]"
+                    style={{ animationDelay: '0.3s' }}
                   />
                   <Sparkles
-                    className="absolute bottom-0 left-4 w-4 h-4 text-yellow-500 animate-pulse"
-                    style={{ animationDelay: '0.6s', animationDuration: '1.8s' }}
+                    className="absolute bottom-0 left-4 w-4 h-4 text-yellow-500 animate-[pulse_1.8s_ease-in-out_5]"
+                    style={{ animationDelay: '0.6s' }}
                   />
                   <Sparkles
-                    className="absolute bottom-4 right-0 w-3 h-3 text-yellow-400 animate-pulse"
-                    style={{ animationDelay: '0.9s', animationDuration: '2.2s' }}
+                    className="absolute bottom-4 right-0 w-3 h-3 text-yellow-400 animate-[pulse_2.2s_ease-in-out_4]"
+                    style={{ animationDelay: '0.9s' }}
                   />
                 </div>
 
-                {/* Subtle glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl animate-pulse"
-                  style={{ animationDuration: '3s' }}
-                />
+                {/* Static glow: the blur-xl layer no longer pulses (a blurred
+                    animating gradient is the expensive kind of decoration). */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl" />
 
                 <Image
                   src={PLANT_IMAGES[(data.strainId || 1) as keyof typeof PLANT_IMAGES] || PLANT_IMAGES[1]}

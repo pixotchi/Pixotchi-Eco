@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { DESKTOP_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useChat } from './chat-context';
 import ChatMessages from './chat-messages';
 import ChatInput from './chat-input';
@@ -55,12 +56,18 @@ function DesktopChatPane({
 
 function ChatDialogContent() {
   const { mode, setMode, isAITyping } = useChat();
+  // Real gate, not CSS hiding: the two desktop panes used to mount (and fetch
+  // both histories) on every phone open, flashing the visible pane's loader.
+  const isDesktopChat = useMediaQuery(DESKTOP_MEDIA_QUERY);
 
   return (
     <DialogContent
       size="full"
       surface="soft"
-      className="flex h-[min(86dvh,42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border sm:h-[82dvh] sm:w-[calc(100vw-2rem)] xl:w-[min(92vw,56rem)] xl:max-w-[56rem]"
+      /* Height caps against the keyboard-inclusive visual viewport (fixed dvh
+         kept the sticky input under the iOS keyboard — this is THE dialog whose
+         whole purpose is typing). */
+      className="flex h-[min(86dvh,calc(var(--visual-viewport-height,100dvh)*0.86),42rem)] w-[min(94vw,28rem)] max-w-md flex-col rounded-[var(--radius-dialog)] border sm:h-[min(82dvh,calc(var(--visual-viewport-height,100dvh)*0.82))] sm:w-[calc(100vw-2rem)] xl:w-[min(92vw,56rem)] xl:max-w-[56rem]"
     >
       <DialogHeader>
         <DialogTitle className="flex items-center justify-between">
@@ -87,30 +94,31 @@ function ChatDialogContent() {
           </div>
         </DialogTitle>
         <DialogDescription>
-          <span className="xl:hidden">
-            Chat with the community or get help from Neural Seed agent.
-          </span>
-          <span className="hidden xl:inline">
-            Chat with the community or get help from Neural Seed agent.
-          </span>
+          Chat with the community or get help from Neural Seed agent.
         </DialogDescription>
       </DialogHeader>
 
-      <div className="flex-grow overflow-hidden xl:hidden">
-        <ChatMessages />
-      </div>
-
-      <div className="hidden min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3 xl:grid">
-        <DesktopChatPane mode="public" title="Public" icon="/icons/chat-icon.webp" />
-        <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
-      </div>
-
-      <DialogFooter sticky className="pt-3 xl:hidden">
-        <div className="w-full space-y-2">
-          {isAITyping && <AITypingIndicator />}
-          <ChatInput />
+      {!isDesktopChat && (
+        <div className="flex-grow overflow-hidden">
+          <ChatMessages />
         </div>
-      </DialogFooter>
+      )}
+
+      {isDesktopChat && (
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3">
+          <DesktopChatPane mode="public" title="Public" icon="/icons/chat-icon.webp" />
+          <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
+        </div>
+      )}
+
+      {!isDesktopChat && (
+        <DialogFooter sticky className="pt-3">
+          <div className="w-full space-y-2">
+            {isAITyping && <AITypingIndicator />}
+            <ChatInput />
+          </div>
+        </DialogFooter>
+      )}
     </DialogContent>
   );
 }

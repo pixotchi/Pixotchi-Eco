@@ -16,22 +16,9 @@
   --ock-compat-line: hsl(var(--border));
 }
 
-.dark {
-  --ock-compat-foreground: hsl(var(--foreground));
-  --ock-compat-foreground-muted: hsl(var(--muted-foreground));
-  --ock-compat-foreground-inverse: hsl(var(--primary-foreground));
-  --ock-compat-background: hsl(var(--card));
-  --ock-compat-background-hover: hsl(var(--accent));
-  --ock-compat-background-active: hsl(var(--secondary));
-  --ock-compat-background-alternate: hsl(var(--secondary));
-  --ock-compat-background-alternate-hover: hsl(var(--muted));
-  --ock-compat-background-alternate-active: hsl(var(--border));
-  --ock-compat-primary: hsl(var(--primary));
-  --ock-compat-primary-hover: hsl(var(--primary) / 0.88);
-  --ock-compat-primary-active: hsl(var(--primary) / 0.78);
-  --ock-compat-error: hsl(var(--destructive));
-  --ock-compat-line: hsl(var(--border));
-}
+/* No .dark block: every value above is hsl(var(--token)) indirection, and the
+   theme class lives on the same element as :root, so the :root block already
+   resolves correctly for all eight themes. */
 
 .ock-compat-font {
   font-family: var(--ock-compat-font);

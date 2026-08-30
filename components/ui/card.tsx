@@ -1,27 +1,28 @@
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
+/*
+ * Removed: the `density` prop (zero call sites — every branch resolved to the
+ * regular column), the `lg` padding and `inset`/`promo`/`game` surfaces (zero
+ * <Card> call sites), and the unnamed role="group" on the inner wrapper (an
+ * unnamed group adds a useless node to the accessibility tree on every card).
+ */
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  density?: 'compact' | 'regular' | 'spacious';
   hover?: boolean;
-  padding?: 'none' | 'sm' | 'md' | 'lg';
-  surface?: 'default' | 'raised' | 'inset' | 'promo' | 'game';
+  padding?: 'none' | 'sm' | 'md';
+  surface?: 'default' | 'raised';
 }
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, density = 'regular', hover = false, padding = 'md', surface = 'default', children, ...props }, ref) => {
+  ({ className, hover = false, padding = 'md', surface = 'default', children, ...props }, ref) => {
     const paddingStyles = {
       none: 'p-0',
-      sm: density === 'compact' ? 'p-2.5' : 'p-3',
-      md: density === 'compact' ? 'p-3' : density === 'spacious' ? 'p-5' : 'p-4',
-      lg: density === 'compact' ? 'p-4' : density === 'spacious' ? 'p-7' : 'p-6',
+      sm: 'p-3',
+      md: 'p-4',
     };
     const surfaceStyles = {
-      default: 'border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow backdrop-blur-md',
+      default: 'border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow backdrop-blur-md',
       raised: 'border-[hsl(var(--border-strong)/0.4)] bg-card bg-[image:var(--gradient-surface-strong)] text-card-foreground surface-shadow-raised backdrop-blur-md',
-      inset: 'border-[hsl(var(--border-strong)/0.32)] bg-secondary/80 bg-[image:var(--gradient-panel)] text-foreground surface-inset',
-      promo: 'border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-foreground surface-shadow',
-      game: 'border-[hsl(var(--border-strong)/0.34)] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow',
     };
 
     return (
@@ -35,7 +36,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         )}
         {...props}
       >
-        <div className={cn('h-full w-full flex flex-col', paddingStyles[padding])} role="group">
+        <div className={cn('h-full w-full flex flex-col', paddingStyles[padding])}>
           {children}
         </div>
       </div>

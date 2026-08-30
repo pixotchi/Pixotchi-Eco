@@ -575,7 +575,7 @@ export default function ActivityTab() {
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div
           data-activity-feed-scroll
-          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3"
+          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3"
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -639,7 +639,7 @@ export default function ActivityTab() {
 
     return (
       <div className="flex h-full min-h-0 flex-col gap-3">
-        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 min-[54rem]:pr-3">
+        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3">
           {visibleActivities.map(renderActivity)}
         </div>
 
@@ -657,7 +657,7 @@ export default function ActivityTab() {
    * at 390px that left 152 of 285 nodes (53%) with a zero-size box, including a second
    * twelve-row feed and 13 of the 25 activity icons.
    *
-   * The min-[54rem] classes stay as the first-frame guard for the gap between a resize
+   * The tablet classes stay as the first-frame guard for the gap between a resize
    * crossing the breakpoint and the matchMedia change event landing.
    *
    * DOM only: the fetches key off `myAddress`, and the desktop feed memos are
@@ -702,9 +702,9 @@ export default function ActivityTab() {
   };
 
   return (
-    <div className="h-full min-h-0 space-y-4 min-[54rem]:mx-auto min-[54rem]:max-w-7xl">
+    <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
       {!isDesktopActivity && (
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden pb-4 min-[54rem]:hidden">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden pb-4 tablet:hidden">
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center gap-3">
             <div className="min-w-0">
@@ -756,8 +756,8 @@ export default function ActivityTab() {
       )}
 
       {isDesktopActivity && (
-      <div className="hidden min-[54rem]:grid min-[54rem]:min-h-0 min-[54rem]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[54rem]:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+      <div className="hidden tablet:grid tablet:min-h-0 tablet:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] tablet:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <TabCard className="tablet:flex tablet:h-[calc(100dvh-12rem)] tablet:flex-col tablet:overflow-hidden xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
@@ -771,7 +771,7 @@ export default function ActivityTab() {
               showDirection={desktopAllFilter.showDirection}
             />
           </CardHeader>
-          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
+          <CardContent className="tablet:min-h-0 tablet:flex-1 tablet:overflow-visible">
             {renderFeedContent("all", desktopAllActivities, loadingByView.all, errorByView.all, desktopAllFilter, {
               page: desktopPageByView.all,
               setPage: (nextPage) => setDesktopPage("all", nextPage),
@@ -779,7 +779,7 @@ export default function ActivityTab() {
           </CardContent>
         </TabCard>
 
-        <TabCard className="min-[54rem]:flex min-[54rem]:h-[calc(100dvh-12rem)] min-[54rem]:flex-col min-[54rem]:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+        <TabCard className="tablet:flex tablet:h-[calc(100dvh-12rem)] tablet:flex-col tablet:overflow-hidden xl:h-[calc(100dvh-7rem)]">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
@@ -793,7 +793,7 @@ export default function ActivityTab() {
               showDirection={desktopMyFilter.showDirection}
             />
           </CardHeader>
-          <CardContent className="min-[54rem]:min-h-0 min-[54rem]:flex-1 min-[54rem]:overflow-visible">
+          <CardContent className="tablet:min-h-0 tablet:flex-1 tablet:overflow-visible">
             {renderFeedContent("my", desktopMyActivities, loadingByView.my, errorByView.my, desktopMyFilter, {
               page: desktopPageByView.my,
               setPage: (nextPage) => setDesktopPage("my", nextPage),

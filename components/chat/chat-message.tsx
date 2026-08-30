@@ -1,15 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
-import { Bot, User, CheckCircle2 } from "lucide-react";
+import { Bot, User } from "lucide-react";
 import { cn, formatAddress } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
 import { Button } from "@/components/ui/button";
-import ChatProfileDialog from "./chat-profile-dialog";
 import dynamic from "next/dynamic";
 
 const MessageResponse = dynamic(
@@ -49,30 +48,55 @@ function formatRelativeShort(date: Date) {
 interface ChatMessageProps {
   message: ChatMessage | AIChatMessage;
   isAIMode?: boolean;
+  /**
+   * The viewer's CHAT identity (publicChatAddress), passed down by the list.
+   * Comparing against the raw wagmi address broke own-message alignment for
+   * Solana-bridge users, whose chat identity is a different address.
+   */
+  ownAddress?: string | null;
+  /** Bumped by the list every ~30s so relative timestamps tick over. */
+  clockTick?: number;
+  onOpenProfile?: (address: string) => void;
   'aria-setsize'?: number;
   'aria-posinset'?: number;
 }
 
-export default function ChatMessageComponent({
+/*
+ * React.memo: this row used to be a plain function component, so every provider
+ * tick (streaming updates arrive every ~60ms) re-ran up to 50 rows x 7 date-fns
+ * calls. Now only the row whose message object actually changed re-renders,
+ * plus a whole-list pass at most twice a minute for the clock tick.
+ */
+function ChatMessageComponent({
   message,
   isAIMode = false,
+  ownAddress = null,
+  clockTick = 0,
+  onOpenProfile,
   'aria-setsize': ariaSetsize,
   'aria-posinset': ariaPosinset
 }: ChatMessageProps) {
   const { address } = useAccount();
-  
+
   const isAIMessage = isAIMode && 'type' in message && message.type === 'assistant';
   const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as UntypedValue).displayName === 'You');
-  const isOwnPublicMessage = !isAIMode && address?.toLowerCase() === message.address.toLowerCase();
-  
+  const isOwnPublicMessage = !isAIMode && !!ownAddress && ownAddress.toLowerCase() === message.address.toLowerCase();
+
   const { name } = usePrimaryName(message.address);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const trackProfileVisit = useCallback(() => {
     if (!address) return;
     postMissionProgress({ address, taskId: 's2_visit_profile' }).catch(() => {});
   }, [address]);
-  
+
+  // Memoized on timestamp + the list's slow clock tick, instead of recomputing
+  // seven date-fns differences on every render.
+  const relativeTime = useMemo(
+    () => formatRelativeShort(new Date(message.timestamp)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [message.timestamp, clockTick],
+  );
+
   let displayName = '';
   if (isAIMessage) {
     displayName = 'Neural Seed';
@@ -83,14 +107,14 @@ export default function ChatMessageComponent({
   }
 
   const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
-  
+
   const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
                   isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
                   'chat-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
-  const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage;
+  const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage && Boolean(onOpenProfile);
   const timestampColor = isOwnPublicMessage || isUserAIMessage
     ? 'text-primary-foreground/80'
     : 'text-muted-foreground';
@@ -105,12 +129,12 @@ export default function ChatMessageComponent({
     <Button
       type="button"
       onClick={() => {
-        setProfileOpen(true);
+        onOpenProfile?.(message.address);
         trackProfileVisit();
       }}
       variant="outline"
       size="compact"
-      className="h-6 min-h-6 rounded-md border-primary/25 bg-primary/5 px-2 py-0 text-[10px] text-primary shadow-none hover:bg-primary/10 active:translate-y-0 active:scale-100"
+      className="rounded-md border-primary/25 bg-primary/5 px-2 py-0 text-[10px] text-primary shadow-none hover:bg-primary/10 active:translate-y-0 active:scale-100"
       aria-label={`Open profile for ${displayName}`}
     >
       Profile
@@ -118,71 +142,63 @@ export default function ChatMessageComponent({
   ) : null;
 
   return (
-    <>
-      <div className={cn("flex", alignment)}>
+    <div className={cn("flex", alignment)}>
+      <div
+        className={cn(
+          "min-w-0 rounded-[var(--radius-control)] [overflow-wrap:anywhere]",
+          bubbleSize,
+          bgColor
+        )}
+        role="article"
+        aria-label={`Message from ${displayName}`}
+        aria-setsize={ariaSetsize}
+        aria-posinset={ariaPosinset}
+      >
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
+            {(isUserAIMessage || isOwnPublicMessage) && <User className="w-4 h-4" />}
+            {displayNameNode}
+            {/* No check icon next to resolved names any more: a blue check next
+                to a name reads as "verified account", but it only meant an
+                ENS/Basename lookup succeeded. */}
+            {profileTrigger}
+          </div>
+          <span className={cn("text-xs whitespace-nowrap self-start", timestampColor)}>
+            {relativeTime}
+          </span>
+        </div>
+
         <div
           className={cn(
-            "min-w-0 rounded-[var(--radius-control)] [overflow-wrap:anywhere]",
-            bubbleSize,
-            bgColor
+            "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",
+            !isAIMessage && "whitespace-pre-wrap"
           )}
-          role="article"
-          aria-label={`Message from ${displayName}`}
-          aria-setsize={ariaSetsize}
-          aria-posinset={ariaPosinset}
         >
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
-              {(isUserAIMessage || isOwnPublicMessage) && <User className="w-4 h-4" />}
-              {displayNameNode}
-              {!isAIMessage && !isUserAIMessage && !isOwnPublicMessage && name && (
-                <CheckCircle2 className="w-3.5 h-3.5 text-[hsl(var(--info))] flex-shrink-0" />
+          {isAIMessage ? (
+            <MessageResponse
+              className={cn(
+                "max-w-none text-sm leading-6 text-current [overflow-wrap:anywhere]",
+                "[&_*]:max-w-full",
+                "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0",
+                "[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:leading-6",
+                "[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h2]:leading-6",
+                "[&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:leading-5",
+                "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5",
+                "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5",
+                "[&_li]:pl-0 [&_li]:marker:text-current [&_li>p]:my-0",
+                "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3",
+                "[&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:p-2",
+                "[&_a]:break-words [&_code]:break-words [&_strong]:font-bold"
               )}
-              {profileTrigger}
-            </div>
-            <span className={cn("text-xs whitespace-nowrap self-start", timestampColor)}>
-              {formatRelativeShort(new Date(message.timestamp))}
-            </span>
-          </div>
-          
-          <div
-            className={cn(
-              "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",
-              !isAIMessage && "whitespace-pre-wrap"
-            )}
-          >
-            {isAIMessage ? (
-              <MessageResponse
-                className={cn(
-                  "max-w-none text-sm leading-6 text-current [overflow-wrap:anywhere]",
-                  "[&_*]:max-w-full",
-                  "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0",
-                  "[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:leading-6",
-                  "[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h2]:leading-6",
-                  "[&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:leading-5",
-                  "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5",
-                  "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5",
-                  "[&_li]:pl-0 [&_li]:marker:text-current [&_li>p]:my-0",
-                  "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3",
-                  "[&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:p-2",
-                  "[&_a]:break-words [&_code]:break-words [&_strong]:font-bold"
-                )}
-              >
-                {message.message}
-              </MessageResponse>
-            ) : message.message}
-          </div>
+            >
+              {message.message}
+            </MessageResponse>
+          ) : message.message}
         </div>
       </div>
-
-      {canOpenProfile && (
-        <ChatProfileDialog
-          address={message.address}
-          open={profileOpen}
-          onOpenChange={setProfileOpen}
-        />
-      )}
-    </>
+    </div>
   );
 }
+
+export default React.memo(ChatMessageComponent);

@@ -170,7 +170,13 @@ const DialogContent = React.forwardRef<
           // frame's inline pointerEvents:none would otherwise have handled.
           "pointer-events-auto [[data-aria-hidden=true]_&]:pointer-events-none",
           "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
-          "max-h-[90dvh]",
+          /* Cap against the KEYBOARD-INCLUSIVE visual viewport, not just dvh:
+             dvh ignores the on-screen keyboard on iOS, so a 90dvh panel kept its
+             full height while the keyboard halved the screen and the sticky
+             footer's submit button landed under it. --visual-viewport-height is
+             maintained by useViewportInsets; the dvh term is the fallback for
+             routes that don't run it. */
+          "max-h-[min(90dvh,calc(var(--visual-viewport-height,100dvh)*0.9))]",
           "rounded-[var(--radius-dialog)]",
           dialogSizeClassName[size],
           dialogSurfaceClassName[danger ? "danger" : surface],
@@ -187,7 +193,7 @@ const DialogContent = React.forwardRef<
               // Size and alignment
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
               // Visuals: match header/task/stake icon controls
-              "rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.34)] !bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)]",
+              "rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] !bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)]",
               "hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
               // Accessibility focus style
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -197,8 +203,8 @@ const DialogContent = React.forwardRef<
               "transition-[border-color,background-color,color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] disabled:pointer-events-none"
             )}
           >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            {/* aria-label above is the accessible name; the icon is decorative. */}
+            <X className="h-4 w-4" aria-hidden="true" />
           </DialogPrimitive.Close>
         )}
       </div>

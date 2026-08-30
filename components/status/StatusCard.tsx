@@ -52,7 +52,7 @@ export function StatusCard({ service }: StatusCardProps) {
   ];
 
   return (
-    <article className="chromatic-white-surface rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.34)] bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+    <article className="chromatic-white-surface rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span
