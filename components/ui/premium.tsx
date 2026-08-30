@@ -26,7 +26,12 @@ export function StatusChip({
   tone?: keyof typeof STATUS_CHIP_TONE_TO_VARIANT;
 }) {
   return (
-    <Badge variant={STATUS_CHIP_TONE_TO_VARIANT[tone]} className={className}>
+    <Badge
+      variant={STATUS_CHIP_TONE_TO_VARIANT[tone]}
+      /* Preserve StatusChip's original 24px density (Badge's default is 28px)
+         while keeping Badge as the single visual source. */
+      className={cn("min-h-6 px-2 py-0.5", className)}
+    >
       {children}
     </Badge>
   );

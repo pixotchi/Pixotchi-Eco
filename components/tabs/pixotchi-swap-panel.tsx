@@ -1479,7 +1479,13 @@ export default function PixotchiSwapPanel() {
           ) : null}
           <div
             id={messageId}
-            className={cn(SWAP_STATUS_TEXT_CLASS, 'flex h-7 pt-2')}
+            className={cn(
+              SWAP_STATUS_TEXT_CLASS,
+              'flex',
+              /* Collapses when empty: the fixed h-7 slot reserved 28px of dead
+                 space under the swap button for the whole session. */
+              formatExecutionMessage(swapMessage)?.trim() ? 'h-7 pt-2' : 'h-0 overflow-hidden',
+            )}
             data-testid="ockSwapMessage_Message"
             role="status"
             aria-live="polite"

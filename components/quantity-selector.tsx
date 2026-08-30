@@ -32,12 +32,12 @@ export default function QuantitySelector({
   };
 
   const compact = size === 'xs' || size === 'sm';
-  // 36px floor (compact) / 44px (default): the old 20px/28px steppers were
-  // below even WCAG 2.5.8's 24px minimum, on a primary purchase control.
+  // Original density restored (24px compact is the one bump kept — 20px sat
+  // below WCAG 2.5.8's 24px minimum on a purchase control).
   const buttonSize = compact
-    ? '!h-9 !min-h-9 !w-9 !min-w-9 p-0'
-    : '!h-11 !min-h-11 !w-11 !min-w-11 p-0';
-  const iconSize = compact ? 'h-3 w-3' : 'h-4 w-4';
+    ? '!h-6 !min-h-6 !w-6 !min-w-6 p-0'
+    : '!h-7 !min-h-7 !w-7 !min-w-7 p-0';
+  const iconSize = compact ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5';
   const textSize = compact ? 'text-xs' : 'text-sm';
 
   return (

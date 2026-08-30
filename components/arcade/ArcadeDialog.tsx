@@ -1011,19 +1011,44 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       <div className="text-sm font-medium text-foreground">Box play</div>
                       <p className="text-xs text-muted-foreground">Pick a box, then choose whether to spend a star.</p>
                     </div>
-                    {/* ToggleGroup, not two hand-rolled buttons: gives radiogroup
-                        semantics, roving focus and full-height touch targets
-                        (the bespoke pair was 32px with no arrow-key support). */}
-                    <div className="shrink-0">
-                      <ToggleGroup
-                        ariaLabel="Star spending"
-                        value={withStar ? 'star' : 'nostar'}
-                        onValueChange={(next) => setWithStar(next === 'star')}
-                        options={[
-                          { value: 'nostar', label: 'No star' },
-                          { value: 'star', label: 'Use star' },
-                        ]}
-                      />
+                    {/* Original compact track look, with real switch semantics. */}
+                    <div
+                      className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1"
+                      role="radiogroup"
+                      aria-label="Star spending"
+                    >
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
+                          !withStar
+                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
+                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
+                        )}
+                        onClick={() => setWithStar(false)}
+                        role="radio"
+                        aria-checked={!withStar}
+                      >
+                        No star
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
+                          withStar
+                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
+                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
+                        )}
+                        onClick={() => setWithStar(true)}
+                        role="radio"
+                        aria-checked={withStar}
+                      >
+                        Use star
+                      </Button>
                     </div>
                   </div>
 

@@ -716,7 +716,11 @@ export default function ActivityTab() {
   return (
     <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
       {!isDesktopActivity && (
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden pb-4 tablet:hidden">
+      <TabCard
+        /* No outer pb-4: it stacked on the inner p-4 and left a 16px dead band
+           between the pagination footer surface and the card edge. */
+        className="flex h-full min-h-[26rem] flex-col overflow-hidden tablet:hidden"
+      >
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center gap-3">
             <div className="min-w-0">

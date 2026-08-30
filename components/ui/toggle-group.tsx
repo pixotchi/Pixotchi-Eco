@@ -28,10 +28,10 @@ export interface ToggleGroupProps {
 // Button's cva size (`compact`) by tailwind-merge, so an entry without min-h would
 // inherit compact's 32px floor rather than the height it appears to set.
 const sizeClassNames = {
-  /* All sizes sit on the 44px touch floor Button documents — sm/default were
-     40px, on the app's primary segmented control (14 importers). */
-  sm: "h-auto min-h-11 px-2.5 py-1.5 text-xs",
-  default: "h-auto min-h-11 px-3 py-1.5 text-xs sm:text-sm",
+  /* Original 40px density restored by request — the 44px floor bump made the
+     app's segmented controls read as oversized. lg remains the 44px option. */
+  sm: "h-auto min-h-10 px-2.5 py-1.5 text-xs",
+  default: "h-auto min-h-10 px-3 py-1.5 text-xs sm:text-sm",
   lg: "h-auto min-h-11 px-3.5 py-2 text-sm",
 } as const;
 

@@ -570,7 +570,7 @@ export default function SwapTab() {
     <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-stretch tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
       {!isDesktopSwapLayout && (
       <TabCard
-        className={`${isChartView ? 'flex flex-col' : ''} pb-4 tablet:hidden`}
+        className={`${isChartView ? 'flex flex-col' : ''} tablet:hidden`}
         padding={isChartView ? 'none' : 'md'}
       >
         <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
