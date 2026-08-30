@@ -118,11 +118,11 @@ export default function AboutTab() {
     // The page is short by design. On desktop it centres in the pane so the
     // remaining space reads as deliberate breathing room rather than the content
     // having collapsed to the top of an empty screen.
-    <div className="mx-auto w-full max-w-[36rem] lg:flex lg:min-h-[calc(100dvh-13rem)] lg:max-w-4xl lg:items-center xl:min-h-[calc(100dvh-9rem)]">
+    <div className="mx-auto w-full max-w-[36rem] tablet:flex tablet:min-h-[60dvh] tablet:max-w-4xl tablet:items-center">
 
-      <div className="w-full space-y-8 lg:grid lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-stretch lg:gap-5 lg:space-y-0">
+      <div className="w-full space-y-8 tablet:grid tablet:grid-cols-[minmax(0,1fr)_17.5rem] tablet:items-stretch tablet:gap-5 tablet:space-y-0">
       {/* Description */}
-      <TabCard className="lg:h-full">
+      <TabCard className="tablet:h-full">
         {/* The gap lives on the container, not as a margin on the actions block:
             `mt-auto` absorbs free space, so when this card is the taller column
             (free space = 0) a margin there collapses and the rule would sit flush
@@ -130,7 +130,7 @@ export default function AboutTab() {
         <CardContent className="flex h-full flex-col gap-6">
           {/* Capped measure: the prose would otherwise run the full column width
               on desktop and become hard to read. */}
-          <div className="space-y-4 lg:max-w-[62ch]">
+          <div className="space-y-4 tablet:max-w-[62ch]">
             <p className="leading-relaxed text-foreground/85">
               <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
             </p>
@@ -140,13 +140,13 @@ export default function AboutTab() {
           </div>
 
           {/* Actions sit against the bottom of the card so both columns end level. */}
-          <div className="border-t border-border/55 pt-5 lg:mt-auto">
-            <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:gap-2">
+          <div className="border-t border-border/55 pt-5 tablet:mt-auto">
+            <div className="grid grid-cols-2 gap-2 tablet:flex tablet:flex-wrap tablet:gap-2">
               {enabled && (
                 <Button
                   variant="default"
                   onClick={() => start({ reset: true })}
-                  className="lg:w-auto"
+                  className="tablet:w-auto"
                   aria-label="Start Pixotchi tutorial"
                 >
                   <PlayCircle className="w-4 h-4 mr-2" />
@@ -156,7 +156,7 @@ export default function AboutTab() {
               <Button
                 variant="outline"
                 onClick={() => setShowFeedbackDialog(true)}
-                className="lg:w-auto"
+                className="tablet:w-auto"
                 aria-label="Open feedback dialog"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
@@ -165,7 +165,7 @@ export default function AboutTab() {
               <Button
                 variant="outline"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
-                className={enabled ? "col-span-2 lg:col-span-1 lg:w-auto" : "lg:w-auto"}
+                className={enabled ? "col-span-2 tablet:col-span-1 tablet:w-auto" : "tablet:w-auto"}
                 aria-label="Open Pixotchi status"
               >
                 <Radio className="w-4 h-4 mr-2" />
@@ -229,10 +229,10 @@ export default function AboutTab() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 lg:flex lg:h-full lg:flex-col lg:justify-between lg:gap-5 lg:space-y-0 lg:rounded-[var(--radius-panel)] lg:border lg:border-[hsl(var(--border-strong)/0.4)] lg:bg-card lg:bg-[image:var(--gradient-surface-strong)] lg:p-5 lg:[box-shadow:var(--surface-highlight),var(--shadow-raised)] lg:backdrop-blur-md">
+      <div className="space-y-4 tablet:flex tablet:h-full tablet:flex-col tablet:justify-between tablet:gap-5 tablet:space-y-0 tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-[hsl(var(--border-strong)/0.4)] tablet:bg-card tablet:bg-[image:var(--gradient-surface-strong)] tablet:p-5 tablet:[box-shadow:var(--surface-highlight),var(--shadow-raised)] tablet:backdrop-blur-md">
         {/* Community first, version last: `order` only applies in flex/grid, so the
             previous DOM order left the version stranded above the heading on mobile. */}
-        <div className="text-center lg:flex lg:flex-1 lg:flex-col lg:justify-center">
+        <div className="text-center tablet:flex tablet:flex-1 tablet:flex-col tablet:justify-center">
           <h3 className="mb-3 text-sm font-semibold">Join our Community</h3>
           <div className="flex justify-center gap-3">
             <button
@@ -273,7 +273,7 @@ export default function AboutTab() {
         </div>
 
         {/* Version Number */}
-        <div className="border-t border-border/55 pt-4 text-center lg:pt-4">
+        <div className="border-t border-border/55 pt-4 text-center tablet:pt-4">
           <span className="text-xs text-muted-foreground font-mono">
             v{packageJson.version}
           </span>

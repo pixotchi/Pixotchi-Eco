@@ -142,6 +142,8 @@ export default function ActivityTab() {
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('activity');
+  // See the 30s freshness guard on the visibility refetch effect below.
+  const lastVisibleFetchRef = useRef(0);
   const myAddress = isSolana ? twinAddress : address;
   const isWalletConnected = isConnected || (isSolana && !!twinAddress);
   const [activitiesByView, setActivitiesByView] = useState<Record<ActivityView, ProcessedActivityEvent[]>>({
@@ -335,6 +337,8 @@ export default function ActivityTab() {
   // Refresh when tab becomes visible
   useEffect(() => {
     if (!isVisible) return;
+    if (Date.now() - lastVisibleFetchRef.current < 30_000) return;
+    lastVisibleFetchRef.current = Date.now();
 
     fetchActivities();
   }, [isVisible, fetchActivities]);
@@ -353,20 +357,29 @@ export default function ActivityTab() {
     [perspective]
   );
 
+  // Clear the personal feed the moment the wallet changes: the previous
+  // account's rows used to keep rendering (with loading forced false because
+  // the stale list was non-empty) until the new fetch resolved.
+  useEffect(() => {
+    setActivitiesByView((previous) => (previous.my.length ? { ...previous, my: [] } : previous));
+    setLoadingByView((previous) => ({ ...previous, my: Boolean(myAddress) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAddress]);
+
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
       case "Attack":
-        return <AttackEventRenderer key={activity.id} event={activity} userAddress={address} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
+        return <AttackEventRenderer key={activity.id} event={activity} perspective={perspective} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       case "Killed":
-        return <KilledEventRenderer key={activity.id} event={activity} userAddress={address} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
+        return <KilledEventRenderer key={activity.id} event={activity} perspective={perspective} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       case "Mint":
         return <MintEventRenderer key={activity.id} event={activity} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       case "Played":
-        return <PlayedEventRenderer key={activity.id} event={activity} userAddress={address} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
+        return <PlayedEventRenderer key={activity.id} event={activity} perspective={perspective} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       case "ItemConsumed":
-        return <ItemConsumedEventRenderer key={activity.id} event={activity as BundledItemConsumedEvent} userAddress={address} itemMap={gardenItemMap} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
+        return <ItemConsumedEventRenderer key={activity.id} event={activity as BundledItemConsumedEvent} perspective={perspective} itemMap={gardenItemMap} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       case "ShopItemPurchased":
-        return <ShopItemPurchasedEventRenderer key={activity.id} event={activity} userAddress={address} itemMap={shopItemMap} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
+        return <ShopItemPurchasedEventRenderer key={activity.id} event={activity} perspective={perspective} itemMap={shopItemMap} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       // Land Event Renderers
       case "LandTransferEvent":
         return <LandTransferEventRenderer key={activity.id} event={activity} userAddress={address} />;
@@ -733,7 +746,7 @@ export default function ActivityTab() {
               }}
               options={[
                 { value: 'all', label: 'All' },
-                { value: 'my', label: 'My Activity' },
+                { value: 'my', label: 'Mine' },
               ]}
             />
           </div>
@@ -756,8 +769,8 @@ export default function ActivityTab() {
       )}
 
       {isDesktopActivity && (
-      <div className="hidden tablet:grid tablet:min-h-0 tablet:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] tablet:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <TabCard className="tablet:flex tablet:h-[calc(100dvh-12rem)] tablet:flex-col tablet:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+      <div className="hidden tablet:grid tablet:h-full tablet:min-h-0 tablet:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] tablet:gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <TabCard className="tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col tablet:overflow-hidden">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
@@ -779,7 +792,7 @@ export default function ActivityTab() {
           </CardContent>
         </TabCard>
 
-        <TabCard className="tablet:flex tablet:h-[calc(100dvh-12rem)] tablet:flex-col tablet:overflow-hidden xl:h-[calc(100dvh-7rem)]">
+        <TabCard className="tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col tablet:overflow-hidden">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>

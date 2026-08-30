@@ -20,7 +20,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { sdk } from '@farcaster/miniapp-sdk';
 import { Copy } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect,useState,type ReactNode } from 'react';
+import { useEffect,useRef,useState,type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
 import { erc20Abi } from 'viem';
 import { useAccount,useReadContract } from 'wagmi';
@@ -486,6 +486,8 @@ export default function SwapTab() {
   const [activeInfoToken, setActiveInfoToken] = useState<InfoToken>('seed');
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('swap');
+  // See the 30s freshness guard on the visibility refetch effect below.
+  const lastVisibleFetchRef = useRef(0);
   const isChartView = swapView === 'chart';
   const isInfoView = swapView === 'info';
   /*
@@ -536,7 +538,8 @@ export default function SwapTab() {
 
   // Refresh global balances when swap tab is visible (in case user swapped elsewhere/added funds)
   useEffect(() => {
-    if (isVisible) {
+    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
+      lastVisibleFetchRef.current = Date.now();
       window.dispatchEvent(new Event('balances:refresh'));
     }
   }, [isVisible]);
@@ -572,7 +575,7 @@ export default function SwapTab() {
       >
         <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
           <div className="flex items-center justify-between gap-4">
-            <CardTitle>{isChartView ? 'Chart' : isInfoView ? 'Info' : 'Swap'}</CardTitle>
+            <CardTitle>{isChartView ? 'Chart' : isInfoView ? 'Token Info' : 'Swap'}</CardTitle>
             <ToggleGroup
               ariaLabel="Swap panel view"
               value={swapView}
@@ -580,7 +583,7 @@ export default function SwapTab() {
               options={[
                 { value: 'swap', label: 'Swap' },
                 { value: 'chart', label: 'Chart' },
-                { value: 'info', label: 'Info' },
+                { value: 'info', label: 'Token Info' },
               ]}
               getButtonClassName={(value) =>
                 isSwapModuleDisabled && value === 'swap' ? 'opacity-60' : ''

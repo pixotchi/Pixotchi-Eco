@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import {
 DropdownMenu,
@@ -39,15 +40,25 @@ import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
+import { DESKTOP_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
 
+// Each inline panel reserves space while its chunk loads; without a fallback
+// the section collapsed to zero height and popped in (visible layout jump).
+const dynamicPanelFallback = () => (
+  <div className="min-h-24 animate-pulse rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/60" aria-hidden="true" />
+);
 const BatchClaimCard = dynamic(() => import("@/components/transactions/batch-claim-card"), {
+  loading: dynamicPanelFallback,
   ssr: false,
 });
 const BatchQuestStartCard = dynamic(() => import("@/components/transactions/batch-quest-start-card"), {
+  loading: dynamicPanelFallback,
   ssr: false,
 });
 const BuildingDetailsPanel = dynamic(() => import("@/components/building-details-panel"), {
+  loading: dynamicPanelFallback,
   ssr: false,
 });
 const LandMapModal = dynamic(() => import("@/components/map/land-map-modal").then((mod) => mod.LandMapModal), {
@@ -167,6 +178,12 @@ function LandsViewContent() {
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('dashboard');
+  // See the 30s freshness guard on the visibility refetch effect below.
+  const lastVisibleFetchRef = useRef(0);
+  const isDocumentVisible = useDocumentVisible();
+  // Real gate for the duplicated grids below (the CSS classes remain as the
+  // first-frame guard between a resize and this state syncing).
+  const isDesktopLand = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [isMapOpen, setIsMapOpen] = useState(false);
 
   // Map data hook
@@ -515,7 +532,8 @@ function LandsViewContent() {
 
   // Refresh when dashboard becomes visible
   useEffect(() => {
-    if (isVisible) {
+    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
+      lastVisibleFetchRef.current = Date.now();
       fetchData();
     }
   }, [isVisible, fetchData]);
@@ -578,7 +596,10 @@ function LandsViewContent() {
     onBlockNumber(blockNumber) {
       setCurrentBlock(blockNumber);
     },
-    enabled: hasUpgradingBuildings, // Only watch blocks when buildings are upgrading
+    // Gated on the in-app tab AND document visibility: the old guard only
+    // checked for upgrading buildings, so a backgrounded webview kept polling
+    // the RPC every 3s and re-rendering this whole view.
+    enabled: hasUpgradingBuildings && isVisible && isDocumentVisible,
     pollingInterval: 3000 // Check every 3 seconds instead of every block
   });
 
@@ -605,9 +626,19 @@ function LandsViewContent() {
 
   // Only block render if we have NO lands data at all
   if (loading && lands.length === 0) {
+    // Skeleton shaped like the real layout (selector + land stage + name),
+    // mirroring plants-view's documented pattern, so content doesn't jump in.
     return (
-      <div className="flex items-center justify-center py-8">
-        <BaseExpandedLoadingPageLoader text="Loading your lands..." />
+      <div className="space-y-4" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading your lands...</span>
+        <TabCard>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="aspect-square w-full rounded-[var(--radius-panel)]" />
+            <Skeleton className="mx-auto h-6 w-40" />
+            <Skeleton className="mx-auto h-4 w-24" />
+          </CardContent>
+        </TabCard>
       </div>
     );
   }
@@ -623,16 +654,16 @@ function LandsViewContent() {
   if (lands.length === 0) {
     return (
       <EmptyState
-        className="h-[60vh]"
+        className="min-h-[60dvh]"
         icon={LandPlot}
         title="No Lands Yet!"
-        description="Head over to the 'Mint' tab to get your first plot of land."
+        description="Go to the Mint tab to get your first plot of land."
       />
     );
   }
 
   return (
-    <div className="space-y-4 tablet:mx-auto tablet:max-w-[34rem] xl:max-w-none">
+    <div className="space-y-4 tablet:mx-auto tablet:max-w-[44rem] xl:max-w-none">
       {selectedLand && (
         <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
           <div className="space-y-4 xl:sticky xl:top-0">
@@ -788,7 +819,7 @@ function LandsViewContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(230px,320px)_minmax(0,1fr)] xl:items-start xl:justify-center xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)]">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
                 {/* Building Grid */}
                 <div className="space-y-4">
                   {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
@@ -797,6 +828,7 @@ function LandsViewContent() {
                     </div>
                   ) : (
                     <>
+                      {!isDesktopLand && (
                       <div className="xl:hidden">
                         <BuildingGrid
                           buildings={buildingType === 'village' ? villageBuildings : townBuildings}
@@ -829,7 +861,9 @@ function LandsViewContent() {
                           ) : null}
                         />
                       </div>
+                      )}
 
+                      {isDesktopLand && (
                       <div className="hidden xl:block space-y-4">
                         <section
                           className={`rounded-[var(--radius-panel)] border p-3 transition-colors ${buildingType === 'village' ? 'border-primary/60 bg-primary/5' : 'border-border bg-background/40'
@@ -895,6 +929,7 @@ function LandsViewContent() {
                           />
                         </section>
                       </div>
+                      )}
                     </>
                   )}
                 </div>

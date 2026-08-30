@@ -1,6 +1,7 @@
 "use client";
 
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
+import type { ActivityPerspective } from '@/lib/activity-filters';
 import { ITEM_ICONS } from '@/lib/constants';
 import {
 ActivityEvent,AttackEvent,BaccaratRoundResultEvent,BarracksBuiltEvent,
@@ -17,11 +18,41 @@ const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
   '1': { name: 'Fence', icon: '/icons/Fence.png' },
 };
 
+/*
+ * One module-level 30s clock shared by every TimeAgo instance. Timestamps were
+ * memoized purely on the (fixed) event timestamp, so "less than a minute ago"
+ * stayed frozen for the whole session.
+ */
+const slowTickSubscribers = new Set<() => void>();
+let slowTickInterval: ReturnType<typeof setInterval> | null = null;
+let slowTickValue = 0;
+function subscribeSlowTick(callback: () => void) {
+  slowTickSubscribers.add(callback);
+  if (slowTickInterval === null) {
+    slowTickInterval = setInterval(() => {
+      slowTickValue += 1;
+      slowTickSubscribers.forEach((subscriber) => subscriber());
+    }, 30_000);
+  }
+  return () => {
+    slowTickSubscribers.delete(callback);
+    if (slowTickSubscribers.size === 0 && slowTickInterval !== null) {
+      clearInterval(slowTickInterval);
+      slowTickInterval = null;
+    }
+  };
+}
+function useSlowTick() {
+  return React.useSyncExternalStore(subscribeSlowTick, () => slowTickValue, () => 0);
+}
+
 const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
+  const tick = useSlowTick();
   const timeAgo = React.useMemo(() => {
     const date = new Date(parseInt(timestamp) * 1000);
     return formatDistanceToNow(date, { addSuffix: true });
-  }, [timestamp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timestamp, tick]);
 
   return <span className="text-xs text-muted-foreground">{timeAgo}</span>;
 });
@@ -208,12 +239,12 @@ const GAME_NAME_ALIASES: Record<string, string> = {
 
 export const AttackEventRenderer = React.memo(({
   event,
-  userAddress,
+  perspective,
   shopItemMap,
   gardenItemMap
 }: {
   event: AttackEvent,
-  userAddress?: string | null,
+  perspective?: ActivityPerspective,
   shopItemMap?: { [key: string]: string },
   gardenItemMap?: { [key: string]: string }
 }) => {
@@ -229,8 +260,10 @@ export const AttackEventRenderer = React.memo(({
       ? { id: event.loser, name: event.loserName }
       : { id: event.winner, name: event.winnerName };
 
-    const attackerYou = userAddress && event.attackerName.toLowerCase() === userAddress.toLowerCase();
-    const opponentYou = userAddress && opp.name?.toLowerCase() === userAddress.toLowerCase();
+    // Plant IDS against the viewer's owned-plant set. The old check compared a
+    // plant NAME to a wallet ADDRESS, so "(You)" never rendered for anyone.
+    const attackerYou = Boolean(perspective?.plantIds.has(String(event.attacker)));
+    const opponentYou = Boolean(perspective?.plantIds.has(String(opp.id)));
     const score = formatScore(parseInt(event.scoresWon));
 
     return {
@@ -240,7 +273,7 @@ export const AttackEventRenderer = React.memo(({
       isOpponentYou: opponentYou,
       formattedScore: score
     };
-  }, [event, userAddress]);
+  }, [event, perspective]);
 
   return (
     <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
@@ -266,9 +299,9 @@ export const AttackEventRenderer = React.memo(({
   );
 });
 
-export const KilledEventRenderer = ({ event, userAddress, shopItemMap, gardenItemMap }: { event: KilledEvent, userAddress?: string | null, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
-  const isWinnerYou = userAddress && event.winnerName.toLowerCase() === userAddress.toLowerCase();
-  const isLoserYou = userAddress && event.loserName.toLowerCase() === userAddress.toLowerCase();
+export const KilledEventRenderer = ({ event, perspective, shopItemMap, gardenItemMap }: { event: KilledEvent, perspective?: ActivityPerspective, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
+  const isWinnerYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
+  const isLoserYou = Boolean(perspective?.plantIds.has(String(event.deadId)));
 
   return (
     <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
@@ -287,8 +320,8 @@ export const MintEventRenderer = ({ event, shopItemMap, gardenItemMap }: { event
   </EventWrapper>
 );
 
-export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenItemMap }: { event: PlayedEvent, userAddress?: string | null, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
-  const isYou = userAddress && event.nftName.toLowerCase() === userAddress.toLowerCase();
+export const PlayedEventRenderer = ({ event, perspective, shopItemMap, gardenItemMap }: { event: PlayedEvent, perspective?: ActivityPerspective, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
+  const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
   const displayGameName = GAME_NAME_ALIASES[event.gameName] ?? event.gameName;
   const pointsDelta = Number(event.points ?? "0");
   const timeBonusSeconds = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? "0") : 0;
@@ -299,7 +332,7 @@ export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
   if (pointsDelta !== 0) {
     rewardChips.push(
       <span key="points" className="font-semibold text-value">
-        {`${pointsDelta > 0 ? '+' : ''}${formatScore(Math.abs(pointsDelta))} PTS`}
+        {`${pointsDelta > 0 ? '+' : '-'}${formatScore(Math.abs(pointsDelta))} PTS`}
       </span>
     );
   }
@@ -307,7 +340,7 @@ export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
   if (timeBonusSeconds !== 0) {
     rewardChips.push(
       <span key="tod" className="font-semibold text-value">
-        {`${timeBonusSeconds > 0 ? '+' : ''}${formatDuration(Math.abs(timeBonusSeconds))} TOD`}
+        {`${timeBonusSeconds > 0 ? '+' : '-'}${formatDuration(Math.abs(timeBonusSeconds))} TOD`}
       </span>
     );
   }
@@ -344,8 +377,8 @@ export const PlayedEventRenderer = ({ event, userAddress, shopItemMap, gardenIte
   );
 };
 
-export const ItemConsumedEventRenderer = ({ event, userAddress, itemMap, shopItemMap, gardenItemMap }: { event: BundledItemConsumedEvent, userAddress?: string | null, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
-  const isYou = userAddress && event.nftName.toLowerCase() === userAddress.toLowerCase();
+export const ItemConsumedEventRenderer = ({ event, perspective, itemMap, shopItemMap, gardenItemMap }: { event: BundledItemConsumedEvent, perspective?: ActivityPerspective, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
+  const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
   const itemName = itemMap[event.itemId] || `Item #${event.itemId}`;
   const quantityText = event.quantity > 1 ? `${event.quantity}x ` : '';
 
@@ -358,8 +391,8 @@ export const ItemConsumedEventRenderer = ({ event, userAddress, itemMap, shopIte
   );
 };
 
-export const ShopItemPurchasedEventRenderer = ({ event, userAddress, itemMap, shopItemMap, gardenItemMap }: { event: ShopItemPurchasedEvent, userAddress?: string | null, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
-  const isYou = userAddress && event.nftName.toLowerCase() === userAddress.toLowerCase();
+export const ShopItemPurchasedEventRenderer = ({ event, perspective, itemMap, shopItemMap, gardenItemMap }: { event: ShopItemPurchasedEvent, perspective?: ActivityPerspective, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
+  const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
   const override = SHOP_ITEM_OVERRIDES[event.itemId];
   const itemName = override?.name || itemMap[event.itemId] || `Item #${event.itemId}`;
   return (

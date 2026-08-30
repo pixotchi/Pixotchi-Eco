@@ -333,8 +333,13 @@ export default function PlantsView() {
 
   // Fetch data when address changes - properly include fetchData in deps
   // Refresh when dashboard becomes visible
+  // Refetch on tab visibility, but not more than once per 30s: every switch
+  // back to this tab used to fire an unconditional refetch (toggling two tabs
+  // twice cost ~10 network round-trips app-wide).
+  const lastVisibleFetchRef = useRef(0);
   useEffect(() => {
-    if (isVisible && address) {
+    if (isVisible && address && Date.now() - lastVisibleFetchRef.current > 30_000) {
+      lastVisibleFetchRef.current = Date.now();
       fetchData();
     }
   }, [isVisible, address, fetchData]);
@@ -348,10 +353,10 @@ export default function PlantsView() {
 
   const renderNoPlantsView = () => (
     <EmptyState
-      className="h-[60vh]"
+      className="min-h-[60dvh]"
       icon={Flower2}
       title="No Plants Yet!"
-      description="Head over to the 'Mint' tab to grow your first plant."
+      description="Go to the Mint tab to grow your first plant."
     />
   );
 

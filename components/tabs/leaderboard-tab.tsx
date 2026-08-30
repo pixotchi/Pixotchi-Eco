@@ -151,6 +151,8 @@ export default function LeaderboardTab() {
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('leaderboard');
+  // See the 30s freshness guard on the visibility refetch effect below.
+  const lastVisibleFetchRef = useRef(0);
 
   // Use Twin address for Solana users, EVM address otherwise
   // Memoize to prevent unnecessary re-renders when dependencies haven't actually changed
@@ -639,7 +641,8 @@ export default function LeaderboardTab() {
 
   // Refresh data when tab becomes visible
   useEffect(() => {
-    if (isVisible) {
+    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
+      lastVisibleFetchRef.current = Date.now();
       fetchLeaderboardData();
       void fetchMyPlants();
       if (boardType === 'stake') {
@@ -692,13 +695,15 @@ export default function LeaderboardTab() {
     }
   };
 
+  // Precomputed once per myPlants change; the old .some() scan ran twice per
+  // row per render, including on every tick of the 1Hz kill-cooldown timer.
+  const myPlantIds = useMemo(() => new Set(myPlants.map((p) => p.id)), [myPlants]);
   const isUserPlant = useCallback((plant: LeaderboardPlant) => {
     // Robust ownership detection: compare owner to connected address and fall back to myPlants list
     const addr = address ? address.toLowerCase() : null;
     const ownerMatches = addr ? plant.owner?.toLowerCase() === addr : false;
-    const listedAsMine = myPlants.some((p) => p.id === plant.id);
-    return ownerMatches || listedAsMine;
-  }, [address, myPlants]);
+    return ownerMatches || myPlantIds.has(plant.id);
+  }, [address, myPlantIds]);
 
   // Eligibility checks (client-side guardrails based on app rules)
   const attackerCooldownOver = useCallback((attacker: Plant) => {
@@ -958,7 +963,7 @@ export default function LeaderboardTab() {
       <div
         key={plant.id}
         className={cn(
-          compact ? "py-0.5 transition-all" : "py-3 transition-all",
+          compact ? "py-0.5" : "py-3",
           isMine && "bg-primary/5 rounded-[var(--radius-control)] px-2 tablet:px-3",
           plant.isDead && "opacity-60"
         )}
@@ -1382,10 +1387,11 @@ export default function LeaderboardTab() {
       // Check if user is in attackable mode and has no plants
       if (filterMode === 'attackable' && address && myPlants.length === 0) {
         return renderRankingState(
-          <div className="text-center space-y-2">
-            <p className="text-muted-foreground">Mint a plant first to attack other plants with it.</p>
-            <p className="text-sm text-muted-foreground">Go to the Mint tab to get started.</p>
-          </div>
+          <EmptyState
+            icon={Flower2}
+            title="No plants to attack with"
+            description="Mint a plant first to attack other plants with it. Go to the Mint tab to get started."
+          />
         );
       }
 
@@ -1422,7 +1428,7 @@ export default function LeaderboardTab() {
 
   return (
     <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden tablet:h-[calc(100dvh-12rem)] xl:h-[calc(100dvh-7rem)]">
+      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden">
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>

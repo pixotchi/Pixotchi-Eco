@@ -15,14 +15,16 @@ interface LandImageProps {
 }
 
 // Mapping of building names to their layer image files
+// WebP re-encodes of the old PNG layers (895KB -> 307KB for the full set; the
+// casino and barracks layers alone dropped from 333KB/260KB to 47KB/41KB).
 const BUILDING_LAYERS = {
-  "Solar Panels": "solar-layer.png",
-  "Soil Factory": "soil-layer.png",
-  "Bee Farm": "bee-layer.png",
-  "Farmer House": "farmerhouse-layer.png",
-  "Marketplace": "marketplace-layer.png",
-  "Casino": "casino-layer.png",
-  "Barracks": "barrackslayer.png",
+  "Solar Panels": "solar-layer.webp",
+  "Soil Factory": "soil-layer.webp",
+  "Bee Farm": "bee-layer.webp",
+  "Farmer House": "farmerhouse-layer.webp",
+  "Marketplace": "marketplace-layer.webp",
+  "Casino": "casino-layer.webp",
+  "Barracks": "barrackslayer.webp",
 } as const;
 
 const LandImage = ({

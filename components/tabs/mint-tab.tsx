@@ -43,6 +43,7 @@ import { getLandMintCall } from '../transactions/land-mint-transaction';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
@@ -67,12 +68,13 @@ const PLANT_STATIC_IMAGES = [
   '/icons/plant5.png'
 ];
 
+// Lossless animated WebP (re-encoded from the old GIFs: 1.1MB -> 426KB total).
 const PLANT_GROWTH_IMAGES = [
-  '/icons/plantGrowth.gif',
-  '/icons/plantGrowth2.gif',
-  '/icons/plantGrowth4.gif',
-  '/icons/plantGrowth5.gif',
-  '/icons/plantGrowth6.gif'
+  '/icons/plantGrowth.webp',
+  '/icons/plantGrowth2.webp',
+  '/icons/plantGrowth4.webp',
+  '/icons/plantGrowth5.webp',
+  '/icons/plantGrowth6.webp'
 ];
 
 const getPlantGrowthImage = (strainId: number | undefined) => {
@@ -106,6 +108,8 @@ export default function MintTab() {
   const frameContext = useFrameContext();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('mint');
+  // See the 30s freshness guard on the visibility refetch effect below.
+  const lastVisibleFetchRef = useRef(0);
   // Lazy initialiser, not `false`: starting false made every desktop first paint
   // render the mobile layout for one frame and fire an extra data fetch keyed on the
   // wrong layout before the media query resolved.
@@ -483,7 +487,8 @@ export default function MintTab() {
 
   // Refresh when tab becomes visible
   useEffect(() => {
-    if (isVisible) {
+    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
+      lastVisibleFetchRef.current = Date.now();
       fetchData();
     }
   }, [isVisible, fetchData]);
@@ -1010,8 +1015,10 @@ export default function MintTab() {
           <TabCard>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
+                {/* Thumb art, not the full animation: a 64px header box was
+                    downloading the complete growth animation. */}
                 <Image
-                  src={getPlantGrowthImage(selectedStrain?.id)}
+                  src={getPlantThumbImage(selectedStrain?.id)}
                   alt={selectedStrain?.name || 'Selected plant'}
                   width={72}
                   height={72}
@@ -1263,7 +1270,7 @@ export default function MintTab() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <Image
-                src={getPlantGrowthImage(selectedStrain?.id)}
+                src={getPlantThumbImage(selectedStrain?.id)}
                 alt={selectedStrain?.name || 'Selected plant'}
                 width={72}
                 height={72}
@@ -1707,8 +1714,6 @@ export default function MintTab() {
                   height={168}
                   className="object-contain"
                   unoptimized
-                  loading="eager"
-                  fetchPriority="high"
                 />
               </div>
             </div>
@@ -2068,10 +2073,27 @@ export default function MintTab() {
     }
 
     if (loading) {
+      // Shaped like the resolved mint card (~520px), not a 200px centered
+      // loader — the mismatch shifted the whole page on every load.
       return (
-        <div className="flex items-center justify-center py-8">
-          <BaseExpandedLoadingPageLoader text="Loading mint data..." />
-        </div>
+        <TabCard padding="sm" className="tablet:min-h-[520px]" aria-busy="true" aria-live="polite">
+          <CardContent className="space-y-4 p-4">
+            <span className="sr-only">Loading mint data...</span>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-16 w-16 shrink-0 rounded-[var(--radius-control)]" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="h-4 w-full max-w-[18rem]" />
+              </div>
+            </div>
+            <Skeleton className="h-12 w-full" />
+            <div className="grid grid-cols-2 gap-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+            <Skeleton className="h-11 w-full" />
+          </CardContent>
+        </TabCard>
       )
     }
 

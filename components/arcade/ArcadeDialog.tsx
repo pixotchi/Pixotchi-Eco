@@ -175,11 +175,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [withStar, setWithStar] = useState(false);
   const [cooldown, setCooldown] = useState({ normal: 0, star: 0 });
   const [spinMeta, setSpinMeta] = useState<SpinState | null>(null);
-  const [, setLoadingSpinMeta] = useState(false);
+  // Rendered now (skeleton line while metadata loads) — it used to be a
+  // write-only state slot, so the panel showed made-up defaults ("Ready to
+  // spin", cost 1) before the reads resolved.
+  const [loadingSpinMeta, setLoadingSpinMeta] = useState(false);
   const [pendingSecret, setPendingSecret] = useState<Uint8Array | null>(null);
-  const [, setBlockCountdown] = useState(0);
-  const [, setBlockSecondsRemaining] = useState(0);
+  // Ticks once per second while the spin tab is open so cooldown/reveal
+  // countdowns actually count down. (Two former write-only states drove
+  // twice-a-second re-renders here for values nothing rendered.)
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [spinRefreshKey, setSpinRefreshKey] = useState(0);
+  const lastUnlockBlocksRef = useRef<number | null>(null);
+  const wheelRotorRef = useRef<HTMLDivElement | null>(null);
   const [boxResultDetails, setBoxResultDetails] = useState<{
     pointsDelta: number;
     timeAdded: number;
@@ -268,6 +275,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     );
   }, []);
 
+  // Local bookkeeping only — no wallet interaction.
+  const noteLastSeenBlock = useCallback((block: number) => {
+    if (Number.isNaN(block) || block <= 0) return;
+    setLastSeenCommitBlock((prev) => (prev !== null ? Math.max(prev, block) : block));
+  }, []);
+
+  // Signs a message: only ever call from an explicit user action (the commit
+  // path). Calling it from the passive log-sync used to pop an unsolicited
+  // wallet signature request just for opening the SpinLeaf tab.
   const persistLastSeenBlock = useCallback(
     async (block: number) => {
       if (!address || Number.isNaN(block) || block <= 0) return;
@@ -346,11 +362,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     return () => { mounted = false; };
   }, [open, plantId, publicClient]);
 
-  // Countdown tick
+  // Countdown tick. Depends on a BOOLEAN, not the mutated values: the old dep
+  // array made every tick tear the interval down and rebuild it, so the 1000ms
+  // window restarted after each React commit and the countdown drifted.
+  const hasActiveBoxCooldown = cooldown.normal > 0 || cooldown.star > 0;
   useEffect(() => {
-    if (!open) return;
-    // Stop interval if both cooldowns are 0
-    if (cooldown.normal === 0 && cooldown.star === 0) return;
+    if (!open || !hasActiveBoxCooldown) return;
 
     const id = setInterval(() => {
       setCooldown((prev: { normal: number; star: number }) => ({
@@ -359,7 +376,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }));
     }, 1000);
     return () => clearInterval(id);
-  }, [open, cooldown.normal, cooldown.star]);
+  }, [open, hasActiveBoxCooldown]);
 
   const enrichPendingFromLogs = useCallback(async () => {
     if (!address) return null;
@@ -463,7 +480,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       };
 
       if (Number(commitBlock) > 0) {
-        persistLastSeenBlock(Number(commitBlock));
+        noteLastSeenBlock(Number(commitBlock));
       }
 
       const lastPlay = playedLogs.find((log) => (log.blockNumber ?? BigInt("0")) >= commitBlock);
@@ -478,7 +495,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       console.warn("Failed to reconcile spin logs", error);
       return null;
     }
-  }, [address, baseLogClient, persistLastSeenBlock, plantId]);
+  }, [address, baseLogClient, noteLastSeenBlock, plantId]);
 
   const hydratePendingState = useCallback(async () => {
     const localKey = `spinleaf:pending:${plantId}`;
@@ -610,22 +627,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 2 - blockNumber);
           const expiryBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 + 256 - blockNumber);
 
-          // Only update blockCountdown from onchain data
-          setBlockCountdown(revealUnlockBlocks);
-
-          // Only set revealDeadline ONCE when blocks are ready (to prevent countdown resets)
+          // Stamp the reveal deadline only when the BLOCK COUNT changes: the old
+          // code re-stamped it on every 3s poll, so the waiting countdown
+          // visibly jumped back up while the chain stood still.
           if (revealUnlockBlocks === 0 && revealDeadlineRef.current === null) {
-            const secondsRemaining = MIN_REVEAL_DELAY_SECONDS;
-            setBlockSecondsRemaining(secondsRemaining);
-            setRevealDeadline(Date.now() + secondsRemaining * 1000);
-          } else if (revealUnlockBlocks > 0) {
-            // Still waiting for blocks - update time estimate
+            setRevealDeadline(Date.now() + MIN_REVEAL_DELAY_SECONDS * 1000);
+            lastUnlockBlocksRef.current = 0;
+          } else if (revealUnlockBlocks > 0 && lastUnlockBlocksRef.current !== revealUnlockBlocks) {
+            lastUnlockBlocksRef.current = revealUnlockBlocks;
             const secondsRemaining = Math.max(
               MIN_REVEAL_DELAY_SECONDS,
               revealUnlockBlocks * BLOCK_TIME_SECONDS,
             );
-            setBlockSecondsRemaining(secondsRemaining);
-            // Reset deadline if we're still waiting for blocks
             setRevealDeadline(Date.now() + secondsRemaining * 1000);
           }
 
@@ -639,9 +652,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             toast.error("Spin expired — stars forfeited.");
           }
         } else {
-          setBlockCountdown(0);
-          setBlockSecondsRemaining(0);
           setRevealDeadline(null);
+          lastUnlockBlocksRef.current = null;
         }
       } catch (error) {
         console.warn("Failed to refresh spin countdown", error);
@@ -661,11 +673,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (!open || selectedGame !== "spin") return;
 
     const interval = setInterval(() => {
-      setBlockSecondsRemaining((prev) => Math.max(0, prev - 1));
+      setNowTick(Date.now());
 
       if (revealDeadline !== null) {
         const remaining = Math.max(0, Math.ceil((revealDeadline - Date.now()) / 1000));
-        setBlockSecondsRemaining(remaining);
         if (remaining === 0) {
           setRevealDeadline(null);
         }
@@ -711,6 +722,13 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [hydratePendingState]);
 
   const startWheelSpin = useCallback(() => {
+    const rotor = wheelRotorRef.current;
+    if (rotor) {
+      // Clear the imperative overrides finishWheelSpin left behind so the idle
+      // spin animation class can take effect again.
+      rotor.style.animation = '';
+      rotor.style.transform = '';
+    }
     setWheelState({ spinning: true, revealReady: false, rewardIndex: undefined });
     setTargetRotation(null);
   }, []);
@@ -719,6 +737,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     const index = rewardIndex ?? Math.floor(Math.random() * WHEEL_SEGMENTS);
     const segmentAngle = 360 / WHEEL_SEGMENTS;
     const target = SPIN_EXTRA_TURNS * 360 + (WHEEL_SEGMENTS - 1 - index) * segmentAngle + segmentAngle / 2;
+    // Bake the animation's CURRENT angle into the base style before swapping to
+    // the settle transition. A CSS transition's before-change style excludes
+    // animation contributions, so without this the wheel visibly snapped back
+    // to 0deg and then swept to the target. (Same approach as the roulette
+    // wheel's RAF-continuation, see EuropeanRouletteWheel.tsx.)
+    const rotor = wheelRotorRef.current;
+    if (rotor) {
+      const computed = getComputedStyle(rotor).transform;
+      rotor.style.animation = 'none';
+      rotor.style.transform = computed === 'none' ? 'rotate(0deg)' : computed;
+      void rotor.offsetHeight; // commit the new base style before the transition arms
+    }
     setWheelState({ spinning: false, revealReady: true, rewardIndex: index });
     setTargetRotation(target);
   }, []);
@@ -782,9 +812,6 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             setPendingSecret(hexToBytes(secretHex));
           } catch { }
         }
-        const unlockBlock = blockNumber + 2;
-        setBlockCountdown(Math.max(0, unlockBlock - blockNumber));
-        setBlockSecondsRemaining(Math.max(0, (unlockBlock - blockNumber) * BLOCK_TIME_SECONDS));
         // Enable reveal button after 3 seconds
         setRevealUnlockedAt(Date.now() + 3000);
         startWheelSpin();
@@ -841,14 +868,19 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     }
   }, []);
 
-  const spinCooldown = spinMeta?.cooldown ?? 0;
+  // Derived from the deadline + the 1s tick: spinMeta.cooldown is a snapshot
+  // from fetch time, so displaying it directly froze the countdown and kept the
+  // spin button dead until the dialog was reopened.
+  const spinCooldown = cooldownDeadline !== null
+    ? Math.max(0, Math.ceil((cooldownDeadline - nowTick) / 1000))
+    : 0;
   const spinStarCost = spinMeta?.starCost ?? 1;
   const pending = spinMeta?.pending;
 
   const canCommit = Boolean(
     spinMeta &&
     !pending &&
-    spinMeta.cooldown === 0 &&
+    spinCooldown === 0 &&
     (plant?.stars ?? 0) >= spinStarCost &&
     commitmentHex,
   );
@@ -861,7 +893,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     (revealUnlockedAt === null || Date.now() >= revealUnlockedAt),
   );
 
-  const BoxGrid = () => (
+  const boxGrid = (
     <div className="grid grid-cols-3 gap-2.5">
       {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
         <Button
@@ -971,7 +1003,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             {selectedGame === 'box' && (
               <div className="space-y-4">
                 <div className="text-sm font-medium">Choose a box</div>
-                <BoxGrid />
+                {boxGrid}
 
                 <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
                   <div className="flex items-center justify-between gap-3">
@@ -979,37 +1011,19 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       <div className="text-sm font-medium text-foreground">Box play</div>
                       <p className="text-xs text-muted-foreground">Pick a box, then choose whether to spend a star.</p>
                     </div>
-                    <div className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
-                          !withStar
-                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
-                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
-                        )}
-                        onClick={() => setWithStar(false)}
-                        aria-pressed={!withStar}
-                      >
-                        No star
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
-                          withStar
-                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
-                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
-                        )}
-                        onClick={() => setWithStar(true)}
-                        aria-pressed={withStar}
-                      >
-                        Use star
-                      </Button>
+                    {/* ToggleGroup, not two hand-rolled buttons: gives radiogroup
+                        semantics, roving focus and full-height touch targets
+                        (the bespoke pair was 32px with no arrow-key support). */}
+                    <div className="shrink-0">
+                      <ToggleGroup
+                        ariaLabel="Star spending"
+                        value={withStar ? 'star' : 'nostar'}
+                        onValueChange={(next) => setWithStar(next === 'star')}
+                        options={[
+                          { value: 'nostar', label: 'No star' },
+                          { value: 'star', label: 'Use star' },
+                        ]}
+                      />
                     </div>
                   </div>
 
@@ -1022,12 +1036,17 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
                 </div>
                 {boxResultDetails && (
-                  <RewardResultPanel title="Box result" tone={(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? "success" : "warning"}>
+                  <RewardResultPanel
+                    title="Box result"
+                    /* Tone follows the SIGN, not mere presence: a negative delta
+                       used to render as "+N" in a green success panel. */
+                    tone={(boxResultDetails.pointsDelta > 0 || boxResultDetails.timeAdded > 0) ? "success" : "warning"}
+                  >
                     {(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? (
                       <div className="space-y-1">
                         {boxResultDetails.pointsDelta !== 0 && (
                           <div>
-                            PTS: <span className="font-semibold text-foreground">{`+${formatScore(Math.abs(boxResultDetails.pointsDelta))}`}</span>
+                            PTS: <span className="font-semibold text-foreground">{`${boxResultDetails.pointsDelta > 0 ? "+" : "-"}${formatScore(Math.abs(boxResultDetails.pointsDelta))}`}</span>
                           </div>
                         )}
                         {boxResultDetails.timeAdded !== 0 && (
@@ -1061,6 +1080,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="relative h-48 w-48 rounded-full border border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[0_24px_54px_-28px_hsl(var(--foreground)/0.5)] sm:h-56 sm:w-56" aria-hidden>
                       <div
+                        ref={wheelRotorRef}
                         className={cn(
                           "absolute inset-4 flex items-center justify-center rounded-full border border-primary/35 bg-background/25 shadow-inner",
                           targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
@@ -1127,8 +1147,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
                     <ArcadeStatLine
                       label="Status"
-                      value={pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"}
-                      tone={pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
+                      value={
+                        loadingSpinMeta && !spinMeta
+                          ? "Loading..."
+                          : pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"
+                      }
+                      tone={loadingSpinMeta && !spinMeta ? "default" : pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
                     />
                     <ArcadeStatLine label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
                     <ArcadeStatLine
@@ -1143,7 +1167,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     />
                   </div>
 
-                  {spinDisabledReason && starsAvailable >= spinStarCost && (
+                  {spinDisabledReason && (starsAvailable >= spinStarCost || Boolean(pending)) && (
                     <DisabledReason>{spinDisabledReason}</DisabledReason>
                   )}
 
@@ -1168,12 +1192,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 <ul className="space-y-1">
                   {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
                     <li>
-                      PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : ""}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
+                      PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : "-"}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
                     </li>
                   )}
                   {typeof resultDetails.timeAdded === "number" && resultDetails.timeAdded !== 0 && (
                     <li>
-                      TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : ""}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
+                      TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
                     </li>
                   )}
                   {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
