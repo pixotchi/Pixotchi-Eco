@@ -179,54 +179,11 @@ export function formatWsol(amount: bigint): string {
   return formatUnits(amount, 9);
 }
 
-export const formatSol = formatWsol;
 
 export function formatSeed(amount: bigint): string {
   return formatUnits(amount, 18);
 }
 
-export function parseWsol(amount: string): bigint {
-  return parseUnits(amount, 9);
-}
-
-export function parseSeed(amount: string): bigint {
-  return parseUnits(amount, 18);
-}
-
-export async function getSolanaBridgeQuote(params: {
-  action: 'mint' | 'shopItem' | 'gardenItem' | 'setName';
-  seedPriceNeeded: bigint;
-  twinAdapterAddress?: string;
-  slippagePercent?: number;
-}): Promise<SolanaQuoteResult & {
-  displayWsol: string;
-  displaySeed: string;
-}> {
-  const {
-    seedPriceNeeded,
-    twinAdapterAddress,
-    slippagePercent = DEFAULT_SLIPPAGE_PERCENT,
-  } = params;
-
-  const quote = await getWsolToSeedQuote(
-    seedPriceNeeded,
-    twinAdapterAddress,
-    slippagePercent,
-  );
-
-  return {
-    ...quote,
-    displayWsol: formatWsol(quote.wsolAmount),
-    displaySeed: formatSeed(quote.seedAmount),
-  };
-}
-
-export function isQuoteStale(
-  quoteTimestamp: number,
-  maxAgeMs: number = 30_000,
-): boolean {
-  return Date.now() - quoteTimestamp > maxAgeMs;
-}
 
 export function isQuoteValid(quote: SolanaQuoteResult): boolean {
   return (

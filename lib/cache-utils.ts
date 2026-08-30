@@ -94,18 +94,4 @@ export async function clearAppCaches(options: ClearOptions = {}) {
   } catch {}
 }
 
-export function markCacheVersion(version: string) {
-  try {
-    localStorage.setItem("pixotchi:cache_version", version);
-  } catch {}
-}
-
-export function needsCacheMigration(version: string): boolean {
-  try {
-    const current = localStorage.getItem("pixotchi:cache_version");
-    return current !== version;
-  } catch {
-    return true;
-  }
-}
 

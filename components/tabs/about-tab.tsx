@@ -10,7 +10,7 @@ import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import packageJson from '@/package.json';
-import { MessageCircle,PlayCircle,Radio } from "lucide-react";
+import { Loader2,MessageCircle,PlayCircle,Radio } from "lucide-react";
 import { useId,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -215,7 +215,7 @@ export default function AboutTab() {
             >
               {feedbackLoading ? (
                 <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   Sending...
                 </>
               ) : (

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { BasePageLoader } from "@/components/ui/loading";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { LoginHero, LoginIntro } from "@/components/login-hero";
-import { WalletProfile } from "@/components/wallet-profile";
+
 import { FarmViewProvider, useFarmView } from "@/lib/farm-view-context";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
@@ -40,8 +40,17 @@ import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
 import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
 import { cn } from "@/lib/utils";
 
-// Import broadcast component
-import { BroadcastMessageModal } from "@/components/broadcast-message-modal";
+// Broadcast + wallet-profile dialogs load on first use, not at boot.
+const BroadcastMessageModal = dynamic(
+  () => import("@/components/broadcast-message-modal").then((mod) => mod.BroadcastMessageModal),
+  { ssr: false },
+);
+// Dialog-only module (1,000+ lines incl. transfer/airdrop flows): dynamic +
+// first-open gate keeps it out of the app-shell chunk.
+const WalletProfile = dynamic(
+  () => import("@/components/wallet-profile").then((mod) => mod.WalletProfile),
+  { ssr: false },
+);
 // Developer-only viewport instrumentation. Loaded on demand and only rendered when
 // ?viewportDebug=1 is present, so it stays out of the app-shell chunk. (Not gated on
 // NODE_ENV: the whole point is reading visualViewport / safe-area insets inside the
@@ -616,6 +625,9 @@ export default function App() {
   });
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
+  // Latches true on first open so the dynamic chunk loads on demand and the
+  // dialog stays mounted afterwards for exit animations.
+  const [walletProfileLoaded, setWalletProfileLoaded] = useState(false);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const [showViewportDebug, setShowViewportDebug] = useState(false);
   // Lazy-initialised media queries (useMediaQuery), not useState(false)+effect:
@@ -635,6 +647,7 @@ export default function App() {
   const previousActiveTabRef = useRef<Tab>(activeTab);
   const tabScrollPositionsRef = useRef<Partial<Record<Tab, number>>>({});
   const lastDismissedRef = useRef<string | null>(null);
+  const broadcastEverShownRef = useRef(false);
   const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
   const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
   const loginThemeLayers = [
@@ -871,6 +884,7 @@ export default function App() {
       const next = broadcastMessages.find((msg) => msg.id !== lastDismissedRef.current);
       if (next) {
         lastDismissedRef.current = null;
+        broadcastEverShownRef.current = true;
         setCurrentBroadcast(next);
       }
     }
@@ -988,7 +1002,10 @@ export default function App() {
                     type="button"
                     variant="headerIcon"
                     size="icon"
-                    onClick={() => setShowWalletProfile(true)}
+                    onClick={() => {
+                      setWalletProfileLoaded(true);
+                      setShowWalletProfile(true);
+                    }}
                     aria-label="Open wallet profile"
                     title="Open wallet profile"
                   >
@@ -1164,18 +1181,22 @@ export default function App() {
             console.error('Error in WalletProfile:', { error, errorInfo });
           }}
         >
-          <WalletProfile
-            open={showWalletProfile}
-            onOpenChange={setShowWalletProfile}
-          />
+          {walletProfileLoaded && (
+            <WalletProfile
+              open={showWalletProfile}
+              onOpenChange={setShowWalletProfile}
+            />
+          )}
         </ErrorBoundary>
 
-        {/* Broadcast Message Modal */}
-        <BroadcastMessageModal
-          message={currentBroadcast}
-          onDismiss={handleDismissBroadcast}
-          onImpression={trackImpression}
-        />
+        {/* Broadcast Message Modal (mounted once a broadcast exists) */}
+        {(currentBroadcast || broadcastEverShownRef.current) && (
+          <BroadcastMessageModal
+            message={currentBroadcast}
+            onDismiss={handleDismissBroadcast}
+            onImpression={trackImpression}
+          />
+        )}
         {showViewportDebug && <ViewportDebugOverlay />}
       </div>
     </div>

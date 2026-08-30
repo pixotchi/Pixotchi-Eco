@@ -1,6 +1,7 @@
 "use client";
 
 import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
@@ -56,12 +57,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     fetchSlots();
   }, [fetchSlots]);
 
-  // Initialize and watch the current block number immediately to avoid transient wrong UI
+  // Initialize and watch the current block number immediately to avoid transient wrong UI.
+  // ONE poller: `watch` alone drives viem's watchBlockNumber at the wagmi
+  // config's pollingInterval — the extra refetchInterval used to run a second,
+  // overlapping eth_blockNumber poll on the same query. Also gated on document
+  // visibility so a backgrounded webview stops hitting the RPC.
+  const isDocumentVisible = useDocumentVisible();
   const { data: liveBlock } = useBlockNumber({
-    watch: isDashboardVisible,
-    query: {
-      refetchInterval: isDashboardVisible ? 3000 : false,
-    },
+    watch: isDashboardVisible && isDocumentVisible,
   });
   React.useEffect(() => {
     if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);

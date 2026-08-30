@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext,ReactNode,useCallback,useContext,useEffect,useState } from "react";
+import { createContext,ReactNode,useCallback,useContext,useEffect,useState, useMemo } from "react";
 
 const STORAGE_KEY = 'pixotchi:ethMode';
 
@@ -18,6 +18,8 @@ interface EthModeContextType {
 }
 
 const EthModeContext = createContext<EthModeContextType | undefined>(undefined);
+
+const ETH_MODE_FEATURE_ENABLED = isEthModeFeatureEnabled();
 
 export function EthModeProvider({ children }: { children: ReactNode }) {
     const [isEthMode, setIsEthMode] = useState<boolean>(false);
@@ -66,13 +68,17 @@ export function EthModeProvider({ children }: { children: ReactNode }) {
         setIsEthMode(prev => !prev);
     }, []);
 
+    // Memoized (and the env-derived feature flag evaluated once): a fresh
+    // object literal here re-rendered every consumer on every provider render.
+    const value = useMemo(() => ({
+        isEthMode: ETH_MODE_FEATURE_ENABLED && isEthMode, // Only true if feature enabled AND user toggled on
+        setEthMode,
+        toggleEthMode,
+        isFeatureEnabled: ETH_MODE_FEATURE_ENABLED,
+    }), [isEthMode, setEthMode, toggleEthMode]);
+
     return (
-        <EthModeContext.Provider value={{
-            isEthMode: isEthModeFeatureEnabled() && isEthMode, // Only true if feature enabled AND user toggled on
-            setEthMode,
-            toggleEthMode,
-            isFeatureEnabled: isEthModeFeatureEnabled()
-        }}>
+        <EthModeContext.Provider value={value}>
             {children}
         </EthModeContext.Provider>
     );

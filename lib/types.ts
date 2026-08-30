@@ -315,11 +315,6 @@ export type BarracksRaidPreviewV2 = {
 // Transaction types
 export type TransactionStatus = 'idle' | 'pending' | 'success' | 'error';
 
-export type TransactionState = {
-  status: TransactionStatus;
-  hash?: string;
-  error?: string;
-};
 
 // MiniKit specific types
 export type FrameContext = {
@@ -339,55 +334,9 @@ export type FrameContext = {
   };
 };
 
-// Component prop types
-export type PlantCardProps = {
-  plant: Plant;
-  onClick?: () => void;
-  showDetails?: boolean;
-  className?: string;
-};
-
-export type StrainCardProps = {
-  strain: Strain;
-  onSelect: (strain: Strain) => void;
-  selected: boolean;
-  disabled?: boolean;
-};
-
-export type ShopItemCardProps = {
-  item: ShopItem;
-  onPurchase: (item: ShopItem) => void;
-  disabled?: boolean;
-  showPrice?: boolean;
-};
-
-// Form data types
-export type MintFormData = {
-  selectedStrain: Strain | null;
-  approvalNeeded: boolean;
-};
-
-export type PurchaseFormData = {
-  selectedPlant: Plant | null;
-  selectedItem: ShopItem | null;
-  confirmed: boolean;
-};
-
-// API response types
-export type ApiResponse<T> = {
-  success: boolean;
-  data?: T;
-  error?: string;
-};
 
 // Utility types
 export type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
-export type Nullable<T> = T | null;
-export type AsyncState<T> = {
-  data: T | null;
-  loading: boolean;
-  error: string | null;
-};
 
 // Types for Ponder Indexer
 export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent | BaccaratRoundResultEvent;
@@ -769,12 +718,6 @@ export type AIUsageStats = {
   reasoningTokens?: number;
 };
 
-export type AICostMetrics = {
-  date: string;
-  messages: number;
-  tokens: number;
-  estimatedCost: number;
-};
 
 // Transaction types - consolidated from multiple transaction component files
 export interface TransactionCall {

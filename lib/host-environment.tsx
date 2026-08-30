@@ -126,13 +126,15 @@ function updateHostEnvironmentSnapshot(nextState: HostEnvironmentState) {
   hostEnvironmentSnapshot = nextState;
   applySafeAreaInsets(nextState.context);
 
-  console.info("[HostEnv] resolved", {
+  if (process.env.NODE_ENV === "development") {
+    console.info("[HostEnv] resolved", {
     clientFid: nextState.clientFid,
     initialized: nextState.initialized,
     isMiniApp: nextState.isMiniApp,
     resolutionSource: nextState.resolutionSource,
     resolutionStatus: nextState.resolutionStatus,
   });
+  }
 
   notifyHostEnvironmentListeners(nextState);
 }

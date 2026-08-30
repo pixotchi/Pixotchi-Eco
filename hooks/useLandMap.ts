@@ -18,6 +18,8 @@ export function useLandMap(initialUserLands: Land[]) {
   // Fetch total supply and leaderboard data (which contains name/xp/id for all minted lands)
   // We use getLandLeaderboard because it efficiently returns basic metadata for range of IDs
   // This is a "hack" to get map data without a dedicated indexer API
+  const userLandsKey = initialUserLands.map((land) => String(land.tokenId)).join(',');
+
   useEffect(() => {
     let mounted = true;
 
@@ -79,7 +81,11 @@ export function useLandMap(initialUserLands: Land[]) {
     return () => {
       mounted = false;
     };
-  }, [initialUserLands]);
+    // Keyed on a derived primitive: the caller passes a state array whose
+    // identity changes on every refetch, which re-ran this effect (and an extra
+    // getLandSupply RPC round-trip) even when the actual land set was unchanged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLandsKey]);
 
   return {
     totalSupply,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { Loader2 } from 'lucide-react';
 import { usePaymaster } from "@/lib/paymaster-context";
 import {
     Transaction,
@@ -611,10 +612,7 @@ export default function BlackjackTransaction({
                 {phase === "fetching" ? (
                     <>
                         <span className="flex items-center justify-center gap-2">
-                            <span
-                                className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                                aria-hidden="true"
-                            />
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                             Preparing...
                         </span>
                     </>

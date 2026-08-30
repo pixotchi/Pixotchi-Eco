@@ -92,7 +92,13 @@ export function ScrollFadeController() {
     });
 
     syncElements();
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    // Scope to the app content pane (falling back to body on routes without the
+    // shell, e.g. admin/status). Observing document.body meant every toast,
+    // dialog portal, and list mutation anywhere triggered a whole-document
+    // querySelectorAll plus a forced layout pass.
+    const observeRoot =
+      document.querySelector('[data-viewport-shell="content"]') ?? document.body;
+    mutationObserver.observe(observeRoot, { childList: true, subtree: true });
     window.addEventListener("resize", scheduleSync);
 
     return () => {

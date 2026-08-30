@@ -965,11 +965,7 @@
     --value: 188 88% 81%;
   }
 
-  /* Unconditional across all themes (the branches covered every state). */
-  .chromatic-white-inner-glow::before {
-    opacity: 0;
-  }
-
+  
   .surface-control {
     border-color: hsl(var(--edge-panel));
     background-color: hsl(var(--card) / 0.95);

@@ -1088,14 +1088,6 @@ export const getStakeAllowance = async (ownerAddress: string): Promise<bigint> =
   });
 };
 
-export const isStakeApproved = async (ownerAddress: string): Promise<boolean> => {
-  try {
-    const allowance = await getStakeAllowance(ownerAddress);
-    return allowance > BigInt(0);
-  } catch {
-    return false;
-  }
-};
 
 // Build approve call for UniversalTransaction
 export const buildApproveStakeCall = (): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
@@ -1544,30 +1536,6 @@ export const transferLands = async (
   return { successIds, failedIds };
 };
 
-/**
- * Transfer all Pixotchi (plants) and Land NFTs owned by the current wallet to a destination address.
- */
-export const transferAllAssets = async (
-  walletClient: WalletClient,
-  ownerAddress: string,
-  toAddress: string,
-): Promise<{
-  plants: { total: number; success: number; failed: number };
-  lands: { total: number; success: number; failed: number };
-}> => {
-  const plants = await getPlantsByOwner(ownerAddress);
-  const lands = await getLandsByOwner(ownerAddress);
-  const plantIds = plants.map(p => p.id);
-  const landIds = lands.map(l => l.tokenId);
-
-  const plantRes = await transferPlants(walletClient, toAddress, plantIds);
-  const landRes = await transferLands(walletClient, toAddress, landIds);
-
-  return {
-    plants: { total: plantIds.length, success: plantRes.successIds.length, failed: plantRes.failedIds.length },
-    lands: { total: landIds.length, success: landRes.successIds.length, failed: landRes.failedIds.length },
-  };
-};
 
 // Token balance (returns raw bigint for precision)
 // Get token balance for any ERC20 token
@@ -1613,24 +1581,6 @@ export const getFormattedTokenBalance = async (address: string): Promise<number>
   return Number(balance) / 1e18; // Convert from wei to token units
 };
 
-// Get formatted token balance for any ERC20 token
-export const getFormattedTokenBalanceForToken = async (address: string, tokenAddress: `0x${string}`): Promise<number> => {
-  const balance = await getTokenBalanceForToken(address, tokenAddress);
-  const readClient = getReadClient();
-  let decimals = 18;
-  try {
-    decimals = await retryWithBackoff(async () => {
-      return await readClient.readContract({
-        address: tokenAddress,
-        abi: PIXOTCHI_TOKEN_ABI,
-        functionName: 'decimals',
-      }) as number;
-    });
-  } catch (error) {
-    console.warn(`Failed to fetch token decimals for ${tokenAddress}, using 18`, error);
-  }
-  return Number(balance) / (10 ** decimals);
-};
 
 // Get token symbol
 export const getTokenSymbol = async (tokenAddress: `0x${string}`): Promise<string> => {
@@ -1848,73 +1798,6 @@ export const getShopItems = async (
   });
 };
 
-// Approve token spending
-export const approveTokenSpending = async (walletClient: WalletClient): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
-
-  const hash = await walletClient.writeContract({
-    address: PIXOTCHI_TOKEN_ADDRESS,
-    abi: PIXOTCHI_TOKEN_ABI,
-    functionName: 'approve',
-    args: [PIXOTCHI_NFT_ADDRESS, maxApproval],
-    account: walletClient.account!,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
-
-// Mint plant
-export const mintPlant = async (walletClient: WalletClient, strain: number): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'mint',
-    args: [BigInt(strain)],
-    account: walletClient.account!,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
-
-// Claim plant rewards (burns score and resets level)
-export const claimPlantRewards = async (walletClient: WalletClient, plantId: number): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-  const hash = await walletClient.writeContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'redeem',
-    args: [BigInt(plantId)],
-    account: walletClient.account!,
-    chain: base,
-  });
-  return waitForBaseTransactionSuccess(hash);
-};
-
-// Buy shop item
-export const buyShopItem = async (
-  walletClient: WalletClient,
-  plantId: number,
-  itemId: string
-): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'shopBuyItem',
-    args: [BigInt(plantId), BigInt(itemId)],
-    account: walletClient.account!,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
 
 // Get all shop items
 export const getAllShopItems = async (): Promise<ShopItem[]> => {
@@ -1967,25 +1850,6 @@ export const getAllGardenItems = async (
   }
 };
 
-// Buy garden item
-export const buyGardenItem = async (
-  walletClient: WalletClient,
-  plantId: number,
-  itemId: string
-): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: PIXOTCHI_NFT_ADDRESS,
-    abi: PIXOTCHI_NFT_ABI,
-    functionName: 'buyAccessory',
-    args: [BigInt(plantId), BigInt(itemId)],
-    account: walletClient.account!,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
 
 // Get swap quote with improved error handling
 export const getSwapQuote = async (ethAmount: string): Promise<{ quote: string; error?: string }> => {
@@ -2086,40 +1950,6 @@ export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
   }
 };
 
-// Execute swap
-export const executeSwap = async (walletClient: WalletClient, ethAmount: string): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const readClient = getReadClient();
-  const amountIn = parseUnits(ethAmount, 18);
-
-  const amountsOut = await readClient.readContract({
-    address: UNISWAP_ROUTER_ADDRESS,
-    abi: UniswapAbi,
-    functionName: 'getAmountsOut',
-    args: [amountIn, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
-  }) as bigint[];
-
-  const amountOutMin = amountsOut[1] * BigInt(95) / BigInt(100); // 5% slippage
-  const deadline = Math.floor(Date.now() / 1000) + 60 * 5; // 5 minutes from now
-
-  const hash = await walletClient.writeContract({
-    address: UNISWAP_ROUTER_ADDRESS,
-    abi: UniswapAbi,
-    functionName: 'swapExactETHForTokens',
-    args: [
-      amountOutMin,
-      [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS],
-      walletClient.account.address,
-      BigInt(deadline)
-    ],
-    value: amountIn,
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
 
 // -------------------- Fence HELPERS --------------------
 
@@ -2198,31 +2028,6 @@ export const buildFenceV2PurchaseCall = (plantId: number, days: number): { addre
   };
 };
 
-export const buyFenceV2 = async (walletClient: WalletClient, plantId: number, days: number): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-  const hash = await walletClient.writeContract({
-    address: FENCE_V2_EXTENSION_ADDRESS,
-    abi: fenceV2Abi,
-    functionName: 'fenceV2Purchase',
-    args: [BigInt(plantId), BigInt(days)],
-    account: walletClient.account!,
-    chain: base,
-  });
-  return waitForBaseTransactionSuccess(hash);
-};
-
-export const setFenceV2PricePerDay = async (walletClient: WalletClient, pricePerDay: bigint): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-  const hash = await walletClient.writeContract({
-    address: FENCE_V2_EXTENSION_ADDRESS,
-    abi: fenceV2Abi,
-    functionName: 'fenceV2SetPricePerDay',
-    args: [pricePerDay],
-    account: walletClient.account!,
-    chain: base,
-  });
-  return waitForBaseTransactionSuccess(hash);
-};
 
 // LEAF token balance (returns raw bigint for precision)
 export const getLeafBalance = async (
@@ -2682,12 +2487,6 @@ export const buildBarracksBuildCall = (landId: bigint) => ({
   args: [landId],
 });
 
-export const buildBarracksTrainCall = (landId: bigint, amount: bigint) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksTrainTroops' as const,
-  args: [landId, amount],
-});
 
 export const buildBarracksTrainCallV2 = (landId: bigint, troopType: number, amount: bigint) => ({
   address: LAND_CONTRACT_ADDRESS,
@@ -2696,23 +2495,6 @@ export const buildBarracksTrainCallV2 = (landId: bigint, troopType: number, amou
   args: [landId, troopType, amount],
 });
 
-export const buildBarracksClaimCall = (landId: bigint) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksClaimTroops' as const,
-  args: [landId],
-});
-
-export const buildBarracksAttackCall = (
-  attackerLandId: bigint,
-  defenderLandId: bigint,
-  troopsToSend: bigint,
-) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksAttack' as const,
-  args: [attackerLandId, defenderLandId, troopsToSend],
-});
 
 export const buildBarracksAttackCallV2 = (
   attackerLandId: bigint,
@@ -2726,33 +2508,6 @@ export const buildBarracksAttackCallV2 = (
   args: [attackerLandId, defenderLandId, swordsmenToSend, phalanxToSend],
 });
 
-export const buildBarracksForceFinishTrainingCallV2 = (landId: bigint) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksForceFinishTrainingV2' as const,
-  args: [landId],
-});
-
-export const buildBarracksAdminAddTroopsCallV2 = (
-  landId: bigint,
-  troopType: number,
-  amount: bigint,
-) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksAdminAddTroopsV2' as const,
-  args: [landId, troopType, amount],
-});
-
-export const buildBarracksAdminAddTroopsToAllBuiltCallV2 = (
-  troopType: number,
-  amount: bigint,
-) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: barracksAbi,
-  functionName: 'barracksAdminAddTroopsToAllBuiltV2' as const,
-  args: [troopType, amount],
-});
 
 export interface LandBuildingsBatchResult {
   landId: bigint;
@@ -2847,83 +2602,6 @@ export const getQuestSlotsByLandId = async (
   });
 };
 
-// Village Building Upgrade Functions
-export const upgradeVillageWithLeaf = async (walletClient: WalletClient, landId: bigint, buildingId: number): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: landAbi,
-    functionName: 'villageUpgradeWithLeaf',
-    args: [landId, buildingId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-export const speedUpVillageWithSeed = async (walletClient: WalletClient, landId: bigint, buildingId: number): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: landAbi,
-    functionName: 'villageSpeedUpWithSeed',
-    args: [landId, buildingId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-// Town Building Upgrade Functions
-export const upgradeTownWithLeaf = async (walletClient: WalletClient, landId: bigint, buildingId: number): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: landAbi,
-    functionName: 'townUpgradeWithLeaf',
-    args: [landId, buildingId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-export const speedUpTownWithSeed = async (walletClient: WalletClient, landId: bigint, buildingId: number): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: landAbi,
-    functionName: 'townSpeedUpWithSeed',
-    args: [landId, buildingId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-// Village Production Claim Function
-export const claimVillageProduction = async (walletClient: WalletClient, landId: bigint, buildingId: number): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: landAbi,
-    functionName: 'villageClaimProduction',
-    args: [landId, buildingId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
 
 // Leaderboard functions
 export const getAliveTokenIds = async (
@@ -3448,53 +3126,6 @@ export const casinoGetStatsByToken = async (landId: bigint, token: string): Prom
   }
 };
 
-/**
- * Get casino building level for a land
- * Casino is building ID 6 (TownBuildingNaming.CASINO)
- */
-export const getCasinoLevel = async (landId: bigint): Promise<number> => {
-  const readClient = getReadClient();
-  try {
-    // Try to get town buildings to find casino level
-    const result = await retryWithBackoff(async () => {
-      return readClient.readContract({
-        address: LAND_CONTRACT_ADDRESS,
-        abi: [
-          {
-            name: 'townGetBuildingsByLandId',
-            type: 'function',
-            inputs: [{ name: 'landId', type: 'uint256' }],
-            outputs: [{
-              type: 'tuple[]',
-              components: [
-                { name: 'id', type: 'uint8' },
-                { name: 'level', type: 'uint8' },
-                { name: 'maxLevel', type: 'uint8' },
-                { name: 'blockHeightUpgradeInitiated', type: 'uint256' },
-                { name: 'blockHeightUntilUpgradeDone', type: 'uint256' },
-                { name: 'isUpgrading', type: 'bool' },
-                { name: 'levelUpgradeCostLeaf', type: 'uint256' },
-                { name: 'levelUpgradeCostSeedInstant', type: 'uint256' },
-                { name: 'levelUpgradeBlockInterval', type: 'uint256' },
-                { name: 'levelUpgradeCostSeed', type: 'uint256' }
-              ]
-            }],
-            stateMutability: 'view'
-          }
-        ],
-        functionName: 'townGetBuildingsByLandId',
-        args: [landId],
-      });
-    }) as UntypedValue as Array<{ id: number; level: number }>;
-
-    // Casino is building ID 6
-    const casino = result.find(b => b.id === 6);
-    return casino ? casino.level : 0;
-  } catch (error) {
-    console.warn('Failed to get casino level:', error);
-    return 0;
-  }
-};
 
 /**
  * Build casino on a land (transaction)
@@ -3859,37 +3490,6 @@ export const checkCasinoApproval = async (
   });
 };
 
-/**
- * Approve token spending for casino operations (betting/building)
- * @param walletClient Connected wallet client
- * @param tokenAddress The token to approve
- */
-export const approveCasinoTokenSpending = async (
-  walletClient: WalletClient,
-  tokenAddress: string
-): Promise<boolean> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
-
-  const hash = await walletClient.writeContract({
-    address: tokenAddress as `0x${string}`,
-    abi: erc20ApprovalAbi,
-    functionName: 'approve',
-    args: [LAND_CONTRACT_ADDRESS, maxApproval],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return waitForBaseTransactionSuccess(hash);
-};
-
-// ============================================================================
-// BLACKJACK FUNCTIONS
-// ============================================================================
-
-import { blackjackAbi,BlackjackAction,BlackjackPhase,BlackjackResult } from '@/public/abi/blackjack-abi';
-export { BlackjackAction,BlackjackPhase,BlackjackResult };
 
 // Types
 export interface BlackjackGameBasic {
@@ -3972,6 +3572,9 @@ export interface BlackjackStats {
 /**
  * Get basic game state for Blackjack
  */
+import { blackjackAbi,BlackjackAction,BlackjackPhase,BlackjackResult } from '@/public/abi/blackjack-abi';
+export { BlackjackAction,BlackjackPhase,BlackjackResult };
+
 export const blackjackGetGameBasic = async (landId: bigint): Promise<BlackjackGameBasic | null> => {
   const readClient = getReadClient();
   try {
@@ -4306,49 +3909,6 @@ export const blackjackIsAvailable = async (landId: bigint): Promise<{ available:
   }
 };
 
-// ============================================================================
-// BLACKJACK BUILD CALLS (for SponsoredTransaction)
-// ============================================================================
-
-/**
- * Build call data for blackjackBet
- */
-export const buildBlackjackBetCall = (landId: bigint, amount: bigint) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: blackjackAbi,
-  functionName: 'blackjackBet' as const,
-  args: [landId, amount],
-});
-
-/**
- * Build call data for blackjackDeal
- */
-export const buildBlackjackDealCall = (landId: bigint, insuranceAmount: bigint = BigInt(0)) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: blackjackAbi,
-  functionName: 'blackjackDeal' as const,
-  args: [landId, insuranceAmount],
-});
-
-/**
- * Build call data for blackjackRequestAction
- */
-export const buildBlackjackRequestActionCall = (landId: bigint, handIndex: number, action: BlackjackAction) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: blackjackAbi,
-  functionName: 'blackjackRequestAction' as const,
-  args: [landId, handIndex, action],
-});
-
-/**
- * Build call data for blackjackRevealAction
- */
-export const buildBlackjackRevealActionCall = (landId: bigint) => ({
-  address: LAND_CONTRACT_ADDRESS,
-  abi: blackjackAbi,
-  functionName: 'blackjackRevealAction' as const,
-  args: [landId],
-});
 
 // ============ Server-Signed Randomness Functions ============
 

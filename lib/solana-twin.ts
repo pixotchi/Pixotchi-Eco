@@ -251,24 +251,4 @@ export async function isTwinSetup(
   }
 }
 
-/**
- * Format Twin address for display (truncated)
- */
-export function formatTwinAddress(address: string, chars: number = 4): string {
-  if (!address || address.length < chars * 2 + 2) return address;
-  return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
-}
 
-/**
- * Get Solana explorer URL for a transaction (mainnet)
- */
-export function getSolanaExplorerUrl(signature: string): string {
-  return `https://explorer.solana.com/tx/${signature}`;
-}
-
-/**
- * Get Base explorer URL for a Twin address (mainnet)
- */
-export function getBaseExplorerUrl(address: string): string {
-  return `https://basescan.org/address/${address}`;
-}

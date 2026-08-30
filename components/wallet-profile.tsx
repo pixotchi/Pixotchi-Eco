@@ -71,7 +71,10 @@ const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chro
 const walletInnerGlowClassName =
   "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
 
-const walletChromaticWhiteInnerGlowClassName = `${walletInnerGlowClassName} chromatic-white-inner-glow`;
+// No chromatic glow variant: globals.css permanently hides the ::before glow on
+// chromatic surfaces (opacity 0 across all themes), so composing it was dead.
+const walletChromaticWhiteInnerGlowClassName =
+  "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)]";
 
 function WalletSectionHeader({
   title,

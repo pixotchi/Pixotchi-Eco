@@ -22,7 +22,6 @@ import {
 } from "@/lib/host-environment";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
-import { LoadingProvider } from "@/lib/loading-context";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
@@ -522,7 +521,6 @@ function ProvidersContent({
           <EthModeProvider>
             <SolanaWalletProvider>
               <BalanceProvider>
-                <LoadingProvider>
                   <RouteAwareChatProvider>
                     <TutorialBundle>
                       <AppUpdateBanner disabled={hostEnvironment.isMiniApp} />
@@ -539,7 +537,6 @@ function ProvidersContent({
                     <SecretGardenListener />
                     <SnowEffect />
                   </RouteAwareChatProvider>
-                </LoadingProvider>
               </BalanceProvider>
             </SolanaWalletProvider>
           </EthModeProvider>

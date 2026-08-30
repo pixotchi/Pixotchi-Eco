@@ -91,17 +91,6 @@ export function formatDuration(seconds: number): string {
   return result.trim() || '0s';
 }
 
-// Format time components
-export function formatTime(seconds: number): [string, string, string, string] {
-  const duration = intervalToDuration({ start: 0, end: seconds * 1000 });
-
-  return [
-    (duration.days || 0).toString().padStart(2, '0'),
-    (duration.hours || 0).toString().padStart(2, '0'),
-    (duration.minutes || 0).toString().padStart(2, '0'),
-    (duration.seconds || 0).toString().padStart(2, '0')
-  ];
-}
 
 // Format numbers with commas
 export function formatNumber(num: number): string {
@@ -286,16 +275,6 @@ export function formatTokenAmountCompact(amount: bigint, decimals: number = 18):
 // without creating a contracts <-> utils cycle.
 export { formatAddress } from "./format-address";
 
-export function getPlantStatusColor(status: number): string {
-  switch (status) {
-    case 0: return 'status-great'; // Great
-    case 1: return 'status-okay'; // Okay
-    case 2: return 'status-dry'; // Dry
-    case 3: return 'status-dying'; // Dying
-    case 4: return 'status-dead'; // Dead
-    default: return 'status-unknown';
-  }
-}
 
 export function getPlantStatusText(status: number): string {
   switch (status) {
@@ -346,10 +325,6 @@ export function getFriendlyErrorMessage(error: UntypedValue): string {
   return 'An unexpected error occurred. Please try again later.';
 }
 
-export function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength) + '...';
-}
 
 // Static building data for caching
 const TOWN_BUILDINGS: { [key: number]: string } = {
@@ -367,7 +342,6 @@ const VILLAGE_BUILDINGS: { [key: number]: string } = {
   5: "Bee Farm"
 };
 
-// Static icon mapping for caching
 const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Solar Panels": "/icons/solar-panels.png",
   "Soil Factory": "/icons/soil-factory.png",
@@ -499,7 +473,6 @@ export function calculateTimeLeft(building: UntypedValue, currentBlock: bigint):
 }
 
 
-
 export function getBuildingIcon(buildingName: string): string {
   // Check cache first
   if (buildingIconCache.has(buildingName)) {
@@ -526,27 +499,12 @@ export function formatLifetimeProduction(seconds: bigint): string {
 
 // Utility function for formatting large numbers with M/K suffixes (used in balance-card and user-stats-service)
 export function formatLargeNumber(amount: bigint): string {
-  const num = Number(amount) / 1e18;
-
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.?0+$/, '') + 'K';
-  }
-
-  return formatTokenAmount(amount);
+  // Delegates to the BigInt-safe compact formatter: the old inline version ran
+  // Number(amount)/1e18, which loses precision above 2^53 — while the correct
+  // implementation sat unused in this same file.
+  return formatTokenAmountCompact(amount);
 }
 
-// Utility function for validating Ethereum addresses (consolidates duplicate validation patterns)
-export function isValidEthereumAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
-
-// Alternative validation using viem's isAddress for cases that need it
-export function isValidAddress(address: string | UntypedValue): address is `0x${string}` {
-  if (typeof address !== 'string') return false;
-  return isValidEthereumAddress(address);
-}
 
 // ============ FENCE V1/V2 UTILITIES ============
 

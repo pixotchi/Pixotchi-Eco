@@ -1,9 +1,7 @@
 const BALANCE_REFRESH_EVENT = "pixotchi:balances:refresh";
-const BUILDINGS_REFRESH_EVENT = "pixotchi:buildings:refresh";
 const TASKS_OPEN_EVENT = "pixotchi:tasks:open";
 const STAKING_OPEN_EVENT = "pixotchi:staking:open";
 const LEGACY_BALANCE_REFRESH_EVENT = "balances:refresh";
-const LEGACY_BUILDINGS_REFRESH_EVENT = "buildings:refresh";
 const LEGACY_TASKS_OPEN_EVENT = "pixotchi:openTasks";
 const LEGACY_STAKING_OPEN_EVENT = "staking:open";
 
@@ -57,19 +55,6 @@ export function onBalanceRefresh(
   );
 }
 
-export function requestBuildingsRefresh() {
-  dispatchTypedEvent(BUILDINGS_REFRESH_EVENT);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(LEGACY_BUILDINGS_REFRESH_EVENT));
-  }
-}
-
-export function onBuildingsRefresh(listener: () => void): EventCleanup {
-  return subscribeToTypedEvents(
-    [BUILDINGS_REFRESH_EVENT, LEGACY_BUILDINGS_REFRESH_EVENT],
-    () => listener(),
-  );
-}
 
 export function openTasksDialog() {
   dispatchTypedEvent(TASKS_OPEN_EVENT);

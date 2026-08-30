@@ -367,25 +367,6 @@ export function isSolanaEnabled(): boolean {
   return envEnabled && hasAdapter;
 }
 
-/**
- * Check if all required Solana environment variables are set
- */
-export function validateSolanaConfig(): { valid: boolean; missing: string[] } {
-  const missing: string[] = [];
-
-  if (!process.env.NEXT_PUBLIC_SOLANA_ENABLED) {
-    missing.push('NEXT_PUBLIC_SOLANA_ENABLED');
-  }
-
-  if (!process.env.NEXT_PUBLIC_SOLANA_TWIN_ADAPTER) {
-    missing.push('NEXT_PUBLIC_SOLANA_TWIN_ADAPTER');
-  }
-
-  return {
-    valid: missing.length === 0,
-    missing,
-  };
-}
 
 /**
  * Get Solana explorer URL for a transaction
@@ -394,23 +375,4 @@ export function getSolanaExplorerTxUrl(signature: string): string {
   return `${SOLANA_BRIDGE_CONFIG.solana.blockExplorer}/tx/${signature}`;
 }
 
-/**
- * Get Solana explorer URL for an address
- */
-export function getSolanaExplorerAddressUrl(address: string): string {
-  return `${SOLANA_BRIDGE_CONFIG.solana.blockExplorer}/address/${address}`;
-}
 
-/**
- * Get Base explorer URL for an address
- */
-export function getBaseExplorerAddressUrl(address: string): string {
-  return `https://basescan.org/address/${address}`;
-}
-
-/**
- * Get Base explorer URL for a transaction
- */
-export function getBaseExplorerTxUrl(txHash: string): string {
-  return `https://basescan.org/tx/${txHash}`;
-}

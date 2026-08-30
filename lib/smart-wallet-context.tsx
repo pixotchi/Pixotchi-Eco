@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, ReactNode, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 
 export type SmartWalletType =
@@ -213,13 +213,13 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     setDetection({ ...result, isLoading: false });
   }, [address, detectSmartWallet, isConnected]);
 
+  // Memoized: the spread minted a fresh object per render, re-rendering the
+  // heaviest consumers (tabs + the whole transactions family) on every parent
+  // render and every useAccount tick.
+  const value = useMemo(() => ({ ...detection, refetch }), [detection, refetch]);
+
   return (
-    <SmartWalletContext.Provider 
-      value={{
-        ...detection,
-        refetch,
-      }}
-    >
+    <SmartWalletContext.Provider value={value}>
       {children}
     </SmartWalletContext.Provider>
   );

@@ -44,7 +44,6 @@ export function useBroadcastMessages() {
     }
     return new Set();
   });
-  const [, setTutorialCompleted] = useState(isTutorialCompleted());
   const lastFetchRef = useRef<number>(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fetchCountRef = useRef<number>(0);
@@ -66,24 +65,10 @@ export function useBroadcastMessages() {
 
   // Local dismissed IDs are loaded synchronously in state initializer
 
-  // Check tutorial completion status on mount only
-  useEffect(() => {
-    setTutorialCompleted(isTutorialCompleted());
-    
-    // Listen for tutorial completion event if needed
-    const handleTutorialComplete = () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('[Broadcast] Tutorial completed, will fetch messages on next poll');
-      }
-      setTutorialCompleted(true);
-    };
-    
-    window.addEventListener('tutorial:complete', handleTutorialComplete);
-    
-    return () => {
-      window.removeEventListener('tutorial:complete', handleTutorialComplete);
-    };
-  }, []);
+  // Tutorial completion is read directly (isTutorialCompleted) where it
+  // gates fetching. The old write-only state here ran a localStorage read +
+  // JSON.parse via a NON-lazy useState initializer on every single render of
+  // the app shell, and its setters triggered renders nothing observed.
 
   // Track mounted state to prevent state updates after unmount
   const mountedRef = useRef(true);

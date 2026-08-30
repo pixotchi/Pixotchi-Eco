@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import StakingDialog from "@/components/staking/staking-dialog";
+import dynamic from "next/dynamic";
+
+// Dialog-only module: loads on first open instead of shipping in the shell.
+const StakingDialog = dynamic(() => import("@/components/staking/staking-dialog"), { ssr: false });
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { formatUnits } from "viem";
@@ -127,6 +130,11 @@ export default function StatusBar({
   });
 
   const [stakingOpen, setStakingOpen] = useState(false);
+  const [stakingLoaded, setStakingLoaded] = useState(false);
+  const openStaking = () => {
+    setStakingLoaded(true);
+    setStakingOpen(true);
+  };
   const gamificationPolicy = getClientGamificationPolicy();
   const showTasksButton = !gamificationPolicy.disabled;
 
@@ -137,7 +145,10 @@ export default function StatusBar({
 
   // Allow other components to open the staking dialog (e.g., Stake House building)
   useEffect(() => {
-    return onStakingDialogOpen(() => setStakingOpen(true));
+    return onStakingDialogOpen(() => {
+      setStakingLoaded(true);
+      setStakingOpen(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -274,7 +285,7 @@ export default function StatusBar({
             {!isSolana && (
               <Button
                 type="button"
-                onClick={() => setStakingOpen(true)}
+                onClick={openStaking}
                 variant="statusAction"
                 size="status"
                 leadingIcon={<StakeTokenCycleIcon />}
@@ -289,7 +300,7 @@ export default function StatusBar({
           </div>
         </div>
       </div>
-      <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
+      {stakingLoaded && <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />}
     </div>
   );
 }

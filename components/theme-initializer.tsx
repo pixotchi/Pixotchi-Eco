@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 
 import {
-  syncThemeCookie,
   THEMES,
   type Theme,
   updateMetaThemeColor,
@@ -23,7 +22,6 @@ export function ThemeInitializer() {
 
     const nextTheme = resolvedTheme as Theme;
 
-    syncThemeCookie(nextTheme);
 
     if (metaUpdateTimeoutRef.current !== null) {
       window.clearTimeout(metaUpdateTimeoutRef.current);

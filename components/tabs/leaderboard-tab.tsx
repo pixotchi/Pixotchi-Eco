@@ -9,7 +9,7 @@ import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/component
 import AttackTransaction from "@/components/transactions/attack-transaction";
 import KillTransaction from "@/components/transactions/kill-transaction";
 import ReviveTransaction from "@/components/transactions/revive-transaction";
-import SolanaBridgeButton from "@/components/transactions/solana-bridge-button";
+
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -41,9 +41,17 @@ import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import { ChevronDown,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
+import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 import { decodeEventLog } from "viem";
 import { useAccount } from "wagmi";
+
+// Dynamic (matching plants-view): a static import dragged @solana/web3.js into
+// this chunk for every user via the bridge button's PublicKey import.
+const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solana-bridge-button"), {
+  loading: () => <Button className="w-full" disabled>Loading...</Button>,
+  ssr: false,
+});
 
 type LeaderboardPlant = Plant & {
   rank: number;
