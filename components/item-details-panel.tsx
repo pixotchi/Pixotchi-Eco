@@ -25,7 +25,7 @@ import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
 import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
 import Image from 'next/image';
-import { useEffect,useMemo,useState } from 'react';
+import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
 
@@ -71,6 +71,8 @@ export default function ItemDetailsPanel({
   // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
   const [ethQuotePerUnit, setEthQuotePerUnit] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
   const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
+  const fenceDurationInputId = useId();
+  const fenceDurationHelpId = useId();
   const { data: ethBalanceData } = useBalance({ address });
   const ethBalance = ethBalanceData?.value ?? BigInt(0);
 
@@ -548,9 +550,10 @@ export default function ItemDetailsPanel({
 
           {isFenceItem && (
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Duration (days):</span>
+              <label htmlFor={fenceDurationInputId} className="text-muted-foreground">Duration (days):</label>
               <div className="flex items-center gap-2">
                 <Input
+                  id={fenceDurationInputId}
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
@@ -569,9 +572,10 @@ export default function ItemDetailsPanel({
                     }
                   }}
                   aria-invalid={fenceV2InputInvalid}
+                  aria-describedby={fenceDurationHelpId}
                   className="w-20"
                 />
-                <span className="text-xs text-muted-foreground">
+                <span id={fenceDurationHelpId} className="text-xs text-muted-foreground">
                   {fenceV2Bounds.min === fenceV2Bounds.max
                     ? `${fenceV2Bounds.min}d${fenceV2Bounds.min === 1 ? '' : 's'} minimum`
                     : `${fenceV2Bounds.min}-${fenceV2Bounds.max} days`}
@@ -665,7 +669,6 @@ export default function ItemDetailsPanel({
                   onSuccess={() => {
                     onPurchaseSuccess();
                     toast.success('Fence purchased with ETH!');
-                    window.dispatchEvent(new Event('balances:refresh'));
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
@@ -688,7 +691,6 @@ export default function ItemDetailsPanel({
                   onSuccess={() => {
                     onPurchaseSuccess();
                     toast.success('Purchase with ETH successful!');
-                    window.dispatchEvent(new Event('balances:refresh'));
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
@@ -719,6 +721,9 @@ export default function ItemDetailsPanel({
                 Approve SEED spending once to unlock shop and garden purchases.
               </p>
               <ApprovalActionTransaction
+                intentKey={isFenceItem
+                  ? `fence:purchase:${selectedPlant.id}:${validFenceV2Days ?? 0}`
+                  : `purchase:${itemType}:${selectedPlant.id}:${selectedItem.id}:${itemType === 'garden' ? quantity : 1}`}
                 actionCalls={purchaseActionCalls}
                 approvalSpender={PIXOTCHI_NFT_ADDRESS}
                 needsApproval={needsSeedApproval}
@@ -769,6 +774,7 @@ export default function ItemDetailsPanel({
             itemType === 'shop' ? (
               isFenceItem ? (
                 <SponsoredTransaction
+                  intentKey={`fence:purchase:${selectedPlant.id}:${validFenceV2Days ?? 0}`}
                   calls={fenceV2Calls}
                   onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();

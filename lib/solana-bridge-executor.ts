@@ -11,6 +11,12 @@ import { formatUnits } from 'viem';
 import { solanaBridgeImplementation,type BaseContractCall } from './solana-bridge-implementation';
 import type { BridgeTransactionParams } from './solana-bridge-service';
 import {
+  waitForBaseBridgeExecution,
+  type BaseBridgeExecutionStatus,
+  type BridgeTransactionMetadata,
+  type SolanaBridgeLifecyclePhase,
+} from './solana-bridge-lifecycle';
+import {
 SOLANA_BRIDGE_CONFIG,
 getSolanaExplorerTxUrl,
 } from './solana-constants';
@@ -22,6 +28,8 @@ export interface BridgeExecuteOptions {
   params: BridgeTransactionParams;
   /** Function to sign the Solana transaction (from Privy) */
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  /** Lifecycle updates for honest submitted/confirmed/relay UI. */
+  onPhase?: (phase: SolanaBridgeLifecyclePhase) => void;
 }
 
 export interface BridgeExecuteResult {
@@ -29,8 +37,60 @@ export interface BridgeExecuteResult {
   signature: string;
   /** Whether the transaction was successful */
   success: boolean;
+  /** Cross-chain terminal/pending state. */
+  status: BaseBridgeExecutionStatus;
+  /** Metadata required to resume a pending relay check. */
+  metadata?: BridgeTransactionMetadata;
   /** Error message if failed */
   error?: string;
+}
+
+export interface PreparedSolanaBridgeTransaction {
+  transaction: Transaction;
+  metadata: BridgeTransactionMetadata;
+}
+
+/**
+ * Convert app bridge parameters into a Solana transaction in one place. This
+ * prevents callers from accidentally dropping the action-specific Base gas cap.
+ */
+export async function createSolanaBridgeTransaction(
+  solanaPublicKey: string,
+  params: BridgeTransactionParams,
+): Promise<PreparedSolanaBridgeTransaction> {
+  const walletPubkey = new PublicKey(solanaPublicKey);
+  const asset = {
+    symbol: 'sol',
+    label: 'SOL',
+    type: 'sol' as const,
+    decimals: 9,
+    remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
+    mint: undefined,
+    tokenProgram: undefined,
+  };
+  const call: BaseContractCall | undefined = params.call
+    ? {
+        type: 'call',
+        target: params.call.target,
+        data: params.call.data,
+        value: params.call.value?.toString() ?? '0',
+      }
+    : undefined;
+
+  const transaction = await solanaBridgeImplementation.createBridgeTransaction({
+    walletAddress: walletPubkey,
+    amount: params.solAmount,
+    destinationAddress: params.twinAddress,
+    asset,
+    tokenAccount: undefined,
+    call,
+    gasLimit: params.gasLimit,
+  });
+
+  return {
+    transaction,
+    metadata: solanaBridgeImplementation.getBridgeTransactionMetadata(transaction),
+  };
 }
 
 /**
@@ -40,63 +100,47 @@ export interface BridgeExecuteResult {
 export async function executeBridgeTransaction(
   options: BridgeExecuteOptions
 ): Promise<BridgeExecuteResult> {
-  const { solanaPublicKey, params, signTransaction } = options;
+  const { solanaPublicKey, params, signTransaction, onPhase } = options;
   
   try {
     console.log('[SolanaBridge] Starting bridge transaction...');
     console.log('[SolanaBridge] Destination (Twin):', params.twinAddress);
     console.log('[SolanaBridge] Amount (lamports):', params.solAmount.toString());
     
-    const walletPubkey = new PublicKey(solanaPublicKey);
-    
-    // Build the bridge asset details for native SOL
-    const asset = {
-      symbol: 'sol',
-      label: 'SOL',
-      type: 'sol' as const,
-      decimals: 9,
-      remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
-      mint: undefined,
-      tokenProgram: undefined,
-    };
-    
-    // Build call options if we have a contract call
-    let callOptions: BaseContractCall | undefined;
-    if (params.call) {
-      callOptions = {
-        type: 'call',
-        target: params.call.target,
-        data: params.call.data,
-        value: params.call.value?.toString() || '0',
-      };
-      console.log('[SolanaBridge] Contract call target:', params.call.target);
-    }
-    
     // Create the bridge transaction
     console.log('[SolanaBridge] Building transaction...');
-    const transaction = await solanaBridgeImplementation.createBridgeTransaction({
-      walletAddress: walletPubkey,
-      amount: params.solAmount,
-      destinationAddress: params.twinAddress,
-      asset,
-      tokenAccount: undefined, // Not needed for native SOL
-      call: callOptions,
-      gasLimit: params.gasLimit,
-    });
+    const { transaction, metadata } = await createSolanaBridgeTransaction(
+      solanaPublicKey,
+      params,
+    );
+    const walletPubkey = new PublicKey(solanaPublicKey);
     
     // Submit the transaction (signs and sends)
     console.log('[SolanaBridge] Signing and submitting...');
     const signature = await solanaBridgeImplementation.submitBridgeTransaction(
       transaction,
       walletPubkey,
-      signTransaction
+      signTransaction,
+      { onPhase },
     );
     
     console.log(`[SolanaBridge] Transaction submitted: ${signature}`);
     
+    const baseResult = await waitForBaseBridgeExecution(
+      solanaBridgeImplementation.getConnection(),
+      metadata,
+      { onPhase },
+    );
+
     return {
       signature,
-      success: true,
+      success: baseResult.status === 'base-confirmed',
+      status: baseResult.status,
+      metadata,
+      error:
+        baseResult.status === 'relay-failed'
+          ? 'The relay attempted the Base action but it failed. Do not resubmit; the message may be retried.'
+          : undefined,
     };
     
   } catch (error) {
@@ -104,6 +148,7 @@ export async function executeBridgeTransaction(
     return {
       signature: '',
       success: false,
+      status: 'unknown',
       error: error instanceof Error ? error.message : 'Bridge transaction failed',
     };
   }

@@ -13,7 +13,7 @@
 // Debug flag - set to true for verbose logging
 const DEBUG_BRIDGE = false;
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useSolanaWallet } from './useSolanaWallet';
 import {
   buildSetupTransaction,
@@ -38,6 +38,11 @@ import { getReadClient } from '@/lib/contracts';
 import { getAddress } from 'viem';
 import { executeBridgeTransaction, checkSolBalance } from '@/lib/solana-bridge-executor';
 import type { Transaction } from '@solana/web3.js';
+import {
+  getSolanaQuoteKey,
+  isCurrentSolanaQuoteGeneration,
+  nextSolanaQuoteGeneration,
+} from '@/lib/solana-bridge-flow';
 
 // ============ Types ============
 
@@ -47,6 +52,10 @@ export type BridgeStatus =
   | 'quoting'
   | 'ready'
   | 'signing'
+  | 'submitted'
+  | 'solana-confirming'
+  | 'solana-confirmed'
+  | 'relay-pending'
   | 'bridging'
   | 'confirming'
   | 'success'
@@ -56,6 +65,8 @@ export interface BridgeState {
   status: BridgeStatus;
   transaction: BridgeTransaction | null;
   quote: SolanaQuoteResult | null;
+  quoteKey: string | null;
+  quoteFetchedAt: number | null;
   signature: string | null;
   error: string | null;
 }
@@ -273,9 +284,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
     status: 'idle',
     transaction: null,
     quote: null,
+    quoteKey: null,
+    quoteFetchedAt: null,
     signature: null,
     error: null,
   });
+
+  const quoteGenerationRef = useRef(0);
+  const quoteCacheRef = useRef(
+    new Map<string, { quote: SolanaQuoteResult; fetchedAt: number }>(),
+  );
 
   const needsSetup = isConnected && !isTwinSetup;
 
@@ -286,10 +304,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
 
   // Reset state
   const reset = useCallback(() => {
+    quoteGenerationRef.current = nextSolanaQuoteGeneration(quoteGenerationRef.current);
+    quoteCacheRef.current.clear();
     setState({
       status: 'idle',
       transaction: null,
       quote: null,
+      quoteKey: null,
+      quoteFetchedAt: null,
       signature: null,
       error: null,
     });
@@ -300,8 +322,18 @@ export function useSolanaBridge(): SolanaBridgeHook {
     actionType: BridgeActionType,
     params?: Record<string, UntypedValue>
   ): Promise<SolanaQuoteResult | null> => {
+    const quoteKey = getSolanaQuoteKey(actionType, params);
+    const generation = nextSolanaQuoteGeneration(quoteGenerationRef.current);
+    quoteGenerationRef.current = generation;
+
     try {
-      updateState({ status: 'quoting', error: null });
+      updateState({
+        status: 'quoting',
+        error: null,
+        quote: null,
+        quoteKey,
+        quoteFetchedAt: null,
+      });
 
       let quote: SolanaQuoteResult | null = null;
 
@@ -330,13 +362,20 @@ export function useSolanaBridge(): SolanaBridgeHook {
           };
       }
 
-      // Update state with the quote so prepareMint can reuse it
       if (quote) {
-        updateState({
-          quote,
-          status: quote.error ? 'error' : 'idle',
-          error: quote.error || null
-        });
+        const fetchedAt = Date.now();
+        if (quoteKey && !quote.error && isCurrentSolanaQuoteGeneration(generation, quoteGenerationRef.current)) {
+          quoteCacheRef.current.set(quoteKey, { quote, fetchedAt });
+        }
+        if (isCurrentSolanaQuoteGeneration(generation, quoteGenerationRef.current)) {
+          updateState({
+            quote,
+            quoteKey,
+            quoteFetchedAt: fetchedAt,
+            status: quote.error ? 'error' : 'idle',
+            error: quote.error || null,
+          });
+        }
         if (DEBUG_BRIDGE) {
           console.log('[SolanaBridge] getQuote stored in state (V2):', {
             hasQuote: true,
@@ -345,14 +384,18 @@ export function useSolanaBridge(): SolanaBridgeHook {
           });
         }
       } else {
-        updateState({ status: 'error', error: 'Failed to get quote' });
+        if (isCurrentSolanaQuoteGeneration(generation, quoteGenerationRef.current)) {
+          updateState({ status: 'error', error: 'Failed to get quote' });
+        }
       }
 
       return quote;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to get quote';
       console.error('[SolanaBridge] getQuote error:', error);
-      updateState({ status: 'error', error: errorMsg });
+      if (isCurrentSolanaQuoteGeneration(generation, quoteGenerationRef.current)) {
+        updateState({ status: 'error', error: errorMsg });
+      }
       return null;
     }
   }, [updateState]);
@@ -391,10 +434,14 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
 
-    // Check if we already have a valid quote in state
-    // V2: No swap data needed - contract does onchain swaps
-    const existingQuote = state.quote;
-    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+    const quoteKey = getSolanaQuoteKey('mint', { strain })!;
+    const cachedQuote = quoteKey ? quoteCacheRef.current.get(quoteKey) : undefined;
+    const existingQuote = cachedQuote?.quote ?? null;
+    const hasValidExistingQuote = Boolean(
+      cachedQuote &&
+      Date.now() - cachedQuote.fetchedAt < BRIDGE_CONFIG.quoteValidityMs &&
+      isQuoteValid(cachedQuote.quote),
+    );
 
     if (!hasValidExistingQuote) {
       updateState({ status: 'quoting', error: null });
@@ -416,14 +463,16 @@ export function useSolanaBridge(): SolanaBridgeHook {
       // Use existing quote if valid, otherwise fetch new one
       let quote: SolanaQuoteResult;
       if (hasValidExistingQuote) {
-        quote = existingQuote;
+        quote = existingQuote!;
         if (DEBUG_BRIDGE) {
           console.log('[SolanaBridge] Reusing existing quote:', {
             wsolAmount: quote.wsolAmount?.toString(),
           });
         }
       } else {
-        quote = await quoteMintCost(strain);
+        const freshQuote = await getQuote('mint', { strain });
+        if (!freshQuote) throw new Error('Failed to get mint quote');
+        quote = freshQuote;
         if (DEBUG_BRIDGE) {
           console.log('[SolanaBridge] Quote received in prepareMint:', {
             hasError: !!quote.error,
@@ -452,7 +501,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       // V2: No swap data validation needed - contract does onchain swaps
 
       // Update state with quote before building transaction
-      updateState({ quote, status: 'building', error: null });
+      updateState({ quote, quoteKey, quoteFetchedAt: Date.now(), status: 'building', error: null });
 
       if (DEBUG_BRIDGE) console.log('[SolanaBridge] Building mint transaction...');
       const tx = await buildMintTransaction(solanaAddress, strain, quote);
@@ -472,7 +521,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState, state.quote]);
+  }, [solanaAddress, needsSetup, updateState, getQuote]);
 
   // Prepare shop item transaction
   const prepareShopItem = useCallback(async (
@@ -489,20 +538,29 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
 
-    // Reuse existing valid quote if present; otherwise fetch a fresh one
-    const existingQuote = state.quote;
-    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+    const quoteKey = getSolanaQuoteKey('shopItem', { itemId })!;
+    const cachedQuote = quoteKey ? quoteCacheRef.current.get(quoteKey) : undefined;
+    const existingQuote = cachedQuote?.quote ?? null;
+    const hasValidExistingQuote = Boolean(
+      cachedQuote &&
+      Date.now() - cachedQuote.fetchedAt < BRIDGE_CONFIG.quoteValidityMs &&
+      isQuoteValid(cachedQuote.quote),
+    );
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
 
     try {
-      const quote = hasValidExistingQuote ? existingQuote! : await quoteShopItemCost(itemId);
+      const quote = hasValidExistingQuote
+        ? existingQuote!
+        : await getQuote('shopItem', { itemId });
+
+      if (!quote) throw new Error('Failed to get shop item quote');
 
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
-      updateState({ quote, status: 'building' });
+      updateState({ quote, quoteKey, quoteFetchedAt: Date.now(), status: 'building' });
 
       const tx = await buildShopItemTransaction(solanaAddress, plantId, itemId, quote);
       updateState({ status: 'ready', transaction: tx });
@@ -512,7 +570,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState, state.quote]);
+  }, [solanaAddress, needsSetup, updateState, getQuote]);
 
   // Prepare garden item transaction
   const prepareGardenItem = useCallback(async (
@@ -529,20 +587,29 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
 
-    // Reuse existing valid quote if present; otherwise fetch a fresh one
-    const existingQuote = state.quote;
-    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+    const quoteKey = getSolanaQuoteKey('gardenItem', { itemId })!;
+    const cachedQuote = quoteKey ? quoteCacheRef.current.get(quoteKey) : undefined;
+    const existingQuote = cachedQuote?.quote ?? null;
+    const hasValidExistingQuote = Boolean(
+      cachedQuote &&
+      Date.now() - cachedQuote.fetchedAt < BRIDGE_CONFIG.quoteValidityMs &&
+      isQuoteValid(cachedQuote.quote),
+    );
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
 
     try {
-      const quote = hasValidExistingQuote ? existingQuote! : await quoteGardenItemCost(itemId);
+      const quote = hasValidExistingQuote
+        ? existingQuote!
+        : await getQuote('gardenItem', { itemId });
+
+      if (!quote) throw new Error('Failed to get garden item quote');
 
       if (!isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
-      updateState({ quote, status: 'building' });
+      updateState({ quote, quoteKey, quoteFetchedAt: Date.now(), status: 'building' });
 
       const tx = await buildGardenItemTransaction(solanaAddress, plantId, itemId, quote);
       updateState({ status: 'ready', transaction: tx });
@@ -552,7 +619,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState, state.quote]);
+  }, [solanaAddress, needsSetup, updateState, getQuote]);
 
   // Prepare box game transaction
   const prepareBoxGame = useCallback(async (plantId: number): Promise<BridgeTransaction | null> => {
@@ -652,21 +719,28 @@ export function useSolanaBridge(): SolanaBridgeHook {
       return null;
     }
 
-    // Reuse existing valid quote if present; otherwise fetch a fresh one
-    const existingQuote = state.quote;
-    const hasValidExistingQuote = existingQuote && isQuoteValid(existingQuote);
+    const quoteKey = getSolanaQuoteKey('setName', { plantId, name })!;
+    const cachedQuote = quoteKey ? quoteCacheRef.current.get(quoteKey) : undefined;
+    const existingQuote = cachedQuote?.quote ?? null;
+    const hasValidExistingQuote = Boolean(
+      cachedQuote &&
+      Date.now() - cachedQuote.fetchedAt < BRIDGE_CONFIG.quoteValidityMs &&
+      (cachedQuote.quote.seedAmount === BigInt(0) || isQuoteValid(cachedQuote.quote)),
+    );
 
     updateState({ status: hasValidExistingQuote ? 'building' : 'quoting', error: null });
 
     try {
-      const quote = hasValidExistingQuote ? existingQuote! : await quoteNameChangeCost();
+      const quote = hasValidExistingQuote ? existingQuote! : await getQuote('setName', {});
+
+      if (!quote) throw new Error('Failed to get name change quote');
 
       // Name change might be free
       if (quote.seedAmount > BigInt(0) && !isQuoteValid(quote)) {
         throw new Error(quote.error || 'Failed to get quote from the TwinAdapter');
       }
 
-      updateState({ quote, status: 'building' });
+      updateState({ quote, quoteKey, quoteFetchedAt: Date.now(), status: 'building' });
 
       const tx = await buildSetNameTransaction(solanaAddress, plantId, name, quote);
       updateState({ status: 'ready', transaction: tx });
@@ -676,7 +750,7 @@ export function useSolanaBridge(): SolanaBridgeHook {
       updateState({ status: 'error', error: message });
       return null;
     }
-  }, [solanaAddress, needsSetup, updateState, state.quote]);
+  }, [solanaAddress, needsSetup, updateState, getQuote]);
 
   // Execute prepared transaction
   const execute = useCallback(async (
@@ -709,13 +783,21 @@ export function useSolanaBridge(): SolanaBridgeHook {
         solanaPublicKey: solanaAddress,
         params: state.transaction.params,
         signTransaction,
+        onPhase: (phase) => {
+          const status: BridgeStatus = phase === 'base-confirmed' ? 'success' : phase;
+          updateState({ status });
+        },
       });
 
-      if (!result.success) {
+      if (!result.success && result.status === 'relay-failed') {
         throw new Error(result.error || 'Bridge transaction failed');
       }
 
-      updateState({ status: 'success', signature: result.signature });
+      updateState({
+        status: result.success ? 'success' : 'relay-pending',
+        signature: result.signature,
+        error: null,
+      });
       return result.signature;
 
     } catch (error) {

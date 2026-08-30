@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useAccount, useBalance } from "wagmi";
 import { ChevronDown, Loader2 } from "lucide-react";
@@ -482,10 +482,28 @@ export default function BarracksPanelV2({
   const [reportView, setReportView] = useState<ReportMode>("outgoing");
   const [eligibleTargets, setEligibleTargets] = useState<Land[]>([]);
   const [selectedTargetLandId, setSelectedTargetLandId] = useState<bigint | null>(null);
+  const [loadedStateLandId, setLoadedStateLandId] = useState<bigint | null>(null);
+  const [loadedAllowanceIdentity, setLoadedAllowanceIdentity] = useState<string | null>(null);
+  const trainAmountInputId = useId();
+  const trainAmountHelpId = useId();
+  const attackSwordsmenInputId = useId();
+  const attackPhalanxInputId = useId();
+  const normalizedAddress = address?.toLowerCase() ?? "disconnected";
+  const currentLandIdRef = useRef(landId);
+  const stateRequestRef = useRef(0);
+  const allowanceRequestRef = useRef(0);
+  const targetsRequestRef = useRef(0);
+  currentLandIdRef.current = landId;
 
   const buildTokenAddress = config?.buildToken;
   const selectedTrainConfig = getTroopConfig(config, selectedTrainTroop);
   const trainingTokenAddress = selectedTrainConfig?.trainingToken;
+  const allowanceIdentity = `${landId.toString()}:${normalizedAddress}:${buildTokenAddress ?? "none"}:${trainingTokenAddress ?? "none"}`;
+  const currentAllowanceIdentityRef = useRef(allowanceIdentity);
+  currentAllowanceIdentityRef.current = allowanceIdentity;
+  const allowancesAreCurrent = loadedAllowanceIdentity === allowanceIdentity;
+  const currentBuildAllowance = allowancesAreCurrent ? buildAllowance : ZERO_BIGINT;
+  const currentTrainingAllowance = allowancesAreCurrent ? trainingAllowance : ZERO_BIGINT;
   const buildTokenSymbol = useTokenSymbol(buildTokenAddress) || "TOKEN";
   const trainingTokenSymbol = useTokenSymbol(trainingTokenAddress) || "TOKEN";
   const { decimals: buildTokenDecimals } = useTokenMetadata(buildTokenAddress);
@@ -585,28 +603,54 @@ export default function BarracksPanelV2({
   }, [landId]);
 
   const loadState = useCallback(async (showLoading = true) => {
+    const requestLandId = landId;
+    if (currentLandIdRef.current !== requestLandId) return null;
+    const requestId = ++stateRequestRef.current;
     try {
       if (showLoading) {
         setLoading(true);
       }
 
       const snapshot = await readSnapshot();
+      if (
+        requestId !== stateRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return null;
       applySnapshot(snapshot);
+      setLoadedStateLandId(requestLandId);
       return snapshot;
     } catch (error) {
       console.error("Failed to load barracks V2 state:", error);
+      if (
+        requestId !== stateRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return null;
+      setConfig(null);
+      setLandState(null);
+      setLastOutgoingReport(null);
+      setLastIncomingReport(null);
+      setLoadedStateLandId(requestLandId);
       return null;
     } finally {
-      if (showLoading) {
+      if (
+        requestId === stateRequestRef.current
+        && currentLandIdRef.current === requestLandId
+      ) {
         setLoading(false);
       }
     }
-  }, [applySnapshot, readSnapshot]);
+  }, [applySnapshot, landId, readSnapshot]);
 
   const loadAllowances = useCallback(async () => {
+    const requestIdentity = allowanceIdentity;
+    if (currentAllowanceIdentityRef.current !== requestIdentity) {
+      return { build: ZERO_BIGINT, training: ZERO_BIGINT };
+    }
+    const requestId = ++allowanceRequestRef.current;
     if (!address || !buildTokenAddress || !trainingTokenAddress) {
       setBuildAllowance(ZERO_BIGINT);
       setTrainingAllowance(ZERO_BIGINT);
+      setLoadedAllowanceIdentity(requestIdentity);
       return { build: ZERO_BIGINT, training: ZERO_BIGINT };
     }
 
@@ -615,18 +659,31 @@ export default function BarracksPanelV2({
         checkBarracksApproval(address, buildTokenAddress),
         checkBarracksApproval(address, trainingTokenAddress),
       ]);
+      if (
+        requestId !== allowanceRequestRef.current
+        || currentAllowanceIdentityRef.current !== requestIdentity
+      ) return { build: ZERO_BIGINT, training: ZERO_BIGINT };
       setBuildAllowance(nextBuildAllowance);
       setTrainingAllowance(nextTrainingAllowance);
+      setLoadedAllowanceIdentity(requestIdentity);
       return { build: nextBuildAllowance, training: nextTrainingAllowance };
     } catch (error) {
       console.error("Failed to load barracks V2 approvals:", error);
+      if (
+        requestId !== allowanceRequestRef.current
+        || currentAllowanceIdentityRef.current !== requestIdentity
+      ) return { build: ZERO_BIGINT, training: ZERO_BIGINT };
       setBuildAllowance(ZERO_BIGINT);
       setTrainingAllowance(ZERO_BIGINT);
+      setLoadedAllowanceIdentity(requestIdentity);
       return { build: ZERO_BIGINT, training: ZERO_BIGINT };
     }
-  }, [address, buildTokenAddress, trainingTokenAddress]);
+  }, [address, allowanceIdentity, buildTokenAddress, trainingTokenAddress]);
 
   const loadTargets = useCallback(async () => {
+    const requestLandId = landId;
+    if (currentLandIdRef.current !== requestLandId) return;
+    const requestId = ++targetsRequestRef.current;
     if (!config?.enabled || !landState?.isBuilt) {
       setEligibleTargets([]);
       setSelectedTargetLandId(null);
@@ -641,6 +698,10 @@ export default function BarracksPanelV2({
 
       const targetIds = await barracksGetEligibleAttackableLandIds(landId);
       const targetLands = targetIds.length > 0 ? await getLandsByIds(targetIds) : [];
+      if (
+        requestId !== targetsRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return;
 
       setEligibleTargets(targetLands);
       setSelectedTargetLandId((current) =>
@@ -650,21 +711,60 @@ export default function BarracksPanelV2({
       );
     } catch (error) {
       console.error("Failed to load barracks V2 targets:", error);
+      if (
+        requestId !== targetsRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return;
       setEligibleTargets([]);
       setSelectedTargetLandId(null);
       setTargetsError("Unable to load eligible targets right now.");
     } finally {
-      setTargetsLoading(false);
+      if (
+        requestId === targetsRequestRef.current
+        && currentLandIdRef.current === requestLandId
+      ) setTargetsLoading(false);
     }
   }, [config?.enabled, landId, landState?.isBuilt]);
+
+  useEffect(() => {
+    stateRequestRef.current += 1;
+    targetsRequestRef.current += 1;
+    setLoadedStateLandId(null);
+    setConfig(null);
+    setLandState(null);
+    setLastOutgoingReport(null);
+    setLastIncomingReport(null);
+    setEligibleTargets([]);
+    setSelectedTargetLandId(null);
+    setTargetsError(null);
+    setTargetsLoading(false);
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+    setAttackSwordsmen("");
+    setAttackPhalanx("");
+    setLoading(true);
+
+    return () => {
+      stateRequestRef.current += 1;
+      targetsRequestRef.current += 1;
+    };
+  }, [landId]);
 
   useEffect(() => {
     void loadState();
   }, [currentBlock, loadState]);
 
   useEffect(() => {
+    allowanceRequestRef.current += 1;
+    setLoadedAllowanceIdentity(null);
+    setBuildAllowance(ZERO_BIGINT);
+    setTrainingAllowance(ZERO_BIGINT);
     void loadAllowances();
-  }, [loadAllowances]);
+    return () => {
+      allowanceRequestRef.current += 1;
+    };
+  }, [allowanceIdentity, loadAllowances]);
 
   useEffect(() => {
     if (activeTab !== "raid") return;
@@ -748,8 +848,11 @@ export default function BarracksPanelV2({
 
   const dispatchRefreshEvents = useCallback(() => {
     onUpdate();
-    dispatchPostTransactionRefresh(["balances:refresh", "buildings:refresh"]);
-  }, [onUpdate]);
+    dispatchPostTransactionRefresh(["buildings:refresh"], undefined, {
+      address,
+      source: "barracks",
+    });
+  }, [address, onUpdate]);
 
   const refreshAfterSuccess = useCallback(async () => {
     for (const waitMs of [0, 500, 1200]) {
@@ -840,9 +943,10 @@ export default function BarracksPanelV2({
     [config?.buildCost, loadAllowances, pause, trainCostTotal],
   );
 
-  const needsBuildApproval = !!config && config.buildCost > ZERO_BIGINT && buildAllowance < config.buildCost;
+  const needsBuildApproval =
+    !!config && config.buildCost > ZERO_BIGINT && currentBuildAllowance < config.buildCost;
   const needsTrainingApproval =
-    !!selectedTrainConfig && trainCostTotal > ZERO_BIGINT && trainingAllowance < trainCostTotal;
+    !!selectedTrainConfig && trainCostTotal > ZERO_BIGINT && currentTrainingAllowance < trainCostTotal;
   const isBuildBalanceLoaded =
     !address || !buildTokenAddress || buildTokenAddress === ZERO_ADDRESS || !!buildTokenBalance;
   const hasBuildBalance =
@@ -865,7 +969,7 @@ export default function BarracksPanelV2({
     ? `Cannot attack for ${formatRemaining(attackCooldownEndsAt)}`
     : "You cannot attack right now";
 
-  if (loading && !config && !landState) {
+  if (loadedStateLandId !== landId || (loading && !config && !landState)) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -948,6 +1052,7 @@ export default function BarracksPanelV2({
               </>
             ) : (
               <SponsoredTransaction
+                intentKey={`barracks:build:${landId}`}
                 calls={[buildBarracksBuildCall(landId)]}
                 buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
                 buttonClassName="w-full"
@@ -1038,11 +1143,14 @@ export default function BarracksPanelV2({
           />
 
           <div className="relative">
+            <label htmlFor={trainAmountInputId} className="sr-only">Number of troops to train</label>
             <Input
+              id={trainAmountInputId}
               value={trainAmount}
               onChange={(event) => setTrainAmount(event.target.value)}
               placeholder="Troops"
               inputMode="numeric"
+              aria-describedby={trainAmountHelpId}
               className="h-10 pr-24"
             />
             {trainDurationDisplay ? (
@@ -1052,7 +1160,7 @@ export default function BarracksPanelV2({
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div id={trainAmountHelpId} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <TroopCount type={selectedTrainTroop} amount="" withName withRole />
             </span>
@@ -1099,6 +1207,7 @@ export default function BarracksPanelV2({
             </>
           ) : (
             <SponsoredTransaction
+              intentKey={`barracks:train:${landId}:${troopNumericType(selectedTrainTroop)}:${parsedTrainAmount}`}
               calls={[buildBarracksTrainCallV2(landId, troopNumericType(selectedTrainTroop), parsedTrainAmount)]}
               buttonText={`Train ${parsedTrainAmount.toString()} ${selectedTroopOption.name}`}
               buttonClassName="w-full"
@@ -1195,7 +1304,9 @@ export default function BarracksPanelV2({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-2">
               <div className="relative">
+                <label htmlFor={attackSwordsmenInputId} className="sr-only">Swordsmen to send</label>
                 <Input
+                  id={attackSwordsmenInputId}
                   value={attackSwordsmen}
                   onChange={(event) => setAttackSwordsmen(event.target.value)}
                   placeholder="Swordsmen"
@@ -1221,7 +1332,9 @@ export default function BarracksPanelV2({
 
             <div className="space-y-2">
               <div className="relative">
+                <label htmlFor={attackPhalanxInputId} className="sr-only">Phalanx troops to send</label>
                 <Input
+                  id={attackPhalanxInputId}
                   value={attackPhalanx}
                   onChange={(event) => setAttackPhalanx(event.target.value)}
                   placeholder="Phalanx"
@@ -1317,6 +1430,7 @@ export default function BarracksPanelV2({
 
           {canAttack && selectedTargetLandId && attackInputsValid ? (
             <SponsoredTransaction
+              intentKey={`barracks:raid:${landId}:${selectedTargetLandId}:${parsedAttackSwordsmen ?? ZERO_BIGINT}:${parsedAttackPhalanx ?? ZERO_BIGINT}`}
               calls={[
                 buildBarracksAttackCallV2(
                   landId,

@@ -40,35 +40,6 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
     const [hasInteracted, setHasInteracted] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    // Initialize audio element
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const audio = new Audio(AUDIO_SRC);
-        audio.loop = true;
-        audio.volume = 0.3; // Ambient volume - not too loud
-        audio.preload = "auto";
-        audioRef.current = audio;
-
-        // Track playing state
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
-        const handleEnded = () => setIsPlaying(false);
-
-        audio.addEventListener("play", handlePlay);
-        audio.addEventListener("pause", handlePause);
-        audio.addEventListener("ended", handleEnded);
-
-        return () => {
-            audio.removeEventListener("play", handlePlay);
-            audio.removeEventListener("pause", handlePause);
-            audio.removeEventListener("ended", handleEnded);
-            audio.pause();
-            audio.src = "";
-            audioRef.current = null;
-        };
-    }, []);
-
     // Load preference from localStorage on mount
     useEffect(() => {
         try {
@@ -102,30 +73,51 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
         };
     }, [hasInteracted]);
 
-    // Play/pause based on enabled state
-    // Try to play immediately if enabled - some contexts (like mini apps) may allow autoplay
+    // Create the media element only after both the persisted opt-in and a real
+    // user gesture are known. Constructing `new Audio(src)` on every cold boot
+    // caused browsers to download the whole soundtrack even for muted users.
     useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio || !mounted) return;
-
-        // Only attempt to play if document is visible
-        if (isEnabled && document.visibilityState === 'visible') {
-            // Try to play - if it works, mark as interacted
-            audio.play()
-                .then(() => {
-                    // Playback started successfully - browser allowed it
-                    if (!hasInteracted) {
-                        setHasInteracted(true);
-                    }
-                })
-                .catch((err) => {
-                    // Autoplay was prevented - wait for user interaction
-                    console.log("[AmbientAudio] Waiting for user interaction:", err.message);
-                });
-        } else {
-            audio.pause();
+        if (!mounted || !isEnabled || !hasInteracted || performanceModeEnabled) {
+            audioRef.current?.pause();
+            return;
         }
-    }, [isEnabled, hasInteracted, mounted]);
+
+        let audio = audioRef.current;
+        if (!audio) {
+            audio = new Audio();
+            audio.preload = "none";
+            audio.loop = true;
+            audio.volume = 0.3;
+            audio.src = AUDIO_SRC;
+            audioRef.current = audio;
+
+            const handlePlay = () => setIsPlaying(true);
+            const handlePause = () => setIsPlaying(false);
+            const handleEnded = () => setIsPlaying(false);
+            audio.addEventListener("play", handlePlay);
+            audio.addEventListener("pause", handlePause);
+            audio.addEventListener("ended", handleEnded);
+        }
+
+        if (document.visibilityState === "visible") {
+            void audio.play().catch(() => {
+                // A browser can still reject playback if it does not count the
+                // captured event as activation. The next toggle retries it.
+            });
+        }
+    }, [hasInteracted, isEnabled, mounted, performanceModeEnabled]);
+
+    // Release the media element and its resource when the provider unmounts.
+    useEffect(() => {
+        return () => {
+            const audio = audioRef.current;
+            if (!audio) return;
+            audio.pause();
+            audio.removeAttribute("src");
+            audio.load();
+            audioRef.current = null;
+        };
+    }, []);
 
     // Pause audio when app/tab loses focus, resume when it regains focus
     useEffect(() => {
@@ -138,7 +130,12 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
             if (document.visibilityState === 'hidden') {
                 // App went to background - pause audio
                 audio.pause();
-            } else if (document.visibilityState === 'visible' && isEnabled) {
+            } else if (
+                document.visibilityState === 'visible' &&
+                isEnabled &&
+                hasInteracted &&
+                !performanceModeEnabled
+            ) {
                 // App came back to foreground - resume if enabled
                 audio.play().catch(() => {
                     // Ignore errors - browser may still block
@@ -150,7 +147,7 @@ export function AmbientAudioProvider({ children }: { children: ReactNode }) {
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [isEnabled]);
+    }, [hasInteracted, isEnabled, performanceModeEnabled]);
 
     const toggleAudio = useCallback(() => {
         const newValue = !isEnabled;

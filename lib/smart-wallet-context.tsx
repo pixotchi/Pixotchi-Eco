@@ -29,11 +29,13 @@ interface SmartWalletContextType extends SmartWalletDetection {
 
 const SmartWalletContext = createContext<SmartWalletContextType | undefined>(undefined);
 
-export function SmartWalletProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();
+type OwnedSmartWalletDetection = {
+  ownerKey: string | null;
+  value: SmartWalletDetection;
+};
 
-  const [detection, setDetection] = useState<SmartWalletDetection>({
+function createEmptyDetection(isLoading = false): SmartWalletDetection {
+  return {
     isSmartWallet: false,
     walletType: 'UntypedValue',
     capabilities: null,
@@ -42,18 +44,44 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     hasCode: false,
     delegationTarget: null,
     isDelegatedEoa: false,
-    isLoading: false,
+    isLoading,
     lastChecked: null,
+  };
+}
+
+export function SmartWalletProvider({ children }: { children: ReactNode }) {
+  const { address, chainId, isConnected } = useAccount();
+  const publicClient = usePublicClient();
+
+  const detectionChainId = chainId ?? publicClient?.chain?.id ?? null;
+  const ownerKey = address && isConnected
+    ? `${detectionChainId ?? 'unknown'}:${address.toLowerCase()}`
+    : null;
+  const ownerKeyRef = useRef(ownerKey);
+  const requestGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  ownerKeyRef.current = ownerKey;
+
+  const [detectionSnapshot, setDetectionSnapshot] = useState<OwnedSmartWalletDetection>({
+    ownerKey: null,
+    value: createEmptyDetection(),
   });
 
+  // Gate the rendered value as well as async commits. Effects run after paint, so
+  // clearing only inside the address-change effect still exposed the previous
+  // wallet's routing classification for one render.
+  const detection = useMemo(
+    () => detectionSnapshot.ownerKey === ownerKey
+      ? detectionSnapshot.value
+      : createEmptyDetection(Boolean(ownerKey)),
+    [detectionSnapshot, ownerKey],
+  );
+
   const getAddressBytecode = useCallback(async (addr: string): Promise<`0x${string}` | undefined> => {
-    if (!publicClient) return undefined;
-    try {
-      return await publicClient.getBytecode({ address: addr as `0x${string}` });
-    } catch (error) {
-      console.warn('Contract address check failed:', error);
-      return undefined;
+    if (!publicClient) {
+      throw new Error('Public client is not ready');
     }
+    return await publicClient.getBytecode({ address: addr as `0x${string}` });
   }, [publicClient]);
 
   const parseEip7702DelegationTarget = useCallback((code: `0x${string}` | undefined): string | null => {
@@ -67,23 +95,8 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Comprehensive smart wallet detection
-  const detectSmartWallet = useCallback(async (): Promise<SmartWalletDetection> => {
-    if (!address || !isConnected) {
-      return {
-        isSmartWallet: false,
-        walletType: 'UntypedValue',
-        capabilities: null,
-        detectionMethods: [],
-        isContract: false,
-        hasCode: false,
-        delegationTarget: null,
-        isDelegatedEoa: false,
-        isLoading: false,
-        lastChecked: null,
-      };
-    }
-
-    // console.log('🔍 Starting comprehensive smart wallet detection (4-tier approach) for:', address);
+  const detectSmartWallet = useCallback(async (requestedAddress: string): Promise<SmartWalletDetection> => {
+    // console.log('🔍 Starting comprehensive smart wallet detection (4-tier approach) for:', requestedAddress);
 
     const results: SmartWalletDetection = {
       isSmartWallet: false,
@@ -101,7 +114,7 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
     try {
       // Method 1: Contract address check (most definitive)
       // console.log('🔍 Method 1: Checking if address is a contract...');
-      const code = await getAddressBytecode(address);
+      const code = await getAddressBytecode(requestedAddress);
       const hasCode = code !== undefined && code !== '0x' && code.length > 2;
       const delegationTarget = parseEip7702DelegationTarget(code);
 
@@ -150,68 +163,84 @@ export function SmartWalletProvider({ children }: { children: ReactNode }) {
         lastChecked: Date.now(),
       };
     }
-  }, [address, getAddressBytecode, isConnected, parseEip7702DelegationTarget]);
+  }, [getAddressBytecode, parseEip7702DelegationTarget]);
 
-  // Track mounted state to prevent state updates after unmount
-  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+    };
+  }, []);
 
   // Run detection when wallet connects or changes
   useEffect(() => {
-    mountedRef.current = true;
-    
-    if (!address || !isConnected) {
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+
+    if (!address || !ownerKey) {
+      setDetectionSnapshot({ ownerKey: null, value: createEmptyDetection() });
+      return;
+    }
+
+    const requestedOwnerKey = ownerKey;
+    const requestedAddress = address;
+    setDetectionSnapshot({
+      ownerKey: requestedOwnerKey,
+      value: createEmptyDetection(true),
+    });
+
+    void detectSmartWallet(requestedAddress).then((result) => {
+      if (
+        !mountedRef.current
+        || requestGenerationRef.current !== generation
+        || ownerKeyRef.current !== requestedOwnerKey
+      ) {
+        return;
+      }
+      setDetectionSnapshot({
+        ownerKey: requestedOwnerKey,
+        value: { ...result, isLoading: false },
+      });
+    });
+  }, [address, detectSmartWallet, ownerKey]);
+
+  // Manual refetch function
+  const refetch = useCallback(async () => {
+    const requestedOwnerKey = ownerKey;
+    const requestedAddress = address;
+
+    // A consumer can retain an older context callback across an account change.
+    // Do not let that stale callback supersede the current owner's in-flight read.
+    if (!mountedRef.current || ownerKeyRef.current !== requestedOwnerKey) return;
+
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+
+    if (!requestedAddress || !requestedOwnerKey) {
       if (mountedRef.current) {
-        setDetection({
-          isSmartWallet: false,
-          walletType: 'UntypedValue',
-          capabilities: null,
-          detectionMethods: [],
-          isContract: false,
-          hasCode: false,
-          delegationTarget: null,
-          isDelegatedEoa: false,
-          isLoading: false,
-          lastChecked: null,
-        });
+        setDetectionSnapshot({ ownerKey: null, value: createEmptyDetection() });
       }
       return;
     }
 
-    const runDetection = async () => {
-      // Skip if recently checked (within last 30 seconds)
-      if (mountedRef.current) {
-        setDetection(prev => {
-          if (prev.lastChecked && Date.now() - prev.lastChecked < 30000) {
-            return prev; // Skip re-detection
-          }
-          return { ...prev, isLoading: true };
-        });
-      }
-      
-      const result = await detectSmartWallet();
-      
-      // Only update state if component is still mounted
-      if (mountedRef.current) {
-        setDetection({ ...result, isLoading: false });
-      }
-    };
-
-    // Small delay to ensure wallet is fully connected
-    const timer = setTimeout(runDetection, 500);
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-    };
-  }, [address, detectSmartWallet, isConnected]);
-
-  // Manual refetch function
-  const refetch = useCallback(async () => {
-    if (!address || !isConnected) return;
-    
-    setDetection(prev => ({ ...prev, isLoading: true }));
-    const result = await detectSmartWallet();
-    setDetection({ ...result, isLoading: false });
-  }, [address, detectSmartWallet, isConnected]);
+    setDetectionSnapshot({
+      ownerKey: requestedOwnerKey,
+      value: createEmptyDetection(true),
+    });
+    const result = await detectSmartWallet(requestedAddress);
+    if (
+      !mountedRef.current
+      || requestGenerationRef.current !== generation
+      || ownerKeyRef.current !== requestedOwnerKey
+    ) {
+      return;
+    }
+    setDetectionSnapshot({
+      ownerKey: requestedOwnerKey,
+      value: { ...result, isLoading: false },
+    });
+  }, [address, detectSmartWallet, ownerKey]);
 
   // Memoized: the spread minted a fresh object per render, re-rendering the
   // heaviest consumers (tabs + the whole transactions family) on every parent

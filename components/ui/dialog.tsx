@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
     className={cn(
       "fixed inset-0 bg-black/60 backdrop-blur-[var(--blur-overlay)]",
       "supports-[backdrop-filter]:bg-black/50 motion-reduce:bg-black/75 motion-reduce:backdrop-blur-none",
-      "duration-[var(--motion-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "[animation-duration:var(--motion-standard)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
@@ -118,7 +118,7 @@ const DialogContent = React.forwardRef<
           : "z-[var(--z-modal)]",
         mobileMode === "sheet" ? "items-end sm:items-center" : "items-center",
         useSafeAreaInset && "safe-area-inset",
-        "duration-[var(--motion-modal)] data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "[animation-duration:var(--motion-modal)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         mobileMode === "sheet"
           ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
@@ -194,7 +194,7 @@ const DialogContent = React.forwardRef<
               "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
               // Visuals: match header/task/stake icon controls
               "rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] !bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)]",
-              "hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
+              "[@media(hover:hover)_and_(pointer:fine)]:hover:border-primary/45 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-[hsl(var(--nav-hover-bg))] [@media(hover:hover)_and_(pointer:fine)]:hover:text-primary [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[var(--shadow-glow)] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
               // Accessibility focus style
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               // Ensure ring offset blends with dialog background

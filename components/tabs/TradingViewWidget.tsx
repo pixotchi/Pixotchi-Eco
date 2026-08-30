@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, memo } from 'react';
 import { useTheme } from 'next-themes';
+import { Button } from '@/components/ui/button';
 
 interface TradingViewWidgetProps {
   symbol?: string;
@@ -11,6 +12,8 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
   const container = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const [loadState, setLoadState] = React.useState<'loading' | 'ready' | 'error'>('loading');
+  const [retryKey, setRetryKey] = React.useState(0);
 
   // enableSystem is false on ServerThemeProvider, so `theme` is always one of the
   // eight explicit palettes — there is no 'system' value to resolve.
@@ -23,6 +26,7 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
   useEffect(() => {
     const node = container.current;
     if (!mounted || !node) return;
+    setLoadState('loading');
 
     /*
      * The host div is rendered with no children on purpose: this effect owns every
@@ -35,6 +39,13 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
      * change — which is in the dependency list — silently did nothing, and the six
      * colour themes never re-tinted.
      */
+    // TradingView discovers its mount point through `document.currentScript`.
+    // Keep that script parented to a dedicated host even if React deactivates
+    // this Activity while the network request is still in flight. Removing the
+    // script itself early makes TradingView dereference a null parent.
+    const widgetHost = document.createElement('div');
+    widgetHost.className = 'tradingview-widget-container__widget h-full w-full';
+
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
@@ -65,14 +76,40 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       autosize: true,
     };
 
+    let disposed = false;
+    let settled = false;
+    const handleLoad = () => {
+      settled = true;
+      if (!disposed) setLoadState('ready');
+      if (disposed) {
+        widgetHost.replaceChildren();
+      }
+    };
+    const handleError = () => {
+      settled = true;
+      if (!disposed) setLoadState('error');
+      if (disposed) {
+        widgetHost.replaceChildren();
+      }
+    };
+    script.addEventListener('load', handleLoad, { once: true });
+    script.addEventListener('error', handleError, { once: true });
     script.innerHTML = JSON.stringify(config);
-    node.replaceChildren(script);
+    widgetHost.appendChild(script);
+    node.replaceChildren(widgetHost);
 
     return () => {
-      // Same node, still uncontrolled by React — safe to empty on the way out.
-      node.replaceChildren();
+      disposed = true;
+      // Detach the host from visible UI, but retain the script-parent relation
+      // until the async script has either executed or failed.
+      if (widgetHost.parentNode === node) {
+        widgetHost.remove();
+      }
+      if (settled) {
+        widgetHost.replaceChildren();
+      }
     };
-  }, [mounted, isDarkTheme, symbol]);
+  }, [mounted, isDarkTheme, retryKey, symbol]);
 
   if (!mounted) {
     return (
@@ -84,9 +121,31 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   return (
     <div
-      className="tradingview-widget-container bg-card rounded-[var(--radius-panel)] overflow-hidden w-full h-full flex flex-col border border-border/70 shadow-[var(--shadow-hairline)]"
-      ref={container}
-    />
+      className="tradingview-widget-container relative h-full w-full overflow-hidden rounded-[var(--radius-panel)] border border-border/70 bg-card shadow-[var(--shadow-hairline)]"
+    >
+      <div
+        ref={container}
+        aria-hidden={loadState !== 'ready'}
+        className={loadState === 'ready' ? 'absolute inset-0' : 'invisible absolute inset-0'}
+      />
+      {loadState === 'loading' && (
+        <div role="status" className="absolute inset-0 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+          <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          Loading chart…
+        </div>
+      )}
+      {loadState === 'error' && (
+        <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Chart unavailable</p>
+            <p className="mt-1 text-xs text-muted-foreground">TradingView could not be loaded. Check your connection and try again.</p>
+          </div>
+          <Button variant="outline" size="touchCompact" onClick={() => setRetryKey((key) => key + 1)}>
+            Retry chart
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

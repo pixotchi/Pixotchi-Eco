@@ -1,13 +1,18 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { slides as defaultSlides, TUTORIAL_VERSION, type TutorialSlide } from "./slides";
+import {
+  TASKS_TUTORIAL_SLIDE_ID,
+  TUTORIAL_SLIDE_IDS,
+  TUTORIAL_VERSION,
+  type TutorialSlideId,
+} from "./config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 
 type SlideshowContextType = {
   open: boolean;
   index: number;
-  slides: TutorialSlide[];
+  slideIds: readonly TutorialSlideId[];
   enabled: boolean;
   start: (opts?: { reset?: boolean }) => void;
   startIfFirstVisit: () => void;
@@ -25,11 +30,11 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const gamificationPolicy = getClientGamificationPolicy();
-  const slides = useMemo(
+  const slideIds = useMemo(
     () =>
       gamificationPolicy.visible
-        ? defaultSlides
-        : defaultSlides.filter((slide) => slide.id !== "tasks"),
+        ? TUTORIAL_SLIDE_IDS
+        : TUTORIAL_SLIDE_IDS.filter((slideId) => slideId !== TASKS_TUTORIAL_SLIDE_ID),
     [gamificationPolicy.visible],
   );
 
@@ -55,11 +60,11 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (!stored.completed) {
-        setIndex(Math.min(stored.lastIndex ?? 0, slides.length - 1));
+        setIndex(Math.min(stored.lastIndex ?? 0, slideIds.length - 1));
         setOpen(true);
       }
     } catch {}
-  }, [envEnabled, slides.length]);
+  }, [envEnabled, slideIds.length]);
 
   const persist = useCallback((data: Partial<{ lastIndex: number; completed: boolean }>) => {
     try {
@@ -86,14 +91,14 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
 
   const next = useCallback(() => {
     setIndex((i) => {
-      const ni = Math.min(i + 1, slides.length - 1);
-      persist({ lastIndex: ni, completed: ni === slides.length - 1 });
-      if (ni === slides.length - 1) {
+      const ni = Math.min(i + 1, slideIds.length - 1);
+      persist({ lastIndex: ni, completed: ni === slideIds.length - 1 });
+      if (ni === slideIds.length - 1) {
         // keep open; user can close at the end
       }
       return ni;
     });
-  }, [slides.length, persist]);
+  }, [slideIds.length, persist]);
 
   const prev = useCallback(() => {
     setIndex((i) => {
@@ -104,12 +109,12 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
   }, [persist]);
 
   const goto = useCallback((i: number) => {
-    const clamped = Math.min(Math.max(i, 0), slides.length - 1);
+    const clamped = Math.min(Math.max(i, 0), slideIds.length - 1);
     setIndex(clamped);
     persist({ lastIndex: clamped });
-  }, [slides.length, persist]);
+  }, [slideIds.length, persist]);
 
-  const value = useMemo(() => ({ open, index, slides, enabled: envEnabled, start, startIfFirstVisit, close, next, prev, goto }), [open, index, slides, envEnabled, start, startIfFirstVisit, close, next, prev, goto]);
+  const value = useMemo(() => ({ open, index, slideIds, enabled: envEnabled, start, startIfFirstVisit, close, next, prev, goto }), [open, index, slideIds, envEnabled, start, startIfFirstVisit, close, next, prev, goto]);
 
   return (
     <SlideshowContext.Provider value={value}>

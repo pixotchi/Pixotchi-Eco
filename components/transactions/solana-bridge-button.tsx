@@ -1,69 +1,119 @@
 "use client";
 
-/**
- * Solana Bridge Button Component
- * Reusable button for executing Solana bridge transactions
- * Follows the same UX pattern as EVM SponsoredTransaction
- * 
- * Quote fetching strategy:
- * - Fetch once on mount/item change (with 3 retries built into quote service)
- * - Cache quote for 20 seconds before allowing refresh
- * - Only refetch when item changes (tracked by stable key)
- */
-
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
 import { useSolanaBridge } from '@/hooks/useSolanaBridge';
 import { useSolanaWallet } from '@/hooks/useSolanaWallet';
-import { solanaBridgeImplementation } from '@/lib/solana-bridge-implementation';
-import { SOLANA_BRIDGE_CONFIG } from '@/lib/solana-constants';
-import { useSignAndSendTransaction,useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
-import { PublicKey } from '@solana/web3.js';
+import {
+  acquirePendingBridgeReservation,
+  clearPendingBridgeAction,
+  confirmSolanaTransaction,
+  finalizePendingBridgeReservation,
+  loadPendingBridgeRecord,
+  loadPendingBridgeAction,
+  markPendingBridgeWalletRequest,
+  PENDING_BRIDGE_ACTION_EVENT,
+  PENDING_BRIDGE_PREPARATION_STALE_MS,
+  PendingBridgeStorageUnavailableError,
+  recoverPendingBridgeWalletRequest,
+  releasePendingBridgeReservation,
+  replacePendingBridgeAction,
+  SolanaConfirmationTimeoutError,
+  SolanaTransactionExecutionError,
+  SolanaTransactionExpiredError,
+  verifySolanaTwinSetup,
+  waitForBaseBridgeExecution,
+  type BaseBridgeExecutionResult,
+  type PendingBridgeAction,
+  type PendingBridgeActionChange,
+  type PendingBridgeRecord,
+  type PendingBridgeReservation,
+  type SolanaBridgeLifecyclePhase,
+} from '@/lib/solana-bridge-lifecycle';
+import {
+  getEffectiveSolanaAction,
+  getSolanaActionButtonLabel,
+  getSolanaActionKey,
+  getSolanaQuoteKey,
+  isCurrentSolanaQuoteGeneration,
+  nextSolanaQuoteGeneration,
+} from '@/lib/solana-bridge-flow';
+import { BRIDGE_CONFIG } from '@/lib/solana-constants';
+import { createSolanaBridgeTransaction } from '@/lib/solana-bridge-executor';
+import { invalidateOwnerResources, type OwnerResourceDomain } from '@/lib/owner-resource-invalidation';
+import { useSignAndSendTransaction, useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import bs58 from 'bs58';
-import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';
-
-// ============ Types ============
-
-export type SolanaBridgeActionType = 'setup' | 'shopItem' | 'gardenItem' | 'setName' | 'claimRewards' | 'attack';
+export type SolanaBridgeActionType =
+  | 'setup'
+  | 'mint'
+  | 'shopItem'
+  | 'gardenItem'
+  | 'setName'
+  | 'claimRewards'
+  | 'attack';
 
 export interface SolanaBridgeButtonProps {
-  /** Action type */
   actionType: SolanaBridgeActionType;
-  /** Plant ID (required for most actions) */
   plantId?: number;
-  /** Item ID (for shop/garden items) */
   itemId?: number | string;
-  /** Target plant ID (for attack) */
   targetId?: number;
-  /** New name (for setName) */
+  strain?: number;
   name?: string;
-  /** Button text override */
   buttonText?: string;
-  /** Button className */
   buttonClassName?: string;
-  /** Disabled state */
   disabled?: boolean;
-  /** Called when transaction succeeds */
+  /** Fires only after the requested action is confirmed on Base. */
   onSuccess?: (signature: string) => void;
-  /** Called when transaction fails */
   onError?: (error: UntypedValue) => void;
-  /** Called whenever a fresh quote is fetched (wSOL amount/error). Only fires for actions that require quotes. */
   onQuote?: (quote: { wsolAmount: bigint; error?: string } | null) => void;
+  onPendingChange?: (pending: boolean) => void;
 }
 
-// Quote cache duration in milliseconds (20 seconds)
-const QUOTE_CACHE_DURATION = 20_000;
+type LocalQuote = {
+  key: string;
+  wsolAmount: bigint;
+  error?: string;
+};
 
-// ============ Component ============
+const DEFAULT_LABELS: Record<SolanaBridgeActionType, string> = {
+  setup: 'Setup Bridge',
+  mint: 'Mint Plant',
+  shopItem: 'Buy Item',
+  gardenItem: 'Buy Item',
+  setName: 'Set Name',
+  claimRewards: 'Claim Rewards',
+  attack: 'Attack',
+};
+
+const PHASE_LABELS: Record<SolanaBridgeLifecyclePhase, string> = {
+  submitted: 'Submitted to Solana...',
+  'solana-confirming': 'Confirming on Solana...',
+  'solana-confirmed': 'Solana confirmed...',
+  'relay-pending': 'Waiting for Base execution...',
+  'base-confirmed': 'Confirmed on Base',
+};
+
+function isExplicitWalletRejection(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 4001 || code === 'ACTION_REJECTED') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /user (?:rejected|denied)|request (?:rejected|cancelled)|declined by user/i.test(message);
+}
+
+function loadMatchingPendingAction(action: PendingBridgeAction): PendingBridgeAction {
+  const stored = loadPendingBridgeAction(action.actionKey);
+  return stored?.attemptId === action.attemptId ? stored : action;
+}
 
 export default function SolanaBridgeButton({
   actionType,
   plantId,
   itemId,
   targetId,
+  strain,
   name,
   buttonText,
   buttonClassName = '',
@@ -71,345 +121,605 @@ export default function SolanaBridgeButton({
   onSuccess,
   onError,
   onQuote,
+  onPendingChange,
 }: SolanaBridgeButtonProps) {
   const bridge = useSolanaBridge();
-  const { solanaAddress, isTwinSetup, isConnected } = useSolanaWallet();
+  const { solanaAddress, isTwinSetup, isConnected, refresh } = useSolanaWallet();
   const { ready: solanaWalletsReady, wallets: solanaWallets } = useSolanaWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  const [statusText, setStatusText] = useState<string | null>(null);
+  const [phase, setPhase] = useState<SolanaBridgeLifecyclePhase | null>(null);
   const [isQuoteLoading, setIsQuoteLoading] = useState(false);
-  const [localQuote, setLocalQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
-  
-  // Track when we last fetched a quote and for what item
-  const lastFetchRef = useRef<{ key: string; timestamp: number } | null>(null);
-  
-  // Store bridge.getQuote in a ref to avoid dependency issues
+  const [localQuote, setLocalQuote] = useState<LocalQuote | null>(null);
+  const [pendingRecord, setPendingRecord] = useState<PendingBridgeRecord | null>(null);
+  const submitLockRef = useRef(false);
+  const quoteGenerationRef = useRef(0);
   const getQuoteRef = useRef(bridge.getQuote);
+  const onQuoteRef = useRef(onQuote);
+  const onPendingChangeRef = useRef(onPendingChange);
+
   useEffect(() => {
     getQuoteRef.current = bridge.getQuote;
   }, [bridge.getQuote]);
-  
-  // Wait for Privy wallet discovery to settle before treating the connected wallet list as authoritative.
+
+  useEffect(() => {
+    onQuoteRef.current = onQuote;
+  }, [onQuote]);
+
+  useEffect(() => {
+    onPendingChangeRef.current = onPendingChange;
+  }, [onPendingChange]);
+
   const solanaWallet = useMemo(
     () => (solanaWalletsReady ? solanaWallets?.[0] ?? null : null),
     [solanaWallets, solanaWalletsReady],
   );
-  
-  // Check if setup is required for this action
-  const needsSetup = !isTwinSetup && ['shopItem', 'gardenItem', 'setName'].includes(actionType);
-  
-  // Create a stable key for the current item/action combination
-  const quoteKey = useMemo(() => {
-    if (actionType === 'shopItem' || actionType === 'gardenItem') {
-      return `${actionType}-${itemId}`;
-    }
-    if (actionType === 'setName') {
-      return `setName-${plantId}`;
-    }
-    return null; // No quote needed for free actions
-  }, [actionType, itemId, plantId]);
-  
-  // Check if this action requires a quote
-  const requiresQuote = ['shopItem', 'gardenItem', 'setName'].includes(actionType);
-  
-  // Fetch quote with caching - only when quoteKey changes (item selection changes)
+
+  const needsSetup =
+    !isTwinSetup && ['mint', 'shopItem', 'gardenItem', 'setName'].includes(actionType);
+
+  const actionParams = useMemo(
+    () => ({ plantId, itemId, targetId, strain, name }),
+    [itemId, name, plantId, strain, targetId],
+  );
+  const quoteKey = useMemo(
+    () => getSolanaQuoteKey(actionType, actionParams),
+    [actionParams, actionType],
+  );
+  const requestKey = useMemo(
+    () => getSolanaActionKey(actionType, actionParams),
+    [actionParams, actionType],
+  );
+  const actionStorageKey = useMemo(
+    () =>
+      solanaAddress
+        ? `${solanaAddress}:active`
+        : null,
+    [solanaAddress],
+  );
+  const requiresQuote = quoteKey !== null;
+  const currentQuote = localQuote?.key === quoteKey ? localQuote : null;
+  const quoteReady = !requiresQuote || Boolean(currentQuote && !currentQuote.error);
+
   useEffect(() => {
-    // Skip if not connected or doesn't require quote
-    // Note: We still fetch quote even if needsSetup=true, so users can see the price
-    if (!isConnected || !requiresQuote || !quoteKey) {
-      setLocalQuote(null);
-      onQuote?.(null);
+    if (!actionStorageKey) {
+      setPendingRecord(null);
       return;
     }
-    
-    // For shop/garden items, itemId is required
-    if ((actionType === 'shopItem' || actionType === 'gardenItem') && !itemId) {
-      setLocalQuote(null);
-      return;
-    }
-    
-    // Check if we already have a recent quote for this item
-    const now = Date.now();
+    const syncPendingAction = (event?: Event) => {
+      const change = (event as CustomEvent<PendingBridgeActionChange> | undefined)?.detail;
+      if (change && change.actionKey !== actionStorageKey) return;
+      setPendingRecord(loadPendingBridgeRecord(actionStorageKey));
+    };
+    syncPendingAction();
+    window.addEventListener(PENDING_BRIDGE_ACTION_EVENT, syncPendingAction);
+    // Custom events synchronize buttons in this tab; the native storage event
+    // synchronizes another open tab using the same wallet.
+    window.addEventListener('storage', syncPendingAction);
+    return () => {
+      window.removeEventListener(PENDING_BRIDGE_ACTION_EVENT, syncPendingAction);
+      window.removeEventListener('storage', syncPendingAction);
+    };
+  }, [actionStorageKey]);
+
+  useEffect(() => {
+    onPendingChangeRef.current?.(pendingRecord !== null);
+  }, [pendingRecord]);
+
+  useEffect(() => {
     if (
-      lastFetchRef.current &&
-      lastFetchRef.current.key === quoteKey &&
-      now - lastFetchRef.current.timestamp < QUOTE_CACHE_DURATION &&
-      localQuote !== null
+      !actionStorageKey
+      || pendingRecord?.kind !== 'reservation'
+      || pendingRecord.phase !== 'preparing'
     ) {
-      // Quote is still fresh, don't refetch
       return;
     }
-    
-    let cancelled = false;
-    
+    const remainingMs = Math.max(
+      0,
+      pendingRecord.createdAt + PENDING_BRIDGE_PREPARATION_STALE_MS - Date.now(),
+    );
+    const timeout = window.setTimeout(() => {
+      setPendingRecord(loadPendingBridgeRecord(actionStorageKey));
+    }, remainingMs + 50);
+    return () => window.clearTimeout(timeout);
+  }, [actionStorageKey, pendingRecord]);
+
+  useEffect(() => {
+    const generation = nextSolanaQuoteGeneration(quoteGenerationRef.current);
+    quoteGenerationRef.current = generation;
+    setLocalQuote(null);
+    onQuoteRef.current?.(null);
+
+    if (!isConnected || !requiresQuote || !quoteKey) {
+      setIsQuoteLoading(false);
+      return;
+    }
+    if (
+      (actionType === 'shopItem' || actionType === 'gardenItem') &&
+      (itemId === undefined || itemId === null || itemId === '')
+    ) {
+      setIsQuoteLoading(false);
+      return;
+    }
+    if (actionType === 'mint' && strain === undefined) {
+      setIsQuoteLoading(false);
+      return;
+    }
+
+    let disposed = false;
     const fetchQuote = async () => {
+      const requestGeneration = nextSolanaQuoteGeneration(quoteGenerationRef.current);
+      quoteGenerationRef.current = requestGeneration;
       setIsQuoteLoading(true);
-      
       try {
-        let result;
-        const getQuote = getQuoteRef.current;
-        
-        if (actionType === 'shopItem' && itemId) {
-          result = await getQuote('shopItem', { itemId: Number(itemId) });
-        } else if (actionType === 'gardenItem' && itemId) {
-          result = await getQuote('gardenItem', { itemId: Number(itemId) });
-        } else if (actionType === 'setName') {
-          result = await getQuote('setName', {});
-        }
-        
-        if (!cancelled) {
-          if (result) {
-            lastFetchRef.current = { key: quoteKey, timestamp: Date.now() };
-            setLocalQuote({
-              wsolAmount: result.wsolAmount || BigInt(0),
+        const params =
+          actionType === 'mint'
+            ? { strain }
+            : actionType === 'shopItem' || actionType === 'gardenItem'
+              ? { itemId: Number(itemId) }
+              : {};
+        const result = await getQuoteRef.current(actionType, params);
+        if (disposed || !isCurrentSolanaQuoteGeneration(requestGeneration, quoteGenerationRef.current)) return;
+
+        const nextQuote: LocalQuote = result
+          ? {
+              key: quoteKey,
+              wsolAmount: result.wsolAmount ?? BigInt(0),
               error: result.error,
-            });
-            onQuote?.({ wsolAmount: result.wsolAmount || BigInt(0), error: result.error });
-          } else {
-            // No result returned
-            const fallback = { wsolAmount: BigInt(0), error: 'No quote available' };
-            setLocalQuote(fallback);
-            onQuote?.(fallback);
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('[SolanaBridgeButton] Quote fetch error:', err);
-          const fallback = { wsolAmount: BigInt(0), error: 'Failed to get quote' };
-          setLocalQuote(fallback);
-          onQuote?.(fallback);
-        }
+            }
+          : { key: quoteKey, wsolAmount: BigInt(0), error: 'No quote available' };
+        setLocalQuote(nextQuote);
+        onQuoteRef.current?.({
+          wsolAmount: nextQuote.wsolAmount,
+          error: nextQuote.error,
+        });
+      } catch (error) {
+        if (disposed || !isCurrentSolanaQuoteGeneration(requestGeneration, quoteGenerationRef.current)) return;
+        const nextQuote = {
+          key: quoteKey,
+          wsolAmount: BigInt(0),
+          error: error instanceof Error ? error.message : 'Failed to get quote',
+        };
+        setLocalQuote(nextQuote);
+        onQuoteRef.current?.({ wsolAmount: nextQuote.wsolAmount, error: nextQuote.error });
       } finally {
-        if (!cancelled) {
+        if (!disposed && isCurrentSolanaQuoteGeneration(requestGeneration, quoteGenerationRef.current)) {
           setIsQuoteLoading(false);
         }
       }
     };
-    
-    fetchQuote();
-    
-    // Set up auto-refresh after cache duration (20 seconds)
-    const refreshInterval = setInterval(() => {
-      if (!cancelled) {
-        // Reset the last fetch timestamp to allow refetch
-        lastFetchRef.current = null;
-        fetchQuote();
-      }
-    }, QUOTE_CACHE_DURATION);
-    
+
+    void fetchQuote();
+    const interval = window.setInterval(fetchQuote, BRIDGE_CONFIG.quoteValidityMs);
     return () => {
-      cancelled = true;
-      clearInterval(refreshInterval);
+      disposed = true;
+      quoteGenerationRef.current = Math.max(
+        nextSolanaQuoteGeneration(quoteGenerationRef.current),
+        nextSolanaQuoteGeneration(generation),
+      );
+      window.clearInterval(interval);
     };
-    // Only depend on stable values - quoteKey changes when item selection changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, requiresQuote, quoteKey, actionType, itemId]);
-  
-  // Get default button text
-  const getDefaultButtonText = () => {
-    if (needsSetup) return 'Setup Bridge Access';
-    
-    switch (actionType) {
-      case 'setup': return 'Setup Bridge';
-      case 'shopItem': return 'Buy Item';
-      case 'gardenItem': return 'Buy Item';
-      case 'setName': return 'Set Name';
-      case 'claimRewards': return 'Claim Rewards';
-      case 'attack': return 'Attack';
-      default: return 'Execute';
+  }, [actionType, isConnected, itemId, quoteKey, requiresQuote, strain]);
+
+  const finalizeBaseResult = useCallback(
+    async (action: PendingBridgeAction, result: BaseBridgeExecutionResult) => {
+      const updatedAction = { ...action, messageHash: result.messageHash };
+
+      if (result.status === 'base-confirmed') {
+        const isSetupResult = action.implicitSetup || action.requestedAction === 'setup';
+        if (isSetupResult) {
+          let setupVerified = false;
+          try {
+            setupVerified = await verifySolanaTwinSetup(action.twinAddress);
+          } catch {
+            setupVerified = false;
+          }
+          if (!setupVerified) {
+            setPendingRecord(updatedAction);
+            await replacePendingBridgeAction(action, updatedAction);
+            toast('Base execution is confirmed; waiting for bridge setup state to refresh.', {
+              icon: 'ℹ️',
+            });
+            return;
+          }
+        }
+
+        const ownsTerminal = await clearPendingBridgeAction(
+          loadMatchingPendingAction(updatedAction),
+        );
+        if (!ownsTerminal) {
+          // Another tab/component already consumed the same terminal proof, or
+          // storage could not complete the exact CAS. Only the successful CAS
+          // owner may fire refreshes, toasts, or consumer callbacks.
+          setPendingRecord(loadPendingBridgeRecord(action.actionKey));
+          setPhase(null);
+          return;
+        }
+        setPendingRecord(null);
+        setPhase('base-confirmed');
+        bridge.reset();
+        if (isSetupResult) {
+          // Refresh only after winning the terminal CAS. A second tab may have
+          // observed the same Base result, but it must not duplicate app-state
+          // refreshes or callbacks after the first owner consumes the proof.
+          await refresh();
+        }
+
+        if (action.implicitSetup) {
+          invalidateOwnerResources({
+            address: action.twinAddress,
+            domains: ['balances'],
+            source: 'solana-bridge:setup',
+            transactionHash: action.signature,
+          });
+          toast.success('Bridge setup confirmed on Base. Press the action button again to continue.');
+          return;
+        }
+
+        const requestedAction = action.requestedAction as SolanaBridgeActionType;
+        const domains: readonly OwnerResourceDomain[] = requestedAction === 'setup'
+          ? ['balances']
+          : requestedAction === 'claimRewards'
+            ? ['balances']
+            : ['plants', 'balances'];
+        invalidateOwnerResources({
+          address: action.twinAddress,
+          domains,
+          source: `solana-bridge:${requestedAction}`,
+          transactionHash: action.signature,
+        });
+        toast.success(`${DEFAULT_LABELS[requestedAction] ?? 'Bridge action'} confirmed on Base.`);
+        window.dispatchEvent(
+          new CustomEvent('solana-bridge:confirmed', {
+            detail: { requestKey: action.requestKey, signature: action.signature },
+          }),
+        );
+        if (action.requestKey === requestKey) {
+          onSuccess?.(action.signature);
+        }
+        return;
+      }
+
+      setPendingRecord(updatedAction);
+      await replacePendingBridgeAction(action, updatedAction);
+      setPhase('relay-pending');
+      if (result.status === 'relay-failed') {
+        toast.error('The Base relay attempt failed. Do not resubmit; check again for a relay retry.');
+      } else {
+        toast('Solana is confirmed. The Base action is still processing.', { icon: 'ℹ️' });
+      }
+    },
+    [bridge, onSuccess, refresh, requestKey],
+  );
+
+  const confirmAndTrack = useCallback(
+    async (action: PendingBridgeAction, resume = false) => {
+      const connection = (await import('@/lib/solana-bridge-implementation'))
+        .solanaBridgeImplementation.getConnection();
+      let currentAction = action;
+
+      if (!currentAction.solanaConfirmed) {
+        try {
+          await confirmSolanaTransaction(connection, currentAction.signature, {
+            onPhase: setPhase,
+            blockhash: currentAction.recentBlockhash,
+            lastValidBlockHeight: currentAction.lastValidBlockHeight,
+            outgoingMessageAddress: currentAction.outgoingMessageAddress,
+          });
+        } catch (error) {
+          if (
+            error instanceof SolanaTransactionExecutionError ||
+            error instanceof SolanaTransactionExpiredError
+          ) {
+            const ownsTerminal = await clearPendingBridgeAction(
+              loadMatchingPendingAction(currentAction),
+            );
+            if (!ownsTerminal) {
+              setPendingRecord(loadPendingBridgeRecord(currentAction.actionKey));
+              setPhase(null);
+              return;
+            }
+            setPendingRecord(null);
+            throw error;
+          }
+          if (error instanceof SolanaConfirmationTimeoutError) {
+            setPendingRecord(currentAction);
+            setPhase('solana-confirming');
+            toast('Transaction submitted; Solana confirmation is still pending.', { icon: 'ℹ️' });
+            return;
+          }
+          setPendingRecord(currentAction);
+          setPhase('solana-confirming');
+          toast('Unable to verify Solana yet. Your submitted transaction is saved for recheck.', {
+            icon: 'ℹ️',
+          });
+          return;
+        }
+
+        currentAction = { ...currentAction, solanaConfirmed: true };
+        setPendingRecord(currentAction);
+        await replacePendingBridgeAction(action, currentAction);
+      }
+
+      const result = await waitForBaseBridgeExecution(
+        connection,
+        { outgoingMessageAddress: currentAction.outgoingMessageAddress },
+        {
+          timeoutMs: resume
+            ? BRIDGE_CONFIG.relayResumeWaitMs
+            : BRIDGE_CONFIG.relayInitialWaitMs,
+          knownMessageHash: currentAction.messageHash,
+          onPhase: setPhase,
+        },
+      );
+      await finalizeBaseResult(currentAction, result);
+    },
+    [finalizeBaseResult],
+  );
+
+  const prepareAction = useCallback(async () => {
+    const { effectiveAction } = getEffectiveSolanaAction(actionType, needsSetup);
+    switch (effectiveAction) {
+      case 'setup':
+        return bridge.prepareSetup();
+      case 'mint':
+        if (strain === undefined) throw new Error('Strain is required');
+        return bridge.prepareMint(strain);
+      case 'shopItem':
+        if (plantId === undefined || itemId === undefined || itemId === '') {
+          throw new Error('Plant ID and Item ID are required');
+        }
+        return bridge.prepareShopItem(plantId, Number(itemId));
+      case 'gardenItem':
+        if (plantId === undefined || itemId === undefined || itemId === '') {
+          throw new Error('Plant ID and Item ID are required');
+        }
+        return bridge.prepareGardenItem(plantId, Number(itemId));
+      case 'setName':
+        if (plantId === undefined || !name) throw new Error('Plant ID and Name are required');
+        return bridge.prepareSetName(plantId, name);
+      case 'claimRewards':
+        if (plantId === undefined) throw new Error('Plant ID is required');
+        return bridge.prepareClaimRewards(plantId);
+      case 'attack':
+        if (plantId === undefined || targetId === undefined) {
+          throw new Error('Plant ID and Target ID are required');
+        }
+        return bridge.prepareAttack(plantId, targetId);
+      default:
+        throw new Error('Unknown bridge action');
     }
-  };
-  
-  // Execute the bridge transaction
+  }, [actionType, bridge, itemId, name, needsSetup, plantId, strain, targetId]);
+
   const handleClick = useCallback(async () => {
-    if (!solanaWallet || !solanaAddress || !signAndSendTransaction) {
-      toast.error('Solana wallet not connected');
-      onError?.('Wallet not connected');
+    if (submitLockRef.current) return;
+    if (!actionStorageKey || !solanaWallet || !solanaAddress || !signAndSendTransaction) {
+      const error = new Error('Solana wallet is not ready');
+      toast.error(error.message);
+      onError?.(error);
       return;
     }
-    
+
+    submitLockRef.current = true;
     setIsLoading(true);
-    setStatusText('Preparing transaction...');
-    
+    let reservation: PendingBridgeReservation | null = null;
+    let walletRequestStarted = false;
     try {
-      // Prepare transaction based on action type
-      let tx;
-      
-      if (needsSetup || actionType === 'setup') {
-        tx = await bridge.prepareSetup();
-      } else {
-        switch (actionType) {
-          case 'shopItem':
-            if (!plantId || !itemId) throw new Error('Plant ID and Item ID required');
-            tx = await bridge.prepareShopItem(plantId, Number(itemId));
-            break;
-          case 'gardenItem':
-            if (!plantId || !itemId) throw new Error('Plant ID and Item ID required');
-            tx = await bridge.prepareGardenItem(plantId, Number(itemId));
-            break;
-          case 'setName':
-            if (!plantId || !name) throw new Error('Plant ID and Name required');
-            tx = await bridge.prepareSetName(plantId, name);
-            break;
-          case 'claimRewards':
-            if (!plantId) throw new Error('Plant ID required');
-            tx = await bridge.prepareClaimRewards(plantId);
-            break;
-          case 'attack':
-            if (!plantId || !targetId) throw new Error('Plant ID and Target ID required');
-            tx = await bridge.prepareAttack(plantId, targetId);
-            break;
-          default:
-            throw new Error('Unknown action type');
+      // React state is advisory. Admission always re-reads a stable storage
+      // snapshot so two components or tabs cannot both reach the wallet.
+      const activeRecord = loadPendingBridgeRecord(actionStorageKey);
+      if (activeRecord?.kind === 'submitted') {
+        setPendingRecord(activeRecord);
+        await confirmAndTrack(activeRecord, true);
+        return;
+      }
+      if (activeRecord?.kind === 'reservation') {
+        setPendingRecord(activeRecord);
+        if (activeRecord.phase === 'preparing') {
+          toast('This Solana action is already being prepared in another window.', {
+            icon: 'ℹ️',
+          });
+          return;
         }
+
+        setPhase('solana-confirming');
+        const connection = (await import('@/lib/solana-bridge-implementation'))
+          .solanaBridgeImplementation.getConnection();
+        const recovery = await recoverPendingBridgeWalletRequest(activeRecord, connection);
+        if (recovery.status === 'submitted') {
+          setPendingRecord(recovery.action);
+          toast('Recovered the submitted Solana transaction. Checking bridge execution...', {
+            icon: 'ℹ️',
+          });
+          await confirmAndTrack(recovery.action, true);
+          return;
+        }
+        if (recovery.status === 'cleared') {
+          setPendingRecord(loadPendingBridgeRecord(actionStorageKey));
+          setPhase(null);
+          toast(
+            'The previous wallet request expired without reaching Solana. It is now safe to try again.',
+            { icon: 'ℹ️' },
+          );
+          return;
+        }
+        setPhase(null);
+        toast(
+          recovery.reason === 'landed-without-signature'
+            ? 'Solana transaction evidence was found. Waiting for its signature index before continuing.'
+            : recovery.reason === 'unexpired'
+              ? 'The previous wallet request is still within its Solana validity window.'
+              : 'The previous wallet request cannot be resolved safely yet. No new transaction was opened.',
+          { icon: 'ℹ️' },
+        );
+        return;
       }
-      
-      if (!tx) {
-        throw new Error(bridge.state.error || 'Failed to prepare transaction');
-      }
-      
-      setStatusText('Building Solana transaction...');
-      
-      // Build the Solana transaction
-      const walletPubkey = new PublicKey(solanaAddress);
-      const asset = {
-        symbol: 'sol',
-        label: 'SOL',
-        type: 'sol' as const,
-        decimals: 9,
-        remoteAddress: SOLANA_BRIDGE_CONFIG.base.wrappedSOL.toLowerCase(),
-      };
-      
-      const callOptions = tx.params.call ? {
-        type: 'call' as const,
-        target: tx.params.call.target,
-        data: tx.params.call.data,
-        value: '0',
-      } : undefined;
-      
-      const solanaTransaction = await solanaBridgeImplementation.createBridgeTransaction({
-        walletAddress: walletPubkey,
-        amount: tx.params.solAmount,
-        destinationAddress: tx.params.twinAddress,
-        asset,
-        call: callOptions,
-        gasLimit: tx.params.gasLimit,
+
+      setPhase(null);
+      const admission = await acquirePendingBridgeReservation({
+        actionKey: actionStorageKey,
+        requestKey,
+        requestedAction: actionType,
       });
-      
-      setStatusText('Waiting for signature...');
-      
-      // Sign and send the transaction
-      // Privy expects a serialized transaction (Uint8Array)
-      const serializedTx = solanaTransaction.serialize({
+      if (!admission.acquired) {
+        if (admission.blocker?.kind === 'submitted') {
+          setPendingRecord(admission.blocker);
+          await confirmAndTrack(admission.blocker, true);
+        } else {
+          setPendingRecord(admission.blocker);
+          toast('Another window is starting this Solana action. No second wallet request was opened.', {
+            icon: 'ℹ️',
+          });
+        }
+        return;
+      }
+      reservation = admission.reservation;
+      setPendingRecord(reservation);
+
+      const tx = await prepareAction();
+      if (!tx) throw new Error(bridge.state.error || 'Failed to prepare transaction');
+
+      const { transaction, metadata } = await createSolanaBridgeTransaction(
+        solanaAddress,
+        tx.params,
+      );
+      const serialized = transaction.serialize({
         requireAllSignatures: false,
         verifySignatures: false,
       });
-
+      const { implicitSetup } = getEffectiveSolanaAction(actionType, needsSetup);
+      const walletPendingReservation = await markPendingBridgeWalletRequest(
+        reservation,
+        {
+          outgoingMessageAddress: metadata.outgoingMessageAddress,
+          implicitSetup,
+          twinAddress: tx.params.twinAddress,
+          recentBlockhash: metadata.recentBlockhash,
+          lastValidBlockHeight: metadata.lastValidBlockHeight,
+        },
+      );
+      if (!walletPendingReservation) {
+        throw new PendingBridgeStorageUnavailableError();
+      }
+      reservation = walletPendingReservation;
+      setPendingRecord(reservation);
+      walletRequestStarted = true;
       const { signature } = await signAndSendTransaction({
-        transaction: serializedTx,
+        transaction: serialized,
         wallet: solanaWallet,
         options: { skipPreflight: false },
       });
-      
-      const connection = solanaBridgeImplementation.getConnection();
-      const signatureStr = typeof signature === 'string' ? signature : bs58.encode(signature);
-      
-      // Fire-and-forget confirmation; if websocket subscriptions are blocked, fallback to HTTP polling
-      const confirmBackground = async () => {
-        try {
-          await connection.confirmTransaction(signatureStr, 'confirmed');
-        } catch (err) {
-          if (SOLANA_DEBUG) console.warn('[SolanaBridgeButton] confirmTransaction websocket error, falling back to HTTP polling:', err);
-          try {
-            const start = Date.now();
-            const timeoutMs = 30_000;
-            while (Date.now() - start < timeoutMs) {
-              const statuses = await connection.getSignatureStatuses([signatureStr]);
-              const status = statuses?.value?.[0];
-              if (status?.err) throw new Error('Transaction failed on Solana');
-              if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
-                return;
-              }
-              await new Promise(res => setTimeout(res, 1500));
-            }
-            throw new Error('Timeout waiting for Solana confirmation');
-          } catch (pollErr) {
-            if (SOLANA_DEBUG) console.warn('[SolanaBridgeButton] HTTP polling confirmation warning:', pollErr);
-          }
-        }
+      const signatureString =
+        typeof signature === 'string' ? signature : bs58.encode(signature);
+      const submittedAction: PendingBridgeAction = {
+        version: 2,
+        kind: 'submitted',
+        actionKey: actionStorageKey,
+        attemptId: walletPendingReservation.attemptId,
+        requestKey,
+        requestedAction: actionType,
+        createdAt: Date.now(),
+        signature: signatureString,
+        outgoingMessageAddress: metadata.outgoingMessageAddress,
+        implicitSetup,
+        solanaConfirmed: false,
+        twinAddress: tx.params.twinAddress,
+        recentBlockhash: metadata.recentBlockhash,
+        lastValidBlockHeight: metadata.lastValidBlockHeight,
       };
-      confirmBackground().catch(() => {});
-      
-      setStatusText(null);
-      toast.success('Transaction submitted! Bridge processing...');
-      onSuccess?.(signatureStr);
-      
+
+      let submittedRecordPersisted = await finalizePendingBridgeReservation(
+        walletPendingReservation,
+        submittedAction,
+      );
+      if (!submittedRecordPersisted) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+        submittedRecordPersisted = await finalizePendingBridgeReservation(
+          walletPendingReservation,
+          submittedAction,
+        );
+      }
+      if (!submittedRecordPersisted) {
+        setPendingRecord(reservation);
+        throw new Error(
+          `Solana accepted ${signatureString}, but its recovery proof could not be saved. Do not resubmit.`,
+        );
+      }
+
+      setPhase('submitted');
+      setPendingRecord(submittedAction);
+      toast('Transaction submitted to Solana. Confirming before Base execution...', {
+        icon: 'ℹ️',
+      });
+      await confirmAndTrack(submittedAction);
     } catch (error) {
-      console.error('[SolanaBridgeButton] Error:', error);
-      setStatusText(null);
+      if (reservation && (!walletRequestStarted || isExplicitWalletRejection(error))) {
+        await releasePendingBridgeReservation(reservation);
+        setPendingRecord(loadPendingBridgeRecord(actionStorageKey));
+      }
       const message = error instanceof Error ? error.message : 'Transaction failed';
+      setPhase(null);
       toast.error(message);
       onError?.(error);
     } finally {
+      submitLockRef.current = false;
       setIsLoading(false);
     }
   }, [
-    actionType, plantId, itemId, targetId, name, needsSetup,
-    solanaWallet, solanaAddress, signAndSendTransaction, bridge,
-    onSuccess, onError
+    actionStorageKey,
+    actionType,
+    bridge.state.error,
+    confirmAndTrack,
+    needsSetup,
+    onError,
+    prepareAction,
+    requestKey,
+    signAndSendTransaction,
+    solanaAddress,
+    solanaWallet,
   ]);
-  
-  // For paid actions: disable only while loading quote for the first time (not on error)
-  // If quote fails, user can still click - the prepare function will retry getting a fresh quote
-  // Note: We use isConnected (from useSolanaWallet) as the primary check, not solanaWallet
-  // solanaWallet is only needed when actually executing the transaction
-  const isDisabled = disabled || !isConnected || isLoading || (requiresQuote && isQuoteLoading && localQuote === null);
-  
-  // Debug logging - remove after fixing
-  if (process.env.NODE_ENV === 'development' || SOLANA_DEBUG) {
-    console.log('[SolanaBridgeButton] State:', {
-      actionType,
-      itemId,
-      plantId,
-      isConnected,
-      isLoading,
-      isQuoteLoading,
-      requiresQuote,
-      hasLocalQuote: localQuote !== null,
-      localQuoteError: localQuote?.error,
-      localQuoteAmount: localQuote?.wsolAmount?.toString(),
-      disabled: disabled,
-      isDisabled,
-      disabledReason: disabled ? 'prop' : !isConnected ? 'not connected' : isLoading ? 'loading' : (requiresQuote && isQuoteLoading && localQuote === null) ? 'quote loading' : 'none',
-    });
-  }
-  
-  // Determine display text
-  const getDisplayText = () => {
-    if (isQuoteLoading && localQuote === null) return 'Loading price...';
-    if (!isConnected) return 'Connect Solana Wallet';
-    return buttonText || getDefaultButtonText();
-  };
-  
-  const displayText = getDisplayText();
-  
+
+  // A submitted action must always remain re-checkable. Its exact parameters
+  // and message identity are already persisted, so a fresh quote is irrelevant
+  // and a quote outage must never strand the pending-action lock.
+  const quoteBlocksAction =
+    pendingRecord === null && requiresQuote && !needsSetup && (!quoteReady || isQuoteLoading);
+  const isDisabled =
+    (pendingRecord === null && disabled) ||
+    !isConnected ||
+    !solanaWallet ||
+    isLoading ||
+    quoteBlocksAction;
+  const pendingDisplayText = pendingRecord?.kind === 'reservation'
+    ? pendingRecord.phase === 'wallet-pending'
+      ? 'Recover Solana transaction'
+      : 'Solana action in progress'
+    : null;
+  const displayText =
+    !solanaWallet && isConnected
+      ? 'Wallet not ready'
+      : pendingDisplayText ?? getSolanaActionButtonLabel({
+          connected: isConnected,
+          needsImplicitSetup: needsSetup,
+          pending: pendingRecord !== null,
+          quoteLoading: requiresQuote && isQuoteLoading,
+          quoteReady,
+          requestedLabel: buttonText,
+          defaultLabel: DEFAULT_LABELS[actionType],
+        });
+
   return (
     <Button
       onClick={handleClick}
       disabled={isDisabled}
+      aria-busy={isLoading}
       className={`w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55 ${buttonClassName}`}
     >
       {isLoading ? (
         <span className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          {statusText || 'Processing...'}
-        </span>
-      ) : isQuoteLoading && localQuote === null ? (
-        <span className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Loading price...
+          {phase ? PHASE_LABELS[phase] : 'Preparing transaction...'}
         </span>
       ) : (
         displayText

@@ -3,6 +3,8 @@ import {
   createPublicClient,
   createTransport,
   http,
+  TransactionReceiptNotFoundError,
+  WaitForTransactionReceiptTimeoutError,
   type Hex,
   type TransactionReceipt,
   type Transport,
@@ -93,6 +95,8 @@ const HTTP_BATCH_WAIT_MS = 16;
 const MULTICALL_BATCH_SIZE = 8_192;
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
+const CANONICAL_RECEIPT_TIMEOUT_MS = 180_000;
+const ZERO_BLOCK_HASH = `0x${'0'.repeat(64)}`;
 
 // Hedge delays govern when we start a parallel request to a backup RPC.
 // Keeping them overridable lets ops dial them up during Base congestion
@@ -859,6 +863,7 @@ const getRetryableFlag = (error: UntypedValue): boolean => {
 
   return (
     message.includes('timeout') ||
+    message.includes('timed out') ||
     message.includes('fetch') ||
     message.includes('network') ||
     message.includes('connection') ||
@@ -1004,11 +1009,130 @@ export const getBaseTransactionReceipt = async (
   }
 };
 
+type BaseReceiptWaitClient = {
+  getTransactionReceipt: (parameters: {
+    hash: Hex;
+  }) => Promise<TransactionReceipt>;
+  waitForTransactionReceipt: (parameters: {
+    hash: Hex;
+    pollingInterval?: number;
+    timeout?: number;
+  }) => Promise<TransactionReceipt>;
+};
+
+type CanonicalReceiptWaitOptions = {
+  now?: () => number;
+  pollingIntervalMs?: number;
+  timeoutMs?: number;
+  wait?: (ms: number) => Promise<void>;
+};
+
+const isCanonicalBaseReceipt = (receipt: TransactionReceipt): boolean => {
+  return (
+    typeof receipt.blockHash === 'string' &&
+    /^0x[0-9a-f]{64}$/i.test(receipt.blockHash) &&
+    receipt.blockHash.toLowerCase() !== ZERO_BLOCK_HASH
+  );
+};
+
+const getReceiptTransactionHash = (
+  receipt: TransactionReceipt,
+  fallbackHash: Hex,
+): Hex => {
+  return typeof receipt.transactionHash === 'string' &&
+    /^0x[0-9a-f]{64}$/i.test(receipt.transactionHash)
+    ? receipt.transactionHash
+    : fallbackHash;
+};
+
+const isRetryableCanonicalReceiptError = (
+  error: UntypedValue,
+  depth = 0,
+): boolean => {
+  if (depth > 5) return false;
+  if (error instanceof TransactionReceiptNotFoundError) return true;
+  if (error instanceof BaseRpcError && error.retryable) return true;
+
+  if (error instanceof AggregateError) {
+    return error.errors.some((nestedError) =>
+      isRetryableCanonicalReceiptError(nestedError, depth + 1),
+    );
+  }
+
+  if (!(error instanceof Error)) return false;
+  if (
+    error.name === 'TransactionReceiptNotFoundError' ||
+    getRetryableFlag(error) ||
+    isRateLimitError(error) ||
+    isConnectivityError(error) ||
+    isServerSideRpcError(error)
+  ) {
+    return true;
+  }
+
+  const cause = (error as Error & { cause?: UntypedValue }).cause;
+  return cause !== undefined
+    ? isRetryableCanonicalReceiptError(cause, depth + 1)
+    : false;
+};
+
+/**
+ * Base can expose a preconfirmation receipt whose block hash is all zeros.
+ * Treat it as provisional and keep polling until the same transaction (or its
+ * replacement) has a canonical block hash. The deadline includes Viem's
+ * initial receipt wait so callers retain one bounded confirmation window.
+ */
+export const waitForCanonicalBaseReceipt = async (
+  client: BaseReceiptWaitClient,
+  hash: Hex,
+  {
+    now = Date.now,
+    pollingIntervalMs = POLICY_CONFIG.receipt.pollingIntervalMs,
+    timeoutMs = CANONICAL_RECEIPT_TIMEOUT_MS,
+    wait = sleep,
+  }: CanonicalReceiptWaitOptions = {},
+): Promise<TransactionReceipt> => {
+  const deadline = now() + Math.max(1, timeoutMs);
+  const intervalMs = Math.max(1, pollingIntervalMs);
+  const timeoutError = () => new WaitForTransactionReceiptTimeoutError({ hash });
+  const remainingMs = () => Math.max(0, deadline - now());
+
+  let remaining = remainingMs();
+  if (remaining <= 0) throw timeoutError();
+
+  let receipt = await client.waitForTransactionReceipt({
+    hash,
+    pollingInterval: intervalMs,
+    timeout: remaining,
+  });
+  if (remainingMs() <= 0) throw timeoutError();
+  if (isCanonicalBaseReceipt(receipt)) return receipt;
+
+  let receiptHash = getReceiptTransactionHash(receipt, hash);
+  while ((remaining = remainingMs()) > 0) {
+    await wait(Math.min(intervalMs, remaining));
+    if (remainingMs() <= 0) throw timeoutError();
+
+    try {
+      receipt = await client.getTransactionReceipt({ hash: receiptHash });
+    } catch (error) {
+      if (isRetryableCanonicalReceiptError(error)) continue;
+      throw error;
+    }
+
+    if (remainingMs() <= 0) throw timeoutError();
+    receiptHash = getReceiptTransactionHash(receipt, receiptHash);
+    if (isCanonicalBaseReceipt(receipt)) return receipt;
+  }
+
+  throw timeoutError();
+};
+
 export const waitForBaseReceipt = async (
   hash: Hex,
 ): Promise<TransactionReceipt> => {
   try {
-    return await getBaseReceiptClient().waitForTransactionReceipt({ hash });
+    return await waitForCanonicalBaseReceipt(getBaseReceiptClient(), hash);
   } catch (error) {
     throw new BaseRpcError('waitForBaseReceipt', error);
   }

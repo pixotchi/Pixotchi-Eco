@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
+import { track } from '@vercel/analytics';
 // global-error replaces the root layout, so neither the stylesheet nor the font
 // variables from app/layout.tsx are present. Import both or the crash screen
 // renders as unstyled HTML with system fonts.
@@ -18,12 +19,17 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to console (will appear in Vercel logs)
     console.error('[GLOBAL ERROR]', {
       message: error.message,
       stack: error.stack,
       digest: error.digest,
       timestamp: new Date().toISOString(),
+    });
+    track('client_error', {
+      boundary: 'global',
+      digest: error.digest ?? 'none',
+      errorName: error.name || 'Error',
+      path: window.location.pathname,
     });
   }, [error]);
 

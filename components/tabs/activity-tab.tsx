@@ -58,6 +58,8 @@ import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useIsSolanaWallet, useTwinAddress } from "@/components/solana";
 import { useFrameContext } from "@/lib/frame-context";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { TABLET_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
@@ -142,6 +144,7 @@ export default function ActivityTab() {
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('activity');
+  const usesCompactPageScroll = useMediaQuery("(max-width: 53.99rem) and (max-height: 700px)");
   // See the 30s freshness guard on the visibility refetch effect below.
   const lastVisibleFetchRef = useRef(0);
   const myAddress = isSolana ? twinAddress : address;
@@ -508,12 +511,13 @@ export default function ActivityTab() {
     window.requestAnimationFrame(() => {
       const feedScroll = document.querySelector<HTMLElement>('[data-activity-feed-scroll]');
       const fallbackShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
-      (feedScroll ?? fallbackShell)?.scrollTo({
+      const scrollOwner = usesCompactPageScroll ? fallbackShell : (feedScroll ?? fallbackShell);
+      scrollOwner?.scrollTo({
         top: 0,
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
     });
-  }, []);
+  }, [usesCompactPageScroll]);
 
   const renderPaginationControls = useCallback((
     activePage: number,
@@ -581,13 +585,17 @@ export default function ActivityTab() {
     loading: boolean,
     error: string | null,
     filter: FilterConfig,
-    pagination?: PaginationConfig
+    pagination?: PaginationConfig,
+    usePageScroll = false,
   ) => {
     const renderFeedState = (content: ReactNode) => (
-      <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className={cn("flex min-h-0 flex-col gap-3", usePageScroll ? "h-auto" : "h-full")}>
         <div
           data-activity-feed-scroll
-          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3"
+          className={cn(
+            "surface-scroll-area min-h-0 rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
+            usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
+          )}
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -650,8 +658,14 @@ export default function ActivityTab() {
       : activities;
 
     return (
-      <div className="flex h-full min-h-0 flex-col gap-3">
-        <div data-activity-feed-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3">
+      <div className={cn("flex min-h-0 flex-col gap-3", usePageScroll ? "h-auto" : "h-full")}>
+        <div
+          data-activity-feed-scroll
+          className={cn(
+            "surface-scroll-area min-h-0 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
+            usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
+          )}
+        >
           {visibleActivities.map(renderActivity)}
         </div>
 
@@ -675,18 +689,7 @@ export default function ActivityTab() {
    * DOM only: the fetches key off `myAddress`, and the desktop feed memos are
    * unconditional, so nothing here changes what is requested.
    */
-  const [isDesktopActivity, setIsDesktopActivity] = useState(
-    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mediaQuery = window.matchMedia('(min-width: 54rem)');
-    setIsDesktopActivity(mediaQuery.matches);
-    const handleChange = (event: MediaQueryListEvent) => setIsDesktopActivity(event.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  const isDesktopActivity = useMediaQuery(TABLET_MEDIA_QUERY);
 
   const mobileFilter: FilterConfig = {
     category: categoryFilter,
@@ -714,12 +717,17 @@ export default function ActivityTab() {
   };
 
   return (
-    <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
+    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-full tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
       {!isDesktopActivity && (
       <TabCard
         /* No outer pb-4: it stacked on the inner p-4 and left a 16px dead band
            between the pagination footer surface and the card edge. */
-        className="flex h-full min-h-[26rem] flex-col overflow-hidden tablet:hidden"
+        className={cn(
+          "flex flex-col tablet:hidden",
+          usesCompactPageScroll
+            ? "h-auto min-h-0 overflow-visible"
+            : "h-full min-h-[26rem] overflow-hidden",
+        )}
       >
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center gap-3">
@@ -762,11 +770,11 @@ export default function ActivityTab() {
             showDirection={mobileFilter.showDirection}
           />
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-visible">
+        <CardContent className={cn("min-h-0 overflow-visible", usesCompactPageScroll ? "flex-none" : "flex-1")}>
           {renderFeedContent(view, mobileActivities, selectedLoading, selectedError, mobileFilter, {
             page: currentPage,
             setPage: setCurrentPage,
-          })}
+          }, usesCompactPageScroll)}
         </CardContent>
       </TabCard>
       )}

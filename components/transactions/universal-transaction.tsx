@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo, useRef } from 'react';
 import {
+  getLifecycleTransactionProof,
   Transaction,
   TransactionButton,
   TransactionStatus,
@@ -12,6 +13,8 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import type { TransactionCall } from '@/lib/types';
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 import { dispatchPostTransactionRefresh } from '@/lib/transaction-refresh';
+import { extractTransactionHash } from '@/lib/transaction-utils';
+import { useAccount } from 'wagmi';
 
 interface UniversalTransactionProps {
   calls: TransactionCall[];
@@ -22,6 +25,7 @@ interface UniversalTransactionProps {
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
+  intentKey?: string;
   forceUnsponsored?: boolean; // Force transaction to be unsponsored (e.g., for swaps)
 }
 
@@ -33,9 +37,12 @@ export default function UniversalTransaction({
   buttonClassName = "",
   disabled = false,
   feedbackMode,
+  showToast = true,
+  intentKey,
   forceUnsponsored = false
 }: UniversalTransactionProps) {
   const { isSponsored: paymasterEnabled } = usePaymaster();
+  const { address } = useAccount();
 
   // Determine if this transaction should be sponsored
   const isSponsored = forceUnsponsored ? false : paymasterEnabled;
@@ -48,10 +55,23 @@ export default function UniversalTransaction({
     [calls]
   );
 
-  const handleOnSuccess = useCallback((tx: UntypedValue) => {
-    onSuccess?.(tx);
-    dispatchPostTransactionRefresh();
-  }, [onSuccess]);
+  const handleOnSuccess = useCallback((tx: UntypedValue, status: LifecycleStatus) => {
+    try {
+      const result = onSuccess?.(tx) as UntypedValue;
+      if (result && typeof result.then === 'function') {
+        void Promise.resolve(result).catch((error) => {
+          console.warn('Transaction success callback failed', error);
+        });
+      }
+    } finally {
+      dispatchPostTransactionRefresh(undefined, undefined, {
+        address,
+        source: 'universal-transaction',
+        transactionHash: extractTransactionHash(tx) || status.statusData.transactionHash,
+        transactionId: status.statusData.transactionId,
+      });
+    }
+  }, [address, onSuccess]);
 
   // Track transaction lifecycle to prevent race conditions where onError is called after success
   const successHandledRef = useRef(false);
@@ -74,13 +94,16 @@ export default function UniversalTransaction({
       successHandledRef.current = false;
     }
     if (status.statusName === 'success' && !successHandledRef.current) {
+      const proof = getLifecycleTransactionProof(status);
+      if (!proof) return;
       successHandledRef.current = true;
-      handleOnSuccess(status.statusData.transactionReceipts[0]);
+      handleOnSuccess(proof, status);
     }
   }, [handleOnSuccess]);
   const resolvedFeedbackMode: TransactionFeedbackMode = feedbackMode ?? "toast";
   const showInlineStatus = resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both";
-  const showGlobalToast = resolvedFeedbackMode !== "none";
+  const showGlobalToast = showToast
+    && (resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both");
 
   return (
     <Transaction
@@ -89,6 +112,7 @@ export default function UniversalTransaction({
       onError={handleOnError}
       isSponsored={isSponsored}
       capabilities={builderCapabilities}
+      intentKey={intentKey}
       resetAfter={2000}
     >
       <TransactionButton

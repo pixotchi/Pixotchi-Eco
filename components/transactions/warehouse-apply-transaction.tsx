@@ -35,19 +35,22 @@ export default function WarehouseApplyTransaction({
   // - Lifetime: minutes (integer)
 
   const parsedAmount = (() => {
-    if (!amount || !/^\d*(?:\.\d+)?$/.test(amount)) return null;
+    const normalizedAmount = amount.trim();
+    if (!normalizedAmount) return null;
     try {
       if (mode === "points") {
+        if (!/^(?:\d+(?:\.\d{0,12})?|\.\d{1,12})$/.test(normalizedAmount)) return null;
         // Scale by 1e12 as bigint
-        const [whole, dec = ""] = amount.split(".");
-        const padded = (dec + "0".repeat(12)).slice(0, 12);
+        const [whole, dec = ""] = normalizedAmount.split(".");
+        const padded = dec.padEnd(12, "0");
         const combined = `${whole || "0"}${padded ? padded.padStart(12, "0") : ""}`;
         return BigInt(combined || "0");
       } else {
         // Contract expects SECONDS. User inputs MINUTES → convert to seconds.
-        const minutes = Math.floor(Number(amount));
-        if (!Number.isFinite(minutes) || minutes <= 0) return null;
-        return BigInt(minutes) * BigInt(60);
+        if (!/^\d+$/.test(normalizedAmount)) return null;
+        const minutes = BigInt(normalizedAmount);
+        if (minutes <= BigInt(0)) return null;
+        return minutes * BigInt(60);
       }
     } catch {
       return null;
@@ -70,6 +73,7 @@ export default function WarehouseApplyTransaction({
 
   return (
     <UniversalTransaction
+      intentKey={`warehouse:apply:${mode}:${landId}:${plantId}:${parsedAmount ?? BigInt(0)}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -79,4 +83,3 @@ export default function WarehouseApplyTransaction({
     />
   );
 }
-

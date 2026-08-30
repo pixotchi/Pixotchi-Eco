@@ -45,6 +45,7 @@ export default function LeafApproveTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`approve:${LEAF_CONTRACT_ADDRESS.toLowerCase()}:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${maxApproval}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -53,4 +54,4 @@ export default function LeafApproveTransaction({
       disabled={disabled}
     />
   );
-} 
+}

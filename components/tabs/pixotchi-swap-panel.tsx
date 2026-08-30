@@ -38,7 +38,7 @@ import {
   SWAP_TOKEN_MAP,
   USER_SWAP_TOKEN_IDS,
 } from '@/lib/swap/constants';
-import { getAllowedSwapTargets } from '@/lib/swap/rules';
+import { getAllowedSwapTargets, sanitizeSwapDecimalInput } from '@/lib/swap/rules';
 import type {
   SwapBuildStepResponse,
   SwapQuoteResponse,
@@ -59,6 +59,36 @@ import {
   extractTransactionHash,
   normalizeTransactionReceipt,
 } from '@/lib/transaction-utils';
+import {
+  PENDING_EVM_STALE_MESSAGE,
+  PendingEvmStaleError,
+  acknowledgePendingEvmRecord,
+  canDurablyPersistPendingEvmTransactions,
+  createPendingEvmCallsDigest,
+  createPendingEvmRecord,
+  finalizePendingEvmRecord,
+  getBrowserPendingEvmStorage,
+  getPendingEvmIntentDigest,
+  getPendingEvmPhase,
+  isDefinitivePendingEvmPreSubmissionError,
+  removePendingEvmRecord,
+  withPendingEvmHardDeadline,
+  withPendingEvmMonitorLease,
+  withPendingEvmSubmissionGuard,
+  writePendingEvmRecord,
+  type PendingEvmCall,
+  type PendingEvmExecutionMethod,
+  type PendingEvmProof,
+  type PendingEvmRecord,
+} from '@/lib/pending-evm-transaction';
+import {
+  claimPendingEvmCoordinatorAttempt,
+  promotePendingEvmCoordinatorAttemptToMonitor,
+  registerPendingEvmController,
+  releasePendingEvmCoordinatorAttempt,
+  requestPendingEvmCoordinatorReconcile,
+  type PendingEvmCoordinatorSnapshot,
+} from '@/lib/pending-evm-coordinator';
 import { cn, formatTokenAmountRounded } from '@/lib/utils';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { SWAP_PANEL_STRINGS as S } from './pixotchi-swap-panel.strings';
@@ -91,10 +121,88 @@ type SmartWalletBatchCall = {
   value: bigint;
 };
 
-const ETH_GAS_BUFFER_WEI = BigInt(50_000_000_000_000);
-// Minimum ETH balance we require *after* the swap's `value` to pay gas for
-// the swap transaction itself (and a prior approval if needed).
-const ETH_GAS_REQUIRED_WEI = BigInt(200_000_000_000_000);
+// Reserve kept after every ETH sell, and required for unsponsored token sells.
+// A single value is intentional: the previous 0.00005 ETH Max reserve
+// conflicted with a separate 0.0002 ETH execution gate, making the screen's
+// own Max result impossible to submit.
+const ETH_GAS_RESERVE_WEI = BigInt(50_000_000_000_000);
+
+const SWAP_APPROVAL_INTENT_KEY = 'pixotchi-swap:approval:v1';
+const SWAP_EXECUTION_INTENT_KEY = 'pixotchi-swap:execution:v1';
+const EMPTY_PENDING_CALLS_DIGEST = createPendingEvmCallsDigest([]);
+const PENDING_MONITOR_RETRY_MS = 1_000;
+
+type SwapPendingStage = 'approval' | 'swap';
+
+type TrackedSwapSubmission<T> = {
+  coordinatorSignal?: AbortSignal;
+  monitorRecord: PendingEvmRecord;
+  terminalRecord: PendingEvmRecord;
+  value: T;
+};
+
+class SwapSubmissionBlockedError extends Error {
+  constructor(message = 'Another wallet transaction is already in progress.') {
+    super(message);
+    this.name = 'SwapSubmissionBlockedError';
+  }
+}
+
+class SwapSubmissionAmbiguousError extends Error {
+  constructor() {
+    super('Wallet submission may still be pending. Check your wallet activity before trying again.');
+    this.name = 'SwapSubmissionAmbiguousError';
+  }
+}
+
+class SwapTransactionRevertedError extends Error {
+  constructor(message = 'Swap transaction reverted') {
+    super(message);
+    this.name = 'SwapTransactionRevertedError';
+  }
+}
+
+function getSwapPendingIntentKey(stage: SwapPendingStage): string {
+  return stage === 'approval' ? SWAP_APPROVAL_INTENT_KEY : SWAP_EXECUTION_INTENT_KEY;
+}
+
+function isAbortError(error: UntypedValue): boolean {
+  return (error as { name?: unknown })?.name === 'AbortError';
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw new DOMException('Transaction monitoring was handed to another controller.', 'AbortError');
+}
+
+async function waitForMonitorRetry(signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, PENDING_MONITOR_RETRY_MS);
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      reject(new DOMException('Transaction monitoring was handed to another controller.', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function withMonitorAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  throwIfAborted(signal);
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new DOMException('Transaction monitoring was handed to another controller.', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    void promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
+}
 
 const QUOTE_DEBOUNCE_MS = 250;
 const QUOTE_MAX_RETRIES = 2;
@@ -287,47 +395,6 @@ function formatExecutionMessage(message?: string): string | null {
   return message;
 }
 
-// Accepts comma-as-decimal, comma-as-thousand-separator, and scientific notation
-// (e.g. "1e6", "2E-3"). Normalizes to a single dot decimal with no thousand
-// separators. Returns '' for invalid input rather than silently mangling.
-function sanitizeDecimalInput(raw: string): string {
-  if (raw == null) return '';
-  let value = String(raw).trim();
-  if (value === '') return '';
-
-  // Scientific notation -> canonical decimal string using Number + toFixed.
-  if (/^[-+]?\d+(?:[.,]\d+)?[eE][-+]?\d+$/.test(value)) {
-    const asNumber = Number(value.replace(',', '.'));
-    if (!Number.isFinite(asNumber) || asNumber < 0) return '';
-    // Use up to 18 fractional digits (max decimals in this app is 18).
-    const normalized = asNumber.toFixed(18);
-    return normalized.replace(/0+$/, '').replace(/\.$/, '');
-  }
-
-  // Decide whether commas are decimal separators or thousand separators.
-  const commaCount = (value.match(/,/g) || []).length;
-  const dotCount = (value.match(/\./g) || []).length;
-  if (commaCount > 0 && dotCount === 0 && commaCount === 1) {
-    // Single comma, no dot -> treat comma as decimal separator.
-    value = value.replace(',', '.');
-  } else {
-    // Treat commas as thousand separators and drop them.
-    value = value.replace(/,/g, '');
-  }
-
-  // Strip anything that isn't a digit or dot.
-  value = value.replace(/[^\d.]/g, '');
-
-  const firstDot = value.indexOf('.');
-  if (firstDot === -1) {
-    return value;
-  }
-
-  return `${value.slice(0, firstDot + 1)}${value
-    .slice(firstDot + 1)
-    .replace(/\./g, '')}`;
-}
-
 function parseInputAmount(
   amount: string,
   tokenId: UserSwapTokenId,
@@ -369,7 +436,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 }
 
 export default function PixotchiSwapPanel() {
-  const { address, chainId } = useAccount();
+  const { address, chainId, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
@@ -381,17 +448,52 @@ export default function PixotchiSwapPanel() {
   const deferredSellAmount = useDeferredValue(sellAmount);
   const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isRecoveryChecking, setIsRecoveryChecking] = useState(true);
+  const [isPeerBlocked, setIsPeerBlocked] = useState(false);
+  const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<PendingEvmRecord | null>(null);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
   const quoteRequestRef = useRef(0);
   const backgroundRefreshInFlightRef = useRef(false);
   const quoteActivityAtRef = useRef(0);
-  // swap-tab renders this panel twice (a mobile card and a desktop card, one of
-  // them CSS-hidden), so hardcoded ids collided: getElementById resolved to the
-  // hidden copy and clicking the visible "Sell" label focused nothing.
+  const balanceRefreshTimerRef = useRef<number | null>(null);
+  const completionResetTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const executingRef = useRef(false);
+  const activePendingRecordRef = useRef<PendingEvmRecord | null>(null);
+  const coordinatorSnapshotsRef = useRef<Record<SwapPendingStage, PendingEvmCoordinatorSnapshot | null>>({
+    approval: null,
+    swap: null,
+  });
+  // Keep labels/status ids instance-safe if this panel is ever mounted in both
+  // a responsive surface and a dialog during a layout transition.
   const panelId = useId();
+  const approvalControllerId = `${panelId}:swap-approval`;
+  const swapControllerId = `${panelId}:swap-execution`;
   const messageId = `pixotchi-swap-message-${panelId}`;
   const sellAmountId = `pixotchi-swap-sell-amount-${panelId}`;
   const isVisible = isTabVisible('swap');
+  const recoveryRegistryIdentity = useMemo(
+    () => walletClient?.account
+      ? {
+          accountAddress: walletClient.account.address,
+          chainId: BASE_CHAIN_ID,
+        }
+      : null,
+    [walletClient],
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (balanceRefreshTimerRef.current !== null) {
+        window.clearTimeout(balanceRefreshTimerRef.current);
+      }
+      if (completionResetTimerRef.current !== null) {
+        window.clearTimeout(completionResetTimerRef.current);
+      }
+    };
+  }, []);
 
   const {
     data: sellBalanceData,
@@ -488,10 +590,14 @@ export default function PixotchiSwapPanel() {
   const usesSponsoredSmartWalletForSwap =
     isSmartWallet &&
     isSponsored &&
-    typeof (walletClient as UntypedValue)?.sendCalls === 'function';
+    typeof (walletClient as UntypedValue)?.sendCalls === 'function' &&
+    typeof (walletClient as UntypedValue)?.waitForCallsStatus === 'function';
   const requiredEthForSwap = useMemo(() => {
     const nativeValue = sellToken === 'ETH' && parsedAmount ? parsedAmount : BigInt(0);
-    return nativeValue + (usesSponsoredSmartWalletForSwap ? BigInt(0) : ETH_GAS_REQUIRED_WEI);
+    const reserve = sellToken === 'ETH' || !usesSponsoredSmartWalletForSwap
+      ? ETH_GAS_RESERVE_WEI
+      : BigInt(0);
+    return nativeValue + reserve;
   }, [parsedAmount, sellToken, usesSponsoredSmartWalletForSwap]);
   const hasInsufficientGas = Boolean(
     address &&
@@ -503,6 +609,8 @@ export default function PixotchiSwapPanel() {
   );
   const actionDisabled =
     isExecuting ||
+    isRecoveryChecking ||
+    isPeerBlocked ||
     !currentQuote ||
     currentQuote.strategy === 'blocked' ||
     !isAmountValid ||
@@ -516,6 +624,18 @@ export default function PixotchiSwapPanel() {
     quoteActivityAtRef.current = Date.now();
   }, []);
   const swapMessage = useMemo(() => {
+    if (pendingFeedbackRecord) {
+      return getPendingEvmPhase(pendingFeedbackRecord) === 'stale'
+        ? PENDING_EVM_STALE_MESSAGE
+        : pendingFeedbackRecord.proof.kind === 'reservation'
+          ? 'Wallet submission may still be pending. Check wallet activity before trying again.'
+          : 'An existing wallet transaction is still awaiting confirmation.';
+    }
+
+    if (isPeerBlocked) {
+      return 'Another wallet transaction is already in progress.';
+    }
+
     if (currentQuote?.strategy === 'blocked') {
       return currentQuote.blockedReason || S.errors.blockedPairFallback;
     }
@@ -576,6 +696,8 @@ export default function PixotchiSwapPanel() {
     hasInsufficientBalance,
     hasInsufficientGas,
     isAmountValid,
+    isPeerBlocked,
+    pendingFeedbackRecord,
     quoteState,
     sellAmount,
     sellToken,
@@ -808,12 +930,18 @@ export default function PixotchiSwapPanel() {
   );
 
   const readAllowance = useCallback(
-    async (token: Address, owner: Address, spender: Address): Promise<bigint> => {
+    async (
+      token: Address,
+      owner: Address,
+      spender: Address,
+      blockNumber?: bigint,
+    ): Promise<bigint> => {
       const result = await readClient.readContract({
         address: token,
         abi: ERC20_TOKEN_ABI,
         functionName: 'allowance',
         args: [owner, spender],
+        ...(blockNumber !== undefined ? { blockNumber } : {}),
       });
       if (typeof result !== 'bigint') {
         throw new Error('Unexpected allowance result type');
@@ -821,6 +949,309 @@ export default function PixotchiSwapPanel() {
       return result;
     },
     [readClient],
+  );
+
+  const submitTrackedAttempt = useCallback(
+    async <T,>({
+      calls,
+      method,
+      stage,
+      submit,
+    }: {
+      calls: PendingEvmCall[];
+      method: PendingEvmExecutionMethod;
+      stage: SwapPendingStage;
+      submit: () => Promise<{
+        proof: Exclude<PendingEvmProof, { kind: 'reservation' }>;
+        value: T;
+      }>;
+    }): Promise<TrackedSwapSubmission<T>> => {
+      if (!walletClient?.account) {
+        throw new Error(S.errors.walletClientUnavailable);
+      }
+
+      const registry = {
+        accountAddress: walletClient.account.address,
+        chainId: BASE_CHAIN_ID,
+      };
+      const controllerId = stage === 'approval' ? approvalControllerId : swapControllerId;
+      const storage = getBrowserPendingEvmStorage();
+      if (!canDurablyPersistPendingEvmTransactions(storage)) {
+        throw new Error(
+          'Safe transaction tracking requires browser storage. Enable site storage, then try again.',
+        );
+      }
+
+      const callsDigest = createPendingEvmCallsDigest(calls);
+      const guarded = await withPendingEvmSubmissionGuard(storage, registry, async () => {
+        const reservation = createPendingEvmRecord({
+          callsDigest,
+          ...(method === 'batch' ? { connectorId: connector?.id ?? 'unavailable' } : {}),
+          identity: {
+            ...registry,
+            intentKey: getSwapPendingIntentKey(stage),
+          },
+          method,
+          proof: { kind: 'reservation' },
+        });
+
+        if (!claimPendingEvmCoordinatorAttempt(registry, reservation, controllerId)) {
+          throw new SwapSubmissionBlockedError();
+        }
+        activePendingRecordRef.current = reservation;
+        if (!writePendingEvmRecord(storage, reservation)) {
+          removePendingEvmRecord(storage, reservation);
+          releasePendingEvmCoordinatorAttempt(registry, reservation, controllerId);
+          activePendingRecordRef.current = null;
+          throw new Error(
+            'Safe transaction tracking requires browser storage. Enable site storage, then try again.',
+          );
+        }
+
+        try {
+          const submitted = await withPendingEvmHardDeadline(submit(), reservation);
+          const finalized = finalizePendingEvmRecord(storage, reservation, submitted.proof);
+          const monitorRecord = finalized?.record ?? createPendingEvmRecord({
+            attemptId: reservation.attemptId,
+            callsDigest,
+            ...(method === 'batch' ? { connectorId: connector?.id ?? 'unavailable' } : {}),
+            identity: {
+              ...registry,
+              intentKey: getSwapPendingIntentKey(stage),
+            },
+            method,
+            proof: submitted.proof,
+          });
+          const terminalRecord = finalized?.blocker ?? reservation;
+          activePendingRecordRef.current = terminalRecord;
+
+          const coordinatorSignal = finalized?.persisted
+            ? promotePendingEvmCoordinatorAttemptToMonitor(
+                registry,
+                monitorRecord,
+                controllerId,
+              ) ?? undefined
+            : undefined;
+          if (!finalized?.persisted) {
+            console.warn(
+              '[PixotchiSwapPanel] Transaction proof could not replace its durable reservation; the reservation remains locked while this page monitors the returned proof.',
+            );
+          }
+
+          return {
+            coordinatorSignal,
+            monitorRecord,
+            terminalRecord,
+            value: submitted.value,
+          };
+        } catch (error) {
+          const canRelease = isDefinitivePendingEvmPreSubmissionError(error);
+          if (canRelease && removePendingEvmRecord(storage, reservation)) {
+            activePendingRecordRef.current = null;
+            releasePendingEvmCoordinatorAttempt(registry, reservation, controllerId);
+            throw error;
+          }
+
+          releasePendingEvmCoordinatorAttempt(registry, reservation, controllerId);
+          requestPendingEvmCoordinatorReconcile(registry);
+          throw new SwapSubmissionAmbiguousError();
+        }
+      });
+
+      if (!guarded.acquired || !guarded.value.submitted) {
+        requestPendingEvmCoordinatorReconcile(registry);
+        throw new SwapSubmissionBlockedError();
+      }
+      return guarded.value.value;
+    },
+    [approvalControllerId, connector?.id, swapControllerId, walletClient],
+  );
+
+  const monitorCanonicalHash = useCallback(
+    async (
+      record: PendingEvmRecord,
+      hash: Hex,
+      stepIndex: number,
+      signal?: AbortSignal,
+    ): Promise<TransactionReceipt> => {
+      let retryAttempt = 0;
+      while (true) {
+        try {
+          return await withMonitorAbort(
+            withPendingEvmHardDeadline(waitForBaseReceipt(hash), record),
+            signal,
+          );
+        } catch (error) {
+          if (isAbortError(error) || error instanceof PendingEvmStaleError) throw error;
+          updateExecutionStep(stepIndex, {
+            status: 'confirming',
+            txHash: hash,
+            message: retryAttempt === 0
+              ? S.execution.transactionPending
+              : 'Confirmation is delayed. Still checking the same transaction…',
+          });
+          retryAttempt += 1;
+          await waitForMonitorRetry(signal);
+        }
+      }
+    },
+    [updateExecutionStep],
+  );
+
+  const monitorBatchSubmission = useCallback(
+    async (
+      record: PendingEvmRecord,
+      stepIndex: number,
+      signal?: AbortSignal,
+    ): Promise<TransactionReceipt> => {
+      if (record.proof.kind !== 'calls' || typeof walletClient?.waitForCallsStatus !== 'function') {
+        throw new Error('Wallet batch confirmation is unavailable.');
+      }
+
+      while (true) {
+        try {
+          const result = await withMonitorAbort(
+            withPendingEvmHardDeadline(
+              walletClient.waitForCallsStatus({
+                id: record.proof.id,
+                timeout: 120_000,
+                throwOnFailure: false,
+              }),
+              record,
+            ),
+            signal,
+          );
+          const status = String(result.status ?? '').toLowerCase();
+          if (status === 'failure' || status === 'failed' || status === 'reverted') {
+            throw new SwapTransactionRevertedError();
+          }
+          if (status !== 'success') {
+            await waitForMonitorRetry(signal);
+            continue;
+          }
+
+          const receipts = result.receipts ?? [];
+          const lastReceipt = receipts[receipts.length - 1] ?? receipts[0];
+          const normalized = normalizeTransactionReceipt(lastReceipt);
+          const transactionHash = (
+            extractTransactionHash(normalized) ?? extractTransactionHash(result)
+          ) as Hex | undefined;
+          if (!transactionHash) {
+            updateExecutionStep(stepIndex, {
+              status: 'confirming',
+              message: S.execution.transactionPending,
+            });
+            await waitForMonitorRetry(signal);
+            continue;
+          }
+
+          return await monitorCanonicalHash(record, transactionHash, stepIndex, signal);
+        } catch (error) {
+          if (
+            isAbortError(error) ||
+            error instanceof PendingEvmStaleError ||
+            error instanceof SwapTransactionRevertedError
+          ) {
+            throw error;
+          }
+          updateExecutionStep(stepIndex, {
+            status: 'confirming',
+            message: 'Confirmation is delayed. Still checking the same wallet batch…',
+          });
+          await waitForMonitorRetry(signal);
+        }
+      }
+    },
+    [monitorCanonicalHash, updateExecutionStep, walletClient],
+  );
+
+  const monitorTrackedSubmission = useCallback(
+    async (
+      stage: SwapPendingStage,
+      monitorRecord: PendingEvmRecord,
+      terminalRecord: PendingEvmRecord,
+      stepIndex: number,
+      signal?: AbortSignal,
+    ): Promise<{ ownsTerminal: boolean; receipt: TransactionReceipt }> => {
+      const storage = getBrowserPendingEvmStorage();
+      const registry = {
+        accountAddress: monitorRecord.accountAddress,
+        chainId: monitorRecord.chainId,
+      };
+      const controllerId = stage === 'approval' ? approvalControllerId : swapControllerId;
+      const lease = await withPendingEvmMonitorLease(
+        storage,
+        monitorRecord,
+        async (isLeaseCurrent) => {
+          let receipt: TransactionReceipt;
+          try {
+            if (monitorRecord.method === 'direct') {
+              if (monitorRecord.proof.kind !== 'hash') {
+                throw new Error('Direct transaction hash is missing.');
+              }
+              receipt = await monitorCanonicalHash(
+                monitorRecord,
+                monitorRecord.proof.hash,
+                stepIndex,
+                signal,
+              );
+            } else {
+              receipt = await monitorBatchSubmission(monitorRecord, stepIndex, signal);
+            }
+          } catch (error) {
+            if (!(error instanceof SwapTransactionRevertedError)) throw error;
+            throwIfAborted(signal);
+            if (!isLeaseCurrent()) {
+              throw new DOMException('Transaction confirmation ownership changed.', 'AbortError');
+            }
+            const ownsTerminal = removePendingEvmRecord(storage, terminalRecord);
+            releasePendingEvmCoordinatorAttempt(
+              registry,
+              terminalRecord,
+              controllerId,
+            );
+            requestPendingEvmCoordinatorReconcile(registry);
+            if (!ownsTerminal) {
+              throw new DOMException('Transaction confirmation ownership changed.', 'AbortError');
+            }
+            if (activePendingRecordRef.current?.attemptId === terminalRecord.attemptId) {
+              activePendingRecordRef.current = null;
+            }
+            throw error;
+          }
+
+          throwIfAborted(signal);
+          if (!isLeaseCurrent()) {
+            throw new DOMException('Transaction confirmation ownership changed.', 'AbortError');
+          }
+          const ownsTerminal = removePendingEvmRecord(storage, terminalRecord);
+          if (ownsTerminal && activePendingRecordRef.current?.attemptId === terminalRecord.attemptId) {
+            activePendingRecordRef.current = null;
+          }
+          releasePendingEvmCoordinatorAttempt(
+            registry,
+            terminalRecord,
+            controllerId,
+          );
+          requestPendingEvmCoordinatorReconcile(registry);
+          return { ownsTerminal, receipt };
+        },
+      );
+
+      if (!lease.acquired) {
+        throw new DOMException(
+          'Transaction confirmation is being checked in another tab.',
+          'AbortError',
+        );
+      }
+      return lease.value;
+    },
+    [
+      approvalControllerId,
+      monitorBatchSubmission,
+      monitorCanonicalHash,
+      swapControllerId,
+    ],
   );
 
   const ensureApproval = useCallback(
@@ -848,32 +1279,78 @@ export default function PixotchiSwapPanel() {
         message: S.execution.approveToken,
       });
 
-      // Exact-amount approval prevents unbounded risk if the spender is ever
-      // compromised. Users will re-approve per swap, which is acceptable for
-      // an aggregator router flow.
-      const approvalHash = await walletClient.writeContract({
-        address: approval.token,
-        abi: ERC20_TOKEN_ABI,
-        functionName: 'approve',
-        args: [approval.spender, requiredAmount],
-        account: walletClient.account,
-        chain: base,
+      const approvalCall: PendingEvmCall = {
+        to: approval.token,
+        data: encodeFunctionData({
+          abi: ERC20_TOKEN_ABI,
+          functionName: 'approve',
+          args: [approval.spender, requiredAmount],
+        }),
+        value: BigInt(0),
+      };
+      const submitted = await submitTrackedAttempt({
+        calls: [approvalCall],
+        method: 'direct',
+        stage: 'approval',
+        submit: async () => {
+          // Exact-amount approval prevents unbounded risk if the spender is ever
+          // compromised. The durable reservation is written before this wallet
+          // call, and its hash replaces that reservation before monitoring.
+          const hash = await walletClient.writeContract({
+            address: approval.token,
+            abi: ERC20_TOKEN_ABI,
+            functionName: 'approve',
+            args: [approval.spender, requiredAmount],
+            account: walletClient.account,
+            chain: base,
+          });
+          return {
+            proof: { hash, kind: 'hash' as const },
+            value: hash,
+          };
+        },
       });
 
-      await waitForBaseReceipt(approvalHash);
+      updateExecutionStep(stepIndex, {
+        status: 'confirming',
+        txHash: submitted.value,
+        message: submitted.value,
+      });
+      const monitored = await monitorTrackedSubmission(
+        'approval',
+        submitted.monitorRecord,
+        submitted.terminalRecord,
+        stepIndex,
+        submitted.coordinatorSignal,
+      );
+      if (!monitored.ownsTerminal) {
+        throw new DOMException('Approval confirmation ownership changed.', 'AbortError');
+      }
+      if (monitored.receipt.status !== 'success') {
+        throw new Error('Approval transaction reverted.');
+      }
 
       // Belt-and-suspenders: re-read allowance after confirmation so the next
-      // writeContract sees ground truth, not the cached pre-approval state.
+      // transaction sees state at the canonical receipt block, never a lagging
+      // provider's provisional `latest` view.
       const postAllowance = await readAllowance(
         approval.token,
         address,
         approval.spender,
+        monitored.receipt.blockNumber,
       );
       if (postAllowance < requiredAmount) {
         throw new Error('Approval confirmed but allowance is still insufficient.');
       }
     },
-    [address, readAllowance, updateExecutionStep, walletClient],
+    [
+      address,
+      monitorTrackedSubmission,
+      readAllowance,
+      submitTrackedAttempt,
+      updateExecutionStep,
+      walletClient,
+    ],
   );
 
   const executeSmartWalletSwapBatch = useCallback(
@@ -885,7 +1362,8 @@ export default function PixotchiSwapPanel() {
       if (
         !address ||
         !walletClient?.account ||
-        typeof walletClient.sendCalls !== 'function'
+        typeof walletClient.sendCalls !== 'function' ||
+        typeof walletClient.waitForCallsStatus !== 'function'
       ) {
         throw new Error(S.errors.walletClientUnavailable);
       }
@@ -920,47 +1398,62 @@ export default function PixotchiSwapPanel() {
           : builtStep.step.routeLabel,
       });
 
-      const batch = await walletClient.sendCalls({
-        account: walletClient.account,
-        chain: base,
+      const submitted = await submitTrackedAttempt({
         calls: transformedCalls,
-        capabilities: getBuilderCapabilities(),
-        forceAtomic: true,
+        method: 'batch',
+        stage: 'swap',
+        submit: async () => {
+          const batch = await walletClient.sendCalls({
+            account: walletClient.account,
+            chain: base,
+            calls: transformedCalls,
+            capabilities: getBuilderCapabilities(),
+            forceAtomic: true,
+          });
+          if (typeof batch.id !== 'string' || batch.id.trim() === '') {
+            throw new Error('Wallet returned no transaction id.');
+          }
+          return {
+            proof: { id: batch.id, kind: 'calls' as const },
+            value: batch.id,
+          };
+        },
       });
 
       updateExecutionStep(stepIndex, {
         status: 'confirming',
         message: S.execution.transactionPending,
       });
-
-      const result = await walletClient.waitForCallsStatus({
-        id: batch.id,
-        timeout: 120_000,
-        throwOnFailure: true,
-      });
-
-      if (result.status !== 'success') {
+      const monitored = await monitorTrackedSubmission(
+        'swap',
+        submitted.monitorRecord,
+        submitted.terminalRecord,
+        stepIndex,
+        submitted.coordinatorSignal,
+      );
+      if (!monitored.ownsTerminal) {
+        throw new DOMException('Swap confirmation ownership changed.', 'AbortError');
+      }
+      if (monitored.receipt.status !== 'success') {
         throw new Error('Swap transaction reverted');
       }
 
-      const receipts = result.receipts ?? [];
-      const lastReceipt = receipts[receipts.length - 1] ?? receipts[0];
-      const receipt = normalizeTransactionReceipt(lastReceipt);
-
-      if (!receipt) {
-        throw new Error('Swap completed without a receipt');
-      }
-
-      const txHash = extractTransactionHash(receipt) as Hex | undefined;
+      const txHash = extractTransactionHash(monitored.receipt) as Hex | undefined;
       updateExecutionStep(stepIndex, {
         status: 'complete',
         txHash,
         message: txHash,
       });
 
-      return receipt as TransactionReceipt;
+      return monitored.receipt;
     },
-    [address, updateExecutionStep, walletClient],
+    [
+      address,
+      monitorTrackedSubmission,
+      submitTrackedAttempt,
+      updateExecutionStep,
+      walletClient,
+    ],
   );
 
   const executeSingleStep = useCallback(
@@ -980,16 +1473,21 @@ export default function PixotchiSwapPanel() {
       const amountIn = amountInOverride || step.amountIn;
       const builtStep = await buildStep(step, amountIn, quote.quoteToken);
       const canUseSmartWalletBatch =
-        isSmartWallet && typeof walletClient?.sendCalls === 'function';
+        isSmartWallet &&
+        typeof walletClient?.sendCalls === 'function' &&
+        typeof walletClient?.waitForCallsStatus === 'function';
       const usesSponsoredSmartWallet = canUseSmartWalletBatch && isSponsored;
 
       // Gas safety: make sure the wallet has enough ETH to actually broadcast
       // the transaction. Sponsored smart-wallet paths still need any ETH value
       // attached to the swap itself, but they do not need the extra gas buffer.
       if (address && ethBalanceData?.value !== undefined) {
+        const reserve = builtStep.step.sellToken === 'ETH' || !usesSponsoredSmartWallet
+          ? ETH_GAS_RESERVE_WEI
+          : BigInt(0);
         const requiredEth =
           BigInt(builtStep.transaction.value || '0') +
-          (usesSponsoredSmartWallet ? BigInt(0) : ETH_GAS_REQUIRED_WEI);
+          reserve;
         if (ethBalanceData.value < requiredEth) {
           throw new Error(S.errors.insufficientGas);
         }
@@ -1012,33 +1510,56 @@ export default function PixotchiSwapPanel() {
         message: builtStep.step.routeLabel,
       });
 
-      const hash = await walletClient.sendTransaction({
+      const swapCall: PendingEvmCall = {
         to: builtStep.transaction.to,
         data: builtStep.transaction.data,
         value: BigInt(builtStep.transaction.value),
-        account: walletClient.account,
-        chain: base,
+      };
+      const submitted = await submitTrackedAttempt({
+        calls: [swapCall],
+        method: 'direct',
+        stage: 'swap',
+        submit: async () => {
+          const hash = await walletClient.sendTransaction({
+            to: builtStep.transaction.to,
+            data: builtStep.transaction.data,
+            value: BigInt(builtStep.transaction.value),
+            account: walletClient.account,
+            chain: base,
+          });
+          return {
+            proof: { hash, kind: 'hash' as const },
+            value: hash,
+          };
+        },
       });
 
       updateExecutionStep(stepIndex, {
         status: 'confirming',
-        txHash: hash,
-        message: hash,
+        txHash: submitted.value,
+        message: submitted.value,
       });
-
-      const receipt = await waitForBaseReceipt(hash);
-
-      if (receipt.status !== 'success') {
+      const monitored = await monitorTrackedSubmission(
+        'swap',
+        submitted.monitorRecord,
+        submitted.terminalRecord,
+        stepIndex,
+        submitted.coordinatorSignal,
+      );
+      if (!monitored.ownsTerminal) {
+        throw new DOMException('Swap confirmation ownership changed.', 'AbortError');
+      }
+      if (monitored.receipt.status !== 'success') {
         throw new Error('Swap transaction reverted');
       }
 
       updateExecutionStep(stepIndex, {
         status: 'complete',
-        txHash: hash,
-        message: hash,
+        txHash: submitted.value,
+        message: submitted.value,
       });
 
-      return receipt;
+      return monitored.receipt;
     },
     [
       address,
@@ -1048,6 +1569,8 @@ export default function PixotchiSwapPanel() {
       executeSmartWalletSwapBatch,
       isSponsored,
       isSmartWallet,
+      monitorTrackedSubmission,
+      submitTrackedAttempt,
       updateExecutionStep,
       walletClient,
     ],
@@ -1055,33 +1578,199 @@ export default function PixotchiSwapPanel() {
 
   const finalizeSwapSuccess = useCallback(
     async (receipt: TransactionReceipt) => {
-      // Base block time is ~2s. Receipt is already confirmed, so waiting
-      // ~1.5s before reading gives every reasonable RPC time to index the
-      // swap's block. Firing refetches immediately risks caching stale
-      // pre-swap data for 30s (global staleTime). One well-timed pass.
-      requestBalanceRefresh(1500);
-      window.setTimeout(() => {
+      const transactionHash = extractTransactionHash(receipt);
+      // One receipt-keyed global reconciliation and one pair-specific pass.
+      // Both are delayed just enough for lagging RPC replicas, and both are
+      // cancellable/coalesced instead of accumulating after repeated swaps.
+      requestBalanceRefresh({
+        address,
+        delayMs: 750,
+        source: 'swap',
+        transactionHash,
+      });
+      if (balanceRefreshTimerRef.current !== null) {
+        window.clearTimeout(balanceRefreshTimerRef.current);
+      }
+      balanceRefreshTimerRef.current = window.setTimeout(() => {
+        balanceRefreshTimerRef.current = null;
         void Promise.allSettled([
           refetchSellBalance(),
           refetchBuyBalance(),
           refetchEthBalance(),
         ]);
-      }, 1500);
+      }, 750);
 
       await trackSwapMission(receipt);
       toast.success(S.execution.completed);
 
-      window.setTimeout(() => {
+      if (completionResetTimerRef.current !== null) {
+        window.clearTimeout(completionResetTimerRef.current);
+      }
+      completionResetTimerRef.current = window.setTimeout(() => {
+        completionResetTimerRef.current = null;
         setExecutionSteps(null);
       }, 2200);
     },
     [
+      address,
       refetchBuyBalance,
       refetchEthBalance,
       refetchSellBalance,
       trackSwapMission,
     ],
   );
+
+  const recoverPendingSwapStage = useCallback(
+    async (
+      stage: SwapPendingStage,
+      record: PendingEvmRecord,
+      signal: AbortSignal,
+    ) => {
+      if (executingRef.current) return;
+      executingRef.current = true;
+      activePendingRecordRef.current = record;
+      if (completionResetTimerRef.current !== null) {
+        window.clearTimeout(completionResetTimerRef.current);
+        completionResetTimerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setIsExecuting(true);
+        setExecutionSteps([{
+          key: 'step1',
+          label: stage === 'approval' ? 'Token approval' : 'Swap',
+          status: 'confirming',
+          txHash: record.proof.kind === 'hash' ? record.proof.hash : undefined,
+          message: 'Resuming confirmation for the existing wallet transaction…',
+        }]);
+      }
+
+      try {
+        const monitored = await monitorTrackedSubmission(
+          stage,
+          record,
+          record,
+          0,
+          signal,
+        );
+        if (!monitored.ownsTerminal) return;
+        if (monitored.receipt.status !== 'success') {
+          throw new Error(
+            stage === 'approval' ? 'Approval transaction reverted.' : 'Swap transaction reverted',
+          );
+        }
+
+        const transactionHash = extractTransactionHash(monitored.receipt) as Hex | undefined;
+        updateExecutionStep(0, {
+          status: 'complete',
+          txHash: transactionHash,
+          message: transactionHash,
+        });
+        if (stage === 'swap') {
+          await finalizeSwapSuccess(monitored.receipt);
+        } else {
+          toast.success('Token approval confirmed. Review your swap and submit again.');
+          completionResetTimerRef.current = window.setTimeout(() => {
+            completionResetTimerRef.current = null;
+            setExecutionSteps(null);
+          }, 2200);
+        }
+      } catch (error) {
+        if (isAbortError(error)) return;
+        const message = error instanceof PendingEvmStaleError
+          ? PENDING_EVM_STALE_MESSAGE
+          : humanizeSwapError(error);
+        updateExecutionStep(0, { status: 'error', message });
+        if (!(error instanceof PendingEvmStaleError)) toast.error(message);
+      } finally {
+        const registry = {
+          accountAddress: record.accountAddress,
+          chainId: record.chainId,
+        };
+        releasePendingEvmCoordinatorAttempt(
+          registry,
+          record,
+          stage === 'approval' ? approvalControllerId : swapControllerId,
+        );
+        requestPendingEvmCoordinatorReconcile(registry);
+        executingRef.current = false;
+        if (mountedRef.current) setIsExecuting(false);
+      }
+    },
+    [
+      approvalControllerId,
+      finalizeSwapSuccess,
+      monitorTrackedSubmission,
+      swapControllerId,
+      updateExecutionStep,
+    ],
+  );
+
+  const applyCoordinatorSnapshot = useCallback(
+    (stage: SwapPendingStage, snapshot: PendingEvmCoordinatorSnapshot) => {
+      coordinatorSnapshotsRef.current[stage] = snapshot;
+      const approvalSnapshot = coordinatorSnapshotsRef.current.approval;
+      const swapSnapshot = coordinatorSnapshotsRef.current.swap;
+      if (!approvalSnapshot || !swapSnapshot) return;
+
+      const feedbackRecord = approvalSnapshot.feedbackRecord ?? swapSnapshot.feedbackRecord;
+      setPendingFeedbackRecord(feedbackRecord);
+      setIsPeerBlocked(
+        approvalSnapshot.locked || swapSnapshot.locked || feedbackRecord !== null,
+      );
+      setIsRecoveryChecking(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!recoveryRegistryIdentity) {
+      coordinatorSnapshotsRef.current = { approval: null, swap: null };
+      setPendingFeedbackRecord(null);
+      setIsPeerBlocked(false);
+      setIsRecoveryChecking(false);
+      return;
+    }
+
+    coordinatorSnapshotsRef.current = { approval: null, swap: null };
+    setIsRecoveryChecking(true);
+    const unregisterApproval = registerPendingEvmController(
+      recoveryRegistryIdentity,
+      {
+        callsDigest: EMPTY_PENDING_CALLS_DIGEST,
+        controllerId: approvalControllerId,
+        intentDigest: getPendingEvmIntentDigest(SWAP_APPROVAL_INTENT_KEY),
+        onSnapshot: (snapshot) => applyCoordinatorSnapshot('approval', snapshot),
+        recover: (record, signal) => recoverPendingSwapStage('approval', record, signal),
+      },
+    );
+    const unregisterSwap = registerPendingEvmController(
+      recoveryRegistryIdentity,
+      {
+        callsDigest: EMPTY_PENDING_CALLS_DIGEST,
+        connectorId:
+          typeof walletClient?.waitForCallsStatus === 'function'
+            ? connector?.id
+            : undefined,
+        controllerId: swapControllerId,
+        intentDigest: getPendingEvmIntentDigest(SWAP_EXECUTION_INTENT_KEY),
+        onSnapshot: (snapshot) => applyCoordinatorSnapshot('swap', snapshot),
+        recover: (record, signal) => recoverPendingSwapStage('swap', record, signal),
+      },
+    );
+
+    return () => {
+      unregisterApproval();
+      unregisterSwap();
+    };
+  }, [
+    applyCoordinatorSnapshot,
+    approvalControllerId,
+    connector?.id,
+    recoverPendingSwapStage,
+    recoveryRegistryIdentity,
+    swapControllerId,
+    walletClient,
+  ]);
 
   const refreshQuoteNow = useCallback(async (): Promise<SwapQuoteResponse | null> => {
     const amountIn = parsedAmount;
@@ -1108,6 +1797,7 @@ export default function PixotchiSwapPanel() {
 
   const executeQuote = useCallback(
     async (initialQuote: SwapQuoteResponse) => {
+      if (executingRef.current || isRecoveryChecking || isPeerBlocked) return;
       if (!address) {
         toast.error(S.errors.connectWallet);
         return;
@@ -1121,51 +1811,69 @@ export default function PixotchiSwapPanel() {
         return;
       }
 
-      // Guard against executing a quote that is older than the max-age or past
-      // its server-provided expiry. If so, refetch before touching the wallet.
-      let quote: SwapQuoteResponse | null = initialQuote;
-      const now = Date.now();
-      const stale =
-        !quote.quoteToken ||
-        !quote.issuedAt ||
-        !quote.expiresAt ||
-        now - quote.issuedAt > SWAP_QUOTE_MAX_AGE_MS ||
-        now >= quote.expiresAt;
-
-      if (stale) {
-        toast.loading(S.errors.quoteStale, { id: 'swap-refresh-quote' });
-        quote = await refreshQuoteNow();
-        toast.dismiss('swap-refresh-quote');
-        if (!quote || quote.strategy === 'blocked') {
-          toast.error(quote?.blockedReason || S.errors.quoteStale);
-          return;
-        }
+      executingRef.current = true;
+      setIsExecuting(true);
+      if (completionResetTimerRef.current !== null) {
+        window.clearTimeout(completionResetTimerRef.current);
+        completionResetTimerRef.current = null;
       }
 
-      setIsExecuting(true);
-      setExecutionSteps(
-        quote.steps.map((step) => ({
-          key: step.key,
-          label: `${SWAP_TOKEN_MAP[step.sellToken].displaySymbol} -> ${SWAP_TOKEN_MAP[step.buyToken].displaySymbol}`,
-          status: 'pending',
-        })),
-      );
-
       try {
+        // Guard against executing a quote that is older than the max-age or past
+        // its server-provided expiry. If so, refetch before touching the wallet.
+        let quote: SwapQuoteResponse | null = initialQuote;
+        const now = Date.now();
+        const stale =
+          !quote.quoteToken ||
+          !quote.issuedAt ||
+          !quote.expiresAt ||
+          now - quote.issuedAt > SWAP_QUOTE_MAX_AGE_MS ||
+          now >= quote.expiresAt;
+
+        if (stale) {
+          toast.loading(S.errors.quoteStale, { id: 'swap-refresh-quote' });
+          quote = await refreshQuoteNow();
+          toast.dismiss('swap-refresh-quote');
+          if (!quote || quote.strategy === 'blocked') {
+            toast.error(quote?.blockedReason || S.errors.quoteStale);
+            return;
+          }
+        }
+
+        setExecutionSteps(
+          quote.steps.map((step) => ({
+            key: step.key,
+            label: `${SWAP_TOKEN_MAP[step.sellToken].displaySymbol} -> ${SWAP_TOKEN_MAP[step.buyToken].displaySymbol}`,
+            status: 'pending',
+          })),
+        );
         const receipt = await executeSingleStep(quote, quote.steps[0], 0);
         await finalizeSwapSuccess(receipt);
       } catch (error) {
+        if (isAbortError(error)) return;
         const message = humanizeSwapError(error);
+        const isUnresolved =
+          error instanceof SwapSubmissionAmbiguousError ||
+          error instanceof SwapSubmissionBlockedError ||
+          error instanceof PendingEvmStaleError;
         setExecutionSteps((current) =>
           current?.map((step, index) =>
             index === 0 && step.status !== 'complete'
-              ? { ...step, status: 'error', message }
+              ? {
+                  ...step,
+                  status: isUnresolved ? 'confirming' : 'error',
+                  message: error instanceof PendingEvmStaleError
+                    ? PENDING_EVM_STALE_MESSAGE
+                    : message,
+                }
               : step,
           ) || null,
         );
-        toast.error(message);
+        if (!(error instanceof PendingEvmStaleError)) toast.error(message);
       } finally {
-        setIsExecuting(false);
+        toast.dismiss('swap-refresh-quote');
+        executingRef.current = false;
+        if (mountedRef.current) setIsExecuting(false);
       }
     },
     [
@@ -1173,6 +1881,8 @@ export default function PixotchiSwapPanel() {
       chainId,
       executeSingleStep,
       finalizeSwapSuccess,
+      isPeerBlocked,
+      isRecoveryChecking,
       refreshQuoteNow,
       walletClient,
     ],
@@ -1197,11 +1907,11 @@ export default function PixotchiSwapPanel() {
 
     let amount = sellBalanceRaw;
     if (sellToken === 'ETH') {
-      if (amount <= ETH_GAS_BUFFER_WEI) {
+      if (amount <= ETH_GAS_RESERVE_WEI) {
         toast.error(S.errors.keepEthForGas);
         return;
       }
-      amount -= ETH_GAS_BUFFER_WEI;
+      amount -= ETH_GAS_RESERVE_WEI;
     }
 
     if (amount <= BigInt(0)) {
@@ -1232,11 +1942,33 @@ export default function PixotchiSwapPanel() {
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (actionDisabled || !currentQuote) return;
+      if (executingRef.current || actionDisabled || !currentQuote) return;
       void executeQuote(currentQuote);
     },
     [actionDisabled, currentQuote, executeQuote],
   );
+
+  const handleAcknowledgeStaleTransaction = useCallback(() => {
+    if (
+      !pendingFeedbackRecord ||
+      getPendingEvmPhase(pendingFeedbackRecord) !== 'stale' ||
+      !acknowledgePendingEvmRecord(
+        getBrowserPendingEvmStorage(),
+        pendingFeedbackRecord,
+      )
+    ) {
+      return;
+    }
+    requestPendingEvmCoordinatorReconcile({
+      accountAddress: pendingFeedbackRecord.accountAddress,
+      chainId: pendingFeedbackRecord.chainId,
+    });
+    if (activePendingRecordRef.current?.attemptId === pendingFeedbackRecord.attemptId) {
+      activePendingRecordRef.current = null;
+    }
+    setPendingFeedbackRecord(null);
+    setExecutionSteps(null);
+  }, [pendingFeedbackRecord]);
 
   const isQuoteLoading = quoteState.status === 'loading';
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
@@ -1255,6 +1987,12 @@ export default function PixotchiSwapPanel() {
     : null;
   const disabledReason = useMemo(() => {
     if (isExecuting) return null;
+    if (isRecoveryChecking) return 'Checking existing wallet activity.';
+    if (isPeerBlocked) {
+      return pendingFeedbackRecord && getPendingEvmPhase(pendingFeedbackRecord) === 'stale'
+        ? PENDING_EVM_STALE_MESSAGE
+        : 'Another wallet transaction is already in progress.';
+    }
     if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
     if (!walletClient?.account) return S.errors.walletClientUnavailable;
     if (!sellAmount.trim()) return null;
@@ -1273,13 +2011,18 @@ export default function PixotchiSwapPanel() {
     isAmountValid,
     isDeferredLagging,
     isExecuting,
+    isPeerBlocked,
     isQuoteLoading,
+    isRecoveryChecking,
+    pendingFeedbackRecord,
     sellAmount,
     sellToken,
     walletClient?.account,
   ]);
   const actionButtonLabel = useMemo(() => {
     if (!actionDisabled || isExecuting) return S.buttons.swap;
+    if (isRecoveryChecking) return 'Checking Wallet...';
+    if (isPeerBlocked) return 'Wallet Transaction Pending';
     if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
     if (!walletClient?.account) return 'Connect Wallet';
     if (!sellAmount.trim()) return S.buttons.swap;
@@ -1299,7 +2042,9 @@ export default function PixotchiSwapPanel() {
     isAmountValid,
     isDeferredLagging,
     isExecuting,
+    isPeerBlocked,
     isQuoteLoading,
+    isRecoveryChecking,
     sellAmount,
     sellToken,
     walletClient?.account,
@@ -1329,7 +2074,10 @@ export default function PixotchiSwapPanel() {
                 value={sellAmount}
                 onChange={(event) => {
                   markQuoteActivity();
-                  setSellAmount(sanitizeDecimalInput(event.target.value));
+                  const nextAmount = sanitizeSwapDecimalInput(event.target.value);
+                  if (nextAmount !== null) {
+                    setSellAmount(nextAmount);
+                  }
                 }}
                 inputMode="decimal"
                 placeholder="0.0"
@@ -1476,6 +2224,17 @@ export default function PixotchiSwapPanel() {
             <DisabledReason className="mt-2">
               {disabledReason}
             </DisabledReason>
+          ) : null}
+          {pendingFeedbackRecord && getPendingEvmPhase(pendingFeedbackRecord) === 'stale' ? (
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
+              className="mt-2 h-auto min-h-11 whitespace-normal py-2 leading-snug"
+              onClick={handleAcknowledgeStaleTransaction}
+            >
+              I checked my wallet — allow another transaction
+            </Button>
           ) : null}
           <div
             id={messageId}

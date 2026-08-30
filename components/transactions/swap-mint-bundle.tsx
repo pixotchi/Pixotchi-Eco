@@ -83,6 +83,7 @@ export default function SwapMintBundle({
     return (
         <SmartWalletTransaction
             calls={calls}
+            intentKey={`swap:mint-plant:${strain}`}
             onSuccess={onSuccess}
             onError={onError}
             buttonText={buttonText}

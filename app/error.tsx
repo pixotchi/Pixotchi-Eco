@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
+import { track } from '@vercel/analytics';
 
 export default function Error({
   error,
@@ -13,18 +14,24 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to console (will appear in Vercel logs)
     console.error('[CLIENT ERROR]', {
       message: error.message,
       stack: error.stack,
       digest: error.digest,
       timestamp: new Date().toISOString(),
     });
+    track('client_error', {
+      boundary: 'route',
+      digest: error.digest ?? 'none',
+      errorName: error.name || 'Error',
+      path: window.location.pathname,
+    });
   }, [error]);
 
   return (
-    <div className="flex flex-col h-dvh bg-background items-center justify-center p-4" role="main" aria-labelledby="error-title">
-      <Card className="max-w-md w-full">
+    <div className="safe-area-inset h-dvh overflow-y-auto bg-background" role="main" aria-labelledby="error-title">
+      <div className="flex min-h-full w-full">
+      <Card className="mx-auto my-auto w-full max-w-md">
         <CardContent className="p-6 text-center">
           <Image
             src="/PixotchiKit/Logonotext.svg"
@@ -69,6 +76,7 @@ export default function Error({
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

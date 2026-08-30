@@ -20,6 +20,7 @@ import { formatUnits, parseUnits } from "viem";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { onBalanceRefresh } from '@/lib/app-events';
 
 type StakingDialogProps = {
   open: boolean;
@@ -95,33 +96,82 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const refreshingRef = useRef<boolean>(false);
+  const [missionTrackingMessage, setMissionTrackingMessage] = useState<string | null>(null);
+  const refreshGenerationRef = useRef(0);
+  const refreshRequestRef = useRef<{
+    address: string;
+    controller: AbortController;
+    generation: number;
+  } | null>(null);
   const lastRefreshTime = useRef<number>(0);
+  const hasLoadedSnapshotRef = useRef(false);
+  const previousAddressRef = useRef<string | null>(null);
+  const missionTrackingGenerationRef = useRef(0);
+  const currentAddressRef = useRef(address?.toLowerCase() ?? null);
+  const openRef = useRef(open);
+  currentAddressRef.current = address?.toLowerCase() ?? null;
+  openRef.current = open;
 
   const refresh = useCallback(async (options: { force?: boolean } = {}) => {
-    if (!address) return;
-    if (refreshingRef.current) {
-      return; // drop overlapping calls
+    const requestAddress = address?.toLowerCase();
+    if (!requestAddress || !openRef.current) return;
+
+    const activeRequest = refreshRequestRef.current;
+    if (activeRequest) {
+      if (!options.force && activeRequest.address === requestAddress) {
+        return;
+      }
+      activeRequest.controller.abort();
     }
     
     // Rate limiting: prevent refreshes more frequent than MIN_REFRESH_INTERVAL_MS.
-    // Post-transaction refreshes pass force — the gate used to silently swallow
-    // them (onSuccess fires refresh() AND balances:refresh, whichever lands
-    // second was dropped), leaving pre-stake balances on screen.
+    // Post-transaction refreshes pass force so a confirmed write always replaces
+    // the pre-transaction snapshot even when the dialog was refreshed recently.
     const now = Date.now();
     if (!options.force && now - lastRefreshTime.current < MIN_REFRESH_INTERVAL_MS) {
       return;
     }
     lastRefreshTime.current = now;
-    refreshingRef.current = true;
+    const generation = refreshGenerationRef.current + 1;
+    refreshGenerationRef.current = generation;
+    const controller = new AbortController();
+    refreshRequestRef.current = {
+      address: requestAddress,
+      controller,
+      generation,
+    };
+    const isCurrentRequest = () =>
+      !controller.signal.aborted &&
+      refreshGenerationRef.current === generation &&
+      currentAddressRef.current === requestAddress &&
+      openRef.current;
+
     setLoading(true);
     setRefreshError(null);
     
     try {
       // Use API routes for consistent RPC handling
+      const [balanceHttpResponse, stakingHttpResponse] = await Promise.all([
+        fetch(`/api/staking/balance?address=${encodeURIComponent(requestAddress)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        }),
+        fetch(`/api/staking/info?address=${encodeURIComponent(requestAddress)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        }),
+      ]);
+
+      if (!balanceHttpResponse.ok) {
+        throw new Error(`Balance request failed (${balanceHttpResponse.status})`);
+      }
+      if (!stakingHttpResponse.ok) {
+        throw new Error(`Staking request failed (${stakingHttpResponse.status})`);
+      }
+
       const [balanceResponse, stakingResponse] = await Promise.all([
-        fetch(`/api/staking/balance?address=${address}`).then(r => r.json() as Promise<BalanceApiResponse>),
-        fetch(`/api/staking/info?address=${address}`).then(r => r.json() as Promise<StakingApiResponse>)
+        balanceHttpResponse.json() as Promise<BalanceApiResponse>,
+        stakingHttpResponse.json() as Promise<StakingApiResponse>,
       ]);
       
       if (!balanceResponse.success) {
@@ -131,73 +181,120 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       if (!stakingResponse.success) {
         throw new Error(`Staking API error: ${stakingResponse.error}`);
       }
-      
-      // Convert string responses back to bigint
-      setSeedBalance(BigInt(balanceResponse.balance));
-      setStakeInfo(stakingResponse.stake ? {
+
+      const nextSeedBalance = BigInt(balanceResponse.balance);
+      const nextStakeInfo = stakingResponse.stake ? {
         staked: BigInt(stakingResponse.stake.staked),
         rewards: BigInt(stakingResponse.stake.rewards)
-      } : null);
-      setApproved(stakingResponse.approved);
+      } : null;
 
       const ratioPayload = stakingResponse.rewardRatio ?? null;
+      let nextRewardRatio: { numerator: bigint; denominator: bigint } | null = null;
       if (ratioPayload?.numerator && ratioPayload?.denominator) {
         try {
-          setRewardRatio({
+          nextRewardRatio = {
             numerator: BigInt(ratioPayload.numerator),
             denominator: BigInt(ratioPayload.denominator),
-          });
-        } catch {
-          setRewardRatio(null);
-        }
-      } else {
-        setRewardRatio(null);
+          };
+        } catch {}
       }
 
+      let nextRewardTimeUnit: bigint | null = null;
       if (stakingResponse.timeUnit) {
         try {
-          setRewardTimeUnit(BigInt(stakingResponse.timeUnit));
-        } catch {
-          setRewardTimeUnit(null);
-        }
-      } else {
-        setRewardTimeUnit(null);
+          nextRewardTimeUnit = BigInt(stakingResponse.timeUnit);
+        } catch {}
       }
 
+      let nextTotalStaked: bigint | null = null;
       if (stakingResponse.totalStaked) {
         try {
-          setTotalStaked(BigInt(stakingResponse.totalStaked));
-        } catch {
-          setTotalStaked(null);
-        }
-      } else {
-        setTotalStaked(null);
+          nextTotalStaked = BigInt(stakingResponse.totalStaked);
+        } catch {}
       }
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      // Commit one address-consistent snapshot. A slow response from the
+      // previous wallet can no longer paint into the current wallet's dialog.
+      setSeedBalance(nextSeedBalance);
+      setStakeInfo(nextStakeInfo);
+      setApproved(stakingResponse.approved);
+      setRewardRatio(nextRewardRatio);
+      setRewardTimeUnit(nextRewardTimeUnit);
+      setTotalStaked(nextTotalStaked);
+      hasLoadedSnapshotRef.current = true;
     } catch (error) {
+      if ((error as Error)?.name === 'AbortError' || !isCurrentRequest()) {
+        return;
+      }
       console.error('❌ Failed to refresh staking data:', error);
       // Keep the last-known values. Zeroing them here used to tell a real
       // holder they had 0 SEED / 0 staked, and flipping `approved` false
       // swapped the footer back to "Approve SEED for Staking" — inviting a
       // redundant on-chain approval over a transient API hiccup.
-      setRefreshError('Could not refresh staking data. Showing the last known values.');
+      setRefreshError(
+        hasLoadedSnapshotRef.current
+          ? 'Could not refresh staking data. Showing the last known values.'
+          : 'Could not load staking data. Please try again.',
+      );
     } finally {
-      setLoading(false);
-      refreshingRef.current = false;
+      if (refreshRequestRef.current?.generation === generation) {
+        refreshRequestRef.current = null;
+      }
+      if (isCurrentRequest()) {
+        setLoading(false);
+      }
     }
   }, [address]);
 
   useEffect(() => {
-    if (open) {
-      refresh();
-    }
-  }, [open, refresh]);
+    refreshGenerationRef.current += 1;
+    refreshRequestRef.current?.controller.abort();
+    refreshRequestRef.current = null;
 
-  // Also refresh when global balances:refresh is emitted after tx success
+    const normalizedAddress = address?.toLowerCase() ?? null;
+    if (previousAddressRef.current !== normalizedAddress) {
+      previousAddressRef.current = normalizedAddress;
+      missionTrackingGenerationRef.current += 1;
+      hasLoadedSnapshotRef.current = false;
+      lastRefreshTime.current = 0;
+      setSeedBalance(BigInt(0));
+      setStakeInfo(null);
+      setApproved(false);
+      setRewardRatio(null);
+      setRewardTimeUnit(null);
+      setTotalStaked(null);
+      setAmount('');
+      setRefreshError(null);
+      setMissionTrackingMessage(null);
+    }
+
+    if (!open || !address) {
+      setLoading(false);
+      setManualRefreshing(false);
+      return;
+    }
+
+    void refresh({ force: true });
+
+    return () => {
+      refreshGenerationRef.current += 1;
+      refreshRequestRef.current?.controller.abort();
+      refreshRequestRef.current = null;
+    };
+  }, [address, open, refresh]);
+
+  // Reconcile if another transaction updates balances while this dialog is open.
   useEffect(() => {
-    const handler = () => refresh();
-    window.addEventListener('balances:refresh', handler as EventListener);
-    return () => window.removeEventListener('balances:refresh', handler as EventListener);
-  }, [refresh]);
+    if (!open || !address) {
+      return;
+    }
+
+    return onBalanceRefresh(() => void refresh());
+  }, [address, open, refresh]);
 
   const handleManualRefresh = useCallback(async () => {
     if (manualRefreshing || loading) return;
@@ -215,6 +312,33 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       setManualRefreshing(false);
     }
   }, [loading, manualRefreshing, refresh]);
+
+  const trackMissionProgress = useCallback((payload: Record<string, UntypedValue>) => {
+    const generation = missionTrackingGenerationRef.current + 1;
+    missionTrackingGenerationRef.current = generation;
+    setMissionTrackingMessage(null);
+
+    void postMissionProgress(payload)
+      .then((response) => {
+        if (missionTrackingGenerationRef.current !== generation) {
+          return;
+        }
+        setMissionTrackingMessage(
+          response.status === 202
+            ? 'Transaction succeeded. Task progress is queued and will retry automatically.'
+            : null,
+        );
+      })
+      .catch((error) => {
+        if (missionTrackingGenerationRef.current !== generation) {
+          return;
+        }
+        console.warn('[staking] Failed to sync task progress:', error);
+        setMissionTrackingMessage(
+          'Transaction succeeded, but task progress could not be synced. Open Farmer\'s Tasks to retry.',
+        );
+      });
+  }, []);
 
   const maxStake = useMemo(() => {
     return seedBalance;
@@ -251,8 +375,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const stakedBal = stakeInfo?.staked ?? BigInt(0);
   const exceedsStake = mode === 'stake' && amountValidPositive && parsed! > seedBalance;
   const exceedsUnstake = mode === 'unstake' && amountValidPositive && parsed! > stakedBal;
-  const disableStakeBtn = mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
-  const disableUnstakeBtn = mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
+  const disableStakeBtn = loading || !address || mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
+  const disableUnstakeBtn = loading || !address || mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
   const disableClaimRewardsBtn = loading || !stakeInfo || stakeInfo.rewards <= BigInt(0);
   const helperText = sanitizedAmount !== "" && !amountValidPositive
     ? "Enter a valid amount (max 18 decimals)"
@@ -419,6 +543,12 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </Alert>
           )}
 
+          {missionTrackingMessage && (
+            <Alert variant="warning">
+              <AlertDescription>{missionTrackingMessage}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
             <label htmlFor="staking-amount" className="text-sm font-medium">Amount to {mode === 'stake' ? 'Stake' : 'Unstake'}</label>
             <div className="flex gap-2">
@@ -460,35 +590,36 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           {mode === 'stake' ? (
             !approved ? (
                 <div className="space-y-2">
-                 <UniversalTransaction
-                   calls={[buildApproveStakeCall()]}
-                   buttonText="Approve SEED for Staking"
-                   buttonClassName={footerTransactionButtonClassName}
+                  <UniversalTransaction
+                    intentKey="staking:approve-seed"
+                    calls={[buildApproveStakeCall()]}
+                    buttonText="Approve SEED for Staking"
+                    buttonClassName={footerTransactionButtonClassName}
+                    disabled={loading || !address}
                    onSuccess={() => {
-                     setApproved(true);
-                     void refresh({ force: true });
-                     window.dispatchEvent(new Event('balances:refresh'));
+                      setApproved(true);
+                      void refresh({ force: true });
                    }}
                  />
               </div>
             ) : (
               <div className="space-y-2">
                  <UniversalTransaction
+                   intentKey={`staking:stake:${parsed ?? BigInt(0)}`}
                    calls={[buildStakeCall(amount)]}
                    buttonText="Stake"
                    disabled={disableStakeBtn}
                    buttonClassName={footerTransactionButtonClassName}
                    onSuccess={(tx: UntypedValue) => {
-                     setAmount("");
-                     void refresh({ force: true });
-                     window.dispatchEvent(new Event('balances:refresh'));
+                      setAmount("");
+                      void refresh({ force: true });
                      try {
                        const payload: Record<string, UntypedValue> = { address, taskId: 's1_stake_seed' };
                        const txHash = extractTransactionHash(tx);
                        if (txHash) {
                          payload.proof = { txHash };
                        }
-                       postMissionProgress(payload);
+                       trackMissionProgress(payload);
                      } catch {}
                    }}
                  />
@@ -497,14 +628,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           ) : (
             <div className="space-y-2">
                <UniversalTransaction
+                 intentKey={`staking:unstake:${parsed ?? BigInt(0)}`}
                  calls={[buildUnstakeCall(amount)]}
                  buttonText="Unstake"
                  disabled={disableUnstakeBtn}
                  buttonClassName={footerTransactionButtonClassName}
                  onSuccess={() => {
-                   setAmount("");
-                   void refresh({ force: true });
-                   window.dispatchEvent(new Event('balances:refresh'));
+                    setAmount("");
+                    void refresh({ force: true });
                  }}
                />
             </div>
@@ -513,20 +644,20 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
           <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>
             <UniversalTransaction
+              intentKey="staking:claim-rewards"
               calls={[buildClaimRewardsCall()]}
               buttonText="Claim Rewards"
               disabled={disableClaimRewardsBtn}
               buttonClassName={footerTransactionButtonClassName}
               onSuccess={(tx: UntypedValue) => {
-                void refresh({ force: true });
-                window.dispatchEvent(new Event('balances:refresh'));
+                 void refresh({ force: true });
                 try {
                   const payload: Record<string, UntypedValue> = { address, taskId: 's1_claim_stake' };
                   const txHash = extractTransactionHash(tx);
                   if (txHash) {
                     payload.proof = { txHash };
                   }
-                  postMissionProgress(payload);
+                   trackMissionProgress(payload);
                 } catch {}
               }}
             />

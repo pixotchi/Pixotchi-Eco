@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { AlertTriangle,Bug,Home,RefreshCw } from "lucide-react";
 import { Component,ErrorInfo,ReactNode } from "react";
+import { track } from "@vercel/analytics";
 
 interface Props {
   children: ReactNode;
@@ -46,6 +47,12 @@ class ErrorBoundary extends Component<Props, State> {
       componentStack: errorInfo.componentStack,
       timestamp: new Date().toISOString(),
       errorId: this.state.errorId
+    });
+    track('client_error', {
+      boundary: this.props.variant ?? 'card',
+      errorId: this.state.errorId,
+      errorName: error.name || 'Error',
+      path: window.location.pathname,
     });
 
     // Call custom error handler if provided
@@ -201,7 +208,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try again
               </Button>
-              <Button variant="outline" onClick={this.handleGoHome} className="flex-1" aria-label="Go back to home page">
+              <Button variant="outline" onClick={this.handleGoHome} className="flex-1" aria-label="Go Home">
                 <Home className="h-4 w-4 mr-2" />
                 Go Home
               </Button>

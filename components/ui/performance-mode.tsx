@@ -20,7 +20,12 @@ function readPerformanceModePreference() {
     return false;
   }
 
-  return window.localStorage.getItem(PERFORMANCE_MODE_STORAGE_KEY) === "1";
+  try {
+    return window.localStorage.getItem(PERFORMANCE_MODE_STORAGE_KEY) === "1";
+  } catch {
+    // Sandboxed/private webviews may expose localStorage but throw on access.
+    return false;
+  }
 }
 
 function applyPerformanceMode(enabled: boolean) {
@@ -81,12 +86,16 @@ function handlePreferenceChange(event: Event) {
   setStoreValue(next);
 }
 
-export function setPerformanceModePreference(enabled: boolean) {
+function setPerformanceModePreference(enabled: boolean) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(PERFORMANCE_MODE_STORAGE_KEY, enabled ? "1" : "0");
+  try {
+    window.localStorage.setItem(PERFORMANCE_MODE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // Keep the preference usable for this app session when persistence is blocked.
+  }
   setStoreValue(enabled);
   window.dispatchEvent(new CustomEvent(PERFORMANCE_MODE_EVENT, { detail: enabled }));
 }

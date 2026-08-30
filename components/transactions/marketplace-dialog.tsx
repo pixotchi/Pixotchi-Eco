@@ -6,11 +6,19 @@ import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from 
 import { Input } from "@/components/ui/input";
 import { ERC20_APPROVE_ABI,getLeafAllowanceForLand,getLeafBalance,getReadClient,getSeedAllowanceForLand,getTokenBalance,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { onBalanceRefresh } from '@/lib/app-events';
+import {
+  computeMarketplaceAmountAsk,
+  formatMarketplacePriceRatio,
+  getMarketplacePriceRatio,
+  type MarketplacePriceRatio,
+} from '@/lib/marketplace-price';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { cn } from "@/lib/utils";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
-import { useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useId,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
+import { parseUnits } from "viem";
 import { useAccount } from "wagmi";
 
 type OrderView = {
@@ -22,8 +30,15 @@ type OrderView = {
   amountAsk: bigint; // wei
 };
 
+type PriceLevelRow = {
+  exactRatio: MarketplacePriceRatio;
+  price: number;
+  size: number;
+};
+
 const MARKETPLACE_ORDER_LIST_LIMIT = 48;
 const PRICE_LEVEL_ORDER_LIST_LIMIT = 20;
+const MAX_ALLOWANCE = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 const marketplacePanelClassName =
   "chat-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]";
 const marketplacePaddedPanelClassName = `${marketplacePanelClassName} p-4`;
@@ -59,6 +74,27 @@ function formatCompact(n: number, dpSmall = 6): string {
   return fmt(n, dpSmall);
 }
 
+const marketplacePriceFormatter = new Intl.NumberFormat('en-US', {
+  maximumSignificantDigits: 6,
+  useGrouping: true,
+});
+
+function formatPrice(n: number): string {
+  if (!Number.isFinite(n)) return '—';
+  return marketplacePriceFormatter.format(n);
+}
+
+function mapOrder(o: UntypedValue): OrderView {
+  return {
+    id: BigInt(o.id),
+    seller: o.seller,
+    sellToken: Number(o.sellToken),
+    amount: BigInt(o.amount),
+    isActive: Boolean(o.isActive),
+    amountAsk: BigInt(o.amountAsk),
+  };
+}
+
 export default function MarketplaceDialog({ open, onOpenChange, landId }: { open: boolean; onOpenChange: (v: boolean) => void; landId: bigint; }) {
   const { address } = useAccount();
   const [activeOrders, setActiveOrders] = useState<OrderView[]>([]);
@@ -66,6 +102,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [sellSide, setSellSide] = useState<"SEED" | "LEAF">("LEAF");
   const [amount, setAmount] = useState<string>("");
   const [price, setPrice] = useState<string>("");
+  const [exactPriceRatio, setExactPriceRatio] = useState<MarketplacePriceRatio | null>(null);
   const [ordersLoading, setLoading] = useState<boolean>(false);
   const [focusedSide, setFocusedSide] = useState<"asks" | "bids" | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
@@ -73,19 +110,64 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [showUserOrders, setShowUserOrders] = useState<boolean>(false);
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [isMarketplaceActive, setIsMarketplaceActive] = useState<boolean>(true);
+  const [ordersOwner, setOrdersOwner] = useState<string | null>(null);
+  const [ordersFresh, setOrdersFresh] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
+  const [leafBalance, setLeafBalance] = useState<bigint>(BigInt(0));
+  const [loadingBalances, setLoadingBalances] = useState<boolean>(false);
+  const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
+  const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
+  const [balanceOwner, setBalanceOwner] = useState<string | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const amountInputId = useId();
+  const amountBalanceId = useId();
+  const amountErrorId = useId();
+  const priceInputId = useId();
+  const priceErrorId = useId();
+  const balanceRequestRef = useRef(0);
+  const orderRequestRef = useRef(0);
 
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const refreshingBalancesRef = useRef(false);
+  useEffect(() => {
+    // Never render one wallet's spendable state for another wallet, even for
+    // the single frame before the new request effect runs.
+    balanceRequestRef.current += 1;
+    setSeedBalance(BigInt(0));
+    setLeafBalance(BigInt(0));
+    setSeedAllowance(BigInt(0));
+    setLeafAllowance(BigInt(0));
+    setBalanceOwner(null);
+    setBalanceError(null);
+    setLoadingBalances(false);
+  }, [address]);
 
   // NEW: State for user's lands to ensure we use a valid landId for transactions
   const [userLandIds, setUserLandIds] = useState<bigint[]>([]);
+  const [userLandOwner, setUserLandOwner] = useState<string | null>(null);
+  const [userLandsLoading, setUserLandsLoading] = useState(false);
+  const [userLandsError, setUserLandsError] = useState<string | null>(null);
+  const [userLandsRetryRevision, setUserLandsRetryRevision] = useState(0);
+
+  useEffect(() => {
+    orderRequestRef.current += 1;
+    setActiveOrders([]);
+    setUserOrders([]);
+    setOrdersOwner(null);
+    setOrdersFresh(false);
+    setOrdersError(null);
+  }, [address]);
 
   // Fetch user's lands to determine valid transaction signer
   useEffect(() => {
+    setUserLandIds([]);
+    setUserLandOwner(null);
+    setUserLandsError(null);
     if (!address) {
-      setUserLandIds([]);
+      setUserLandsLoading(false);
       return;
     }
+    setUserLandsLoading(true);
+    let cancelled = false;
     const fetchUserLands = async () => {
       try {
         const client = getReadClient();
@@ -97,49 +179,87 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
           args: [address as `0x${string}`]
         }) as UntypedValue[];
         // lands is array of struct { tokenId, ... }
-        if (Array.isArray(lands)) {
+        if (!cancelled && Array.isArray(lands)) {
           setUserLandIds(lands.map(l => BigInt(l.tokenId)));
+          setUserLandOwner(address.toLowerCase());
         }
       } catch (e) {
         console.warn('Failed to fetch user lands for marketplace:', e);
+        if (!cancelled) {
+          setUserLandsError('Land ownership could not be verified. Trading actions are paused until this check succeeds.');
+        }
+      } finally {
+        if (!cancelled) setUserLandsLoading(false);
       }
     };
-    fetchUserLands();
-  }, [address]);
+    void fetchUserLands();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, userLandsRetryRevision]);
 
   // Determine which landId to use for transactions (Create/Take/Cancel)
   // Contract requires isApproved(landId), so we must use a land OWNED by the sender.
   // PREFERENCE: Use current landId if owned (context relevant), otherwise use first owned land.
   const transactionLandId = useMemo(() => {
+    if (!address || userLandOwner !== address.toLowerCase()) return null;
     if (userLandIds.some(id => id === landId)) return landId;
     if (userLandIds.length > 0) return userLandIds[0];
     return null; // User owns no lands -> Cannot trade (per contract logic requiring valid landId)
-  }, [landId, userLandIds]);
+  }, [address, landId, userLandIds, userLandOwner]);
+  const normalizedAddress = address?.toLowerCase() ?? null;
+  const balancesCurrent = normalizedAddress !== null && balanceOwner === normalizedAddress;
+  const ordersCurrent = normalizedAddress !== null && ordersOwner === normalizedAddress && ordersFresh;
+  const currentUserOrders = ordersOwner === normalizedAddress ? userOrders : [];
+  const unavailableLandLabel = userLandsLoading
+    ? 'Checking land'
+    : userLandsError
+      ? 'Land unavailable'
+      : 'No land';
 
   const fetchOrders = useCallback(async () => {
+    const requestId = ++orderRequestRef.current;
+    const requestedOwner = address?.toLowerCase() ?? null;
     try {
       setLoading(true);
+      setOrdersFresh(false);
+      setOrdersError(null);
       const client = getReadClient();
       const [active, mine, activeFlag] = await Promise.all([
         client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<UntypedValue[]>,
         address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<UntypedValue[]> : Promise.resolve([]),
         client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
       ]);
+      if (requestId !== orderRequestRef.current) return;
       setActiveOrders((active || []).map(mapOrder));
       setUserOrders((mine || []).map(mapOrder));
       setIsMarketplaceActive(Boolean(activeFlag));
-    } catch {
-      // silent
+      setOrdersOwner(requestedOwner);
+      setOrdersFresh(true);
+    } catch (error) {
+      console.warn('[Marketplace] Failed to fetch orders:', error);
+      if (requestId === orderRequestRef.current) {
+        setOrdersError('Marketplace orders could not be refreshed. Trading actions are paused to prevent using stale data.');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === orderRequestRef.current) setLoading(false);
     }
   }, [address]);
 
-  // Extract fetchBalances outside useEffect to be reusable
   const fetchBalances = useCallback(async () => {
-    if (!address || refreshingBalancesRef.current) return;
-    refreshingBalancesRef.current = true;
-    setIsRefreshing(true);
+    const requestId = ++balanceRequestRef.current;
+    if (!address) {
+      setSeedBalance(BigInt(0));
+      setLeafBalance(BigInt(0));
+      setSeedAllowance(BigInt(0));
+      setLeafAllowance(BigInt(0));
+      setBalanceOwner(null);
+      setBalanceError(null);
+      setLoadingBalances(false);
+      return;
+    }
+    setLoadingBalances(true);
+    setBalanceError(null);
     try {
       const [seed, leaf, seedAll, leafAll] = await Promise.all([
         getTokenBalance(address),
@@ -147,74 +267,67 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         getSeedAllowanceForLand(address),
         getLeafAllowanceForLand(address),
       ]);
+      if (requestId !== balanceRequestRef.current) return;
       setSeedBalance(seed || BigInt(0));
       setLeafBalance(leaf || BigInt(0));
       setSeedAllowance(seedAll || BigInt(0));
       setLeafAllowance(leafAll || BigInt(0));
+      setBalanceOwner(address.toLowerCase());
     } catch (error) {
       console.warn('[Marketplace] Failed to fetch balances:', error);
-      // Don't reset state on error - keep stale data to prevent UI flash
+      if (requestId === balanceRequestRef.current) {
+        setBalanceError('Balances and approvals could not be refreshed. Check your connection and retry.');
+      }
     } finally {
-      refreshingBalancesRef.current = false;
-      setIsRefreshing(false);
+      if (requestId === balanceRequestRef.current) setLoadingBalances(false);
     }
   }, [address]);
-
-  // NEW: Improved refresh function that triggers allowance updates
-  const refreshBalancesAndAllowances = useCallback(() => {
-    // Poll multiple times to handle RPC latency/indexing delays
-    const delays = [500, 1500, 3000];
-    delays.forEach(delay => {
-      setTimeout(() => {
-        fetchBalances();
-        fetchOrders();
-      }, delay);
-    });
-  }, [fetchBalances, fetchOrders]);
 
   useEffect(() => {
     if (!open) return;
 
-    // Initial fetch
-    fetchBalances();
-    fetchOrders();
-
-    // NEW: Proper event listener that triggers BOTH balance and order refresh
-    const refreshHandler = () => {
-      if (open) refreshBalancesAndAllowances();
-    };
-    window.addEventListener('balances:refresh', refreshHandler as EventListener);
-    return () => window.removeEventListener('balances:refresh', refreshHandler as EventListener);
-  }, [open, address, fetchBalances, fetchOrders, refreshBalancesAndAllowances]);
-
-  const mapOrder = (o: UntypedValue): OrderView => ({
-    id: BigInt(o.id),
-    seller: o.seller,
-    sellToken: Number(o.sellToken),
-    amount: BigInt(o.amount),
-    isActive: Boolean(o.isActive),
-    amountAsk: BigInt(o.amountAsk),
-  });
-
-  const refresh = () => {
-    try { window.dispatchEvent(new Event('balances:refresh')); } catch { }
-  };
-
-  const refreshNow = () => {
     void fetchBalances();
     void fetchOrders();
-  };
+
+    let refreshTimer: number | null = null;
+    let refreshTargetAt = Number.POSITIVE_INFINITY;
+    const unsubscribe = onBalanceRefresh((detail) => {
+      if (detail.address && address && detail.address.toLowerCase() !== address.toLowerCase()) {
+        return;
+      }
+
+      const targetAt = Date.now() + detail.delayMs;
+      if (refreshTimer !== null && refreshTargetAt <= targetAt) return;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTargetAt = targetAt;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        refreshTargetAt = Number.POSITIVE_INFINITY;
+        void Promise.allSettled([fetchBalances(), fetchOrders()]);
+      }, Math.max(0, targetAt - Date.now()));
+    });
+
+    return () => {
+      unsubscribe();
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+    };
+  }, [address, fetchBalances, fetchOrders, open]);
+
+  const refreshNow = useCallback(() => {
+    void Promise.allSettled([fetchBalances(), fetchOrders()]);
+  }, [fetchBalances, fetchOrders]);
 
   // Build order book (asks: sell LEAF; bids: sell SEED)
   const asks = useMemo(() => {
     // Aggregate by price (6 dp) and compute cumulative depth
     const rows = (activeOrders || [])
       .filter(o => o.sellToken === 1)
-      .map(o => ({ o, price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
-      .reduce((acc: Array<{ price: number; size: number }>, cur) => {
+      .map(o => ({ exactRatio: getMarketplacePriceRatio(o), price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
+      .filter((row): row is PriceLevelRow => row.exactRatio !== null)
+      .reduce((acc: PriceLevelRow[], cur) => {
         const key = Number((Math.round(cur.price * 1e6) / 1e6).toFixed(6));
         const found = acc.find(r => r.price === key);
-        if (found) found.size += cur.size; else acc.push({ price: key, size: cur.size });
+        if (found) found.size += cur.size; else acc.push({ exactRatio: cur.exactRatio, price: key, size: cur.size });
         return acc;
       }, [])
       .sort((a, b) => a.price - b.price)
@@ -226,11 +339,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const bids = useMemo(() => {
     const rows = (activeOrders || [])
       .filter(o => o.sellToken === 0)
-      .map(o => ({ o, price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
-      .reduce((acc: Array<{ price: number; size: number }>, cur) => {
+      .map(o => ({ exactRatio: getMarketplacePriceRatio(o), price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
+      .filter((row): row is PriceLevelRow => row.exactRatio !== null)
+      .reduce((acc: PriceLevelRow[], cur) => {
         const key = Number((Math.round(cur.price * 1e6) / 1e6).toFixed(6));
         const found = acc.find(r => r.price === key);
-        if (found) found.size += cur.size; else acc.push({ price: key, size: cur.size });
+        if (found) found.size += cur.size; else acc.push({ exactRatio: cur.exactRatio, price: key, size: cur.size });
         return acc;
       }, [])
       .sort((a, b) => b.price - a.price)
@@ -243,41 +357,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const bestBid = bids[0]?.price ?? 0;
   const mid = bestAsk > 0 && bestBid > 0 ? (bestAsk + bestBid) / 2 : (bestAsk || bestBid || 0);
 
-  // Local balances to validate actions
-  const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
-  const [leafBalance, setLeafBalance] = useState<bigint>(BigInt(0));
-  const [loadingBalances, setLoadingBalances] = useState<boolean>(false);
-  const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
-  const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
-
-  useEffect(() => {
-    const run = async () => {
-      if (!address) { setSeedBalance(BigInt(0)); setLeafBalance(BigInt(0)); return; }
-      setLoadingBalances(true);
-      try {
-        const [seed, leaf, seedAll, leafAll] = await Promise.all([
-          getTokenBalance(address),
-          getLeafBalance(address),
-          getSeedAllowanceForLand(address),
-          getLeafAllowanceForLand(address),
-        ]);
-        setSeedBalance(seed || BigInt(0));
-        setLeafBalance(leaf || BigInt(0));
-        setSeedAllowance(seedAll || BigInt(0));
-        setLeafAllowance(leafAll || BigInt(0));
-      } catch {
-        setSeedBalance(BigInt(0));
-        setLeafBalance(BigInt(0));
-        setSeedAllowance(BigInt(0));
-        setLeafAllowance(BigInt(0));
-      } finally {
-        setLoadingBalances(false);
-      }
-    };
-    if (open) run();
-  }, [open, address]);
-
   const hasSufficientForOrder = (o: OrderView): boolean => {
+    if (!balancesCurrent) return false;
     // If order sells LEAF (asks), taker pays SEED = amountAsk
     // If order sells SEED (bids), taker pays LEAF = amountAsk
     if (o.sellToken === 1) {
@@ -287,14 +368,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   };
 
   const isOrderActive = (orderId: bigint): boolean => {
-    return activeOrders.some((x) => x.id === orderId && x.isActive);
+    return ordersCurrent && activeOrders.some((x) => x.id === orderId && x.isActive);
   };
 
   // Helpers to consistently apply best prices into the controlled input
   const useBestBid = () => {
     if (bids.length > 0) {
       setSellSide('LEAF');
-      setPrice(fmt(bids[0].price, 6));
+      setPrice(formatMarketplacePriceRatio(bids[0].exactRatio));
+      setExactPriceRatio(bids[0].exactRatio);
       setFocusedSide('bids');
     }
   };
@@ -302,38 +384,58 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const useBestAsk = () => {
     if (asks.length > 0) {
       setSellSide('SEED');
-      setPrice(fmt(asks[0].price, 6));
+      setPrice(formatMarketplacePriceRatio(asks[0].exactRatio));
+      setExactPriceRatio(asks[0].exactRatio);
       setFocusedSide('asks');
     }
   };
 
-  // Build create order call from amount and price (exact math, 18 decimals)
-  const buildCreateOrderCall = () => {
-    if (!amount || !price) return null;
-    const toWei = (v: string) => {
-      try { return BigInt(Math.floor(Number(v) * 1e6)) * BigInt(1e12); } catch { return null; }
-    };
-    const amountWei = toWei(amount);
-    const priceWei = toWei(price); // price in 1e18 fixed-point (LEAF/SEED)
-    if (amountWei === null || amountWei <= BigInt(0) || priceWei === null || priceWei <= BigInt(0)) return null;
+  const parsedAmount = useMemo(() => {
+    if (!amount.trim()) return null;
+    try { return parseUnits(amount.trim(), 18); } catch { return null; }
+  }, [amount]);
+  const parsedPrice = useMemo(() => {
+    if (!price.trim()) return null;
+    try { return parseUnits(price.trim(), 18); } catch { return null; }
+  }, [price]);
+  const amountInputError = amount && (parsedAmount === null || parsedAmount <= BigInt(0))
+    ? 'Enter a positive amount with no more than 18 decimal places.'
+    : null;
+  const priceInputError = price && (parsedPrice === null || parsedPrice <= BigInt(0))
+    ? 'Enter a positive price with no more than 18 decimal places.'
+    : null;
+
+  // Build one stable call object so responsive layout changes do not remount or
+  // reset the transaction controller.
+  const createOrderCall = useMemo(() => {
+    if (
+      parsedAmount === null
+      || parsedAmount <= BigInt(0)
+      || (exactPriceRatio === null && (parsedPrice === null || parsedPrice <= BigInt(0)))
+      || transactionLandId === null
+    ) return null;
     // Compute amountAsk per side
     let amountAskWei: bigint;
-    if (sellSide === 'LEAF') {
+    if (exactPriceRatio !== null) {
+      const exactAmountAsk = computeMarketplaceAmountAsk(sellSide, parsedAmount, exactPriceRatio);
+      if (exactAmountAsk === null) return null;
+      amountAskWei = exactAmountAsk;
+    } else if (sellSide === 'LEAF' && parsedPrice !== null) {
       // price = amount / amountAsk => amountAsk = amount / price
-      amountAskWei = (amountWei * BigInt(1e18)) / priceWei;
-    } else {
+      amountAskWei = (parsedAmount * BigInt(1e18)) / parsedPrice;
+    } else if (parsedPrice !== null) {
       // price = amountAsk / amount => amountAsk = price * amount
-      amountAskWei = (priceWei * amountWei) / BigInt(1e18);
-    }
+      amountAskWei = (parsedPrice * parsedAmount) / BigInt(1e18);
+    } else return null;
     if (amountAskWei <= BigInt(0)) return null;
     const sellToken = sellSide === 'LEAF' ? 1 : 0;
     return {
       address: LAND_CONTRACT_ADDRESS as `0x${string}`,
       abi: landAbi as UntypedValue,
       functionName: 'marketPlaceCreateOrder',
-      args: [transactionLandId, BigInt(sellToken), amountWei, amountAskWei] as UntypedValue[],
+      args: [transactionLandId, BigInt(sellToken), parsedAmount, amountAskWei] as UntypedValue[],
     };
-  };
+  }, [exactPriceRatio, parsedAmount, parsedPrice, sellSide, transactionLandId]);
 
   // After successful create order, mark mission progress
   const onOrderSuccess = (tx: UntypedValue) => {
@@ -344,6 +446,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     }
     postMissionProgress(payload).catch(err => console.warn('Gamification tracking failed (non-critical):', err));
   };
+
+  const createOrderAmount = (createOrderCall?.args?.[2] as bigint | undefined) ?? BigInt(0);
+  const createOrderSellToken = (createOrderCall?.args?.[1] as bigint | undefined) ?? BigInt(0);
+  const createOrderAmountAsk = (createOrderCall?.args?.[3] as bigint | undefined) ?? BigInt(0);
+  const needsSeedApproval = balancesCurrent && sellSide === 'SEED' && seedAllowance < createOrderAmount;
+  const needsLeafApproval = balancesCurrent && sellSide === 'LEAF' && leafAllowance < createOrderAmount;
+  const needsCreateApproval = needsSeedApproval || needsLeafApproval;
+  const hasCreateBalance = balancesCurrent && (sellSide === 'SEED'
+    ? seedBalance >= createOrderAmount
+    : leafBalance >= createOrderAmount);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -362,10 +474,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div>
                 <div className="text-xs text-muted-foreground">Mid (LEAF / SEED)</div>
                 <div className="max-w-full truncate text-xl font-semibold tabular-nums sm:text-2xl" title={mid ? fmt(mid, 6) : undefined}>
-                  {mid ? formatCompact(mid) : '—'}
+                  {mid ? formatPrice(mid) : '—'}
                 </div>
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  {activeOrders.length} active • {userOrders.filter((order) => order.isActive).length} mine
+                  {activeOrders.length} active • {currentUserOrders.filter((order) => order.isActive).length} mine
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -375,7 +487,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   variant="outline"
                   size="compact"
                   onClick={refreshNow}
-                  loading={ordersLoading || isRefreshing}
+                  loading={ordersLoading || loadingBalances}
                   loadingText="Refreshing"
                 >
                   Refresh
@@ -383,177 +495,124 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
             </div>
 
-            {/* Mobile: keep orders (asks+bids) together, then trade panel */}
-            <div className="space-y-4 tablet:hidden">
-              <div className={cn(marketplacePanelClassName, "overflow-hidden")}>
-                {/* Asks header and list */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-destructive/10 text-destructive">
-                  <span>Asks (Sell LEAF)</span>
-                  <span className="opacity-70">Price • Size</span>
-                </div>
-                <div className="max-h-60 overflow-y-auto">
+            {balanceError && (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.12)] px-3 py-2 text-sm text-foreground">
+                <span>{balanceError}</span>
+                <Button variant="outline" size="compact" onClick={() => void fetchBalances()} loading={loadingBalances} loadingText="Retrying">
+                  Retry balances
+                </Button>
+              </div>
+            )}
+
+            {ordersError && (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.12)] px-3 py-2 text-sm text-foreground">
+                <span>{ordersError}</span>
+                <Button variant="outline" size="compact" onClick={() => void fetchOrders()} loading={ordersLoading} loadingText="Retrying">
+                  Retry orders
+                </Button>
+              </div>
+            )}
+
+            {userLandsError && (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.12)] px-3 py-2 text-sm text-foreground">
+                <span>{userLandsError}</span>
+                <Button
+                  variant="outline"
+                  size="compact"
+                  onClick={() => setUserLandsRetryRevision((revision) => revision + 1)}
+                  loading={userLandsLoading}
+                  loadingText="Retrying"
+                >
+                  Retry land check
+                </Button>
+              </div>
+            )}
+
+            {/* One physical tree keeps transaction state stable across responsive resizes. */}
+            <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:items-start">
+              {/* Asks */}
+              <div className={cn(
+                marketplacePanelClassName,
+                "order-1 overflow-hidden tablet:col-start-1 tablet:row-start-1",
+                focusedSide === 'asks' && "ring-1 ring-destructive/50",
+              )}>
+                <div className="max-h-60 overflow-y-auto tablet:min-h-[18rem] tablet:max-h-[22rem]">
+                  <div className="sticky top-0 z-10 flex items-center justify-between bg-destructive/10 px-3 py-2 text-sm text-destructive tablet:text-xs">
+                    <span>Asks (Sell LEAF)</span>
+                    <span className="opacity-70">Price • Size</span>
+                  </div>
                   {asks.length === 0 ? (
-                    <div className="text-center text-sm text-muted-foreground p-4">—</div>
+                    <div className="p-4 text-center text-sm text-muted-foreground">—</div>
                   ) : (
                     asks.map((row, idx) => {
                       const isSelected = selectedSide === 'asks' && selectedLevel === row.price;
                       return (
                         <button
-                          key={`m-ask-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
-                          onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
-                          aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
+                          key={"ask-" + idx}
+                          className={cn(
+                            "relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background tablet:text-xs",
+                            isSelected && "bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner",
+                          )}
+                          onClick={() => {
+                            setSellSide('SEED');
+                            setPrice(formatMarketplacePriceRatio(row.exactRatio));
+                            setExactPriceRatio(row.exactRatio);
+                            setFocusedSide('asks');
+                            setSelectedLevel(row.price);
+                            setSelectedSide('asks');
+                          }}
+                          aria-label={"Select price " + fmt(row.price, 6) + " LEAF per SEED"}
                         >
-                          <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
-                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-destructive'}`}>{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-destructive/10" style={{ width: row.depth + "%" }} />
+                          <span className={cn("relative font-semibold", isSelected ? "text-primary-foreground" : "text-destructive")}>
+                            {formatPrice(row.price)}
+                          </span>
                           <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
                     })
                   )}
                 </div>
-                {/* Bids header and list */}
-                <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-sm bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))] border-t border-border">
-                  <span>Bids (Sell SEED)</span>
-                  <span className="opacity-70">Price • Size</span>
-                </div>
-                <div className="max-h-60 overflow-y-auto">
+              </div>
+
+              {/* Bids */}
+              <div className={cn(
+                marketplacePanelClassName,
+                "order-2 overflow-hidden tablet:col-start-3 tablet:row-start-1",
+                focusedSide === 'bids' && "ring-1 ring-[hsl(var(--success)/0.5)]",
+              )}>
+                <div className="max-h-60 overflow-y-auto tablet:min-h-[18rem] tablet:max-h-[22rem]">
+                  <div className="sticky top-0 z-10 flex items-center justify-between bg-[hsl(var(--success)/0.12)] px-3 py-2 text-sm text-[hsl(var(--success-strong))] tablet:text-xs">
+                    <span>Bids (Sell SEED)</span>
+                    <span className="opacity-70">Price • Size</span>
+                  </div>
                   {bids.length === 0 ? (
-                    <div className="text-center text-sm text-muted-foreground p-4">—</div>
+                    <div className="p-4 text-center text-sm text-muted-foreground">—</div>
                   ) : (
                     bids.map((row, idx) => {
                       const isSelected = selectedSide === 'bids' && selectedLevel === row.price;
                       return (
                         <button
-                          key={`m-bid-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
-                          onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
-                          aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
+                          key={"bid-" + idx}
+                          className={cn(
+                            "relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--nav-hover-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background tablet:text-xs",
+                            isSelected && "bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner",
+                          )}
+                          onClick={() => {
+                            setSellSide('LEAF');
+                            setPrice(formatMarketplacePriceRatio(row.exactRatio));
+                            setExactPriceRatio(row.exactRatio);
+                            setFocusedSide('bids');
+                            setSelectedLevel(row.price);
+                            setSelectedSide('bids');
+                          }}
+                          aria-label={"Select price " + fmt(row.price, 6) + " LEAF per SEED"}
                         >
-                          <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
-                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-[hsl(var(--success-strong))]'}`}>{formatCompact(row.price)}</span>
+                          <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: row.depth + "%" }} />
+                          <span className={cn("relative font-semibold", isSelected ? "text-primary-foreground" : "text-[hsl(var(--success-strong))]")}>
+                            {formatPrice(row.price)}
+                          </span>
                           <span className="relative">{formatCompact(row.size)} SEED</span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Trade panel (mobile below orders) */}
-              <div className={cn(marketplacePaddedPanelClassName, "space-y-4")}>
-                <div className="flex items-center gap-2 text-sm">
-                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
-                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Amount ({sellSide})</div>
-                    <div className="relative">
-                      <Input
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.0"
-                        inputMode="decimal"
-                        className="h-12 pr-20"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">{sellSide}</span>
-                    </div>
-                    <div className="mt-1.5 text-xs text-muted-foreground">Balance: {sellSide === 'LEAF' ? formatCompact(toNumberWei(leafBalance)) + ' LEAF' : formatCompact(toNumberWei(seedBalance)) + ' SEED'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-2">Price (LEAF / SEED)</div>
-                    <div className="relative">
-                      <Input
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        placeholder="0.0"
-                        inputMode="decimal"
-                        className="h-12 pr-24"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">LEAF / SEED</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Tip: Tap an order to pre-fill the price.</span>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
-                    <SponsoredTransaction
-                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
-                      buttonText="Approve SEED"
-                      buttonClassName="h-10 min-h-10 px-4"
-                      hideStatus
-                      onSuccess={() => {
-                        toast.success('SEED approved');
-                        // FIX: Refresh allowance state immediately + trigger UI update
-                        setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                        setTimeout(() => fetchBalances(), 500);
-                      }}
-                      onError={(error) => {
-                        console.error('[Marketplace] SEED approval failed:', error);
-                        toast.error('Approval failed - please try again');
-                      }}
-                    />
-                  )}
-                  {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
-                    <SponsoredTransaction
-                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
-                      buttonText="Approve LEAF"
-                      buttonClassName="h-10 min-h-10 px-4"
-                      hideStatus
-                      onSuccess={() => {
-                        toast.success('LEAF approved');
-                        // FIX: Refresh allowance state immediately + trigger UI update
-                        setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                        setTimeout(() => fetchBalances(), 500);
-                      }}
-                      onError={(error) => {
-                        console.error('[Marketplace] LEAF approval failed:', error);
-                        toast.error('Approval failed - please try again');
-                      }}
-                    />
-                  )}
-                </div>
-                <SponsoredTransaction
-                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
-                  buttonText={`Create Order`}
-                  buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
-                  disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
-                  hideStatus
-                  onSuccess={(tx) => { toast.success('Order created'); setAmount(''); setPrice(''); refresh(); onOrderSuccess(tx); }}
-                />
-              </div>
-            </div>
-
-            {/* Desktop/tablet: three-column layout */}
-            <div className="hidden items-start gap-4 tablet:grid tablet:grid-cols-3">
-              {/* Asks */}
-                <div className={cn(marketplacePanelClassName, "overflow-hidden", focusedSide === 'asks' && "ring-1 ring-destructive/50")}>
-                <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-destructive/10 text-destructive">
-                    <span>Asks (Sell LEAF)</span>
-                    <span className="opacity-70">Price • Size</span>
-                  </div>
-                  {asks.length === 0 ? (
-                    <div className="text-center text-sm text-muted-foreground p-4">—</div>
-                  ) : (
-                    asks.map((row, idx) => {
-                      const isSelected = selectedSide === 'asks' && selectedLevel === row.price;
-                      return (
-                        <button
-                          key={`ask-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
-                          onClick={() => { setSellSide('SEED'); setPrice(fmt(row.price)); setFocusedSide('asks'); setSelectedLevel(row.price); setSelectedSide('asks'); }}
-                          aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
-                        >
-                          <div className="absolute inset-0 bg-destructive/10" style={{ width: `${row.depth}%` }} />
-                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-destructive'}`}>{formatCompact(row.price)}</span>
-                          <span className="relative">{formatCompact(row.size)} LEAF</span>
                         </button>
                       );
                     })
@@ -562,122 +621,154 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               </div>
 
               {/* Trade panel */}
-              <div className={cn(marketplacePaddedPanelClassName, "min-h-[18rem] space-y-4 tablet:max-h-[22rem] tablet:overflow-y-auto")}>
+              <div className={cn(
+                marketplacePaddedPanelClassName,
+                "order-3 space-y-4 tablet:col-start-2 tablet:row-start-1 tablet:min-h-[18rem] tablet:max-h-[22rem] tablet:overflow-y-auto",
+              )}>
                 <div className="flex items-center gap-2 text-sm">
-                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>Sell LEAF</Button>
-                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>Sell SEED</Button>
+                  <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>
+                    Sell LEAF
+                  </Button>
+                  <Button variant={sellSide === 'SEED' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('SEED')}>
+                    Sell SEED
+                  </Button>
                 </div>
+
                 <div className="space-y-4">
                   <div>
-                    <div className="text-sm text-muted-foreground mb-2">Amount ({sellSide})</div>
+                    <label className="mb-2 block text-sm text-muted-foreground" htmlFor={amountInputId}>
+                      Amount ({sellSide})
+                    </label>
                     <div className="relative">
                       <Input
+                        id={amountInputId}
+                        aria-describedby={`${amountBalanceId}${amountInputError ? ` ${amountErrorId}` : ''}`}
+                        aria-invalid={Boolean(amountInputError)}
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(event) => setAmount(event.target.value)}
                         placeholder="0.0"
                         inputMode="decimal"
                         className="h-12 pr-20"
                       />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">{sellSide}</span>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                        {sellSide}
+                      </span>
                     </div>
-                    <div className="mt-1.5 text-xs text-muted-foreground">Balance: {sellSide === 'LEAF' ? formatCompact(toNumberWei(leafBalance)) + ' LEAF' : formatCompact(toNumberWei(seedBalance)) + ' SEED'}</div>
+                    <div id={amountBalanceId} className="mt-1.5 text-xs text-muted-foreground">
+                      Balance: {!balancesCurrent
+                        ? (balanceError ? 'Unavailable' : 'Loading…')
+                        : sellSide === 'LEAF'
+                          ? formatCompact(toNumberWei(leafBalance)) + ' LEAF'
+                          : formatCompact(toNumberWei(seedBalance)) + ' SEED'}
+                    </div>
+                    {amountInputError && <p id={amountErrorId} role="alert" className="mt-1 text-xs text-destructive">{amountInputError}</p>}
                   </div>
+
                   <div>
-                    <div className="text-sm text-muted-foreground mb-2">Price (LEAF / SEED)</div>
+                    <label className="mb-2 block text-sm text-muted-foreground" htmlFor={priceInputId}>
+                      Price (LEAF / SEED)
+                    </label>
                     <div className="relative">
                       <Input
+                        id={priceInputId}
+                        aria-describedby={priceInputError ? priceErrorId : undefined}
+                        aria-invalid={Boolean(priceInputError)}
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
+                        onChange={(event) => {
+                          setExactPriceRatio(null);
+                          setPrice(event.target.value);
+                        }}
                         placeholder="0.0"
                         inputMode="decimal"
                         className="h-12 pr-24"
                       />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">LEAF / SEED</span>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                        LEAF / SEED
+                      </span>
                     </div>
+                    {priceInputError && <p id={priceErrorId} role="alert" className="mt-1 text-xs text-destructive">{priceInputError}</p>}
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Tip: Click an order row to pre-fill the price.</span>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
-                  </div>
-                </div>
-                {/* Allowance helpers */}
-                <div className="flex gap-2">
-                  {sellSide === 'SEED' && seedAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
-                    <SponsoredTransaction
-                      calls={[{ address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
-                      buttonText="Approve SEED"
-                      buttonClassName="h-10 min-h-10 px-4"
-                      hideStatus
-                      onSuccess={() => {
-                        toast.success('SEED approved');
-                        // FIX: Refresh allowance state immediately + trigger UI update
-                        setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                        setTimeout(() => fetchBalances(), 500);
-                      }}
-                      onError={(error) => {
-                        console.error('[Marketplace] SEED approval failed:', error);
-                        toast.error('Approval failed - please try again');
-                      }}
-                    />
-                  )}
-                  {sellSide === 'LEAF' && leafAllowance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) && (
-                    <SponsoredTransaction
-                      calls={[{ address: LEAF_CONTRACT_ADDRESS as `0x${string}`, abi: ERC20_APPROVE_ABI as UntypedValue, functionName: 'approve', args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')] }]}
-                      buttonText="Approve LEAF"
-                      buttonClassName="h-10 min-h-10 px-4"
-                      hideStatus
-                      onSuccess={() => {
-                        toast.success('LEAF approved');
-                        // FIX: Refresh allowance state immediately + trigger UI update
-                        setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                        setTimeout(() => fetchBalances(), 500);
-                      }}
-                      onError={(error) => {
-                        console.error('[Marketplace] LEAF approval failed:', error);
-                        toast.error('Approval failed - please try again');
-                      }}
-                    />
-                  )}
-                </div>
-                <SponsoredTransaction
-                  calls={buildCreateOrderCall() ? [buildCreateOrderCall() as UntypedValue] : []}
-                  buttonText={`Create Order`}
-                  buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
-                  disabled={!isMarketplaceActive || !buildCreateOrderCall() || (sellSide === 'SEED' ? seedBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)) : leafBalance < (buildCreateOrderCall()?.args?.[2] as bigint || BigInt(0)))}
-                  hideStatus
-                  onSuccess={(tx) => { toast.success('Order created'); setAmount(''); setPrice(''); refresh(); onOrderSuccess(tx); }}
-                />
-              </div>
 
-              {/* Bids */}
-                <div className={cn(marketplacePanelClassName, "overflow-hidden", focusedSide === 'bids' && "ring-1 ring-[hsl(var(--success)/0.5)]")}>
-                <div className="max-h-72 overflow-y-auto min-h-[18rem] md:max-h-[22rem]">
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 text-xs bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success-strong))]">
-                    <span>Bids (Sell SEED)</span>
-                    <span className="opacity-70">Price • Size</span>
-                  </div>
-                  {bids.length === 0 ? (
-                    <div className="text-center text-sm text-muted-foreground p-4">—</div>
-                  ) : (
-                    bids.map((row, idx) => {
-                      const isSelected = selectedSide === 'bids' && selectedLevel === row.price;
-                      return (
-                        <button
-                          key={`bid-${idx}`}
-                          className={`relative flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-xs hover:bg-[hsl(var(--nav-hover-bg))] ${isSelected ? 'bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-inner' : ''} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background`}
-                          onClick={() => { setSellSide('LEAF'); setPrice(fmt(row.price)); setFocusedSide('bids'); setSelectedLevel(row.price); setSelectedSide('bids'); }}
-                          aria-label={`Select price ${fmt(row.price, 6)} LEAF per SEED`}
-                        >
-                          <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: `${row.depth}%` }} />
-                          <span className={`relative font-semibold ${isSelected ? 'text-primary-foreground' : 'text-[hsl(var(--success-strong))]'}`}>{formatCompact(row.price)}</span>
-                          <span className="relative">{formatCompact(row.size)} SEED</span>
-                        </button>
-                      );
-                    })
-                  )}
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>Tip: Tap an order to pre-fill the price.</span>
+                  <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
                 </div>
+
+                {needsCreateApproval && (
+                  <div className="flex gap-2">
+                    {needsSeedApproval && (
+                      <SponsoredTransaction
+                        intentKey="marketplace:approve-seed"
+                        calls={[{
+                          address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
+                          abi: ERC20_APPROVE_ABI as UntypedValue,
+                          functionName: 'approve',
+                          args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE],
+                        }]}
+                        buttonText="Approve SEED"
+                        buttonClassName="h-10 min-h-10 px-4"
+                        hideStatus
+                        onSuccess={() => {
+                          toast.success('SEED approved');
+                          setSeedAllowance(MAX_ALLOWANCE);
+                        }}
+                        onError={(error) => {
+                          console.error('[Marketplace] SEED approval failed:', error);
+                          toast.error('Approval failed - please try again');
+                        }}
+                      />
+                    )}
+                    {needsLeafApproval && (
+                      <SponsoredTransaction
+                        intentKey="marketplace:approve-leaf"
+                        calls={[{
+                          address: LEAF_CONTRACT_ADDRESS as `0x${string}`,
+                          abi: ERC20_APPROVE_ABI as UntypedValue,
+                          functionName: 'approve',
+                          args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE],
+                        }]}
+                        buttonText="Approve LEAF"
+                        buttonClassName="h-10 min-h-10 px-4"
+                        hideStatus
+                        onSuccess={() => {
+                          toast.success('LEAF approved');
+                          setLeafAllowance(MAX_ALLOWANCE);
+                        }}
+                        onError={(error) => {
+                          console.error('[Marketplace] LEAF approval failed:', error);
+                          toast.error('Approval failed - please try again');
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                <SponsoredTransaction
+                  intentKey={`marketplace:create-order:${transactionLandId ?? BigInt(0)}:${createOrderSellToken}:${createOrderAmount}:${createOrderAmountAsk}`}
+                  calls={createOrderCall ? [createOrderCall] : []}
+                  buttonText="Create Order"
+                  buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
+                  disabled={
+                    loadingBalances
+                    || !balancesCurrent
+                    || !ordersCurrent
+                    || userLandsLoading
+                    || Boolean(userLandsError)
+                    || !isMarketplaceActive
+                    || !createOrderCall
+                    || !hasCreateBalance
+                    || needsCreateApproval
+                  }
+                  hideStatus
+                  onSuccess={(tx) => {
+                    toast.success('Order created');
+                    setAmount('');
+                    setPrice('');
+                    setExactPriceRatio(null);
+                    onOrderSuccess(tx);
+                  }}
+                />
               </div>
             </div>
 
@@ -708,12 +799,14 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         {visibleList.map((o) => {
                           const payTokenIsLeaf = o.sellToken === 0;
                           const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;
-                          const needsApproval = currentAllowance < o.amountAsk;
+                          const needsApproval = ordersCurrent && balancesCurrent && currentAllowance < o.amountAsk;
                           const isMyOrder = address && o.seller.toLowerCase() === address.toLowerCase();
                           const disabledReason = isMyOrder
                             ? 'Your order'
                             : !transactionLandId
-                              ? 'No land'
+                              ? unavailableLandLabel
+                              : !ordersCurrent
+                                ? 'Orders unavailable'
                               : !hasSufficientForOrder(o)
                                 ? 'Low balance'
                                 : '';
@@ -726,30 +819,31 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                               </div>
                               {needsApproval && !isMyOrder ? (
                                 <SponsoredTransaction
+                                  intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
                                     abi: ERC20_APPROVE_ABI as UntypedValue,
                                     functionName: 'approve',
-                                    args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
+                                    args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
                                   hideStatus
                                   onSuccess={() => {
                                     toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
-                                    if (payTokenIsLeaf) setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                                    else setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                                    setTimeout(() => fetchBalances(), 500);
+                                    if (payTokenIsLeaf) setLeafAllowance(MAX_ALLOWANCE);
+                                    else setSeedAllowance(MAX_ALLOWANCE);
                                   }}
                                 />
                               ) : (
                                 <SponsoredTransaction
+                                  intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText={disabledReason || "Take"}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
-                                  disabled={loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
+                                  disabled={!ordersCurrent || loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
                                   hideStatus
-                                  onSuccess={() => { toast.success('Order filled'); refresh(); }}
+                                  onSuccess={() => { toast.success('Order filled'); }}
                                 />
                               )}
                             </div>
@@ -798,7 +892,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div className={cn(marketplacePanelClassName, "max-h-[18rem] overflow-y-auto")}>
                 {(() => {
                   const ordersToShow = showUserOrders
-                    ? (showHistory ? userOrders : userOrders.filter(o => o.isActive))
+                    ? (showHistory ? currentUserOrders : currentUserOrders.filter(o => o.isActive))
                     : activeOrders;
                   const visibleOrders = [...ordersToShow]
                     .sort((a, b) => {
@@ -806,6 +900,14 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       return Number(b.id - a.id);
                     })
                     .slice(0, MARKETPLACE_ORDER_LIST_LIMIT);
+
+                  if (!ordersCurrent && ordersToShow.length === 0 && (ordersLoading || ordersError)) {
+                    return (
+                      <div role={ordersError ? 'alert' : 'status'} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                        {ordersError ? 'Orders are unavailable until the refresh succeeds.' : 'Loading current orders…'}
+                      </div>
+                    );
+                  }
 
                   if (ordersToShow.length === 0) {
                     return (
@@ -829,13 +931,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     // If sellToken is SEED(0), buyer pays LEAF(1) -> Check LEAF Allowance
                     const payTokenIsLeaf = o.sellToken === 0;
                     const currentAllowance = payTokenIsLeaf ? leafAllowance : seedAllowance;
-                    const needsApproval = currentAllowance < o.amountAsk;
+                    const needsApproval = ordersCurrent && balancesCurrent && currentAllowance < o.amountAsk;
                     const isMyOrder = !!address && o.seller.toLowerCase() === address.toLowerCase();
-                    const canTakeOrder = !loadingBalances && hasSufficientForOrder(o) && isOrderActive(o.id) && !isMyOrder && !!transactionLandId;
+                    const canTakeOrder = ordersCurrent && !loadingBalances && hasSufficientForOrder(o) && isOrderActive(o.id) && !isMyOrder && !!transactionLandId;
                     const disabledReason = isMyOrder
                       ? 'Mine'
                       : !transactionLandId
-                        ? 'No land'
+                        ? unavailableLandLabel
+                        : !ordersCurrent
+                          ? 'Orders unavailable'
                         : !hasSufficientForOrder(o)
                           ? 'Low balance'
                           : !isOrderActive(o.id)
@@ -847,17 +951,18 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-xs">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
                             <span className="font-medium">{o.sellToken === 1 ? 'Sell LEAF' : 'Sell SEED'} • #{String(o.id)}</span>
-                            <span className="text-muted-foreground">Price {formatCompact(computePriceLeafPerSeed(o))} • Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
+                            <span className="text-muted-foreground">Price {formatPrice(computePriceLeafPerSeed(o))} • Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
                             {!o.isActive && <span className="text-muted-foreground italic">(Inactive)</span>}
                           </div>
                           {showUserOrders && isMyOrder && o.isActive && (
                             <SponsoredTransaction
+                              intentKey={`marketplace:cancel-order:${transactionLandId}:${o.id}`}
                               calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                               buttonText="Cancel"
                               buttonClassName="h-9 min-h-9 w-auto min-w-[64px] shrink-0 px-2.5 py-0 text-xs"
-                              disabled={!isOrderActive(o.id)}
+                              disabled={!ordersCurrent || !isOrderActive(o.id)}
                               hideStatus
-                              onSuccess={() => { toast.success('Order canceled'); fetchOrders(); refresh(); }}
+                              onSuccess={() => { toast.success('Order canceled'); }}
                             />
                           )}
                           {/* Take Order Button (or Approve) */}
@@ -865,11 +970,12 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             <>
                               {needsApproval ? (
                                 <SponsoredTransaction
+                                  intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
                                     abi: ERC20_APPROVE_ABI as UntypedValue,
                                     functionName: 'approve',
-                                    args: [LAND_CONTRACT_ADDRESS, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')]
+                                    args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
@@ -877,19 +983,19 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                   onSuccess={() => {
                                     toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
                                     // Determine which setAllowance to call
-                                    if (payTokenIsLeaf) setLeafAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                                    else setSeedAllowance(BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-                                    setTimeout(() => fetchBalances(), 500);
+                                    if (payTokenIsLeaf) setLeafAllowance(MAX_ALLOWANCE);
+                                    else setSeedAllowance(MAX_ALLOWANCE);
                                   }}
                                 />
                               ) : (
                                 <SponsoredTransaction
+                                  intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText={disabledReason || "Take"}
                                   buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={!canTakeOrder}
                                   hideStatus
-                                  onSuccess={() => { toast.success('Order filled'); fetchOrders(); refresh(); }}
+                                  onSuccess={() => { toast.success('Order filled'); }}
                                 />
                               )}
                             </>

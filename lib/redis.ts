@@ -69,26 +69,45 @@ export const withPrefix = (key: string) => (key.startsWith(KEY_PREFIX) ? key : `
 export const stripPrefix = (key: string) =>
   key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : key;
 
-// JSON helpers with type-safety and error-guarding
-export async function redisGetJSON<T>(key: string): Promise<T | null> {
-  if (!redis) return null;
+export type RedisJSONReadResult<T> =
+  | { status: 'ok'; value: T }
+  | { status: 'missing' }
+  | { status: 'unavailable'; error: unknown };
+
+/**
+ * Read JSON while preserving the distinction between a missing record and an
+ * unavailable Redis service. Callers that render user-facing resources should
+ * not turn an infrastructure outage into a false 404.
+ */
+export async function redisGetJSONResult<T>(key: string): Promise<RedisJSONReadResult<T>> {
+  if (!redis) {
+    return { status: 'unavailable', error: new Error('Redis is not configured') };
+  }
+
   try {
     const raw = await redis.get(withPrefix(key));
-    if (raw == null) return null;
+    if (raw == null) return { status: 'missing' };
     if (typeof raw === 'string') {
       try {
-        return JSON.parse(raw) as T;
+        return { status: 'ok', value: JSON.parse(raw) as T };
       } catch {
         // Some providers may already return objects
         logger.warn('Failed to parse JSON value; returning raw', { key });
-        return raw as UntypedValue as T;
+        return { status: 'ok', value: raw as UntypedValue as T };
       }
     }
-    return raw as T;
+    return { status: 'ok', value: raw as T };
   } catch (error) {
     logger.error('redisGetJSON failed', error, { key });
-    return null;
+    return { status: 'unavailable', error };
   }
+}
+
+// Backwards-compatible helper for flows where missing/unavailable legitimately
+// share the same optional-data fallback.
+export async function redisGetJSON<T>(key: string): Promise<T | null> {
+  const result = await redisGetJSONResult<T>(key);
+  return result.status === 'ok' ? result.value : null;
 }
 
 export async function redisSetJSON<T>(key: string, value: T, ttlSeconds?: number): Promise<boolean> {

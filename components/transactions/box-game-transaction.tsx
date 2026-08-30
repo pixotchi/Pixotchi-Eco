@@ -111,6 +111,7 @@ export default function BoxGameTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`box:${plantId}:${seed}:${withStar ? "star" : "standard"}`}
       calls={calls as UntypedValue}
       onSuccess={handleSuccess}
       onError={onError}

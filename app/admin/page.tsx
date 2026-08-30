@@ -1539,7 +1539,7 @@ export default function AdminDashboard() {
 
   // Main dashboard
   return (
-    <div className="min-h-screen w-full bg-background overflow-y-auto overflow-x-hidden">
+    <div className="min-h-screen w-full bg-background">
       {/* Header */}
       <div className="bg-card border-b border-border sticky top-0 z-10 w-full">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1931,10 +1931,22 @@ export default function AdminDashboard() {
                             <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{msg.content}</p>
                           </div>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => handleBroadcastEdit(msg)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              aria-label={`Edit broadcast: ${msg.title}`}
+                              onClick={() => handleBroadcastEdit(msg)}
+                            >
                               <Edit2 className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleBroadcastDelete(msg.id)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              aria-label={`Delete broadcast: ${msg.title}`}
+                              onClick={() => handleBroadcastDelete(msg.id)}
+                            >
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>
@@ -2089,6 +2101,8 @@ export default function AdminDashboard() {
                           <Button
                             variant="destructive"
                             size="sm"
+                            className="h-11 w-11 p-0"
+                            aria-label={`Delete chat message from ${message.displayName || message.address}`}
                             onClick={() => deleteMessage(message.id, message.timestamp)}
                             disabled={chatLoading}
                           >
@@ -2245,6 +2259,8 @@ export default function AdminDashboard() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-11 w-11 p-0"
+                              aria-label={`View conversation with ${conversation.address}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 loadConversationMessages(conversation.id);
@@ -2255,6 +2271,8 @@ export default function AdminDashboard() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-11 w-11 p-0"
+                              aria-label={`Delete conversation with ${conversation.address}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 confirmDeleteConversation(conversation.id);
@@ -3034,6 +3052,7 @@ export default function AdminDashboard() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-11 w-11 p-0 text-destructive hover:text-destructive"
+                                  aria-label={`Delete notification key ${keyInfo.key}`}
                                   onClick={() => {
                                     showConfirmDialog({
                                       title: 'Delete Key',
@@ -3362,9 +3381,10 @@ export default function AdminDashboard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label={`Delete feedback from ${feedback.username || feedback.address || 'anonymous user'}`}
                             onClick={() => deleteFeedback(feedback.id)}
                             disabled={loading}
-                            className="shrink-0 mt-2"
+                            className="mt-2 h-11 w-11 shrink-0 p-0"
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
@@ -3768,7 +3788,7 @@ export default function AdminDashboard() {
                 {claimsData && claimsData.claims.length > 0 ? (
                   <div className="space-y-2">
                     {/* Header */}
-                    <div className="grid grid-cols-[1fr_80px_70px_90px_100px_80px] gap-2 text-xs font-medium text-muted-foreground px-3 pb-2 border-b">
+                    <div className="hidden grid-cols-[minmax(0,1fr)_80px_70px_90px_100px_80px] gap-2 border-b px-3 pb-2 text-xs font-medium text-muted-foreground md:grid">
                       <div>Address</div>
                       <div>Token ID</div>
                       <div>Strain</div>
@@ -3777,13 +3797,23 @@ export default function AdminDashboard() {
                       <div>Actions</div>
                     </div>
                     {claimsData.claims.map((claim: UntypedValue) => (
-                      <div key={claim.address} className="grid grid-cols-[1fr_80px_70px_90px_100px_80px] gap-2 items-center text-sm px-3 py-2 rounded hover:bg-muted/50">
-                        <div className="font-mono text-xs truncate" title={claim.address}>
-                          {claim.address?.slice(0, 8)}...{claim.address?.slice(-6)}
+                      <div key={claim.address} className="grid grid-cols-2 items-start gap-x-4 gap-y-3 rounded-lg border border-border/60 px-3 py-3 text-sm hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_80px_70px_90px_100px_80px] md:items-center md:gap-2 md:border-0 md:border-b md:border-border/40 md:py-2">
+                        <div className="col-span-2 min-w-0 md:col-span-1">
+                          <span className="mb-0.5 block text-[11px] font-medium text-muted-foreground md:hidden">Address</span>
+                          <span className="block truncate font-mono text-xs" title={claim.address}>
+                            {claim.address?.slice(0, 8)}...{claim.address?.slice(-6)}
+                          </span>
                         </div>
-                        <div className="font-mono text-xs">{claim.tokenId || '—'}</div>
-                        <div>{claim.strainId || '—'}</div>
                         <div>
+                          <span className="mb-0.5 block text-[11px] font-medium text-muted-foreground md:hidden">Token ID</span>
+                          <span className="font-mono text-xs">{claim.tokenId || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="mb-0.5 block text-[11px] font-medium text-muted-foreground md:hidden">Strain</span>
+                          <span>{claim.strainId || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="mb-0.5 block text-[11px] font-medium text-muted-foreground md:hidden">Status</span>
                           {claim.status === 'complete' ? (
                             <span className="text-[hsl(var(--success-strong))] text-xs flex items-center gap-1">
                               <CheckCircle className="w-3 h-3" /> OK
@@ -3794,14 +3824,18 @@ export default function AdminDashboard() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {claim.leafBonusSent ? 'LEAF ' : ''}{claim.seedBonusSent ? 'SEED' : ''}{!claim.leafBonusSent && !claim.seedBonusSent ? '—' : ''}
-                        </div>
                         <div>
+                          <span className="mb-0.5 block text-[11px] font-medium text-muted-foreground md:hidden">Bonuses</span>
+                          <span className="text-xs text-muted-foreground">
+                            {claim.leafBonusSent ? 'LEAF ' : ''}{claim.seedBonusSent ? 'SEED' : ''}{!claim.leafBonusSent && !claim.seedBonusSent ? '—' : ''}
+                          </span>
+                        </div>
+                        <div className="col-span-2 flex justify-end md:col-span-1 md:justify-start">
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-11 w-11 p-0 text-destructive hover:text-destructive"
+                            aria-label={`Delete claim for ${claim.address}`}
                             onClick={() => {
                               showConfirmDialog({
                                 title: 'Delete Claim',

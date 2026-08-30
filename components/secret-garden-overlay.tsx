@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 
 type SecretGardenOverlayProps = {
   open: boolean;
@@ -90,6 +91,8 @@ const FOCUSABLE_SELECTORS = [
 ].join(", ");
 
 export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps) {
+  const { enabled: performanceModeEnabled } = usePerformanceMode();
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [artVisible, setArtVisible] = useState(false);
@@ -100,6 +103,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const lastHoveredRef = useRef<HTMLElement | null>(null);
   const initialRevealRef = useRef(initialReveal);
+  const skipMotionRef = useRef(performanceModeEnabled || prefersReducedMotion);
   const headingId = useId();
   const descriptionId = useId();
 
@@ -183,22 +187,51 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
   }, []);
 
   useEffect(() => {
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPreference = () => setPrefersReducedMotion(reducedMotion.matches);
+    syncPreference();
+    try {
+      reducedMotion.addEventListener("change", syncPreference);
+      return () => reducedMotion.removeEventListener("change", syncPreference);
+    } catch {
+      reducedMotion.addListener(syncPreference);
+      return () => reducedMotion.removeListener(syncPreference);
+    }
+  }, []);
+
+  useEffect(() => {
+    const skipMotion = performanceModeEnabled || prefersReducedMotion;
+    skipMotionRef.current = skipMotion;
+    if (!skipMotion) return;
+    if (open) {
+      setArtVisible(true);
+    } else {
+      setShouldRender(false);
+    }
+  }, [open, performanceModeEnabled, prefersReducedMotion]);
+
+  useEffect(() => {
+    const skipSpatialMotion = skipMotionRef.current;
 
     if (open) {
       setShouldRender(true);
       setArtVisible(false);
       setInitialReveal(true);
-      // Under reduced motion, skip the 1.8s black-screen intro entirely — it
-      // held a full-screen overlay with no content and Escape not yet armed.
-      const timer = window.setTimeout(() => setArtVisible(true), reduceMotion ? 0 : 1800);
-      return () => window.clearTimeout(timer);
+      if (skipSpatialMotion) {
+        setArtVisible(true);
+        return;
+      }
+
+      // Two frames guarantee one painted starting state without holding users
+      // on a perceptible blank black screen.
+      let frame = window.requestAnimationFrame(() => {
+        frame = window.requestAnimationFrame(() => setArtVisible(true));
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
 
     setArtVisible(false);
-    const timer = window.setTimeout(() => setShouldRender(false), reduceMotion ? 0 : 1600);
+    const timer = window.setTimeout(() => setShouldRender(false), skipSpatialMotion ? 0 : 280);
     return () => window.clearTimeout(timer);
   }, [open]);
 
@@ -390,8 +423,8 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     // layer re-enables pointer events only while actually open.
     <div className="pointer-events-none fixed inset-0 z-[var(--z-takeover)]" aria-hidden={!open}>
       <div
-        className={`absolute inset-0 bg-black transition-opacity duration-[1600ms] ease-in ${
-          open ? "opacity-100" : "opacity-0"
+        className={`absolute inset-0 bg-black transition-opacity duration-[var(--motion-standard)] ease-[var(--ease-standard)] ${
+          open && artVisible ? "opacity-100" : "opacity-0"
         }`}
         aria-hidden="true"
       />
@@ -404,8 +437,8 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         aria-describedby={descriptionId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`relative z-10 flex h-full w-full items-center justify-center px-4 py-6 transition-opacity duration-500 ease-out ${
-          open ? "pointer-events-auto" : ""
+        className={`relative z-10 flex h-full w-full items-center justify-center px-4 py-6 transition-opacity duration-[var(--motion-modal)] ease-[var(--ease-standard)] ${
+          open && artVisible ? "pointer-events-auto" : ""
         } ${
           open && artVisible ? "opacity-100" : "opacity-0"
         }`}
@@ -467,10 +500,11 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
           aspect-ratio: 1 / 1;
           border-radius: 0.12rem;
           opacity: var(--o, 0.2);
-          transition: opacity 0.8s ease-in, rotate 0.4s ease-out, filter 0.6s ease-out, background-color 0.45s ease, border-color 0.45s ease;
+          transition: opacity var(--motion-quick) var(--ease-standard), transform var(--motion-quick) var(--ease-standard);
           transform-origin: center;
+          transform: rotate(0deg);
           background-color: rgba(255, 255, 255, 0.96);
-          box-shadow: 0 0 10px rgba(15, 23, 42, 0.08);
+          box-shadow: none;
           border: 1px solid rgba(255, 255, 255, 0.75);
         }
         .secret-garden-pixel--initial {
@@ -478,19 +512,20 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
           border-color: transparent;
           box-shadow: none;
         }
-        .secret-garden-pixel:hover,
         .secret-garden-pixel[data-hover="true"] {
-          transition-duration: 0s;
-          rotate: calc(var(--r, 0) * 90deg);
+          transform: rotate(calc(var(--r, 0) * 90deg));
           opacity: 1 !important;
-          filter: grayscale(0) brightness(1);
           background-color: var(--pixel-color, rgba(255, 255, 255, 1));
           border-color: rgba(148, 163, 184, 0.3);
           box-shadow: 0 0 14px rgba(34, 197, 94, 0.22);
         }
-        @media (prefers-reduced-motion: reduce) {
-          .secret-garden-pixel {
-            transition: opacity 0.6s ease;
+        @media (hover: hover) and (pointer: fine) {
+          .secret-garden-pixel:hover {
+            transform: rotate(calc(var(--r, 0) * 90deg));
+            opacity: 1 !important;
+            background-color: var(--pixel-color, rgba(255, 255, 255, 1));
+            border-color: rgba(148, 163, 184, 0.3);
+            box-shadow: 0 0 14px rgba(34, 197, 94, 0.22);
           }
         }
       `}</style>
@@ -498,4 +533,3 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
     portalTarget
   );
 }
-

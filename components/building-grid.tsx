@@ -1,13 +1,12 @@
 "use client";
 
-import { casinoIsBuilt } from '@/lib/contracts';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Building2 } from 'lucide-react';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { BuildingData,BuildingType } from '@/lib/types';
 import { getBuildingIcon,getBuildingName } from '@/lib/utils';
 import Image from 'next/image';
-import React,{ useCallback,useEffect,useMemo,useState } from 'react';
+import React,{ useCallback,useMemo } from 'react';
 
 // Casino feature flag - hide casino building when disabled
 const CASINO_ENABLED = CLIENT_ENV.CASINO_ENABLED;
@@ -19,7 +18,6 @@ interface BuildingGridProps {
   selectedBuildingType?: BuildingType;
   onBuildingSelect: (building: BuildingData) => void;
   currentBlock: bigint;
-  landId: bigint;
   extraItems?: React.ReactNode;
   gridClassName?: string;
   denseLabels?: boolean;
@@ -31,14 +29,12 @@ const BuildingItem = React.memo(({
   buildingType,
   isSelected,
   onBuildingSelect,
-  casinoBuiltState,
   denseLabels
 }: {
   building: BuildingData;
   buildingType: BuildingType;
   isSelected: boolean;
   onBuildingSelect: (building: BuildingData) => void;
-  casinoBuiltState?: boolean | null;
   denseLabels?: boolean;
 }) => {
   // Memoize building name and icon computation
@@ -48,9 +44,9 @@ const BuildingItem = React.memo(({
     return { buildingName: name, buildingIcon: icon };
   }, [building.id, buildingType]);
 
-  const isCasino = buildingType === 'town' && building.id === 6;
-  // For Casino, use casinoBuiltState; for others, use building.level
-  const effectiveLevel = isCasino && casinoBuiltState ? 1 : building.level;
+  // The owner supplies the Casino's synthesized level in the same snapshot as
+  // every other building, so the tile does not need its own contract read.
+  const effectiveLevel = building.level;
   const isMaxLevel = effectiveLevel >= building.maxLevel;
 
   return (
@@ -120,29 +116,10 @@ export default function BuildingGrid({
   selectedBuilding,
   selectedBuildingType = buildingType,
   onBuildingSelect,
-  landId,
   extraItems,
   gridClassName,
   denseLabels = false
 }: BuildingGridProps) {
-  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
-
-  // Fetch casino built state for town buildings
-  useEffect(() => {
-    // Cancellation guard (mirrors LandImage's): switching lands quickly let a
-    // stale resolution overwrite the newer one, showing the previous land's
-    // casino state on the tile.
-    let cancelled = false;
-    if (buildingType === 'town' && landId) {
-      casinoIsBuilt(landId)
-        .then((built) => { if (!cancelled) setCasinoBuiltState(built); })
-        .catch(() => { if (!cancelled) setCasinoBuiltState(false); });
-    } else {
-      setCasinoBuiltState(false);
-    }
-    return () => { cancelled = true; };
-  }, [buildingType, landId]);
-
   const handleBuildingSelect = useCallback((building: BuildingData) => {
     onBuildingSelect(building);
   }, [onBuildingSelect]);
@@ -181,7 +158,6 @@ export default function BuildingGrid({
             buildingType={buildingType}
             isSelected={isSelected}
             onBuildingSelect={handleBuildingSelect}
-            casinoBuiltState={casinoBuiltState}
             denseLabels={denseLabels}
           />
         );

@@ -48,6 +48,11 @@ type BaseChatSessionRequest = {
 
 let publicChatSessionCache: PublicChatSessionCacheEntry | null = null;
 let inFlightPublicChatSessionRequest: Promise<PublicChatSession | null> | null = null;
+// Guards authoritative session writes (POST/DELETE) from being overwritten by
+// an older GET that was already in flight. This is especially important during
+// Base/test autologin: Wagmi can expose the address before the SIWE session POST
+// finishes, so the pre-auth GET may return 401 after the POST has succeeded.
+let publicChatSessionGeneration = 0;
 
 function normalizeAddress(address: string | null | undefined): string | null {
   return address?.trim().toLowerCase() || null;
@@ -82,6 +87,7 @@ async function parseSessionResponse(response: Response): Promise<PublicChatSessi
 }
 
 function emitPublicChatSessionEvent(session: PublicChatSession | null) {
+  publicChatSessionGeneration += 1;
   setPublicChatSessionCache(session);
 
   if (typeof window === 'undefined') {
@@ -135,6 +141,7 @@ export async function getCurrentPublicChatSessionForAddress(
     return inFlightPublicChatSessionRequest;
   }
 
+  const requestGeneration = publicChatSessionGeneration;
   inFlightPublicChatSessionRequest = (async () => {
     const miniAppHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress });
     const response = await fetch('/api/chat/auth/session', {
@@ -142,6 +149,12 @@ export async function getCurrentPublicChatSessionForAddress(
       credentials: 'same-origin',
       headers: miniAppHeaders,
     });
+
+    // A newer create/clear completed while this request was in flight. Its
+    // cache entry is authoritative, regardless of this older response.
+    if (publicChatSessionGeneration !== requestGeneration) {
+      return publicChatSessionCache?.session ?? null;
+    }
 
     if (response.status === 401) {
       setPublicChatSessionCache(null);
@@ -160,6 +173,12 @@ export async function getCurrentPublicChatSessionForAddress(
       setPublicChatSessionCache(null);
       clearConfirmedMiniAppSession('chat-session-wallet-mismatch');
       return null;
+    }
+
+    // Parsing may yield long enough for an authoritative event to win the
+    // race, so validate the generation once more before mutating the cache.
+    if (publicChatSessionGeneration !== requestGeneration) {
+      return publicChatSessionCache?.session ?? null;
     }
 
     setPublicChatSessionCache(session);

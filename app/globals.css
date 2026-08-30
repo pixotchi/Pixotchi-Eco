@@ -570,8 +570,10 @@
     background-color: hsl(var(--border) / 0.75);
   }
 
-  *::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--foreground) / 0.28);
+  @media (hover: hover) and (pointer: fine) {
+    *::-webkit-scrollbar-thumb:hover {
+      background-color: hsl(var(--foreground) / 0.28);
+    }
   }
 
   *::-webkit-scrollbar-button {
@@ -615,17 +617,23 @@
     *::before,
     *::after {
       animation: none !important;
-      transition: none !important;
+      /* Keep a short opacity/color response so state changes remain legible,
+         while removing spatial and layout motion. */
+      transition-delay: 0ms !important;
+      transition-duration: 120ms !important;
+      transition-property: color, background-color, border-color, opacity !important;
       scroll-behavior: auto !important;
     }
   }
 
-  /* Disable all animations/transitions when motion-off is set (mobile) */
+  /* Match reduced-motion behavior for the in-app motion toggle. */
   .motion-off *,
   .motion-off *::before,
   .motion-off *::after {
     animation: none !important;
-    transition: none !important;
+    transition-delay: 0ms !important;
+    transition-duration: 120ms !important;
+    transition-property: color, background-color, border-color, opacity !important;
     scroll-behavior: auto !important;
   }
 
@@ -679,7 +687,14 @@
   .performance-mode *::after {
     animation: none !important;
     scroll-behavior: auto !important;
-    transition-duration: 0ms !important;
+    transition: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* A slow spinner remains the essential progress cue in transaction and
+     initial-loading states. Decorative JS loops stop in their components. */
+  .performance-mode .animate-spin {
+    animation: spin 1.5s linear infinite !important;
   }
 
   .performance-mode [class*="shadow-"],
@@ -974,10 +989,12 @@
     box-shadow: var(--shadow-control);
   }
 
-  .surface-control:hover {
-    border-color: hsl(var(--primary) / 0.46);
-    background-color: hsl(var(--nav-hover-bg));
-    color: hsl(var(--primary));
+  @media (hover: hover) and (pointer: fine) {
+    .surface-control:hover {
+      border-color: hsl(var(--primary) / 0.46);
+      background-color: hsl(var(--nav-hover-bg));
+      color: hsl(var(--primary));
+    }
   }
 
   .surface-control-selected {
@@ -1052,20 +1069,17 @@
     padding-right: max(1rem, env(safe-area-inset-right), var(--safe-area-inset-right), var(--browser-safe-area-right));
   }
 
-  .app-shell-inner {
-    max-width: 28rem;
-    /*
-     * Horizontal safe area. viewportFit: "cover" is set in app/layout.tsx, so on a
-     * notched phone in landscape the display cutout overlaps the left/right edges.
-     *
-     * Applied HERE, on the shell wrapper, precisely because this element sets no
-     * horizontal padding of its own — so the inset composes instead of replacing a
-     * gutter. (Putting an equivalent rule on the header, which carries px-4,
-     * silently collapsed that padding to 0 on every device without a cutout.)
-     * Resolves to 0px when there is no cutout, so it is inert on normal screens.
-     */
+  /* Put physical cutout protection on the full viewport wrapper. Applying the
+     same inset inside a centered, width-capped shell double-shrinks compact
+     landscape layouts even when that shell already fits inside the safe region. */
+  [data-viewport-shell="outer"] {
     padding-left: max(0px, env(safe-area-inset-left), var(--safe-area-inset-left), var(--browser-safe-area-left));
     padding-right: max(0px, env(safe-area-inset-right), var(--safe-area-inset-right), var(--browser-safe-area-right));
+  }
+
+  .app-shell-inner {
+    max-width: 28rem;
+    padding-inline: 0;
   }
 
   .app-shell-inner[data-connected="false"] {
@@ -1114,6 +1128,108 @@
   /* Bottom nav safe area helper */
   .safe-area-bottom {
     padding-bottom: max(0.25rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+  }
+
+  /* Login content owns its own scroll pane, so it needs a comfortable content
+     gutter as well as notch/home-indicator protection. Reusing the compact
+     bottom-nav helper here reduced the trailing space to 4px on short screens
+     and left the top edge unaware of viewport-fit=cover insets. */
+  .login-shell-safe-top {
+    padding-top: max(0px, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top));
+  }
+
+  .login-safe-area {
+    justify-content: flex-start;
+    padding-top: 1rem !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+  }
+
+  /* The server fallback renders before the app shell (and its top-inset owner)
+     exists, so it must protect its own top edge. */
+  .login-fallback-safe-area {
+    padding-top: max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
+  }
+
+  /* `safe center` preserves centring when the stack fits, but falls back to the
+     scroll origin when a banner, inset, or optional auth action makes it taller
+     than the available pane. This avoids unreachable negative overflow without
+     guessing a fixed height threshold. */
+  @media (min-width: 48rem) {
+    .login-safe-area {
+      justify-content: safe center;
+    }
+  }
+
+  /* Keep both sign-in actions visible on short landscape phones and embedded
+     wallet webviews. The normal stacked composition remains preferable in
+     portrait and in taller windows; only the height-constrained state becomes
+     a balanced two-column panel. */
+  @media (orientation: landscape) and (min-width: 40rem) and (max-height: 30rem) {
+    .login-safe-area {
+      flex-direction: row !important;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .login-hero-copy,
+    .login-auth-actions,
+    .login-auth-actions-placeholder {
+      width: auto !important;
+      max-width: 20rem !important;
+      flex: 1 1 0 !important;
+    }
+
+    .login-hero-copy,
+    .login-auth-actions {
+      align-self: center;
+      border: 1px solid hsl(var(--edge-panel)) !important;
+      border-radius: var(--radius-panel) !important;
+      background-color: hsl(var(--card) / 0.82) !important;
+      padding: 1rem !important;
+      box-shadow: var(--shadow-hairline);
+    }
+
+    .login-hero {
+      margin-bottom: 1rem;
+      gap: 0.5rem;
+    }
+
+    .login-hero img {
+      width: 3.5rem;
+      height: 3.5rem;
+    }
+
+    .login-intro-copy {
+      margin-bottom: 0;
+    }
+
+    .login-auth-actions-placeholder {
+      height: 19rem;
+    }
+
+    .not-found-shell {
+      padding-top: 1rem !important;
+      padding-bottom: 1rem !important;
+    }
+
+    .not-found-content {
+      gap: 1rem;
+    }
+
+    .not-found-art {
+      width: 4rem;
+      height: 4rem;
+    }
+
+    .not-found-copy > :not(:last-child) {
+      margin-bottom: 0.5rem;
+    }
+
+    .not-found-title {
+      font-size: 1.5rem !important;
+      line-height: 2rem !important;
+    }
   }
 
   /* Bottom offset helper for fixed and floating UI */
@@ -1193,7 +1309,8 @@
       padding-left: 0.5rem;
       padding-right: 0.5rem;
       padding-top: 0.125rem;
-      padding-bottom: max(0.125rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+      /* Preserve the 4px focus-ring clearance at the viewport edge. */
+      padding-bottom: max(0.25rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
       border-top-left-radius: var(--radius-panel);
       border-top-right-radius: var(--radius-panel);
     }
@@ -1205,7 +1322,6 @@
     }
 
     [data-viewport-shell="nav"] [role="tab"] {
-      width: 3.25rem;
       gap: 0.125rem;
     }
 
@@ -1248,8 +1364,10 @@
     color: hsl(var(--destructive-strong));
   }
 
-  .hover\:text-destructive:hover {
-    color: hsl(var(--destructive-strong));
+  @media (hover: hover) and (pointer: fine) {
+    .hover\:text-destructive:hover {
+      color: hsl(var(--destructive-strong));
+    }
   }
 
   /* Optimize mobile scrolling performance */
@@ -1332,18 +1450,20 @@ button[class*="follow"]:not([aria-label*="close" i]),
 [class*="FollowButton"] button {
   transform: none;
   scale: 1;
-  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition: background-color var(--motion-quick) var(--ease-standard), color var(--motion-quick) var(--ease-standard), opacity var(--motion-quick) var(--ease-standard);
 }
 
-[class*="transaction-modal"] button:hover,
-[class*="TransactionModal"] button:hover,
-button[class*="follow"]:hover:not([aria-label*="close" i]),
-[class*="follow-button"]:hover:not([aria-label*="close" i]),
-[class*="FollowButton"]:hover:not([aria-label*="close" i]),
-[class*="follow-button"] button:hover,
-[class*="FollowButton"] button:hover {
-  transform: none;
-  scale: 1;
+@media (hover: hover) and (pointer: fine) {
+  [class*="transaction-modal"] button:hover,
+  [class*="TransactionModal"] button:hover,
+  button[class*="follow"]:hover:not([aria-label*="close" i]),
+  [class*="follow-button"]:hover:not([aria-label*="close" i]),
+  [class*="FollowButton"]:hover:not([aria-label*="close" i]),
+  [class*="follow-button"] button:hover,
+  [class*="FollowButton"] button:hover {
+    transform: none;
+    scale: 1;
+  }
 }
 
 /* FollowButton content stability */
@@ -1354,10 +1474,12 @@ button[class*="follow"]:hover:not([aria-label*="close" i]),
   transition: none;
 }
 
-[class*="follow-button"]:hover>*,
-[class*="FollowButton"]:hover>* {
-  transform: none;
-  scale: 1;
+@media (hover: hover) and (pointer: fine) {
+  [class*="follow-button"]:hover>*,
+  [class*="FollowButton"]:hover>* {
+    transform: none;
+    scale: 1;
+  }
 }
 
 button.profile-follow-button.follow-button {
@@ -1411,8 +1533,10 @@ button.profile-follow-button.follow-button-muted {
   color: hsl(var(--accent-foreground)) !important;
 }
 
-button.profile-follow-button.follow-button:hover {
-  filter: brightness(1.03);
+@media (hover: hover) and (pointer: fine) {
+  button.profile-follow-button.follow-button:hover {
+    filter: brightness(1.03);
+  }
 }
 
 button.profile-follow-button.follow-button p,
@@ -1544,7 +1668,7 @@ button.profile-follow-button.follow-button p {
 }
 
 .animate-deal-card {
-  animation: deal-card 0.4s ease-out forwards;
+  animation: deal-card 240ms var(--ease-standard) both;
 }
 
 @utility animate-tab-content-in {
@@ -1583,11 +1707,11 @@ button.profile-follow-button.follow-button p {
    below on the element itself is the one that does the work. */
 
 .login-theme-cycle {
-  --login-theme-transition-duration: 3200ms;
+  --login-theme-transition-duration: var(--motion-modal);
   position: relative;
   isolation: isolate;
   color: hsl(var(--foreground));
-  transition: color var(--login-theme-transition-duration) ease-in-out;
+  transition: color var(--login-theme-transition-duration) var(--ease-standard);
 }
 
 .login-theme-cycle .app-shell-inner[data-connected="false"] {
@@ -1608,7 +1732,7 @@ button.profile-follow-button.follow-button p {
 .login-theme-cycle :is(button, [role="alert"], .login-web-app-alert) {
   transition-duration: var(--login-theme-transition-duration);
   transition-property: background-color, border-color, color, opacity;
-  transition-timing-function: ease-in-out;
+  transition-timing-function: var(--ease-standard);
 }
 
 .login-theme-cycle :is(button, [role="button"], .surface-control) {
@@ -1638,19 +1762,9 @@ button.profile-follow-button.follow-button p {
   background-position: center top;
   background-size: 160% 120%;
   opacity: 0;
-  transition: opacity var(--login-theme-transition-duration) ease-in-out;
+  transition: opacity var(--login-theme-transition-duration) var(--ease-standard);
 }
 
 .login-theme-layer.is-active {
   opacity: 1;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .login-theme-cycle,
-  .login-theme-cycle :is(button, [role="alert"], .login-web-app-alert),
-  .login-theme-layer {
-    transition: none;
-  }
-}
-
-

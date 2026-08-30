@@ -5,12 +5,13 @@ import { formatAddress } from "@/lib/utils";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 import { LandLeaderboardEntry,getLandOwner } from "@/lib/contracts";
 import { contractToVisual,getCoordinateFromTokenId } from "@/lib/land-utils";
 import { Land } from "@/lib/types";
 import { Compass,Minus,Plus,User,X } from "lucide-react";
 import Image from "next/image";
-import { useEffect,useState } from 'react';
+import { useEffect,useRef,useState } from 'react';
 import { LandMapCanvas } from './land-map-canvas';
 
 // Helper to truncate address
@@ -29,6 +30,57 @@ interface LandMapModalProps {
   neighborData: Record<number, LandLeaderboardEntry>;
 }
 
+function useExitPresence<T>(value: T | null, skipMotion: boolean) {
+  const [renderedValue, setRenderedValue] = useState<T | null>(value);
+  const [isVisible, setIsVisible] = useState(value !== null);
+  const wasPresentRef = useRef(value !== null);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+
+    if (value !== null) {
+      const isEntering = !wasPresentRef.current;
+      wasPresentRef.current = true;
+      setRenderedValue(value);
+
+      if (skipMotion || !isEntering) {
+        setIsVisible(true);
+        return;
+      }
+
+      setIsVisible(false);
+      frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = requestAnimationFrame(() => {
+          frameRef.current = null;
+          setIsVisible(true);
+        });
+      });
+      return () => {
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
+      };
+    }
+
+    wasPresentRef.current = false;
+    setIsVisible(false);
+    if (skipMotion) {
+      setRenderedValue(null);
+      return;
+    }
+
+    const exitTimer = window.setTimeout(() => setRenderedValue(null), 180);
+    return () => window.clearTimeout(exitTimer);
+  }, [skipMotion, value]);
+
+  return { isVisible, renderedValue };
+}
+
 export function LandMapModal({
   isOpen,
   onClose,
@@ -38,6 +90,8 @@ export function LandMapModal({
   totalSupply,
   neighborData
 }: LandMapModalProps) {
+  const { enabled: performanceModeEnabled } = usePerformanceMode();
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const [tappedLandId, setTappedLandId] = useState<number | null>(null);
@@ -45,6 +99,22 @@ export function LandMapModal({
   const [fetchedOwner, setFetchedOwner] = useState<string | null>(null);
   const [isOwnerLoading, setIsOwnerLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncPreference = () => setPrefersReducedMotion(reducedMotion.matches);
+    syncPreference();
+    try {
+      reducedMotion.addEventListener('change', syncPreference);
+      return () => reducedMotion.removeEventListener('change', syncPreference);
+    } catch {
+      reducedMotion.addListener(syncPreference);
+      return () => reducedMotion.removeListener(syncPreference);
+    }
+  }, []);
+  const skipPanelMotion = performanceModeEnabled || prefersReducedMotion;
+  const wildernessPresence = useExitPresence(tappedWilderness, skipPanelMotion);
+  const landPresence = useExitPresence(tappedLandId, skipPanelMotion);
+  const presentedLandId = landPresence.renderedValue;
   
   // Initialize center to selected land or (0,0)
   useEffect(() => {
@@ -91,9 +161,9 @@ export function LandMapModal({
     }
   };
 
-  const neighbor = tappedLandId ? neighborData[tappedLandId] : null;
-  const isUserOwned = tappedLandId ? userLands.some(l => Number(l.tokenId) === tappedLandId) : false;
-  const isTappedLandMinted = tappedLandId !== null && tappedLandId > 0 && tappedLandId < totalSupply;
+  const neighbor = presentedLandId ? neighborData[presentedLandId] : null;
+  const isUserOwned = presentedLandId ? userLands.some(l => Number(l.tokenId) === presentedLandId) : false;
+  const isTappedLandMinted = presentedLandId !== null && presentedLandId > 0 && presentedLandId < totalSupply;
   
   // Owners we can resolve without an RPC call, reduced to plain strings so the
   // effect below doesn't re-run (and re-fetch) every time the parent re-renders
@@ -107,7 +177,7 @@ export function LandMapModal({
 
   // Fetch owner on demand
   useEffect(() => {
-    if (tappedLandId) {
+    if (presentedLandId) {
       // If user owned, we know the owner
       if (knownOwnerAddress) {
         setFetchedOwner(knownOwnerAddress);
@@ -128,7 +198,7 @@ export function LandMapModal({
 
       setIsOwnerLoading(true);
       setFetchedOwner(null);
-      getLandOwner(tappedLandId)
+      getLandOwner(presentedLandId)
         .then(owner => {
           if (ignore) return;
           setFetchedOwner(owner);
@@ -150,7 +220,7 @@ export function LandMapModal({
       setFetchedOwner(null);
       setIsOwnerLoading(false);
     }
-  }, [tappedLandId, knownOwnerAddress, neighborOwnerAddress]);
+  }, [presentedLandId, knownOwnerAddress, neighborOwnerAddress]);
 
   const ownerAddress = fetchedOwner || '';
   
@@ -241,8 +311,12 @@ export function LandMapModal({
         </div>
         
         {/* Wilderness Info Tooltip */}
-        {tappedWilderness && (
-            <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        {wildernessPresence.renderedValue && (
+            <div
+              aria-hidden={tappedWilderness === null || !wildernessPresence.isVisible}
+              inert={tappedWilderness === null || !wildernessPresence.isVisible}
+              className={`absolute bottom-6 left-4 right-16 transition-[opacity,transform] duration-[180ms] ease-[var(--ease-standard)] ${tappedWilderness !== null && wildernessPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
+            >
                 <div className="flex items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
@@ -253,13 +327,13 @@ export function LandMapModal({
                                `type` is typed as string and an unexpected value
                                previously fell through to the raw type. */
                             src={`/icons/map/${
-                                tappedWilderness.type === 'water' ? 'lake' :
-                                tappedWilderness.type === 'none' ? 'cemetery' :
-                                tappedWilderness.type === 'forest' ? 'jungle' :
-                                tappedWilderness.type === 'mountain' ? 'mountains' :
+                                wildernessPresence.renderedValue.type === 'water' ? 'lake' :
+                                wildernessPresence.renderedValue.type === 'none' ? 'cemetery' :
+                                wildernessPresence.renderedValue.type === 'forest' ? 'jungle' :
+                                wildernessPresence.renderedValue.type === 'mountain' ? 'mountains' :
                                 'jungle'
                             }.webp`}
-                            alt={tappedWilderness.type}
+                            alt={wildernessPresence.renderedValue.type}
                             fill
                             sizes="64px"
                             className="object-contain p-1"
@@ -269,9 +343,9 @@ export function LandMapModal({
                     <div className="flex-1">
                         <h3 className="text-lg font-semibold capitalize">
                             {
-                                tappedWilderness.type === 'water' ? 'Lake' :
-                                tappedWilderness.type === 'none' ? 'Cemetery' : 
-                                tappedWilderness.type
+                                wildernessPresence.renderedValue.type === 'water' ? 'Lake' :
+                                wildernessPresence.renderedValue.type === 'none' ? 'Cemetery' :
+                                wildernessPresence.renderedValue.type
                             }
                         </h3>
                     </div>
@@ -290,8 +364,12 @@ export function LandMapModal({
         )}
 
         {/* Neighbor Info Tooltip / Sheet */}
-        {tappedLandId && (
-            <div className="absolute bottom-6 left-4 right-16 z-20 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        {presentedLandId && (
+            <div
+              aria-hidden={tappedLandId === null || !landPresence.isVisible}
+              inert={tappedLandId === null || !landPresence.isVisible}
+              className={`absolute bottom-6 left-4 right-16 transition-[opacity,transform] duration-[180ms] ease-[var(--ease-standard)] ${tappedLandId !== null && landPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
+            >
                 <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-16 shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
@@ -308,16 +386,16 @@ export function LandMapModal({
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
                                 <h3 className="flex items-center gap-2 truncate text-base font-semibold">
-                                    {neighbor?.name || (isTappedLandMinted ? `Land #${tappedLandId}` : "Cemetery")}
+                                    {neighbor?.name || (isTappedLandMinted ? `Land #${presentedLandId}` : "Cemetery")}
                                     {isUserOwned && <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded">YOU</span>}
                                 </h3>
                                 <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
-                                    <span className="font-mono">#{tappedLandId}</span>
+                                    <span className="font-mono">#{presentedLandId}</span>
                                     {isTappedLandMinted && (
                                         <>
                                             <span className="mx-1">/</span>
                                             <span className="font-mono">
-                                                ({getCoordinateFromTokenId(tappedLandId).x}, {getCoordinateFromTokenId(tappedLandId).y})
+                                                ({getCoordinateFromTokenId(presentedLandId).x}, {getCoordinateFromTokenId(presentedLandId).y})
                                             </span>
                                         </>
                                     )}
@@ -416,7 +494,7 @@ export function LandMapModal({
         </div>
 
         {/* Legend overlay (hidden if showing neighbor info) */}
-        {!tappedLandId && (
+        {!presentedLandId && (
             <div className="absolute bottom-6 left-4 z-10 pointer-events-none">
             <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[var(--radius-control)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]">
                 <div className="flex items-center gap-2 text-[10px]">

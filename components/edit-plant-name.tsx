@@ -43,7 +43,7 @@ const FALLBACK_NAME_CHANGE_COST_WEI = BigInt(DEFAULT_PLANT_NAME_CHANGE_COST_SEED
 const renamePanelClassName =
   "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
 
-export function EditPlantName({
+function EditPlantName({
   plant,
   onNameChanged,
   className = "",
@@ -177,9 +177,6 @@ export function EditPlantName({
       onNameChanged(plant.id, newName.trim());
     }
 
-    // Manually trigger a balance refresh across the app
-    window.dispatchEvent(new Event('balances:refresh'));
-
     // Close dialog after a short delay to show success state
     scheduleAutoClose();
   };
@@ -273,7 +270,6 @@ export function EditPlantName({
                 if (onNameChanged) {
                   onNameChanged(plant.id, newName.trim());
                 }
-                window.dispatchEvent(new Event('balances:refresh'));
                 scheduleAutoClose();
               }}
               onError={(error) => {

@@ -67,6 +67,7 @@ export function BuyShopItemTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`purchase:shop:${plantId}:${itemId}`}
       calls={[getBuyShopItemCall(plantId, itemId)]}
       onSuccess={onSuccess}
       onError={onError}
@@ -102,6 +103,7 @@ export function BuyGardenItemTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`purchase:garden:${plantId}:${itemId}`}
       calls={[getBuyGardenItemCall(plantId, itemId)]}
       onSuccess={onSuccess}
       onError={onError}

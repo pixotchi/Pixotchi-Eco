@@ -73,7 +73,6 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
               onSuccess={(tx: UntypedValue) => { 
                 toast.success('Collected to Warehouse'); 
                 onClaimSuccess(); 
-                window.dispatchEvent(new Event('balances:refresh'));
                 window.dispatchEvent(new Event('buildings:refresh'));
                 try {
                   const payload: Record<string, UntypedValue> = { address, taskId: 's3_claim_production' };

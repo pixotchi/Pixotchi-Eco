@@ -3,14 +3,14 @@ import { getStakeLeaderboard } from '@/lib/stake-leaderboard-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const revalidate = 86400; // 24 hours cache - matches midnight cron schedule
 
 /**
  * GET /api/leaderboard/stake
  * 
  * Returns the stake leaderboard with cached data.
  * Cache is warmed daily at midnight by cron job.
- * Revalidates every 24 hours.
+ * The response is cached by browsers/CDN for 24 hours; execution itself stays
+ * dynamic because the service cache is warmed by the midnight cron.
  */
 export async function GET() {
   try {

@@ -44,6 +44,7 @@ export default function BuildingUpgradeTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`building:upgrade:${buildingType}:${landId}:${building.id}:${building.level + 1}:${finalFunctionName}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -52,4 +53,4 @@ export default function BuildingUpgradeTransaction({
       disabled={disabled || building.level >= building.maxLevel}
     />
   );
-} 
+}

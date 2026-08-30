@@ -9,6 +9,12 @@ export const queryKeys = {
     ["mint", mintType, address?.toLowerCase() ?? "anonymous"] as const,
   plantsByOwner: (address: string | null | undefined) =>
     ["plantsByOwner", address?.toLowerCase() ?? "anonymous"] as const,
+  landsByOwner: (address: string | null | undefined) =>
+    ["landsByOwner", address?.toLowerCase() ?? "anonymous"] as const,
+  landById: (address: string | null | undefined, landId: bigint | number | string | null | undefined) =>
+    ["landById", address?.toLowerCase() ?? "anonymous", landId?.toString() ?? "none"] as const,
+  buildingsByLand: (address: string | null | undefined, landId: bigint | number | string | null | undefined) =>
+    ["buildingsByLand", address?.toLowerCase() ?? "anonymous", landId?.toString() ?? "none"] as const,
 } as const;
 
 export type QueryKey = readonly UntypedValue[];

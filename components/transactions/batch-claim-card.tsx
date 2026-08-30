@@ -213,6 +213,18 @@ export default function BatchClaimCard({
     return [burnCall, ...claimCalls];
   }, [currentBatchItems, burnAmountWei]);
 
+  const batchClaimIntentKey = useMemo(() => {
+    const pairs = [...currentBatchItems]
+      .sort((a, b) => {
+        if (a.landId < b.landId) return -1;
+        if (a.landId > b.landId) return 1;
+        return a.buildingId - b.buildingId;
+      })
+      .map((item) => `${item.landId}/${item.buildingId}`)
+      .join(",");
+    return `batch-claim:${pairs}`;
+  }, [currentBatchItems]);
+
   const scanPending = lands.length > 0 && landIdsHash !== lastScannedLandIds;
 
   if ((loading || (showWhenEmpty && scanPending)) && claimableItems.length === 0) {
@@ -348,6 +360,7 @@ export default function BatchClaimCard({
             </div>
             <SmartWalletTransaction
               key={txKey} // Force re-mount to reset button state after each batch
+              intentKey={batchClaimIntentKey}
               calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
               buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
@@ -367,7 +380,6 @@ export default function BatchClaimCard({
 
                 scanLands(); // Re-scan to update remaining items
                 if (onSuccess) onSuccess();
-                window.dispatchEvent(new Event('balances:refresh'));
                 window.dispatchEvent(new Event('buildings:refresh'));
 
                 // Trigger claim production task for gamification

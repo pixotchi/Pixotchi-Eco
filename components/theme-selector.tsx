@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
+import { Palette } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -39,6 +40,7 @@ const themeMenuButtonClass = "h-8 min-h-8 w-8 min-w-8 !rounded-[6px] border bord
    surface behind it (the Light swatch on the light header button, and the Dark
    swatch in dark theme, both used to read as a blank/broken button). */
 const themeSwatchClass = "h-4 w-4 rounded-[2px] border border-[hsl(var(--border-strong)/0.45)]";
+const themeTriggerSwatchClass = "absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
 
 /*
  * A Radix menu item, not a hand-rolled button.
@@ -180,7 +182,11 @@ export function ThemeSelector({
 
   if (!mounted) {
     // Render a placeholder to prevent layout shift
-    return <Button variant="headerIcon" size="icon" disabled aria-label="Loading theme selector" />;
+    return (
+      <Button variant="headerIcon" size="icon" disabled aria-label="Loading theme selector">
+        <Palette className="h-5 w-5" aria-hidden="true" />
+      </Button>
+    );
   }
 
   const currentTheme = themes.find((t) => t.name === theme) ?? themes[0];
@@ -193,8 +199,10 @@ export function ThemeSelector({
           size="icon"
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
+          className="relative"
         >
-          <div className={`${themeSwatchClass} ${currentTheme.color}`} />
+          <Palette className="h-5 w-5 text-foreground/85" aria-hidden="true" />
+          <span className={`${themeTriggerSwatchClass} ${currentTheme.color}`} aria-hidden="true" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

@@ -21,6 +21,7 @@ import {
   FollowButton,
   fetchFollowState,
   fetchProfileLists,
+  type FollowingState,
   type ForceFollowingState,
   useTransactions,
 } from 'ethereum-identity-kit';
@@ -33,6 +34,14 @@ import "ethereum-identity-kit/css";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { WalletAvatar } from '@/components/ui/wallet-avatar';
+import {
+  buildEfpRelationshipTransactions,
+  createEfpWorkflowSnapshot,
+  getBrowserEfpWorkflowStorage,
+  readEfpWorkflow,
+  writeEfpWorkflow,
+  type EfpRelationshipAction,
+} from '@/lib/efp-transaction-workflow';
 
 interface PlantProfileDialogProps {
   /**
@@ -82,7 +91,19 @@ export default function PlantProfileDialog({
   const plantId = plant?.id ?? null;
 
   // Get TransactionModal state to detect when it's open/closed
-  const { txModalOpen, selectedList: efpSelectedList, lists: efpLists } = useTransactions();
+  const {
+    defaultChainId: efpDefaultChainId,
+    lists: efpLists,
+    nonce: efpNonce,
+    pendingTxs: efpPendingTxs,
+    selectedChainId: efpSelectedChainId,
+    selectedList: efpSelectedList,
+    setCurrentTxIndex: setEfpCurrentTxIndex,
+    setPendingTxs: setEfpPendingTxs,
+    setSelectedChainId: setEfpSelectedChainId,
+    setTxModalOpen,
+    txModalOpen,
+  } = useTransactions();
   const queryClient = useQueryClient();
 
   // Close plant profile dialog when TransactionModal opens
@@ -289,6 +310,81 @@ export default function PlantProfileDialog({
 
     void run();
   }, [connectedAddress, ownerAddress, fetchIsFollowingOwner, verifyFollowAndTrackMission]);
+
+  const handleSafeEfpAction = useCallback((buttonState: FollowingState) => {
+    if (!connectedAddress || !ownerAddress) return;
+    if (efpPendingTxs.length > 0 || txModalOpen) {
+      toast('Finish the current EFP update first.', { icon: '⏳' });
+      return;
+    }
+
+    const supportedActions: readonly FollowingState[] = [
+      'Blocked',
+      'Follow',
+      'Following',
+      'Muted',
+    ];
+    if (!supportedActions.includes(buttonState)) {
+      toast.error('This EFP relationship update is already pending.');
+      return;
+    }
+
+    try {
+      const workflowStorage = getBrowserEfpWorkflowStorage();
+      if (readEfpWorkflow(workflowStorage, connectedAddress)) {
+        toast('Finish the current EFP update first.', { icon: '⏳' });
+        return;
+      }
+      const defaultChainId = efpDefaultChainId ?? 8453;
+      const pendingTxs = buildEfpRelationshipTransactions({
+        action: buttonState as EfpRelationshipAction,
+        connectedAddress,
+        defaultChainId,
+        nonce: efpNonce,
+        primaryList: efpLists?.primary_list,
+        selectedChainId: efpSelectedChainId,
+        selectedList: efpSelectedList,
+        targetAddress: ownerAddress as `0x${string}`,
+      });
+      const workflow = createEfpWorkflowSnapshot({
+        accountAddress: connectedAddress,
+        currentTxIndex: 0,
+        pendingTxs,
+        selectedList: efpSelectedList,
+      });
+
+      if (!writeEfpWorkflow(workflowStorage, workflow)) {
+        toast.error('Another EFP update is active, or safe browser storage is unavailable. Finish it and try again.');
+        return;
+      }
+
+      setEfpPendingTxs(pendingTxs);
+      setEfpCurrentTxIndex(0);
+      setEfpSelectedChainId(pendingTxs[0]?.chainId ?? defaultChainId);
+      setTxModalOpen(true);
+
+      if (buttonState === 'Follow') {
+        handleFollowButtonIntent();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to prepare the EFP update.');
+    }
+  }, [
+    connectedAddress,
+    efpDefaultChainId,
+    efpLists?.primary_list,
+    efpNonce,
+    efpPendingTxs.length,
+    efpSelectedChainId,
+    efpSelectedList,
+    handleFollowButtonIntent,
+    ownerAddress,
+    setEfpCurrentTxIndex,
+    setEfpPendingTxs,
+    setEfpSelectedChainId,
+    setTxModalOpen,
+    txModalOpen,
+  ]);
 
   // Refresh EFP stats when TransactionModal closes (after follow/unfollow transaction completes)
   useEffect(() => {
@@ -545,10 +641,12 @@ export default function PlantProfileDialog({
                   ownerAddress &&
                   connectedAddress.toLowerCase() !== ownerAddress.toLowerCase() && (
                     <div className="flex justify-center pt-4 border-t border-border">
-                      <div className="w-full" onClickCapture={handleFollowButtonIntent}>
+                      <div className="w-full">
                         <FollowButton
                           lookupAddress={ownerAddress as `0x${string}`}
                           connectedAddress={connectedAddress}
+                          customOnClick={handleSafeEfpAction}
+                          disabled={efpPendingTxs.length > 0 || txModalOpen}
                           forceState={forcedFollowState}
                           onDisconnectedClick={() => {
                             toast.error('Please connect your wallet to follow users');

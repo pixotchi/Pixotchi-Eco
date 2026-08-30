@@ -7,10 +7,9 @@
  * MAINNET ONLY
  */
 
-import { isSolanaEnabled } from '@/lib/solana-constants';
-import { getTwinAddress,getTwinAddressInfo,type TwinAddressInfo } from '@/lib/solana-twin';
+import type { TwinAddressInfo } from '@/lib/solana-twin';
 import { useSolanaWalletContext } from '@/lib/solana-wallet-context';
-import { useCallback,useEffect,useMemo,useState } from 'react';
+import { useMemo } from 'react';
 
 // ============ Types ============
 
@@ -80,92 +79,6 @@ export function useSolanaWallet(): SolanaWalletHook {
     refresh: context.refreshTwinInfo,
     effectiveAddress,
   };
-}
-
-/**
- * Standalone hook to resolve a Solana address to Twin (outside of context)
- * Useful for one-off lookups
- */
-export function useTwinAddressLookup(solanaAddress: string | null) {
-  const [twinAddress, setTwinAddress] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    if (!solanaAddress || !isSolanaEnabled()) {
-      setTwinAddress(null);
-      return;
-    }
-    
-    let cancelled = false;
-    
-    const lookup = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        // Mainnet only - no environment parameter needed
-        const address = await getTwinAddress(solanaAddress);
-        
-        if (!cancelled) {
-          setTwinAddress(address);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Lookup failed');
-          setTwinAddress(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-    
-    lookup();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [solanaAddress]);
-  
-  return { twinAddress, isLoading, error };
-}
-
-/**
- * Hook to get Twin info with balances
- */
-export function useTwinInfo(solanaAddress: string | null) {
-  const [twinInfo, setTwinInfo] = useState<TwinAddressInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const refresh = useCallback(async () => {
-    if (!solanaAddress || !isSolanaEnabled()) {
-      setTwinInfo(null);
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      // Mainnet only - no environment parameter needed
-      const info = await getTwinAddressInfo(solanaAddress);
-      setTwinInfo(info);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch Twin info');
-      setTwinInfo(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [solanaAddress]);
-  
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-  
-  return { twinInfo, isLoading, error, refresh };
 }
 
 // Re-export for convenience

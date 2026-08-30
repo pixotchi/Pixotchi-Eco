@@ -1,9 +1,9 @@
 "use client";
 
-import { casinoIsBuilt } from '@/lib/contracts';
 import { BuildingData,BuildingType,Land } from '@/lib/types';
 import { getBuildingName } from '@/lib/utils';
-import React,{ useEffect,useMemo,useState } from 'react';
+import React,{ useMemo } from 'react';
+import { preload } from 'react-dom';
 
 interface LandImageProps {
   selectedLand: Land | null;
@@ -11,7 +11,7 @@ interface LandImageProps {
   villageBuildings?: BuildingData[];
   townBuildings?: BuildingData[];
   className?: string;
-  priority?: boolean; // Will be used for preloading, not directly on the div
+  priority?: boolean;
 }
 
 // Mapping of building names to their layer image files
@@ -32,35 +32,11 @@ const LandImage = ({
   buildingType = 'village',
   villageBuildings = [],
   townBuildings = [],
-  className = ""
+  className = "",
+  priority = false,
 }: LandImageProps) => {
-  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean>(false);
-  const landId = selectedLand?.tokenId;
-
-  // Fetch casino built state
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!landId) {
-      setCasinoBuiltState(false);
-      return;
-    }
-
-    casinoIsBuilt(landId)
-      .then((built) => {
-        if (!cancelled) setCasinoBuiltState(built);
-      })
-      .catch(() => {
-        if (!cancelled) setCasinoBuiltState(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [landId]);
-
-  const backgroundStyle = useMemo(() => {
-    if (!selectedLand) return {};
+  const { backgroundStyle, imageUrls } = useMemo(() => {
+    if (!selectedLand) return { backgroundStyle: {}, imageUrls: [] };
 
     const baseImageUrl = buildingType === 'village'
       ? '/icons/village-start.png'
@@ -68,41 +44,43 @@ const LandImage = ({
 
     const currentBuildings = buildingType === 'village' ? villageBuildings : townBuildings;
 
-    // Filter for completed buildings to render their layers
-    // Special case: Casino uses casinoBuiltState instead of building.level
-    const completedBuildings = currentBuildings.filter(building => {
-      const isCasino = building.id === 6;
-      if (isCasino) {
-        return casinoBuiltState; // Use async-fetched state for Casino
-      }
-      return building.level > 1 || (building.level === 1 && !building.isUpgrading);
-    });
+    // `lands-view` owns the complete building snapshot, including the Casino's
+    // synthesized level. Reusing it avoids an identical RPC from every child.
+    const completedBuildings = currentBuildings.filter(
+      (building) => building.level > 1 || (building.level === 1 && !building.isUpgrading),
+    );
 
-    const layerImageUrls = completedBuildings
+    const layerImagePaths = completedBuildings
       .map(building => {
         const buildingName = getBuildingName(building.id, buildingType === 'town');
         const layerImage = BUILDING_LAYERS[buildingName as keyof typeof BUILDING_LAYERS];
-        return layerImage ? `url(/icons/${layerImage})` : null;
+        return layerImage ? `/icons/${layerImage}` : null;
       })
-      .filter(Boolean); // Remove nulls for buildings without layers
+      .filter((path): path is string => Boolean(path));
 
-    const allImageUrls = [...layerImageUrls, `url(${baseImageUrl})`];
+    const nextImageUrls = [...layerImagePaths, baseImageUrl];
 
     return {
-      backgroundImage: allImageUrls.join(', '),
-      backgroundSize: 'contain',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      width: '100%',
-      height: '100%',
+      imageUrls: nextImageUrls,
+      backgroundStyle: {
+        backgroundImage: nextImageUrls.map((url) => `url(${url})`).join(', '),
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        width: '100%',
+        height: '100%',
+      },
     };
-  }, [selectedLand, buildingType, villageBuildings, townBuildings, casinoBuiltState]);
+  }, [selectedLand, buildingType, villageBuildings, townBuildings]);
+
+  if (priority) {
+    imageUrls.forEach((url) => preload(url, { as: 'image', fetchPriority: 'high' }));
+  }
 
   if (!selectedLand) {
     return null;
   }
 
-  // The `priority` prop could be used with <link rel="preload"> in the parent component if needed
   return (
     <div
       className={className}

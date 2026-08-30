@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,11 +23,19 @@ getTownBuildingsByLandId,
 getVillageBuildingsByLandId
 } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
+import {
+invalidateOwnerResources,
+isAbortError,
+onOwnerResourceInvalidation,
+ownerInvalidationMatches,
+retryOwnerRead,
+} from "@/lib/owner-resource-invalidation";
+import { queryKeys } from "@/lib/query-keys";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback,useEffect,useRef,useState } from "react";
+import { useCallback,useEffect,useLayoutEffect,useRef,useState } from "react";
 import { useAccount,useWatchBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -41,7 +50,6 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 import { DESKTOP_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
-import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
 
 // Each inline panel reserves space while its chunk loads; without a fallback
 // the section collapsed to zero height and popped in (visible layout jump).
@@ -70,10 +78,74 @@ const LAND_SELECTION_STORAGE_KEY = 'pixotchi:selected-land-id';
 const BUILDING_TYPE_STORAGE_KEY = 'pixotchi:selected-building-type';
 const BUILDING_ID_STORAGE_KEY = 'pixotchi:selected-building-id';
 type LandUtilityPanel = 'batch-claim' | 'batch-quests';
+type LandInvariant = (lands: Land[]) => boolean;
+type QueuedLandFetch = { force: boolean; invariants: LandInvariant[] };
+type ApprovalFetchIdentity = { generation: number; ownerKey: string };
+type BuildingFetchIdentity = {
+  buildingType: BuildingType;
+  generation: number;
+  landId: bigint;
+  ownerKey: string;
+  requestGeneration: number;
+};
+
+function approvalFetchIdentityMatches(
+  left: ApprovalFetchIdentity | null,
+  right: ApprovalFetchIdentity,
+): boolean {
+  return Boolean(
+    left
+    && left.generation === right.generation
+    && left.ownerKey === right.ownerKey,
+  );
+}
+
+function buildingFetchIdentityMatches(
+  left: BuildingFetchIdentity | null,
+  right: BuildingFetchIdentity,
+): boolean {
+  return Boolean(
+    left
+    && left.buildingType === right.buildingType
+    && left.generation === right.generation
+    && left.landId === right.landId
+    && left.ownerKey === right.ownerKey
+    && left.requestGeneration === right.requestGeneration,
+  );
+}
+
+function readLocalStorage(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage may be disabled in private or embedded wallet browsers. The
+    // current in-memory selection remains authoritative for this session.
+  }
+}
+
+function didLandSnapshotChange(before: Land, after: Land | undefined): boolean {
+  if (!after) return true;
+  return (
+    before.accumulatedPlantLifetime !== after.accumulatedPlantLifetime ||
+    before.accumulatedPlantPoints !== after.accumulatedPlantPoints ||
+    before.experiencePoints !== after.experiencePoints ||
+    before.farmerAvatar !== after.farmerAvatar ||
+    before.name !== after.name ||
+    before.owner.toLowerCase() !== after.owner.toLowerCase()
+  );
+}
 
 function readStoredBigInt(key: string): bigint | null {
-  if (typeof window === 'undefined') return null;
-  const value = window.localStorage.getItem(key);
+  const value = readLocalStorage(key);
   if (!value) return null;
   try {
     return BigInt(value);
@@ -83,16 +155,14 @@ function readStoredBigInt(key: string): bigint | null {
 }
 
 function readStoredNumber(key: string): number | null {
-  if (typeof window === 'undefined') return null;
-  const value = window.localStorage.getItem(key);
+  const value = readLocalStorage(key);
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function readStoredBuildingType(): BuildingType {
-  if (typeof window === 'undefined') return 'village';
-  return window.localStorage.getItem(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
+  return readLocalStorage(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
 }
 
 /**
@@ -172,6 +242,8 @@ export default function LandsView() {
 
 function LandsViewContent() {
   const { address } = useAccount();
+  const ownerKey = address?.toLowerCase() ?? null;
+  const queryClient = useQueryClient();
   useSmartWallet();
   const [lands, setLands] = useState<Land[]>([]);
   const [selectedLand, setSelectedLand] = useState<Land | null>(null);
@@ -204,11 +276,20 @@ function LandsViewContent() {
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
 
-  // Request deduplication refs to prevent multiple simultaneous calls
-  const fetchDataPendingRef = useRef<string | null>(null);
-  const fetchApprovalStatusPendingRef = useRef<string | null>(null);
-  const fetchBuildingDataPendingRef = useRef<bigint | null>(null);
-  const fetchBuildingDataQueuedRef = useRef(false);
+  // Owner generation guards every async path. In-flight invalidations are
+  // coalesced into one queued pass instead of being discarded.
+  const ownerKeyRef = useRef<string | null>(ownerKey);
+  const ownerGenerationRef = useRef(0);
+  const activeLandFetchAbortRef = useRef<AbortController | null>(null);
+  const selectedLandIdRef = useRef<bigint | null>(null);
+  const buildingTypeRef = useRef(buildingType);
+  const buildingFetchRequestGenerationRef = useRef(0);
+  const fetchDataPendingRef = useRef<{ generation: number; ownerKey: string } | null>(null);
+  const fetchDataQueuedRef = useRef<QueuedLandFetch | null>(null);
+  const fetchApprovalStatusPendingRef = useRef<ApprovalFetchIdentity | null>(null);
+  const fetchApprovalStatusQueuedRef = useRef<ApprovalFetchIdentity | null>(null);
+  const fetchBuildingDataPendingRef = useRef<BuildingFetchIdentity | null>(null);
+  const fetchBuildingDataQueuedRef = useRef<BuildingFetchIdentity | null>(null);
 
   // Token approval state for land interactions
   const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
@@ -216,116 +297,243 @@ function LandsViewContent() {
 
   // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
-    if (!address) {
+    if (!address || !ownerKey) {
       setLeafAllowance(BigInt(0));
       setSeedAllowance(BigInt(0));
       fetchApprovalStatusPendingRef.current = null;
+      fetchApprovalStatusQueuedRef.current = null;
       return;
     }
 
-    // Prevent duplicate calls for the same address
-    if (fetchApprovalStatusPendingRef.current === address) {
+    const requestIdentity: ApprovalFetchIdentity = {
+      generation: ownerGenerationRef.current,
+      ownerKey,
+    };
+
+    // A confirmed approval can arrive while the initial allowance read is in
+    // flight. Preserve one exact-owner trailing pass instead of dropping it.
+    if (approvalFetchIdentityMatches(fetchApprovalStatusPendingRef.current, requestIdentity)) {
+      fetchApprovalStatusQueuedRef.current = requestIdentity;
       return;
     }
 
-    fetchApprovalStatusPendingRef.current = address;
+    fetchApprovalStatusQueuedRef.current = null;
+    fetchApprovalStatusPendingRef.current = requestIdentity;
 
     try {
       const [currentLeafAllowance, currentSeedAllowance] = await Promise.all([
         checkLeafTokenApproval(address),
         checkLandSpeedUpApproval(address),
       ]);
-      // Only update if address hasn't changed during the fetch
-      if (fetchApprovalStatusPendingRef.current === address) {
+      if (
+        approvalFetchIdentityMatches(fetchApprovalStatusPendingRef.current, requestIdentity)
+        && ownerGenerationRef.current === requestIdentity.generation
+        && ownerKeyRef.current === requestIdentity.ownerKey
+      ) {
         setLeafAllowance(currentLeafAllowance);
         setSeedAllowance(currentSeedAllowance);
       }
     } catch (error) {
       console.error("Failed to fetch land token approval status:", error);
-      // Only set error if address hasn't changed
-      if (fetchApprovalStatusPendingRef.current === address) {
+      if (
+        approvalFetchIdentityMatches(fetchApprovalStatusPendingRef.current, requestIdentity)
+        && ownerGenerationRef.current === requestIdentity.generation
+        && ownerKeyRef.current === requestIdentity.ownerKey
+      ) {
         setLeafAllowance(BigInt(0));
         setSeedAllowance(BigInt(0));
       }
     } finally {
-      // Clear pending flag only if address hasn't changed
-      if (fetchApprovalStatusPendingRef.current === address) {
+      const ownsPendingSlot = approvalFetchIdentityMatches(
+        fetchApprovalStatusPendingRef.current,
+        requestIdentity,
+      );
+      if (ownsPendingSlot) {
         fetchApprovalStatusPendingRef.current = null;
+        const queuedIdentity = fetchApprovalStatusQueuedRef.current;
+        fetchApprovalStatusQueuedRef.current = null;
+        if (
+          approvalFetchIdentityMatches(queuedIdentity, requestIdentity)
+          && ownerGenerationRef.current === requestIdentity.generation
+          && ownerKeyRef.current === requestIdentity.ownerKey
+        ) {
+          queueMicrotask(() => {
+            if (
+              ownerGenerationRef.current === requestIdentity.generation
+              && ownerKeyRef.current === requestIdentity.ownerKey
+            ) {
+              void fetchApprovalStatus();
+            }
+          });
+        }
       }
     }
-  }, [address]);
+  }, [address, ownerKey]);
 
-  const fetchData = useCallback(async () => {
-    if (!address) {
-      fetchDataPendingRef.current = null;
+  const fetchData = useCallback(async (
+    { force = false, until }: { force?: boolean; until?: LandInvariant } = {},
+  ) => {
+    if (!address || !ownerKey) return;
+
+    const pending = fetchDataPendingRef.current;
+    if (pending?.ownerKey === ownerKey) {
+      const queued = fetchDataQueuedRef.current ?? { force: false, invariants: [] };
+      queued.force ||= force;
+      if (until) queued.invariants.push(until);
+      fetchDataQueuedRef.current = queued;
       return;
     }
 
-    // Prevent duplicate calls for the same address
-    if (fetchDataPendingRef.current === address) {
-      return;
-    }
-
-    fetchDataPendingRef.current = address;
-
-    // Only show full page loader on initial load
-    if (lands.length === 0) {
-      setLoading(true);
-    }
+    const generation = ownerGenerationRef.current;
+    const controller = new AbortController();
+    activeLandFetchAbortRef.current?.abort();
+    activeLandFetchAbortRef.current = controller;
+    fetchDataPendingRef.current = { generation, ownerKey };
+    if (lands.length === 0) setLoading(true);
     setError(null);
 
     try {
-      const landsData = await getLandsByOwner(address);
-
-      // Only update if address hasn't changed during the fetch
-      if (fetchDataPendingRef.current === address) {
-        setLands(landsData);
-
-        if (landsData.length > 0) {
-          const currentSelectedId = selectedLand?.tokenId;
-          const storedSelectedId = readStoredBigInt(LAND_SELECTION_STORAGE_KEY);
-          const preferredSelectedId = currentSelectedId ?? storedSelectedId;
-          const newSelectedLand = landsData.find(p => p.tokenId === preferredSelectedId);
-          setSelectedLand(newSelectedLand || landsData[0]);
-        } else {
-          setSelectedLand(null);
+      const landsQueryKey = queryKeys.landsByOwner(ownerKey);
+      const readLands = async () => {
+        if (force || until) {
+          await queryClient.invalidateQueries({
+            exact: true,
+            queryKey: landsQueryKey,
+            refetchType: "none",
+          });
         }
+        return queryClient.fetchQuery({
+          queryKey: landsQueryKey,
+          queryFn: () => getLandsByOwner(address),
+          staleTime: force || until ? 0 : 30_000,
+        });
+      };
+      const landsData = until
+        ? await retryOwnerRead(readLands, { accept: until, signal: controller.signal })
+        : await readLands();
+      const isCurrentOwner =
+        !controller.signal.aborted &&
+        ownerKeyRef.current === ownerKey &&
+        ownerGenerationRef.current === generation &&
+        fetchDataPendingRef.current?.generation === generation;
+      if (!isCurrentOwner) return;
+
+      setLands(landsData);
+      if (landsData.length > 0) {
+        const preferredSelectedId = selectedLandIdRef.current ?? readStoredBigInt(LAND_SELECTION_STORAGE_KEY);
+        const freshSelection = landsData.find((land) => land.tokenId === preferredSelectedId);
+        const landToSelect = freshSelection ?? landsData[0];
+        selectedLandIdRef.current = landToSelect.tokenId;
+        setSelectedLand(landToSelect);
+      } else {
+        selectedLandIdRef.current = null;
+        setSelectedLand(null);
       }
     } catch (err) {
-      console.error("Error fetching lands data:", err);
-      // Only set error if address hasn't changed
-      if (fetchDataPendingRef.current === address) {
-        setError("Failed to load your lands. Please try again.");
+      if (!isAbortError(err)) {
+        console.error("Error fetching lands data:", err);
+        if (ownerKeyRef.current === ownerKey && ownerGenerationRef.current === generation) {
+          setError("Failed to load your lands. Please try again.");
+        }
       }
     } finally {
-      // Clear pending flag only if address hasn't changed
-      if (fetchDataPendingRef.current === address) {
-        setLoading(false);
+      const ownsPendingSlot =
+        fetchDataPendingRef.current?.ownerKey === ownerKey &&
+        fetchDataPendingRef.current?.generation === generation;
+      if (ownsPendingSlot) {
         fetchDataPendingRef.current = null;
+        setLoading(false);
+        const queued = fetchDataQueuedRef.current;
+        fetchDataQueuedRef.current = null;
+        if (queued && ownerKeyRef.current === ownerKey) {
+          const queuedInvariant = queued.invariants.length
+            ? (nextLands: Land[]) => queued.invariants.every((invariant) => invariant(nextLands))
+            : undefined;
+          queueMicrotask(() => {
+            void fetchData({ force: queued.force, until: queuedInvariant });
+          });
+        }
       }
     }
-  }, [address, selectedLand?.tokenId, lands.length]);
+  }, [address, lands.length, ownerKey, queryClient]);
+
+  useLayoutEffect(() => {
+    if (ownerKeyRef.current === ownerKey) return;
+    const previousOwner = ownerKeyRef.current;
+    ownerKeyRef.current = ownerKey;
+    ownerGenerationRef.current += 1;
+    activeLandFetchAbortRef.current?.abort();
+    activeLandFetchAbortRef.current = null;
+    fetchDataPendingRef.current = null;
+    fetchDataQueuedRef.current = null;
+    lastVisibleFetchRef.current = 0;
+    fetchApprovalStatusPendingRef.current = null;
+    fetchApprovalStatusQueuedRef.current = null;
+    fetchBuildingDataPendingRef.current = null;
+    fetchBuildingDataQueuedRef.current = null;
+    selectedLandIdRef.current = null;
+    setLands([]);
+    setSelectedLand(null);
+    setVillageBuildings([]);
+    setTownBuildings([]);
+    setSelectedBuilding(null);
+    setSelectedUtilityPanel(null);
+    setLeafAllowance(BigInt(0));
+    setSeedAllowance(BigInt(0));
+    setError(null);
+    setLoading(Boolean(ownerKey));
+    setBuildingsLoading(false);
+    setIsMapOpen(false);
+    if (previousOwner) {
+      void queryClient.cancelQueries({ queryKey: queryKeys.landsByOwner(previousOwner) });
+    }
+  }, [ownerKey, queryClient]);
+
+  useEffect(() => () => activeLandFetchAbortRef.current?.abort(), []);
+
+  useLayoutEffect(() => {
+    selectedLandIdRef.current = selectedLandId;
+    buildingTypeRef.current = buildingType;
+  }, [buildingType, selectedLandId]);
 
   const fetchBuildingData = useCallback(async () => {
-    if (selectedLandId == null) {
+    if (selectedLandId == null || !ownerKey) {
       setVillageBuildings([]);
       setTownBuildings([]);
       setSelectedBuilding(null);
       setSelectedUtilityPanel(null);
+      setBuildingsLoading(false);
       fetchBuildingDataPendingRef.current = null;
-      fetchBuildingDataQueuedRef.current = false;
+      fetchBuildingDataQueuedRef.current = null;
       return;
     }
 
     const landId = selectedLandId;
-
-    // Prevent duplicate calls for the same land
-    if (fetchBuildingDataPendingRef.current === landId) {
-      fetchBuildingDataQueuedRef.current = true;
+    const generation = ownerGenerationRef.current;
+    // Preserve one follow-up only for the exact request already in flight. A
+    // different land/owner/generation/type starts a new authoritative request
+    // and invalidates any queued work owned by the older identity.
+    const pendingIdentity = fetchBuildingDataPendingRef.current;
+    if (
+      pendingIdentity
+      && pendingIdentity.buildingType === buildingType
+      && pendingIdentity.generation === generation
+      && pendingIdentity.landId === landId
+      && pendingIdentity.ownerKey === ownerKey
+    ) {
+      fetchBuildingDataQueuedRef.current = pendingIdentity;
       return;
     }
 
-    fetchBuildingDataPendingRef.current = landId;
+    const requestIdentity: BuildingFetchIdentity = {
+      buildingType,
+      generation,
+      landId,
+      ownerKey,
+      requestGeneration: ++buildingFetchRequestGenerationRef.current,
+    };
+    fetchBuildingDataQueuedRef.current = null;
+    fetchBuildingDataPendingRef.current = requestIdentity;
     setBuildingsLoading(true);
 
     try {
@@ -337,7 +545,13 @@ function LandsViewContent() {
       ]);
 
       // Only update if land hasn't changed during the fetch
-      if (fetchBuildingDataPendingRef.current === landId) {
+      if (
+        buildingFetchIdentityMatches(fetchBuildingDataPendingRef.current, requestIdentity) &&
+        ownerGenerationRef.current === generation &&
+        ownerKeyRef.current === ownerKey &&
+        selectedLandIdRef.current === landId &&
+        buildingTypeRef.current === buildingType
+      ) {
         setVillageBuildings(villageData || []);
 
         // Add prebuilt utility buildings that are not part of TownFacet output
@@ -455,33 +669,67 @@ function LandsViewContent() {
     } catch (err) {
       console.error("Error fetching building data:", err);
       // Only set error if land hasn't changed
-      if (fetchBuildingDataPendingRef.current === landId) {
+      if (
+        buildingFetchIdentityMatches(fetchBuildingDataPendingRef.current, requestIdentity) &&
+        ownerGenerationRef.current === generation &&
+        ownerKeyRef.current === ownerKey &&
+        selectedLandIdRef.current === landId &&
+        buildingTypeRef.current === buildingType
+      ) {
         setVillageBuildings([]);
         setTownBuildings([]);
       }
     } finally {
-      // Clear pending flag only if land hasn't changed
-      if (fetchBuildingDataPendingRef.current === landId) {
+      const ownsPendingSlot = buildingFetchIdentityMatches(
+        fetchBuildingDataPendingRef.current,
+        requestIdentity,
+      );
+      // Only the request that still owns the pending slot may clear loading or
+      // consume its queued follow-up. An older land finishing cannot drain work
+      // queued for the currently selected land.
+      if (ownsPendingSlot) {
         setBuildingsLoading(false);
         fetchBuildingDataPendingRef.current = null;
-      }
-
-      if (fetchBuildingDataQueuedRef.current && selectedLandId === landId) {
-        fetchBuildingDataQueuedRef.current = false;
-        setTimeout(() => {
-          void fetchBuildingData();
-        }, 0);
+        const queuedIdentity = fetchBuildingDataQueuedRef.current;
+        fetchBuildingDataQueuedRef.current = null;
+        if (
+          buildingFetchIdentityMatches(queuedIdentity, requestIdentity)
+          && ownerGenerationRef.current === generation
+          && ownerKeyRef.current === ownerKey
+          && selectedLandIdRef.current === landId
+          && buildingTypeRef.current === buildingType
+        ) {
+          setTimeout(() => {
+            if (
+              ownerGenerationRef.current === generation
+              && ownerKeyRef.current === ownerKey
+              && selectedLandIdRef.current === landId
+              && buildingTypeRef.current === buildingType
+            ) {
+              void fetchBuildingData();
+            }
+          }, 0);
+        }
       }
     }
-  }, [selectedLandId, buildingType]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
+  }, [selectedLandId, buildingType, ownerKey]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {
     const refreshWarehouseOnSelect = async () => {
       if (selectedLandId == null || buildingType !== 'town' || selectedBuildingId !== 3) return;
+      const generation = ownerGenerationRef.current;
+      const requestedOwner = ownerKey;
+      const requestedLandId = selectedLandId;
       try {
-        const latest = await getLandById(selectedLandId);
-        if (latest) {
+        const latest = await getLandById(requestedLandId);
+        if (
+          latest &&
+          requestedOwner &&
+          ownerGenerationRef.current === generation &&
+          ownerKeyRef.current === requestedOwner &&
+          selectedLandIdRef.current === requestedLandId
+        ) {
           // Update only the selected land info (keeping array intact to avoid extra renders)
           setSelectedLand(latest);
         }
@@ -490,50 +738,53 @@ function LandsViewContent() {
       }
     };
     refreshWarehouseOnSelect();
-  }, [selectedBuildingId, buildingType, selectedLandId]);
+  }, [selectedBuildingId, buildingType, selectedLandId, ownerKey]);
 
   const refreshBuildingSnapshot = useCallback(() => {
-    fetchBuildingData();
+    const generation = ownerGenerationRef.current;
+    const requestedOwner = ownerKey;
+    const requestedLandId = selectedLandId;
+    void fetchBuildingData();
     (async () => {
       try {
-        if (selectedLandId != null) {
-          const latest = await getLandById(selectedLandId);
-          if (latest) setSelectedLand(latest);
+        if (requestedLandId != null && requestedOwner) {
+          const latest = await getLandById(requestedLandId);
+          if (
+            latest &&
+            ownerGenerationRef.current === generation &&
+            ownerKeyRef.current === requestedOwner &&
+            selectedLandIdRef.current === requestedLandId
+          ) {
+            setSelectedLand(latest);
+          }
         }
       } catch { }
     })();
-  }, [fetchBuildingData, selectedLandId]);
+  }, [fetchBuildingData, ownerKey, selectedLandId]);
 
-  const scheduleBuildingSnapshotRefresh = useCallback(() => {
-    for (const delay of POST_TRANSACTION_REFRESH_DELAYS_MS) {
-      if (delay <= 0) {
-        refreshBuildingSnapshot();
-      } else {
-        window.setTimeout(refreshBuildingSnapshot, delay);
-      }
-    }
-  }, [refreshBuildingSnapshot]);
-
-  // Combined function to refresh both building data and balances after transactions.
+  // One mutation signal owns reconciliation. Child panels may still emit the
+  // legacy buildings event while migrating; the listener below coalesces it.
   const handleBuildingTransactionSuccess = useCallback(() => {
-    scheduleBuildingSnapshotRefresh();
-    dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
-  }, [scheduleBuildingSnapshotRefresh]);
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["buildings", "lands", "balances"],
+      source: "lands-view:building-transaction",
+    });
+  }, [ownerKey]);
 
   const handleBatchClaimSuccess = useCallback(() => {
-    fetchBuildingData();
-    if (selectedLand) {
-      getLandById(selectedLand.tokenId).then(latest => {
-        if (latest) setSelectedLand(latest);
-      });
-    }
-  }, [fetchBuildingData, selectedLand]);
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["buildings", "lands", "balances"],
+      source: "lands-view:batch-claim",
+    });
+  }, [ownerKey]);
 
   // Refresh when dashboard becomes visible
   useEffect(() => {
     if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
       lastVisibleFetchRef.current = Date.now();
-      fetchData();
+      void fetchData();
     }
   }, [isVisible, fetchData]);
 
@@ -543,12 +794,102 @@ function LandsViewContent() {
     }
   }, [address, fetchApprovalStatus]);
 
-  // Listen for global buildings refresh events (emitted on tx success in panels)
+  const lastOwnerBuildingInvalidationRef = useRef(0);
+  useEffect(() => onOwnerResourceInvalidation((detail) => {
+    if (ownerInvalidationMatches(detail, ownerKey, "lands")) {
+      if (detail.clear) {
+        ownerGenerationRef.current += 1;
+        activeLandFetchAbortRef.current?.abort();
+        activeLandFetchAbortRef.current = null;
+        fetchDataPendingRef.current = null;
+        fetchDataQueuedRef.current = null;
+        fetchApprovalStatusPendingRef.current = null;
+        fetchApprovalStatusQueuedRef.current = null;
+        fetchBuildingDataPendingRef.current = null;
+        fetchBuildingDataQueuedRef.current = null;
+        selectedLandIdRef.current = null;
+        setLands([]);
+        setSelectedLand(null);
+        setVillageBuildings([]);
+        setTownBuildings([]);
+        setSelectedBuilding(null);
+        setSelectedUtilityPanel(null);
+        setLoading(false);
+        setBuildingsLoading(false);
+        setError(null);
+        return;
+      }
+      const baseline = [...lands];
+      const baselineById = new Map(baseline.map((land) => [land.tokenId.toString(), land]));
+      const expected = detail.expected;
+      const hasExpectation = Boolean(
+        expected?.landCountAtLeast !== undefined ||
+        expected?.landIdsAbsent?.length ||
+        expected?.landIdsPresent?.length
+      );
+      const shouldObserveMutation = Boolean(
+        detail.transactionHash ||
+        detail.source?.includes("claim") ||
+        detail.source?.includes("transfer") ||
+        detail.source?.includes("mint")
+      );
+      const until = hasExpectation || shouldObserveMutation
+        ? (nextLands: Land[]) => {
+            const ids = new Set(nextLands.map((land) => land.tokenId.toString()));
+            if (expected?.landCountAtLeast !== undefined && nextLands.length < expected.landCountAtLeast) return false;
+            if (expected?.landIdsPresent?.some((id) => !ids.has(id.toString()))) return false;
+            if (expected?.landIdsAbsent?.some((id) => ids.has(id.toString()))) return false;
+            if (hasExpectation) return true;
+            if (nextLands.length !== baseline.length) return true;
+            if (baseline.some((land) => !ids.has(land.tokenId.toString()))) return true;
+            return nextLands.some((land) => {
+              const before = baselineById.get(land.tokenId.toString());
+              return before ? didLandSnapshotChange(before, land) : true;
+            });
+          }
+        : undefined;
+      void fetchData({ force: detail.force, until });
+    }
+
+    if (ownerInvalidationMatches(detail, ownerKey, "buildings")) {
+      lastOwnerBuildingInvalidationRef.current = Date.now();
+      refreshBuildingSnapshot();
+    }
+  }), [fetchData, lands, ownerKey, refreshBuildingSnapshot]);
+
+  // Backward compatibility for panels not yet migrated to the owner-domain API.
   useEffect(() => {
-    const handler = () => refreshBuildingSnapshot();
+    const handler = () => {
+      if (Date.now() - lastOwnerBuildingInvalidationRef.current < 500) return;
+      refreshBuildingSnapshot();
+    };
     window.addEventListener('buildings:refresh', handler as EventListener);
     return () => window.removeEventListener('buildings:refresh', handler as EventListener);
   }, [refreshBuildingSnapshot]);
+
+  const lastLifecycleReconcileRef = useRef(0);
+  useEffect(() => {
+    if (!address || !isVisible) return;
+    const reconcile = () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      const now = Date.now();
+      if (now - lastLifecycleReconcileRef.current < 15_000) return;
+      lastLifecycleReconcileRef.current = now;
+      void fetchData({ force: true });
+      if (selectedLandIdRef.current !== null) refreshBuildingSnapshot();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("online", reconcile);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [address, fetchData, isVisible, refreshBuildingSnapshot]);
 
   // Remove aggressive image preloads; Next/Image will handle efficient lazy-loading
 
@@ -559,32 +900,46 @@ function LandsViewContent() {
   // When switching lands, refresh the selected land summary and reset visible building
   useEffect(() => {
     if (selectedLandId == null) return;
+    const generation = ownerGenerationRef.current;
+    const requestedOwner = ownerKey;
+    const requestedLandId = selectedLandId;
+    let cancelled = false;
     // Reset selected building so fetchBuildingData will pick first of new land
     setSelectedBuilding(null);
     setSelectedUtilityPanel(null);
     (async () => {
       try {
-        const latest = await getLandById(selectedLandId);
-        if (latest) setSelectedLand(latest);
+        const latest = await getLandById(requestedLandId);
+        if (
+          !cancelled &&
+          latest &&
+          requestedOwner &&
+          ownerGenerationRef.current === generation &&
+          ownerKeyRef.current === requestedOwner &&
+          selectedLandIdRef.current === requestedLandId
+        ) {
+          setSelectedLand(latest);
+        }
       } catch { }
     })();
-  }, [selectedLandId]);
+    return () => { cancelled = true; };
+  }, [selectedLandId, ownerKey]);
 
   // Track last selected building id to persist across land switches
   useEffect(() => {
     if (selectedBuildingId !== null && typeof selectedBuildingId !== 'undefined') {
       lastSelectedBuildingIdRef.current = Number(selectedBuildingId);
-      window.localStorage.setItem(BUILDING_ID_STORAGE_KEY, String(selectedBuildingId));
+      writeLocalStorage(BUILDING_ID_STORAGE_KEY, String(selectedBuildingId));
     }
   }, [selectedBuildingId]);
 
   useEffect(() => {
-    window.localStorage.setItem(BUILDING_TYPE_STORAGE_KEY, buildingType);
+    writeLocalStorage(BUILDING_TYPE_STORAGE_KEY, buildingType);
   }, [buildingType]);
 
   useEffect(() => {
     if (selectedLandId == null) return;
-    window.localStorage.setItem(LAND_SELECTION_STORAGE_KEY, selectedLandId.toString());
+    writeLocalStorage(LAND_SELECTION_STORAGE_KEY, selectedLandId.toString());
   }, [selectedLandId]);
 
   // Watch for block updates to track upgrade progress
@@ -619,8 +974,12 @@ function LandsViewContent() {
   }, []);
 
   const handleBatchQuestSuccess = useCallback(() => {
-    fetchBuildingData();
-  }, [fetchBuildingData]);
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["buildings", "lands", "balances"],
+      source: "lands-view:batch-quest",
+    });
+  }, [ownerKey]);
 
 
   // Only block render if we have NO lands data at all
@@ -836,7 +1195,6 @@ function LandsViewContent() {
                           selectedBuildingType={buildingType}
                           onBuildingSelect={(building) => handleBuildingSelect(buildingType, building)}
                           currentBlock={currentBlock}
-                          landId={selectedLand.tokenId}
                           extraItems={lands.length > 0 ? (
                             buildingType === 'village' ? (
                               <UtilityBuildingTile
@@ -879,7 +1237,6 @@ function LandsViewContent() {
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('village', building)}
                             currentBlock={currentBlock}
-                            landId={selectedLand.tokenId}
                             gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
                             extraItems={lands.length > 0 ? (
@@ -911,7 +1268,6 @@ function LandsViewContent() {
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('town', building)}
                             currentBlock={currentBlock}
-                            landId={selectedLand.tokenId}
                             gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
                             extraItems={lands.length > 0 ? (

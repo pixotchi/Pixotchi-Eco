@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { StatusService,StatusSnapshot } from "@/lib/status-checks";
 import { AlertTriangle,RefreshCcw } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useState,useTransition } from "react";
+import { useCallback,useEffect,useRef,useState,useTransition } from "react";
 import { StatusCard } from "./StatusCard";
 
 interface StatusPageClientProps {
@@ -19,8 +19,13 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
   const [snapshot, setSnapshot] = useState<StatusSnapshot>(initialSnapshot);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(Date.now());
 
   const refresh = useCallback(() => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+
     startTransition(async () => {
       try {
         setError(null);
@@ -30,8 +35,11 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
         }
         const data = (await response.json()) as StatusSnapshot;
         setSnapshot(data);
+        lastRefreshAtRef.current = Date.now();
       } catch (err: UntypedValue) {
         setError(err?.message || "Unable to refresh status");
+      } finally {
+        refreshInFlightRef.current = false;
       }
     });
   }, []);
@@ -39,10 +47,47 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
   useEffect(() => {
     if (!refreshMinutes || refreshMinutes <= 0) return;
     const ms = refreshMinutes * 60 * 1000;
-    const id = setInterval(() => {
-      refresh();
-    }, ms);
-    return () => clearInterval(id);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const clearPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const startPolling = () => {
+      clearPolling();
+      if (document.visibilityState !== "visible") return;
+      intervalId = setInterval(refresh, ms);
+    };
+
+    const refreshAfterResume = () => {
+      if (document.visibilityState !== "visible") {
+        clearPolling();
+        return;
+      }
+
+      // Avoid bursts when focus, visibility and pageshow fire together.
+      if (Date.now() - lastRefreshAtRef.current >= 15_000) {
+        refresh();
+      }
+      startPolling();
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", refreshAfterResume);
+    window.addEventListener("focus", refreshAfterResume);
+    window.addEventListener("online", refreshAfterResume);
+    window.addEventListener("pageshow", refreshAfterResume);
+
+    return () => {
+      clearPolling();
+      document.removeEventListener("visibilitychange", refreshAfterResume);
+      window.removeEventListener("focus", refreshAfterResume);
+      window.removeEventListener("online", refreshAfterResume);
+      window.removeEventListener("pageshow", refreshAfterResume);
+    };
   }, [refreshMinutes, refresh]);
 
   useEffect(() => {
@@ -82,9 +127,16 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
             <div className="flex shrink-0 items-center gap-2">
               <ThemeSelector enableSecretGardenProgress={false} showMusicToggle={false} />
               {showManualRefresh && (
-                <Button onClick={refresh} disabled={isPending} variant="statusAction" size="status" className="gap-2">
+                <Button
+                  onClick={refresh}
+                  disabled={isPending}
+                  variant="statusAction"
+                  size="touchCompact"
+                  className="gap-2"
+                  aria-label={isPending ? "Refreshing system status" : "Refresh system status"}
+                >
                   <RefreshCcw className={isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-                  <span>{isPending ? "Refreshing" : "Refresh"}</span>
+                  <span className="hidden sm:inline">{isPending ? "Refreshing" : "Refresh"}</span>
                 </Button>
               )}
             </div>

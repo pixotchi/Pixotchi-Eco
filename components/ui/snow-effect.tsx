@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, memo } from "react";
 import { useSnow } from "@/lib/snow-context";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 
 /**
  * Subtle snow particles effect for winter/Christmas celebrations.
@@ -33,6 +34,7 @@ const MAX_SPEED = 1.2;
 const WIND_VARIANCE = 0.3;
 
 function SnowEffectCanvas() {
+    const { enabled: performanceModeEnabled } = usePerformanceMode();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const snowflakesRef = useRef<Snowflake[]>([]);
     const animationRef = useRef<number | null>(null);
@@ -45,11 +47,8 @@ function SnowEffectCanvas() {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        // Check for reduced motion preference
-        const prefersReducedMotion = window.matchMedia(
-            "(prefers-reduced-motion: reduce)"
-        ).matches;
-        if (prefersReducedMotion) return;
+        const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let lastFrameTime: number | null = null;
 
         // Set canvas size
         const updateSize = () => {
@@ -80,8 +79,17 @@ function SnowEffectCanvas() {
         };
         isVisibleRef.current = document.visibilityState === "visible";
 
-        // Animation loop
-        const animate = () => {
+        const animate = (timestamp: number) => {
+            if (performanceModeEnabled || reducedMotion.matches || document.visibilityState !== "visible") {
+                stopAnimation();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            const frameScale = lastFrameTime === null
+                ? 1
+                : Math.min((timestamp - lastFrameTime) / (1000 / 60), 3);
+            lastFrameTime = timestamp;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             snowflakesRef.current.forEach((flake) => {
@@ -92,8 +100,8 @@ function SnowEffectCanvas() {
                 ctx.fill();
 
                 // Update position
-                flake.y += flake.speed;
-                flake.x += flake.wind + Math.sin(flake.y * 0.01) * 0.3; // Gentle sway
+                flake.y += flake.speed * frameScale;
+                flake.x += (flake.wind + Math.sin(flake.y * 0.01) * 0.3) * frameScale; // Gentle sway
 
                 // Reset if out of bounds
                 if (flake.y > canvas.height + flake.radius) {
@@ -111,29 +119,57 @@ function SnowEffectCanvas() {
             animationRef.current = requestAnimationFrame(animate);
         };
 
+        const startAnimation = () => {
+            if (
+                animationRef.current !== null ||
+                performanceModeEnabled ||
+                reducedMotion.matches ||
+                document.visibilityState !== "visible"
+            ) return;
+
+            lastFrameTime = null;
+            animationRef.current = requestAnimationFrame(animate);
+        };
+
         // Visibility change handler
         const handleVisibility = () => {
             isVisibleRef.current = document.visibilityState === "visible";
             if (isVisibleRef.current) {
-                if (animationRef.current === null) {
-                    animate();
-                }
+                startAnimation();
             } else {
                 stopAnimation();
             }
         };
         document.addEventListener("visibilitychange", handleVisibility);
 
-        if (isVisibleRef.current) {
-            animate();
-        }
+        const handleMotionPreference = () => {
+            if (reducedMotion.matches || performanceModeEnabled) {
+                stopAnimation();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else {
+                startAnimation();
+            }
+        };
+        const unsubscribeMotionPreference = (() => {
+            try {
+                reducedMotion.addEventListener("change", handleMotionPreference);
+                return () => reducedMotion.removeEventListener("change", handleMotionPreference);
+            } catch {
+                reducedMotion.addListener(handleMotionPreference);
+                return () => reducedMotion.removeListener(handleMotionPreference);
+            }
+        })();
+
+        startAnimation();
 
         return () => {
             window.removeEventListener("resize", updateSize);
             document.removeEventListener("visibilitychange", handleVisibility);
+            unsubscribeMotionPreference();
             stopAnimation();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
         };
-    }, []);
+    }, [performanceModeEnabled]);
 
     return (
         <canvas
@@ -149,7 +185,7 @@ function SnowEffectCanvas() {
  * Snow effect wrapper that reads from SnowContext.
  * Add to providers.tsx or layout to enable globally.
  */
-export const SnowEffect = memo(function SnowEffect() {
+const SnowEffect = memo(function SnowEffect() {
     const { isEnabled } = useSnow();
 
     if (!isEnabled) return null;

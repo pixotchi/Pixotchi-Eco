@@ -54,6 +54,7 @@ export default function ApproveTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`approve:${token.toLowerCase()}:${spenderAddress.toLowerCase()}:${maxApproval}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}

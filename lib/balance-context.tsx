@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, ReactNode, useCallback, useMemo } from "react";
+import { createContext, useContext, useEffect, ReactNode, useCallback, useMemo, useRef } from "react";
 import { useAccount, useReadContracts } from 'wagmi';
 import { PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, CREATOR_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { leafAbi } from '@/public/abi/leaf-abi';
@@ -60,17 +60,87 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const leafBalance = data?.[1]?.result as bigint ?? BigInt(0);
   const pixotchiBalance = data?.[2]?.result as bigint ?? BigInt(0);
 
+  const addressRef = useRef(address);
+  const refetchRef = useRef(refetch);
+  addressRef.current = address;
+  refetchRef.current = refetch;
+
   useEffect(() => {
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshTargetAt = Number.POSITIVE_INFINITY;
+    let refreshInFlight = false;
+    let refreshQueued = false;
+    const seenRefreshes = new Map<string, { seenAt: number; targetAt: number }>();
+
+    const runRefresh = async () => {
+      if (!active) return;
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+      }
+
+      refreshInFlight = true;
+      try {
+        await refetchRef.current();
+      } catch (error) {
+        console.warn("Balance reconciliation failed", error);
+      } finally {
+        refreshInFlight = false;
+        if (active && refreshQueued) {
+          refreshQueued = false;
+          refreshTargetAt = Date.now() + 100;
+          refreshTimer = setTimeout(() => {
+            refreshTimer = null;
+            refreshTargetAt = Number.POSITIVE_INFINITY;
+            void runRefresh();
+          }, 100);
+        }
+      }
+    };
+
     const unsubscribe = onBalanceRefresh((detail) => {
-      // Small delay to allow blockchain state to propagate
-      // Base has fast 1-2 second block times, so 500ms is sufficient
-      setTimeout(() => {
-        refetch();
-      }, detail?.delayMs ?? 500);
+      const currentAddress = addressRef.current?.toLowerCase();
+      if (detail.address && currentAddress && detail.address.toLowerCase() !== currentAddress) {
+        return;
+      }
+
+      const dedupeKey = detail.transactionHash?.toLowerCase()
+        || detail.transactionId
+        || detail.dedupeKey
+        || detail.eventId;
+      const now = Date.now();
+      const targetAt = now + detail.delayMs;
+      const recent = seenRefreshes.get(dedupeKey);
+      if (recent && now - recent.seenAt < 15_000 && recent.targetAt <= targetAt) return;
+      seenRefreshes.set(dedupeKey, { seenAt: now, targetAt });
+      if (seenRefreshes.size > 100) {
+        for (const [key, recentRefresh] of seenRefreshes) {
+          if (now - recentRefresh.seenAt >= 15_000) seenRefreshes.delete(key);
+        }
+        while (seenRefreshes.size > 100) {
+          const oldestKey = seenRefreshes.keys().next().value as string | undefined;
+          if (!oldestKey) break;
+          seenRefreshes.delete(oldestKey);
+        }
+      }
+
+      if (refreshTimer !== null && refreshTargetAt <= targetAt) return;
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTargetAt = targetAt;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        refreshTargetAt = Number.POSITIVE_INFINITY;
+        void runRefresh();
+      }, Math.max(0, targetAt - Date.now()));
     });
 
-    return unsubscribe;
-  }, [refetch]);
+    return () => {
+      active = false;
+      unsubscribe();
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+    };
+  }, []);
 
 
   const refreshBalances = useCallback(async () => {

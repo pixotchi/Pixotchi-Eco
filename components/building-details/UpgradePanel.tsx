@@ -128,7 +128,7 @@ export default function UpgradePanel({
                 onSuccess={() => {
                   toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
                   onUpgradeSuccess();
-                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
+                  dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
@@ -157,7 +157,7 @@ export default function UpgradePanel({
                 onSuccess={() => {
                   toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
                   onUpgradeSuccess();
-                  dispatchPostTransactionRefresh(['balances:refresh', 'buildings:refresh']);
+                  dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`${needsLeafApproval ? 'Step 2: ' : ''}Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}

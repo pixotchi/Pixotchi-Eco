@@ -102,20 +102,3 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
     </SolanaWalletContextProvider>
   );
 }
-
-/**
- * HOC to wrap a component with Solana wallet provider
- */
-export function withSolanaWallet<P extends object>(
-  Component: React.ComponentType<P>
-): React.FC<P> {
-  return function WithSolanaWalletWrapper(props: P) {
-    return (
-      <SolanaWalletProvider>
-        <Component {...props} />
-      </SolanaWalletProvider>
-    );
-  };
-}
-
-export default SolanaWalletProvider;

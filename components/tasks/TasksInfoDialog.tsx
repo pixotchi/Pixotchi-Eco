@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAccount } from "wagmi";
 import Image from "next/image";
@@ -8,6 +8,10 @@ import { CLIENT_ENV } from "@/lib/env-config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { onTasksDialogOpen } from "@/lib/app-events";
 import type { GmMissionDay } from "@/lib/gamification-types";
+import {
+  flushMissionProgressOutbox,
+  onMissionTrackingEvent,
+} from "@/lib/mission-tracking";
 import { CheckCircle2, Circle } from "lucide-react";
 import { ProgressBar } from "@/components/ui/progress-bar";
 
@@ -72,6 +76,13 @@ export default function TasksInfoDialog() {
   const [serverDisabledMessage, setServerDisabledMessage] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryVersion, setSummaryVersion] = useState(0);
+  const [missionTrackingNotice, setMissionTrackingNotice] = useState<{
+    message: string;
+    status: 'error' | 'queued';
+  } | null>(null);
+  const summaryRequestGenerationRef = useRef(0);
+  const previousSummaryAddressRef = useRef<string | null>(null);
   const effectiveDisabled = !gamificationPolicy.enabled || !!serverDisabledMessage;
   const effectiveDisabledMessage =
     serverDisabledMessage ||
@@ -83,12 +94,64 @@ export default function TasksInfoDialog() {
   }, []);
 
   useEffect(() => {
+    return onMissionTrackingEvent((detail) => {
+      const eventAddress = typeof detail.payload.address === 'string'
+        ? detail.payload.address.toLowerCase()
+        : null;
+      if (!address || !eventAddress || eventAddress !== address.toLowerCase()) {
+        return;
+      }
+
+      if (detail.status === 'success') {
+        setMissionTrackingNotice(null);
+        if (open) {
+          setSummaryVersion((version) => version + 1);
+        }
+        return;
+      }
+
+      setMissionTrackingNotice({
+        message: detail.message ?? 'Task progress could not be synced.',
+        status: detail.status,
+      });
+    });
+  }, [address, open]);
+
+  useEffect(() => {
+    void flushMissionProgressOutbox();
+  }, [open]);
+
+  useEffect(() => {
+    const normalizedAddress = address?.toLowerCase() ?? null;
+    if (previousSummaryAddressRef.current === normalizedAddress) {
+      return;
+    }
+
+    previousSummaryAddressRef.current = normalizedAddress;
+    setMissionDay(null);
+    setMissionPts(0);
+    setMissionTotal(0);
+    setStreak(null);
+    setServerDisabledMessage(null);
+    setSummaryError(null);
+    setMissionTrackingNotice(null);
+  }, [address]);
+
+  useEffect(() => {
     // Abort on close/wallet switch (a switch mid-flight used to paint the
     // previous wallet's streak), track loading so the summary shows skeletons
     // instead of confident zeros, and surface failures instead of swallowing
     // them into a "Streak 0 / Tasks 0" card.
-    if (!address || !open || !gamificationPolicy.enabled) return;
+    const generation = summaryRequestGenerationRef.current + 1;
+    summaryRequestGenerationRef.current = generation;
+    if (!address || !open || !gamificationPolicy.enabled) {
+      setSummaryLoading(false);
+      return;
+    }
     const controller = new AbortController();
+    const isCurrentRequest = () =>
+      !controller.signal.aborted &&
+      summaryRequestGenerationRef.current === generation;
 
     (async () => {
       try {
@@ -103,6 +166,7 @@ export default function TasksInfoDialog() {
 
         if (sRes.ok) {
           const sPayload = await sRes.json();
+          if (!isCurrentRequest()) return;
           if (sPayload?.disabled) {
             setServerDisabledMessage(typeof sPayload?.message === 'string' ? sPayload.message : gamificationDisabledMessage);
             return;
@@ -114,6 +178,7 @@ export default function TasksInfoDialog() {
 
         if (mRes.ok) {
           const m = await mRes.json();
+          if (!isCurrentRequest()) return;
           if (m?.disabled) {
             setServerDisabledMessage(typeof m?.message === 'string' ? m.message : gamificationDisabledMessage);
             return;
@@ -125,19 +190,24 @@ export default function TasksInfoDialog() {
           throw new Error(`Missions request failed (${mRes.status})`);
         }
       } catch (error) {
-        if ((error as Error)?.name !== 'AbortError') {
+        if ((error as Error)?.name !== 'AbortError' && isCurrentRequest()) {
           console.warn('[Tasks] Failed to load summary:', error);
           setSummaryError('Could not load your progress. Close and reopen to retry.');
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (isCurrentRequest()) {
           setSummaryLoading(false);
         }
       }
     })();
 
-    return () => controller.abort();
-  }, [address, open, gamificationPolicy.enabled, gamificationDisabledMessage]);
+    return () => {
+      controller.abort();
+      if (summaryRequestGenerationRef.current === generation) {
+        summaryRequestGenerationRef.current += 1;
+      }
+    };
+  }, [address, open, gamificationPolicy.enabled, gamificationDisabledMessage, summaryVersion]);
 
   useEffect(() => {
     if (gamificationPolicy.visible) return;
@@ -202,6 +272,11 @@ export default function TasksInfoDialog() {
     >
       {summaryError && (
         <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">{summaryError}</p>
+      )}
+      {missionTrackingNotice && (
+        <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">
+          {missionTrackingNotice.message}
+        </p>
       )}
       <div className="grid grid-cols-3 gap-2" aria-busy={summaryLoading || undefined}>
         <div>

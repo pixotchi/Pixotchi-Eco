@@ -1,16 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { TutorialSlideId } from "./config";
 
 export type TutorialSlide = {
-  id: string;
+  id: TutorialSlideId;
   title: string;
   content: ReactNode;
   icon?: ReactNode;
   art?: "token-flow" | "mint-plant" | "plant-items" | "attack" | "land" | "buildings" | "staking" | "chat" | "base" | "ptstod" | "tasks";
 };
-
-export const TUTORIAL_VERSION = "v1";
 
 export const slides: TutorialSlide[] = [
   // 1) Swap

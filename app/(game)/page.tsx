@@ -1,11 +1,13 @@
 "use client";
 
 import { ChatButton } from "@/components/chat";
+import { AppUpdateBanner } from "@/components/app-update-banner";
 import StatusBar from "@/components/status-bar";
 import { useIsSolanaWallet } from "@/components/solana";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BasePageLoader } from "@/components/ui/loading";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { LoginHero, LoginIntro } from "@/components/login-hero";
@@ -18,7 +20,7 @@ import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,t
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type KeyboardEvent } from "react";
+import { Activity,memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type ComponentType,type CSSProperties,type KeyboardEvent } from "react";
 import toast from "react-hot-toast";
 
 // Import custom hooks
@@ -45,12 +47,26 @@ const BroadcastMessageModal = dynamic(
   () => import("@/components/broadcast-message-modal").then((mod) => mod.BroadcastMessageModal),
   { ssr: false },
 );
-// Dialog-only module (1,000+ lines incl. transfer/airdrop flows): dynamic +
-// first-open gate keeps it out of the app-shell chunk.
-const WalletProfile = dynamic(
-  () => import("@/components/wallet-profile").then((mod) => mod.WalletProfile),
-  { ssr: false },
-);
+// Dialog-only module (1,000+ lines incl. transfer/airdrop flows). Keep one
+// retryable promise so hover/focus can preload it and a cold click can display
+// an immediate, accessible loading dialog instead of appearing dead.
+type WalletProfileProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+let walletProfileModulePromise: Promise<ComponentType<WalletProfileProps>> | null = null;
+
+function loadWalletProfileModule() {
+  if (!walletProfileModulePromise) {
+    walletProfileModulePromise = import("@/components/wallet-profile")
+      .then((module) => module.WalletProfile as ComponentType<WalletProfileProps>)
+      .catch((error) => {
+        walletProfileModulePromise = null;
+        throw error;
+      });
+  }
+  return walletProfileModulePromise;
+}
 // Developer-only viewport instrumentation. Loaded on demand and only rendered when
 // ?viewportDebug=1 is present, so it stays out of the app-shell chunk. (Not gated on
 // NODE_ENV: the whole point is reading visualViewport / safe-area insets inside the
@@ -248,7 +264,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
-import { useKeyboardAware,useKeyboardNavigation,useViewportInsets } from "@/hooks/useKeyboardAware";
+import { useViewportInsets } from "@/hooks/useKeyboardAware";
 
 type LoginAuthActionsProps = {
   className: string;
@@ -423,6 +439,8 @@ type AppTabDefinition = {
   icon: LucideIcon;
 };
 
+type TabChangeSource = "keyboard" | "pointer";
+
 // Static — hoisted so the two SlidingNavTabs (memoized below) don't reconcile
 // all 12 nav buttons on every App render.
 const APP_TABS: AppTabDefinition[] = [
@@ -436,13 +454,15 @@ const APP_TABS: AppTabDefinition[] = [
 
 const SlidingNavTabs = memo(function SlidingNavTabs({
   activeTab,
+  animateIndicator,
   mode,
   onTabChange,
   tabs,
 }: {
   activeTab: Tab;
+  animateIndicator: boolean;
   mode: "desktop" | "mobile";
-  onTabChange: (tab: Tab) => void;
+  onTabChange: (tab: Tab, source: TabChangeSource) => void;
   tabs: AppTabDefinition[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -487,7 +507,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
     const tab = tabs[index];
     if (!tab) return;
 
-    onTabChange(tab.id);
+    onTabChange(tab.id, "keyboard");
     focusTab(index);
   };
 
@@ -534,7 +554,12 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
       <span
         aria-hidden="true"
         data-main-nav-indicator={mode}
-        className="surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border transition-[transform,width,height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+        className={cn(
+          "surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border",
+          animateIndicator
+            ? "transition-[transform,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
+            : "transition-none",
+        )}
         style={indicatorStyle}
       />
       {tabs.map((tab, index) => {
@@ -545,7 +570,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
           <Button
             key={tab.id}
             variant="navSliding"
-            onClick={() => onTabChange(tab.id)}
+            onClick={(event) => onTabChange(tab.id, event.detail === 0 ? "keyboard" : "pointer")}
             data-active={isActive}
             onKeyDown={(event) => handleKeyDown(event, index)}
             ref={(node) => {
@@ -553,6 +578,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
             }}
             className={cn(
               "relative z-10",
+              !animateIndicator && "transition-none",
               mode === "desktop"
                 ? "flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
@@ -623,11 +649,17 @@ export default function App() {
     },
     serialize: (value) => (value === "dashboard" ? null : value),
   });
+  const [keyboardSelectedTab, setKeyboardSelectedTab] = useState<Tab | null>(null);
+  const handleTabChange = useCallback((tab: Tab, source: TabChangeSource) => {
+    setKeyboardSelectedTab(source === "keyboard" ? tab : null);
+    setActiveTab(tab);
+  }, [setActiveTab]);
+  const shouldAnimateTabChange = keyboardSelectedTab !== activeTab;
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
-  // Latches true on first open so the dynamic chunk loads on demand and the
-  // dialog stays mounted afterwards for exit animations.
-  const [walletProfileLoaded, setWalletProfileLoaded] = useState(false);
+  const [WalletProfileComponent, setWalletProfileComponent] = useState<ComponentType<WalletProfileProps> | null>(null);
+  const [walletProfileLoading, setWalletProfileLoading] = useState(false);
+  const [walletProfileLoadError, setWalletProfileLoadError] = useState<string | null>(null);
   const [localTestAuthAvailable, setLocalTestAuthAvailable] = useState(false);
   const [showViewportDebug, setShowViewportDebug] = useState(false);
   // Lazy-initialised media queries (useMediaQuery), not useState(false)+effect:
@@ -648,6 +680,21 @@ export default function App() {
   const tabScrollPositionsRef = useRef<Partial<Record<Tab, number>>>({});
   const lastDismissedRef = useRef<string | null>(null);
   const broadcastEverShownRef = useRef(false);
+
+  const ensureWalletProfileLoaded = useCallback(async () => {
+    if (WalletProfileComponent || walletProfileLoading) return;
+    setWalletProfileLoading(true);
+    setWalletProfileLoadError(null);
+    try {
+      const component = await loadWalletProfileModule();
+      setWalletProfileComponent(() => component);
+    } catch (error) {
+      console.error('Failed to load wallet profile:', error);
+      setWalletProfileLoadError('Wallet profile could not be loaded. Check your connection and retry.');
+    } finally {
+      setWalletProfileLoading(false);
+    }
+  }, [WalletProfileComponent, walletProfileLoading]);
   const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
   const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
   const loginThemeLayers = [
@@ -664,6 +711,12 @@ export default function App() {
   if (!visitedTabs.has(activeTab)) {
     setVisitedTabs(new Set(visitedTabs).add(activeTab));
   }
+
+  useEffect(() => {
+    if (keyboardSelectedTab !== null && keyboardSelectedTab !== activeTab) {
+      setKeyboardSelectedTab(null);
+    }
+  }, [activeTab, keyboardSelectedTab]);
 
   useTabPrefetching(activeTab, isConnected);
 
@@ -686,10 +739,6 @@ export default function App() {
     // removes the cross-fade — leaving the timer running would swap the palette in a
     // hard cut every 4s, which is worse than the fade it was meant to soften.
     const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    if (motionQuery?.matches) {
-      return;
-    }
-
     const advanceLoginTheme = () => {
       setLoginThemeState(({ activeLayer, current }) => ({
         activeLayer: activeLayer === 0 ? 1 : 0,
@@ -698,20 +747,42 @@ export default function App() {
       }));
     };
 
-    const intervalId = window.setInterval(() => {
-      advanceLoginTheme();
-    }, LOGIN_THEME_INTERVAL_MS);
+    let intervalId: number | null = null;
+    const stopThemeCycle = () => {
+      if (intervalId === null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
+    const startThemeCycle = () => {
+      if (intervalId !== null || motionQuery?.matches) return;
+      intervalId = window.setInterval(advanceLoginTheme, LOGIN_THEME_INTERVAL_MS);
+    };
 
     const handleMotionPreferenceChange = () => {
       if (motionQuery?.matches) {
-        window.clearInterval(intervalId);
+        stopThemeCycle();
+      } else {
+        startThemeCycle();
       }
     };
-    motionQuery?.addEventListener?.("change", handleMotionPreferenceChange);
+    handleMotionPreferenceChange();
+
+    if (motionQuery) {
+      if (typeof motionQuery.addEventListener === "function") {
+        motionQuery.addEventListener("change", handleMotionPreferenceChange);
+      } else {
+        motionQuery.addListener(handleMotionPreferenceChange);
+      }
+    }
 
     return () => {
-      window.clearInterval(intervalId);
-      motionQuery?.removeEventListener?.("change", handleMotionPreferenceChange);
+      stopThemeCycle();
+      if (!motionQuery) return;
+      if (typeof motionQuery.removeEventListener === "function") {
+        motionQuery.removeEventListener("change", handleMotionPreferenceChange);
+      } else {
+        motionQuery.removeListener(handleMotionPreferenceChange);
+      }
     };
   }, [isConnected]);
 
@@ -755,10 +826,8 @@ export default function App() {
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
   const [currentBroadcast, setCurrentBroadcast] = useState<UntypedValue>(null);
 
-  // Keyboard and viewport awareness
-  const keyboardState = useKeyboardAware();
+  // Keep CSS safe-area and keyboard-inclusive viewport variables in sync.
   useViewportInsets();
-  const isKeyboardNavigation = useKeyboardNavigation();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
   const miniAppContext = (fc?.context as UntypedValue) ?? null;
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
@@ -798,14 +867,16 @@ export default function App() {
 
     let mounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
+    let controller: AbortController | null = null;
 
     (async () => {
       try {
         const fid = typeof fc?.context === 'object' ? (fc?.context as UntypedValue)?.user?.fid : undefined;
         if (!fid || !address || !mounted) return;
 
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 5000);
+        const requestController = new AbortController();
+        controller = requestController;
+        timeoutId = setTimeout(() => requestController.abort(), 5000);
         const authHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress: address });
         if (!authHeaders.Authorization || !mounted) return;
 
@@ -813,7 +884,7 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ fid, address }),
-          signal: controller.signal,
+          signal: requestController.signal,
         });
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
@@ -826,6 +897,7 @@ export default function App() {
 
     return () => {
       mounted = false;
+      controller?.abort();
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [address, fc?.context, isNeynarNotifications]);
@@ -905,8 +977,6 @@ export default function App() {
       data-viewport-shell="outer"
       className={cn(
         "flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none",
-        keyboardState.isVisible ? "keyboard-visible" : "keyboard-hidden",
-        isKeyboardNavigation && "keyboard-navigation",
         !isConnected && "login-theme-cycle",
         !isConnected && loginTheme,
       )}
@@ -936,7 +1006,7 @@ export default function App() {
         data-connected={isConnected ? "true" : "false"}
         className={cn(
           "app-shell-inner w-full flex flex-col h-dvh overflow-hidden overscroll-none",
-          !isConnected && "relative z-10",
+          !isConnected && "login-shell-safe-top relative z-10",
           isConnected ? "bg-background bg-[image:var(--gradient-content-well)]" : "bg-transparent"
         )}
         style={!isConnected ? { maxWidth: "100%" } : undefined}
@@ -1003,9 +1073,11 @@ export default function App() {
                     variant="headerIcon"
                     size="icon"
                     onClick={() => {
-                      setWalletProfileLoaded(true);
                       setShowWalletProfile(true);
+                      void ensureWalletProfileLoaded();
                     }}
+                    onPointerEnter={() => void ensureWalletProfileLoaded()}
+                    onFocus={() => void ensureWalletProfileLoaded()}
                     aria-label="Open wallet profile"
                     title="Open wallet profile"
                   >
@@ -1037,6 +1109,10 @@ export default function App() {
           </div>
         )}
 
+        <div className="relative z-[var(--z-banner)] shrink-0">
+          <AppUpdateBanner disabled={isMiniApp} />
+        </div>
+
         {/* Main Content */}
         <main
           data-viewport-shell="main"
@@ -1048,15 +1124,15 @@ export default function App() {
           aria-label="Main content area"
         >
           {(!isConnected) ? (
-            <div className="relative z-10 flex h-full flex-col items-center justify-center overflow-y-auto overscroll-contain p-4 safe-area-bottom md:w-full xl:p-5">
-              <div className="flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pt-5">
+            <div className="login-safe-area relative z-10 flex h-full flex-col items-center overflow-y-auto overscroll-contain p-4 md:w-full xl:p-5">
+              <div className="login-hero-copy flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pt-5">
                 {/* Same components the server-rendered fallback uses (see
                     app/(game)/layout.tsx), so the hand-off is seamless. */}
                 <LoginHero title={fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'} />
                 <LoginIntro />
               </div>
               <LoginAuthActions
-                className="w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
+                className="login-auth-actions w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
                 isMiniConnectRetrying={state.isMiniConnectRetrying}
@@ -1071,8 +1147,9 @@ export default function App() {
               <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
                 <SlidingNavTabs
                   activeTab={activeTab}
+                  animateIndicator={shouldAnimateTabChange}
                   mode="desktop"
-                  onTabChange={setActiveTab}
+                  onTabChange={handleTabChange}
                   tabs={APP_TABS}
                 />
               </nav>
@@ -1134,7 +1211,8 @@ export default function App() {
                             className={
                               activeTab === tab.id
                                 ? cn(
-                                    'block min-h-0 animate-tab-content-in',
+                                    'block min-h-0',
+                                    shouldAnimateTabChange && 'animate-tab-content-in',
                                     usesContainedTabLayout && 'h-full'
                                   )
                                 : 'hidden'
@@ -1164,8 +1242,9 @@ export default function App() {
               <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
                 <SlidingNavTabs
                   activeTab={activeTab}
+                  animateIndicator={shouldAnimateTabChange}
                   mode="mobile"
-                  onTabChange={setActiveTab}
+                  onTabChange={handleTabChange}
                   tabs={APP_TABS}
                 />
               </nav>
@@ -1181,11 +1260,32 @@ export default function App() {
             console.error('Error in WalletProfile:', { error, errorInfo });
           }}
         >
-          {walletProfileLoaded && (
-            <WalletProfile
+          {WalletProfileComponent ? (
+            <WalletProfileComponent
               open={showWalletProfile}
               onOpenChange={setShowWalletProfile}
             />
+          ) : (
+            <Dialog open={showWalletProfile} onOpenChange={setShowWalletProfile}>
+              <DialogContent surface="soft" className="w-[min(92vw,26rem)]">
+                <DialogHeader>
+                  <DialogTitle>Wallet profile</DialogTitle>
+                  <DialogDescription>
+                    {walletProfileLoadError ?? 'Loading your wallet, balances, and settings.'}
+                  </DialogDescription>
+                </DialogHeader>
+                {walletProfileLoading ? (
+                  <div role="status" className="flex min-h-20 items-center justify-center gap-3 text-sm text-muted-foreground">
+                    <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                    Loading wallet profile…
+                  </div>
+                ) : walletProfileLoadError ? (
+                  <Button className="w-full" size="touchCompact" onClick={() => void ensureWalletProfileLoaded()}>
+                    Retry loading wallet profile
+                  </Button>
+                ) : null}
+              </DialogContent>
+            </Dialog>
           )}
         </ErrorBoundary>
 

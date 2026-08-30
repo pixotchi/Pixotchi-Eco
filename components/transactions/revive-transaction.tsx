@@ -46,6 +46,7 @@ export default function ReviveTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`plant:revive:${plantId}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -57,5 +58,4 @@ export default function ReviveTransaction({
     />
   );
 }
-
 

@@ -10,12 +10,37 @@ import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
 import { formatSolAmount } from "@/lib/solana-bridge-executor";
 import { cn,formatLargeNumber } from "@/lib/utils";
 import Image from "next/image";
-import { type ReactNode,useEffect,useState } from "react";
+import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { useAccount,useBalance } from "wagmi";
 
 import { StandardContainer } from "./ui/pixel-container";
 
 const MIN_REFRESH_FEEDBACK_MS = 650;
+
+type StakeInfo = { staked: bigint; rewards: bigint } | null;
+
+type WalletProfileResourceSnapshot = {
+  ownerKey: string | null;
+  stakeInfo: StakeInfo;
+  plantCount: number | null;
+  landCount: number | null;
+  isLoading: boolean;
+  error: string | null;
+};
+
+function createEmptyProfileSnapshot(
+  ownerKey: string | null = null,
+  isLoading = false,
+): WalletProfileResourceSnapshot {
+  return {
+    ownerKey,
+    stakeInfo: null,
+    plantCount: null,
+    landCount: null,
+    isLoading,
+    error: null,
+  };
+}
 
 interface BalanceCardProps {
   className?: string;
@@ -33,8 +58,16 @@ export default function BalanceCard({ className = "", variant = "default", onRef
     refreshBalances
   } = useBalances();
   const isSolana = useIsSolanaWallet();
-  const { solBalance, twinInfo, isLoading: solanaLoading } = useSolanaWallet();
+  const {
+    effectiveAddress,
+    solBalance,
+    twinInfo,
+    isLoading: solanaLoading,
+  } = useSolanaWallet();
   const [manualRefreshing, setManualRefreshing] = useState(false);
+  const manualRefreshingRef = useRef(false);
+  const manualRefreshGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
 
   // ETH balance for wallet profile variant (EVM only)
   const {
@@ -46,77 +79,146 @@ export default function BalanceCard({ className = "", variant = "default", onRef
     query: { enabled: !!address && variant === "wallet-profile" && !isSolana }
   });
 
-  // Stake info for wallet profile variant
-  const [stakeInfo, setStakeInfo] = useState<{ staked: bigint; rewards: bigint } | null>(null);
-  const [, setStakeLoading] = useState(false);
-
-  // NFT counts for wallet profile variant
-  const [plantCount, setPlantCount] = useState<number>(0);
-  const [landCount, setLandCount] = useState<number>(0);
-  const [nftLoading, setNftLoading] = useState(false);
+  // Solana-owned plants live at the Base Twin address. Key the snapshot by the
+  // effective Base owner so switching auth surfaces cannot carry EVM profile data
+  // into a Solana profile (or vice versa).
+  const profileOwnerAddress = isSolana ? effectiveAddress : (address ?? null);
+  const profileOwnerKey = variant === "wallet-profile" && profileOwnerAddress
+    ? profileOwnerAddress.toLowerCase()
+    : null;
+  const profileOwnerKeyRef = useRef(profileOwnerKey);
+  const profileRequestGenerationRef = useRef(0);
+  profileOwnerKeyRef.current = profileOwnerKey;
 
   useEffect(() => {
-    if (variant !== "wallet-profile" || !address) return;
-
-    const fetchWalletProfileData = async () => {
-      setStakeLoading(true);
-      setNftLoading(true);
-      try {
-        const [infoResult, plantsResult, landsResult] = await Promise.allSettled([
-          getStakeInfo(address),
-          getPlantsByOwner(address),
-          getLandsByOwner(address)
-        ]);
-
-        if (infoResult.status === "fulfilled") {
-          setStakeInfo(infoResult.value);
-        }
-
-        if (plantsResult.status === "fulfilled") {
-          setPlantCount(plantsResult.value.length);
-        }
-
-        if (landsResult.status === "fulfilled") {
-          setLandCount(landsResult.value.length);
-        }
-
-        if (
-          infoResult.status === "rejected" &&
-          plantsResult.status === "rejected" &&
-          landsResult.status === "rejected"
-        ) {
-          throw infoResult.reason;
-        }
-      } catch (err) {
-        console.error('Failed to fetch wallet profile data:', err);
-        setStakeInfo(null);
-      } finally {
-        setStakeLoading(false);
-        setNftLoading(false);
-      }
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      manualRefreshGenerationRef.current += 1;
+      profileRequestGenerationRef.current += 1;
     };
+  }, []);
 
-    fetchWalletProfileData();
-  }, [address, variant]);
+  const [profileSnapshot, setProfileSnapshot] = useState<WalletProfileResourceSnapshot>(
+    () => createEmptyProfileSnapshot(),
+  );
+  const visibleProfileSnapshot = useMemo(
+    () => profileSnapshot.ownerKey === profileOwnerKey
+      ? profileSnapshot
+      : createEmptyProfileSnapshot(profileOwnerKey, Boolean(profileOwnerKey)),
+    [profileOwnerKey, profileSnapshot],
+  );
+
+  const refreshProfileData = useCallback(async () => {
+    const requestedOwner = profileOwnerAddress;
+    const requestedOwnerKey = profileOwnerKey;
+
+    if (!requestedOwner || !requestedOwnerKey) {
+      if (mountedRef.current && profileOwnerKeyRef.current === requestedOwnerKey) {
+        profileRequestGenerationRef.current += 1;
+        setProfileSnapshot(createEmptyProfileSnapshot());
+      }
+      return;
+    }
+
+    if (!mountedRef.current || profileOwnerKeyRef.current !== requestedOwnerKey) return;
+    const generation = profileRequestGenerationRef.current + 1;
+    profileRequestGenerationRef.current = generation;
+    setProfileSnapshot(createEmptyProfileSnapshot(requestedOwnerKey, true));
+
+    const [infoResult, plantsResult, landsResult] = await Promise.allSettled([
+      getStakeInfo(requestedOwner),
+      getPlantsByOwner(requestedOwner),
+      getLandsByOwner(requestedOwner),
+    ]);
+
+    if (
+      profileRequestGenerationRef.current !== generation
+      || !mountedRef.current
+      || profileOwnerKeyRef.current !== requestedOwnerKey
+    ) {
+      return;
+    }
+
+    const failures = [infoResult, plantsResult, landsResult].filter(
+      (result) => result.status === "rejected",
+    );
+    if (failures.length > 0) {
+      console.warn('Some wallet profile resources could not be loaded', failures);
+    }
+
+    setProfileSnapshot({
+      ownerKey: requestedOwnerKey,
+      stakeInfo: infoResult.status === "fulfilled" ? infoResult.value : null,
+      plantCount: plantsResult.status === "fulfilled" ? plantsResult.value.length : null,
+      landCount: landsResult.status === "fulfilled" ? landsResult.value.length : null,
+      isLoading: false,
+      error: failures.length > 0
+        ? 'Some ownership details are unavailable. Refresh to try again.'
+        : null,
+    });
+  }, [profileOwnerAddress, profileOwnerKey]);
+
+  useEffect(() => {
+    void refreshProfileData();
+    return () => {
+      profileRequestGenerationRef.current += 1;
+    };
+  }, [refreshProfileData]);
+
+  useEffect(() => {
+    manualRefreshGenerationRef.current += 1;
+    manualRefreshingRef.current = false;
+    setManualRefreshing(false);
+  }, [profileOwnerKey]);
+
+  const {
+    error: profileResourceError,
+    isLoading: profileResourcesLoading,
+    landCount,
+    plantCount,
+    stakeInfo,
+  } = visibleProfileSnapshot;
+  const nftLoading = profileResourcesLoading
+    || (variant === "wallet-profile" && isSolana && !profileOwnerKey && solanaLoading);
 
   const handleRefresh = async () => {
-    if (manualRefreshing) return;
+    if (
+      manualRefreshingRef.current
+      || !mountedRef.current
+      || profileOwnerKeyRef.current !== profileOwnerKey
+    ) return;
 
+    const requestedOwnerKey = profileOwnerKey;
+    const generation = manualRefreshGenerationRef.current + 1;
+    manualRefreshGenerationRef.current = generation;
     const startedAt = Date.now();
+    manualRefreshingRef.current = true;
     setManualRefreshing(true);
 
     try {
+      const refreshes: Promise<unknown>[] = [
+        refreshBalances(),
+        refreshProfileData(),
+      ];
       if (variant === "wallet-profile" && !isSolana) {
-        await refetchEthBalance();
+        refreshes.push(refetchEthBalance());
       }
-      await refreshBalances();
-      await onRefresh?.();
+      if (onRefresh) refreshes.push(Promise.resolve(onRefresh()));
+      await Promise.allSettled(refreshes);
     } finally {
       const remainingFeedbackMs = MIN_REFRESH_FEEDBACK_MS - (Date.now() - startedAt);
       if (remainingFeedbackMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, remainingFeedbackMs));
       }
-      setManualRefreshing(false);
+      if (
+        manualRefreshGenerationRef.current === generation
+        && mountedRef.current
+        && profileOwnerKeyRef.current === requestedOwnerKey
+      ) {
+        manualRefreshingRef.current = false;
+        setManualRefreshing(false);
+      }
     }
   };
 
@@ -201,6 +303,12 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </Button>
         </div>
 
+        {profileResourceError ? (
+          <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">
+            {profileResourceError}
+          </p>
+        ) : null}
+
         <StandardContainer className="chromatic-white-surface space-y-3 overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-3 shadow-[var(--shadow-raised)]">
           <div className="space-y-1">
             <div className={walletGroupLabelClassName}>Tokens</div>
@@ -267,7 +375,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "Plants",
                 iconSrc: "/icons/plant1.svg",
                 iconAlt: "Plants",
-                value: plantCount,
+                value: plantCount ?? "—",
                 isLoading: nftLoading,
                 skeletonClassName: "h-4 w-12",
               })}
@@ -275,7 +383,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "Lands",
                 iconSrc: "/icons/landIcon.png",
                 iconAlt: "Lands",
-                value: landCount,
+                value: landCount ?? "—",
                 isLoading: nftLoading,
                 skeletonClassName: "h-4 w-12",
               })}

@@ -21,7 +21,6 @@ import {
   createBasePublicChatSession,
   createFarcasterPublicChatSession,
   createPrivyPublicChatSession,
-  getCurrentPublicChatSession,
   getCurrentPublicChatSessionForAddress,
   PUBLIC_CHAT_SESSION_EVENT,
   type PublicChatSession,
@@ -93,6 +92,41 @@ function delay(ms: number) {
 }
 
 const PUBLIC_CHAT_MIN_FETCH_INTERVAL_MS = 4500;
+const BASE_AUTH_BOOTSTRAP_WAIT_MS = 5000;
+const BASE_AUTH_BOOTSTRAP_POLL_MS = 125;
+const PUBLIC_CHAT_AUTO_RETRY_DELAYS_MS = [1250, 2500, 5000] as const;
+
+function normalizeBaseAuthSurface(surface: string | null) {
+  return surface === 'coinbase' ? 'base' : surface;
+}
+
+function isBaseAuthBootstrapPending(
+  surface: 'base' | 'test',
+  address: string,
+): boolean {
+  const autologin = normalizeBaseAuthSurface(sessionStorageManager.getAutologin());
+  if (autologin === surface) {
+    return true;
+  }
+
+  const pendingAuth = sessionStorageManager.getPendingBaseChatAuth();
+  return pendingAuth?.address?.toLowerCase() === address.toLowerCase();
+}
+
+async function waitForBaseAuthBootstrap(
+  surface: 'base' | 'test',
+  address: string,
+  shouldContinue: () => boolean,
+) {
+  const deadline = Date.now() + BASE_AUTH_BOOTSTRAP_WAIT_MS;
+  while (
+    shouldContinue() &&
+    Date.now() < deadline &&
+    isBaseAuthBootstrapPending(surface, address)
+  ) {
+    await delay(BASE_AUTH_BOOTSTRAP_POLL_MS);
+  }
+}
 
 type PublicChatFetchGate = {
   inFlight: boolean;
@@ -156,6 +190,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const fetchInFlightRef = useRef<Partial<Record<ChatMode, boolean>>>({});
   const bootstrapKeyRef = useRef<string | null>(null);
+  const bootstrapRunRef = useRef(0);
+  const publicChatAutoRetryRef = useRef<{ attempt: number; key: string | null }>({
+    attempt: 0,
+    key: null,
+  });
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
   const publicChatSessionRef = useRef<PublicChatSession | null>(null);
@@ -278,8 +317,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Invalidate any older async bootstrap before publishing the newer,
+      // authoritative session event into React state.
+      bootstrapRunRef.current += 1;
       publicChatSessionRef.current = nextSession;
       setPublicChatSession(nextSession);
+      if (nextSession) {
+        setError(null);
+      }
       setPublicChatSessionVersion((version) => version + 1);
     };
 
@@ -321,6 +366,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [chatAddress, getCurrentWebAuthSurface, isMiniApp]);
 
   const retryPublicChatSession = useCallback(() => {
+    publicChatAutoRetryRef.current = { attempt: 0, key: null };
     setError(null);
     setPublicChatState('booting');
 
@@ -702,6 +748,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const bootstrapRunId = bootstrapRunRef.current + 1;
+    bootstrapRunRef.current = bootstrapRunId;
+    let cancelled = false;
+    const isCurrentBootstrap = () =>
+      !cancelled && bootstrapRunRef.current === bootstrapRunId;
+
     if (isMiniApp) {
       bootstrapKeyRef.current = bootstrapKey;
 
@@ -712,14 +764,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      let cancelled = false;
-
       const bootstrapMiniAppChat = async () => {
         setPublicChatState('booting');
         setPublicChatLoading(true);
 
         try {
           let nextSession = await getCurrentPublicChatSessionForAddress(chatAddress);
+          if (!isCurrentBootstrap()) {
+            return;
+          }
 
           const nextSessionMatchesWallet =
             nextSession?.address?.toLowerCase() === chatAddress.toLowerCase();
@@ -736,24 +789,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           if (!nextSession) {
             const { token } = await sdk.quickAuth.getToken();
+            if (!isCurrentBootstrap()) {
+              return;
+            }
             nextSession = await createFarcasterPublicChatSession({
               expectedAddress: chatAddress,
               token,
             });
           }
 
-          if (!cancelled) {
+          if (isCurrentBootstrap()) {
+            publicChatSessionRef.current = nextSession;
             setPublicChatSession(nextSession);
             setPublicChatState('ready');
           }
         } catch (miniAppBootstrapError) {
           console.error('[chat] Failed to bootstrap Mini App public chat session:', miniAppBootstrapError);
-          if (!cancelled) {
+          if (isCurrentBootstrap()) {
+            publicChatSessionRef.current = null;
             setPublicChatSession(null);
             setPublicChatState('error');
           }
         } finally {
-          if (!cancelled) {
+          if (isCurrentBootstrap()) {
             setPublicChatLoading(false);
           }
         }
@@ -792,7 +850,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     bootstrapKeyRef.current = bootstrapKey;
-    let cancelled = false;
 
     const bootstrapPublicChat = async () => {
       setPublicChatState('booting');
@@ -807,13 +864,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
 
           if (hasMatchingPrivySession) {
-            setPublicChatState('ready');
+            if (isCurrentBootstrap()) {
+              setPublicChatState('ready');
+            }
             return;
           }
 
           const accessToken = identityToken ? null : await getAccessToken();
           if (!identityToken && !accessToken) {
             throw new Error('Privy token unavailable.');
+          }
+          if (!isCurrentBootstrap()) {
+            return;
           }
 
           const nextSession = await createPrivyPublicChatSession({
@@ -823,7 +885,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             ...(currentSurface === 'privysolana' ? { solanaAddress } : {}),
           });
 
-          if (!cancelled) {
+          if (isCurrentBootstrap()) {
+            publicChatSessionRef.current = nextSession;
             setPublicChatSession(nextSession);
             setPublicChatState('ready');
           }
@@ -831,26 +894,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
 
         if (shouldCheckBase) {
+          const baseSurface: 'base' | 'test' = currentSurface === 'test' ? 'test' : 'base';
           const hasMatchingBaseSession =
             publicChatSession?.provider === 'base' &&
             publicChatSession.address?.toLowerCase() === chatAddress.toLowerCase();
 
           if (hasMatchingBaseSession) {
-            setPublicChatState('ready');
+            if (isCurrentBootstrap()) {
+              setPublicChatState('ready');
+            }
             return;
           }
 
-          let nextSession: PublicChatSession | null = null;
+          // Surface switching stores an autologin marker before reloading.
+          // Wagmi can reconnect before the SIWE POST completes, so wait for
+          // that handshake instead of issuing a predictably unauthenticated
+          // GET. The bounded wait still lets genuine auth failures surface.
+          await waitForBaseAuthBootstrap(
+            baseSurface,
+            chatAddress,
+            isCurrentBootstrap,
+          );
+          if (!isCurrentBootstrap()) {
+            return;
+          }
 
-          for (let attempt = 0; attempt < 3; attempt += 1) {
-            nextSession = await getCurrentPublicChatSession();
-            if (nextSession?.address?.toLowerCase() === chatAddress.toLowerCase()) {
-              break;
-            }
-
-            if (attempt < 2) {
-              await delay(250);
-            }
+          let nextSession = await getCurrentPublicChatSessionForAddress(chatAddress);
+          if (!isCurrentBootstrap()) {
+            return;
           }
 
           if (!nextSession) {
@@ -884,9 +955,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             nextSession = null;
           }
 
-          if (!cancelled) {
-            setPublicChatSession(nextSession);
-            setPublicChatState(nextSession ? 'ready' : 'error');
+          if (isCurrentBootstrap()) {
+            const eventSession = publicChatSessionRef.current;
+            const matchingEventSession =
+              eventSession?.provider === 'base' &&
+              eventSession.address.toLowerCase() === chatAddress.toLowerCase()
+                ? eventSession
+                : null;
+            const resolvedSession = nextSession ?? matchingEventSession;
+
+            publicChatSessionRef.current = resolvedSession;
+            setPublicChatSession(resolvedSession);
+            setPublicChatState(resolvedSession ? 'ready' : 'error');
           }
 
           if (nextSession?.address?.toLowerCase() === chatAddress.toLowerCase()) {
@@ -897,12 +977,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       } catch (bootstrapError) {
         console.error('[chat] Failed to bootstrap public chat session:', bootstrapError);
-        if (!cancelled) {
+        if (isCurrentBootstrap()) {
+          const currentSession = publicChatSessionRef.current;
+          const currentSessionMatches =
+            currentSession?.address?.toLowerCase() === chatAddress.toLowerCase();
+          if (currentSessionMatches) {
+            setPublicChatState('ready');
+            return;
+          }
+
+          publicChatSessionRef.current = null;
           setPublicChatSession(null);
           setPublicChatState('error');
         }
       } finally {
-        if (!cancelled) {
+        if (isCurrentBootstrap()) {
           setPublicChatLoading(false);
         }
       }
@@ -925,6 +1014,84 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     publicChatRetryVersion,
     privyReady,
     solanaAddress,
+  ]);
+
+  useEffect(() => {
+    const currentSurface = getCurrentWebAuthSurface();
+    if (publicChatAuthenticated) {
+      publicChatAutoRetryRef.current = { attempt: 0, key: null };
+      return;
+    }
+
+    if (
+      isMiniApp ||
+      !chatAddress ||
+      (currentSurface !== 'base' && currentSurface !== 'test') ||
+      publicChatLoading ||
+      publicChatState !== 'error'
+    ) {
+      return;
+    }
+
+    const retryKey = `${currentSurface}:${chatAddress.toLowerCase()}`;
+    if (publicChatAutoRetryRef.current.key !== retryKey) {
+      publicChatAutoRetryRef.current = { attempt: 0, key: retryKey };
+    }
+
+    const attempt = publicChatAutoRetryRef.current.attempt;
+    if (attempt >= PUBLIC_CHAT_AUTO_RETRY_DELAYS_MS.length) {
+      return;
+    }
+    publicChatAutoRetryRef.current.attempt += 1;
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        if (cancelled) {
+          return;
+        }
+
+        const isFinalAttempt = attempt === PUBLIC_CHAT_AUTO_RETRY_DELAYS_MS.length - 1;
+        const authenticatedAddress = sessionStorageManager
+          .getBaseAuthenticatedAddress()
+          ?.toLowerCase();
+
+        if (isFinalAttempt && authenticatedAddress === chatAddress.toLowerCase()) {
+          setPublicChatState('booting');
+          setPublicChatLoading(true);
+          const recovery = await requestBaseChatSessionRefresh('chat-auth-failure', 15_000);
+          if (cancelled) {
+            return;
+          }
+
+          setPublicChatLoading(false);
+          if (recovery.status === 'success') {
+            setError(null);
+            setPublicChatRetryVersion((version) => version + 1);
+            return;
+          }
+
+          setError(recovery.message ?? 'Could not restore the secure chat session.');
+          setPublicChatState('error');
+          return;
+        }
+
+        setPublicChatState('booting');
+        setPublicChatRetryVersion((version) => version + 1);
+      })();
+    }, PUBLIC_CHAT_AUTO_RETRY_DELAYS_MS[attempt]);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    chatAddress,
+    getCurrentWebAuthSurface,
+    isMiniApp,
+    publicChatAuthenticated,
+    publicChatLoading,
+    publicChatState,
   ]);
 
   useEffect(() => {

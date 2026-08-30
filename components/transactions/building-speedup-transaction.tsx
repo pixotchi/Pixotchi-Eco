@@ -41,6 +41,7 @@ export default function BuildingSpeedUpTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`building:speedup:${buildingType}:${landId}:${building.id}:${building.blockHeightUpgradeInitiated}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -49,4 +50,4 @@ export default function BuildingSpeedUpTransaction({
       disabled={disabled || !building.isUpgrading}
     />
   );
-} 
+}

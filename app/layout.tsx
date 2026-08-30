@@ -202,12 +202,10 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#1f2d42" />
         {/* Fonts are self-hosted via next/font/local */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
-        {/* Preload above-the-fold art to reduce first paint */}
-        <link rel="preload" as="image" href="/PixotchiKit/Logonotext.svg" />
       </head>
       <body className="bg-background">
         {children}
-        <Analytics />
+        {process.env.VERCEL ? <Analytics /> : null}
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { getBuildingName, getBuildingIcon } from '@/lib/utils';
@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { Info } from 'lucide-react';
 import BuildingInfoDialog from './building-info-dialog';
-import { casinoIsBuilt } from '@/lib/contracts';
 
 // Import the new specialized panel components
 import UpgradePanel from './building-details/UpgradePanel';
@@ -55,15 +54,8 @@ function BuildingDetailsPanel({
   villageBuildings = [],
 }: BuildingDetailsPanelProps) {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  const [casinoBuiltState, setCasinoBuiltState] = useState<boolean | null>(null);
 
-  // Fetch casino built state for Casino building
   const isCasino = buildingType === 'town' && selectedBuilding?.id === 6;
-  useEffect(() => {
-    if (isCasino && landId) {
-      casinoIsBuilt(landId).then(setCasinoBuiltState).catch(() => setCasinoBuiltState(false));
-    }
-  }, [isCasino, landId]);
 
   if (!selectedBuilding) {
     return (
@@ -133,7 +125,13 @@ function BuildingDetailsPanel({
           return <MarketplacePanel landId={landId} />;
         case 6: // Casino/Roulette - CasinoPanel handles both build (level 0) and game UI
           if (!CASINO_ENABLED) return null;
-          return <CasinoPanel landId={landId} onSpinComplete={onUpgradeSuccess} />;
+          return (
+            <CasinoPanel
+              landId={landId}
+              initialIsBuilt={selectedBuilding.level > 0}
+              onSpinComplete={onUpgradeSuccess}
+            />
+          );
         case 7: // Farmer House
           if (selectedBuilding.level === 0) {
             return (
@@ -197,10 +195,7 @@ function BuildingDetailsPanel({
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              {isCasino
-                ? `Level ${casinoBuiltState ? 1 : 0}/${selectedBuilding.maxLevel}`
-                : `Level ${selectedBuilding.level}/${selectedBuilding.maxLevel}`
-              }
+              {`Level ${selectedBuilding.level}/${selectedBuilding.maxLevel}`}
             </p>
           </div>
         </div>

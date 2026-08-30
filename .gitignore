@@ -12,13 +12,14 @@ pnpm-debug.log*
 out/
 bridge-main/
 contracts/
-# Local one-off scripts stay ignored, but the two runners package.json depends on
+# Local one-off scripts stay ignored, but runners package.json depends on
 # must be tracked or `npm run lint` cannot work from a fresh clone.
 # Note: `scripts/*` (contents) rather than `scripts/` (the directory), because git
 # cannot re-include a path whose parent directory is excluded.
 scripts/*
 !scripts/check-base-rpc-hardening.mjs
 !scripts/run-eslint-chunked.mjs
+!scripts/run-react-server-smoke.mjs
 exports/
 pixotchi-onchain/
 tools/
@@ -36,6 +37,7 @@ output/
 .vercel
 
 # Local/generated files
+.playwright-cli/
 .claude/
 .codex
 unused-assets/

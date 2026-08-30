@@ -81,6 +81,7 @@ export default function BundleBuyTransaction({
 
   return (
     <SmartWalletTransaction
+      intentKey={`purchase:${itemType}:${plant.id}:${item.id}:${quantity}`}
       calls={generateBundleCalls()}
       onSuccess={(tx: UntypedValue) => {
         try {

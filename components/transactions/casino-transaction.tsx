@@ -289,6 +289,7 @@ export default function CasinoTransaction({
 
     return (
         <SponsoredTransaction
+            intentKey={`roulette:${mode}:${landId}`}
             calls={calls as UntypedValue}
             buttonText={buttonText ?? defaultText}
             buttonClassName={buttonClassName}

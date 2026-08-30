@@ -25,8 +25,8 @@ export function ProgressBar({ className, label, value, ...props }: ProgressBarPr
       {...props}
     >
       <div
-        className="h-full rounded-full bg-[hsl(var(--success))] bg-[image:var(--gradient-success)] shadow-[0_0_10px_hsl(var(--success)/0.28)] transition-[width] duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
-        style={{ width: `${normalizedValue}%` }}
+        className="h-full w-full origin-left rounded-full bg-[hsl(var(--success))] bg-[image:var(--gradient-success)] shadow-[0_0_10px_hsl(var(--success)/0.28)] transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
+        style={{ transform: `scaleX(${normalizedValue / 100})` }}
       />
     </div>
   );

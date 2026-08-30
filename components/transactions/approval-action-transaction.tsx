@@ -24,6 +24,7 @@ const ERC20_APPROVE_ABI = [
 ] as const;
 
 type ApprovalActionTransactionProps = {
+  intentKey: string;
   actionCalls: TransactionCall[];
   approvalSpender: `0x${string}`;
   approvalTokenAddress?: `0x${string}`;
@@ -43,6 +44,7 @@ type ApprovalActionTransactionProps = {
 };
 
 export default function ApprovalActionTransaction({
+  intentKey,
   actionCalls,
   approvalSpender,
   approvalTokenAddress = PIXOTCHI_TOKEN_ADDRESS,
@@ -86,6 +88,7 @@ export default function ApprovalActionTransaction({
   if (pendingApproval && isSmartWallet) {
     return (
       <SmartWalletTransaction
+        intentKey={intentKey}
         calls={[approvalCall, ...actionCalls]}
         onSuccess={onSuccess}
         onError={onError}
@@ -101,6 +104,7 @@ export default function ApprovalActionTransaction({
   if (pendingApproval) {
     return (
       <SponsoredTransaction
+        intentKey={`${intentKey}:approval:${approvalTokenAddress.toLowerCase()}:${approvalSpender.toLowerCase()}:${approvalAmount}`}
         calls={[approvalCall]}
         onSuccess={(tx) => {
           setApprovalConfirmed(true);
@@ -118,6 +122,7 @@ export default function ApprovalActionTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={intentKey}
       calls={actionCalls}
       onSuccess={onSuccess}
       onError={onError}

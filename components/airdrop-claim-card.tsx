@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { BASE_BRAND_BUTTON_CLASSNAME } from '@/components/ui/button';
 import { useAccount, useSignMessage } from 'wagmi';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Gift, Loader2, CheckCircle, PenTool } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import { invalidateOwnerResources } from '@/lib/owner-resource-invalidation';
 
 interface AirdropStatus {
     eligible: boolean;
@@ -20,11 +21,25 @@ interface AirdropStatus {
 
 export function AirdropClaimCard() {
     const { address } = useAccount();
+    const ownerKey = address?.toLowerCase() ?? null;
+    const ownerKeyRef = useRef<string | null>(ownerKey);
     const { signMessageAsync } = useSignMessage();
     const [status, setStatus] = useState<AirdropStatus | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [retryRevision, setRetryRevision] = useState(0);
     const [claiming, setClaiming] = useState(false);
     const [signingStep, setSigningStep] = useState<'idle' | 'signing' | 'claiming'>('idle');
+
+    useLayoutEffect(() => {
+        if (ownerKeyRef.current === ownerKey) return;
+        ownerKeyRef.current = ownerKey;
+        setStatus(null);
+        setLoadError(null);
+        setLoading(Boolean(ownerKey));
+        setClaiming(false);
+        setSigningStep('idle');
+    }, [ownerKey]);
 
     // Fetch eligibility on mount and when address changes
     useEffect(() => {
@@ -40,30 +55,36 @@ export function AirdropClaimCard() {
                 setLoading(false);
                 return;
             }
+            const requestedOwner = address.toLowerCase();
 
             try {
                 setLoading(true);
                 setStatus(null);
+                setLoadError(null);
                 const res = await fetch(`/api/airdrop/status?address=${address}`);
                 if (!res.ok) {
                     throw new Error(`Airdrop status request failed (${res.status})`);
                 }
                 const data = await res.json();
-                if (!cancelled) setStatus(data);
+                if (!cancelled && ownerKeyRef.current === requestedOwner) setStatus(data);
             } catch (err) {
                 console.error('[AIRDROP] Failed to fetch status:', err);
-                if (!cancelled) setStatus(null);
+                if (!cancelled && ownerKeyRef.current === requestedOwner) {
+                    setStatus(null);
+                    setLoadError('Airdrop eligibility could not be loaded. Check your connection and retry.');
+                }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled && ownerKeyRef.current === requestedOwner) setLoading(false);
             }
         }
 
         fetchStatus();
         return () => { cancelled = true; };
-    }, [address]);
+    }, [address, retryRevision]);
 
     const handleClaim = async () => {
         if (!address || !status?.eligible || status.claimed) return;
+        const operationOwner = address.toLowerCase();
 
         setClaiming(true);
         setSigningStep('signing');
@@ -92,6 +113,8 @@ export function AirdropClaimCard() {
                 throw signError;
             }
 
+            if (ownerKeyRef.current !== operationOwner) return;
+
             setSigningStep('claiming');
 
             // Step 3: Submit claim with signature
@@ -108,17 +131,29 @@ export function AirdropClaimCard() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                toast.success('Airdrop claimed successfully!');
-                setStatus(prev => prev ? { ...prev, claimed: true, txHash: data.txHash } : null);
+                invalidateOwnerResources({
+                    address: operationOwner,
+                    domains: ['balances'],
+                    source: 'airdrop-claim',
+                    transactionHash: typeof data.txHash === 'string' ? data.txHash : undefined,
+                });
+                if (ownerKeyRef.current === operationOwner) {
+                    toast.success('Airdrop claimed successfully!');
+                    setStatus(prev => prev ? { ...prev, claimed: true, txHash: data.txHash } : null);
+                }
             } else {
-                toast.error(data.error || 'Claim failed');
+                if (ownerKeyRef.current === operationOwner) toast.error(data.error || 'Claim failed');
             }
         } catch (err: UntypedValue) {
             console.error('[AIRDROP] Claim error:', err);
-            toast.error(err?.message || 'Failed to claim airdrop');
+            if (ownerKeyRef.current === operationOwner) {
+                toast.error(err?.message || 'Failed to claim airdrop');
+            }
         } finally {
-            setClaiming(false);
-            setSigningStep('idle');
+            if (ownerKeyRef.current === operationOwner) {
+                setClaiming(false);
+                setSigningStep('idle');
+            }
         }
     };
 
@@ -141,9 +176,46 @@ export function AirdropClaimCard() {
     const baseActionClassName =
         `w-full text-xs ${BASE_BRAND_BUTTON_CLASSNAME}`;
 
-    // Don't render if loading or no address
-    if (loading || !address || !status) {
+    if (!address) {
         return null;
+    }
+
+    if (loading) {
+        return (
+            <div className="space-y-3" aria-busy="true">
+                <h3 className="text-sm font-semibold text-foreground">Airdrop</h3>
+                <StandardContainer padding="none" className={panelClassName}>
+                    <div role="status" className="flex min-h-24 items-center justify-center gap-3 p-4 text-sm text-muted-foreground">
+                        <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        Checking eligibility…
+                    </div>
+                </StandardContainer>
+            </div>
+        );
+    }
+
+    if (loadError || !status) {
+        return (
+            <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">Airdrop</h3>
+                <StandardContainer padding="none" className={panelClassName}>
+                    <div role="alert" className={`${contentClassName} space-y-3`}>
+                        <p className="text-sm font-semibold text-foreground">Eligibility unavailable</p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            {loadError ?? 'Airdrop eligibility could not be loaded.'}
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="touchCompact"
+                            className="w-full"
+                            onClick={() => setRetryRevision((revision) => revision + 1)}
+                        >
+                            Retry eligibility check
+                        </Button>
+                    </div>
+                </StandardContainer>
+            </div>
+        );
     }
 
     // Not eligible state

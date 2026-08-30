@@ -9,14 +9,15 @@ import { loadBetPreference,storeBetPreference } from '@/lib/casino-bet-preferenc
 import { formatCasinoLimitForToken,getCasinoUiMaxBet,getCasinoUiMinBet,isPotentialCasinoAmountInput,parseCasinoAmountInput } from '@/lib/casino-amount-input';
 import { getClientCasinoPolicy } from '@/lib/casino-client';
 import {
-BlackjackAction,
-BlackjackPhase,
-BlackjackResult,
-LAND_CONTRACT_ADDRESS,
-blackjackGetGameSnapshot,
-blackjackGetGameToken,
-blackjackGetTokenConfig,
-checkCasinoApproval,
+    BlackjackAction,
+    BlackjackPhase,
+    BlackjackResult,
+    LAND_CONTRACT_ADDRESS,
+    blackjackGetGameSnapshot,
+    blackjackGetGameToken,
+    blackjackGetTokenConfig,
+    checkCasinoApproval,
+    type BlackjackGameSnapshot,
 } from '@/lib/contracts';
 import { formatTokenAmount,formatTokenAmountRounded,getCasinoTokenImage } from '@/lib/utils';
 import { getResultText } from '@/public/abi/blackjack-abi';
@@ -50,17 +51,37 @@ const BLACKJACK_FAILURE_STATUSES = new Set([
     'userRejected',
     'buildError',
 ]);
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const waitForAbortableDelay = (ms: number, signal: AbortSignal): Promise<boolean> => (
+    new Promise((resolve) => {
+        if (signal.aborted) {
+            resolve(false);
+            return;
+        }
+
+        let settled = false;
+        const finish = (completed: boolean) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeoutId);
+            signal.removeEventListener('abort', handleAbort);
+            resolve(completed);
+        };
+        const handleAbort = () => finish(false);
+        const timeoutId = window.setTimeout(() => finish(true), ms);
+        signal.addEventListener('abort', handleAbort, { once: true });
+        if (signal.aborted) handleAbort();
+    })
+);
 const BLACKJACK_ACTION_BUTTON_BASE = "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
 const BLACKJACK_SMALL_ACTION_BUTTON_BASE = "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-3 py-2.5 text-xs font-semibold leading-none shadow-[var(--shadow-hairline)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
-const BLACKJACK_WARNING_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
-const BLACKJACK_PRIMARY_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-primary/30 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground hover:brightness-[1.03]`;
-const BLACKJACK_STAND_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-white/10 text-white hover:bg-white/15`;
-const BLACKJACK_DANGER_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-destructive/45 bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground hover:brightness-[1.03]`;
-const BLACKJACK_WARNING_ACTION_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
-const BLACKJACK_SPECIAL_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
-const BLACKJACK_SPECIAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white hover:brightness-105`;
-const BLACKJACK_NEUTRAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/15 bg-white/10 text-white/90 hover:bg-white/15`;
+const BLACKJACK_WARNING_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
+const BLACKJACK_PRIMARY_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-primary/30 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
+const BLACKJACK_STAND_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-white/10 text-white [@media(hover:hover)_and_(pointer:fine)]:hover:bg-white/15`;
+const BLACKJACK_DANGER_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-destructive/45 bg-destructive bg-[image:var(--gradient-danger)] text-destructive-foreground [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
+const BLACKJACK_WARNING_ACTION_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
+const BLACKJACK_SPECIAL_BUTTON = `${BLACKJACK_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-105`;
+const BLACKJACK_SPECIAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/20 bg-[image:var(--gradient-special)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-105`;
+const BLACKJACK_NEUTRAL_BUTTON_SM = `${BLACKJACK_SMALL_ACTION_BUTTON_BASE} border border-white/15 bg-white/10 text-white/90 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-white/15`;
 const BLACKJACK_STICKY_ACTIONS_CLASS = "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 -mx-3 mt-auto space-y-3 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white sm:-mx-4 sm:px-4";
 
 /**
@@ -249,6 +270,29 @@ export default function BlackjackDialog({
     // Core game state - derived from contract
     const [gameState, setGameState] = useState<GameState>(initialGameState);
     const refreshGenerationRef = useRef(0);
+    const refreshScopeRef = useRef('');
+    const gameOwnerScopeRef = useRef('');
+    const snapshotGenerationRef = useRef(0);
+    const configGenerationRef = useRef(0);
+    const allowanceGenerationRef = useRef(0);
+    const actionSyncGenerationRef = useRef(0);
+    const scopeAbortControllerRef = useRef<AbortController | null>(null);
+    const snapshotRequestsRef = useRef(new Map<string, {
+        generation: number;
+        promise: Promise<BlackjackGameSnapshot | null>;
+        scopeKey: string;
+    }>());
+    const gameRefreshInFlightRef = useRef<{
+        generation: number;
+        promise: Promise<boolean>;
+        scopeKey: string;
+    } | null>(null);
+    const actionSyncInFlightRef = useRef<{
+        controller: AbortController;
+        generation: number;
+        promise: Promise<boolean>;
+        scopeKey: string;
+    } | null>(null);
 
     // Transaction in progress tracking - tracks specific action for hiding other buttons
     const [txInProgress, setTxInProgress] = useState<'deal' | BlackjackAction | null>(null);
@@ -281,6 +325,103 @@ export default function BlackjackDialog({
     }, [blackjackPlayable, casinoPolicy.blackjackEnabled, casinoPolicy.message, onOpenChange, open]);
 
     const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(config?.bettingToken);
+    const refreshScopeKey = [
+        open ? 'open' : 'closed',
+        blackjackPlayable ? 'playable' : 'disabled',
+        address?.toLowerCase() ?? '',
+        landId.toString(),
+        selectedToken?.toLowerCase() ?? '',
+    ].join(':');
+    const gameOwnerScopeKey = [address?.toLowerCase() ?? '', landId.toString()].join(':');
+
+    useEffect(() => {
+        const gameOwnerChanged = gameOwnerScopeRef.current !== gameOwnerScopeKey;
+        gameOwnerScopeRef.current = gameOwnerScopeKey;
+        refreshScopeRef.current = refreshScopeKey;
+        refreshGenerationRef.current += 1;
+        snapshotGenerationRef.current += 1;
+        configGenerationRef.current += 1;
+        allowanceGenerationRef.current += 1;
+        actionSyncGenerationRef.current += 1;
+        scopeAbortControllerRef.current?.abort();
+        actionSyncInFlightRef.current?.controller.abort();
+        const scopeController = new AbortController();
+        scopeAbortControllerRef.current = scopeController;
+
+        setActionButtonsReady(false);
+        setActionButtonsSyncing(false);
+        setActionButtonsSyncFailed(false);
+        setConfig(null);
+        setAllowanceWei(BigInt(0));
+        if (gameOwnerChanged) {
+            setGameState(prev => ({
+                ...initialGameState,
+                betAmountInput: prev.betAmountInput,
+            }));
+            setTxInProgress(null);
+            setWalletTxPending(false);
+            setError(null);
+        }
+
+        return () => {
+            if (refreshScopeRef.current === refreshScopeKey) {
+                refreshScopeRef.current = '';
+            }
+            refreshGenerationRef.current += 1;
+            snapshotGenerationRef.current += 1;
+            configGenerationRef.current += 1;
+            allowanceGenerationRef.current += 1;
+            actionSyncGenerationRef.current += 1;
+            scopeController.abort();
+            actionSyncInFlightRef.current?.controller.abort();
+            if (scopeAbortControllerRef.current === scopeController) {
+                scopeAbortControllerRef.current = null;
+            }
+        };
+    }, [gameOwnerScopeKey, refreshScopeKey]);
+
+    const readGameSnapshot = useCallback((): Promise<BlackjackGameSnapshot | null> => {
+        if (!open || !blackjackPlayable || refreshScopeRef.current !== refreshScopeKey) {
+            return Promise.resolve(null);
+        }
+
+        const snapshotRequests = snapshotRequestsRef.current;
+        const activeRequest = snapshotRequests.get(refreshScopeKey);
+        const snapshotGeneration = snapshotGenerationRef.current;
+        if (
+            activeRequest?.scopeKey === refreshScopeKey &&
+            activeRequest.generation === snapshotGeneration
+        ) {
+            return activeRequest.promise;
+        }
+
+        const requestRecord: {
+            generation: number;
+            promise: Promise<BlackjackGameSnapshot | null>;
+            scopeKey: string;
+        } = {
+            generation: snapshotGeneration,
+            promise: Promise.resolve(null),
+            scopeKey: refreshScopeKey,
+        };
+        const readSnapshot = () => {
+            if (
+                refreshScopeRef.current !== refreshScopeKey ||
+                snapshotGenerationRef.current !== snapshotGeneration
+            ) return Promise.resolve(null);
+            return blackjackGetGameSnapshot(landId);
+        };
+        const snapshotPromise = activeRequest?.scopeKey === refreshScopeKey
+            ? activeRequest.promise.catch(() => null).then(readSnapshot)
+            : readSnapshot();
+        requestRecord.promise = snapshotPromise.finally(() => {
+            if (snapshotRequests.get(refreshScopeKey) === requestRecord) {
+                snapshotRequests.delete(refreshScopeKey);
+            }
+        });
+        snapshotRequests.set(refreshScopeKey, requestRecord);
+        return requestRecord.promise;
+    }, [blackjackPlayable, landId, open, refreshScopeKey]);
 
     const { data: balanceData, refetch: refetchBalance } = useBalance({
         address: address,
@@ -344,49 +485,74 @@ export default function BlackjackDialog({
 
     const invalidatePendingRefreshes = useCallback(() => {
         refreshGenerationRef.current += 1;
+        snapshotGenerationRef.current += 1;
+        actionSyncGenerationRef.current += 1;
+        actionSyncInFlightRef.current?.controller.abort();
     }, []);
 
     // Fetch complete game state from contract
-    const refreshGameState = useCallback(async (): Promise<boolean> => {
-        if (!open || !blackjackPlayable) {
-            setActionButtonsReady(false);
-            return false;
+    const refreshGameState = useCallback((): Promise<boolean> => {
+        if (!open || !blackjackPlayable || refreshScopeRef.current !== refreshScopeKey) {
+            return Promise.resolve(false);
         }
 
-        const refreshGeneration = refreshGenerationRef.current;
+        const activeRefresh = gameRefreshInFlightRef.current;
+        if (
+            activeRefresh?.scopeKey === refreshScopeKey &&
+            activeRefresh.generation === refreshGenerationRef.current
+        ) {
+            return activeRefresh.promise;
+        }
 
-        try {
-            const snapshot = await blackjackGetGameSnapshot(landId);
+        const refreshGeneration = refreshGenerationRef.current + 1;
+        refreshGenerationRef.current = refreshGeneration;
+        const isCurrentRefresh = () => (
+            refreshScopeRef.current === refreshScopeKey &&
+            refreshGenerationRef.current === refreshGeneration
+        );
+        const requestRecord: {
+            generation: number;
+            promise: Promise<boolean>;
+            scopeKey: string;
+        } = {
+            generation: refreshGeneration,
+            promise: Promise.resolve(false),
+            scopeKey: refreshScopeKey,
+        };
 
-            if (refreshGeneration !== refreshGenerationRef.current) {
-                return false;
-            }
+        requestRecord.promise = (async () => {
+            try {
+                const snapshot = await readGameSnapshot();
 
-            if (!snapshot) {
-                // Do not hard-reset UI on transient RPC/read failures.
-                // We keep the current state and try again on next refresh/action.
-                setActionButtonsReady(false);
-                return false;
-            }
-
-            const normalizedPlayer = (snapshot.player || '').toLowerCase();
-            const normalizedAddress = address?.toLowerCase() ?? '';
-            const isOurGame =
-                normalizedPlayer !== '' &&
-                normalizedPlayer !== ZERO_ADDRESS &&
-                normalizedAddress !== '' &&
-                normalizedPlayer === normalizedAddress;
-            const trustedActionState = isOurGame && hasTrustedActionState(snapshot);
-            setActionButtonsReady(trustedActionState);
-            if (trustedActionState) {
-                setActionButtonsSyncing(false);
-                setActionButtonsSyncFailed(false);
-            }
-
-            setGameState(prev => {
-                if (refreshGeneration !== refreshGenerationRef.current) {
-                    return prev;
+                if (!isCurrentRefresh()) {
+                    return false;
                 }
+
+                if (!snapshot) {
+                    // Do not hard-reset UI on transient RPC/read failures.
+                    // We keep the current state and try again on next refresh/action.
+                    setActionButtonsReady(false);
+                    return false;
+                }
+
+                const normalizedPlayer = (snapshot.player || '').toLowerCase();
+                const normalizedAddress = address?.toLowerCase() ?? '';
+                const isOurGame =
+                    normalizedPlayer !== '' &&
+                    normalizedPlayer !== ZERO_ADDRESS &&
+                    normalizedAddress !== '' &&
+                    normalizedPlayer === normalizedAddress;
+                const trustedActionState = isOurGame && hasTrustedActionState(snapshot);
+                setActionButtonsReady(trustedActionState);
+                if (trustedActionState) {
+                    setActionButtonsSyncing(false);
+                    setActionButtonsSyncFailed(false);
+                }
+
+                setGameState(prev => {
+                    if (!isCurrentRefresh()) {
+                        return prev;
+                    }
 
                 const snapshotLooksEmpty =
                     snapshot.phase === BlackjackPhase.NONE &&
@@ -546,82 +712,169 @@ export default function BlackjackDialog({
                     canSplit: isPlayerTurn ? snapshot.canSplit : false,
                     canSurrender: isPlayerTurn ? snapshot.canSurrender : false,
                 };
-            });
-            return trustedActionState;
-        } catch (err) {
-            console.error('Failed to refresh blackjack state:', err);
+                });
+                return trustedActionState;
+            } catch (err) {
+                if (isCurrentRefresh()) {
+                    console.error('Failed to refresh blackjack state:', err);
+                    setActionButtonsReady(false);
+                }
+                return false;
+            }
+        })().finally(() => {
+            if (gameRefreshInFlightRef.current === requestRecord) {
+                gameRefreshInFlightRef.current = null;
+            }
+        });
+        gameRefreshInFlightRef.current = requestRecord;
+        return requestRecord.promise;
+    }, [address, blackjackPlayable, open, readGameSnapshot, refreshScopeKey]);
+
+    const syncActionButtonsWithRetries = useCallback((): Promise<boolean> => {
+        if (!open || !blackjackPlayable || refreshScopeRef.current !== refreshScopeKey) {
+            return Promise.resolve(false);
+        }
+
+        const activeSync = actionSyncInFlightRef.current;
+        if (
+            activeSync?.scopeKey === refreshScopeKey &&
+            activeSync.generation === actionSyncGenerationRef.current &&
+            !activeSync.controller.signal.aborted
+        ) {
+            return activeSync.promise;
+        }
+
+        const syncGeneration = actionSyncGenerationRef.current + 1;
+        actionSyncGenerationRef.current = syncGeneration;
+        const controller = new AbortController();
+        const isCurrentSync = () => (
+            !controller.signal.aborted &&
+            refreshScopeRef.current === refreshScopeKey &&
+            actionSyncGenerationRef.current === syncGeneration
+        );
+        const syncRecord: {
+            controller: AbortController;
+            generation: number;
+            promise: Promise<boolean>;
+            scopeKey: string;
+        } = {
+            controller,
+            generation: syncGeneration,
+            promise: Promise.resolve(false),
+            scopeKey: refreshScopeKey,
+        };
+
+        syncRecord.promise = (async () => {
+            if (!isCurrentSync()) return false;
             setActionButtonsReady(false);
+            setActionButtonsSyncing(true);
+            setActionButtonsSyncFailed(false);
+
+            const maxAttempts = 3;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const trusted = await refreshGameState();
+                if (!isCurrentSync()) return false;
+                if (trusted) {
+                    setActionButtonsReady(true);
+                    setActionButtonsSyncing(false);
+                    setActionButtonsSyncFailed(false);
+                    return true;
+                }
+                if (
+                    attempt < maxAttempts - 1 &&
+                    !await waitForAbortableDelay(1500, controller.signal)
+                ) {
+                    return false;
+                }
+            }
+
+            if (!isCurrentSync()) return false;
+            setActionButtonsSyncing(false);
+            setActionButtonsSyncFailed(true);
             return false;
-        }
-    }, [open, landId, address, blackjackPlayable]);
-
-    const syncActionButtonsWithRetries = useCallback(async (): Promise<boolean> => {
-        setActionButtonsReady(false);
-        setActionButtonsSyncing(true);
-        setActionButtonsSyncFailed(false);
-
-        const maxAttempts = 3;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const trusted = await refreshGameState();
-            if (trusted) {
-                setActionButtonsReady(true);
-                setActionButtonsSyncing(false);
-                setActionButtonsSyncFailed(false);
-                return true;
+        })().finally(() => {
+            if (actionSyncInFlightRef.current === syncRecord) {
+                actionSyncInFlightRef.current = null;
             }
-            if (attempt < maxAttempts - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            }
-        }
-
-        setActionButtonsSyncing(false);
-        setActionButtonsSyncFailed(true);
-        return false;
-    }, [refreshGameState]);
+        });
+        actionSyncInFlightRef.current = syncRecord;
+        return syncRecord.promise;
+    }, [blackjackPlayable, open, refreshGameState, refreshScopeKey]);
 
     // Load config on open
     useEffect(() => {
-        const loadConfig = async () => {
-            if (!open || !blackjackPlayable) return;
+        if (!open || !blackjackPlayable || refreshScopeRef.current !== refreshScopeKey) return;
 
+        let disposed = false;
+        const configGeneration = configGenerationRef.current + 1;
+        configGenerationRef.current = configGeneration;
+        const snapshotGeneration = snapshotGenerationRef.current;
+        const allowanceGeneration = allowanceGenerationRef.current + 1;
+        allowanceGenerationRef.current = allowanceGeneration;
+        const scopeSignal = scopeAbortControllerRef.current?.signal;
+        const isCurrentConfig = () => (
+            !disposed &&
+            !scopeSignal?.aborted &&
+            refreshScopeRef.current === refreshScopeKey &&
+            configGenerationRef.current === configGeneration &&
+            snapshotGenerationRef.current === snapshotGeneration
+        );
+
+        const loadConfig = async () => {
             try {
-                const snapshot = await blackjackGetGameSnapshot(landId);
-                const effectiveToken = snapshot?.isActive
-                    ? await blackjackGetGameToken(landId)
-                    : selectedToken;
+                const snapshot = await readGameSnapshot();
+                if (!isCurrentConfig()) return;
+                if (!snapshot) throw new Error('Blackjack game snapshot read failed');
+
+                let effectiveToken = selectedToken;
+                if (snapshot.isActive) {
+                    effectiveToken = await blackjackGetGameToken(landId);
+                    if (!isCurrentConfig()) return;
+                    if (!effectiveToken) throw new Error('Blackjack active game token read failed');
+                }
 
                 if (!effectiveToken) {
                     setConfig(null);
-                    setAllowanceWei(BigInt(0));
+                    if (allowanceGenerationRef.current === allowanceGeneration) {
+                        setAllowanceWei(BigInt(0));
+                    }
                     return;
                 }
 
                 const cfg = await blackjackGetTokenConfig(effectiveToken);
-                if (cfg?.supported || snapshot?.isActive) {
-                    setConfig({
+                if (!isCurrentConfig()) return;
+                if (!cfg) throw new Error('Blackjack token config read failed');
+
+                const nextConfig = cfg.supported || snapshot.isActive
+                    ? {
                         minBet: cfg?.minBet ?? BigInt(0),
                         maxBet: cfg?.maxBet ?? BigInt(0),
                         bettingToken: effectiveToken,
                         enabled: cfg?.enabled ?? false,
-                    });
-
-                    if (address) {
-                        const allowance = await checkCasinoApproval(address, effectiveToken);
-                        setAllowanceWei(allowance);
-                    } else {
-                        setAllowanceWei(BigInt(0));
                     }
-                } else {
-                    setConfig(null);
-                    setAllowanceWei(BigInt(0));
+                    : null;
+                let allowance = BigInt(0);
+                if (address && nextConfig) {
+                    allowance = await checkCasinoApproval(address, effectiveToken);
+                    if (!isCurrentConfig()) return;
+                }
+
+                setConfig(nextConfig);
+                if (allowanceGenerationRef.current === allowanceGeneration) {
+                    setAllowanceWei(allowance);
                 }
             } catch (err) {
-                console.error('Failed to load blackjack config:', err);
+                if (isCurrentConfig()) {
+                    console.error('Failed to load blackjack config:', err);
+                }
             }
         };
 
-        loadConfig();
-    }, [open, address, landId, selectedToken, blackjackPlayable]);
+        void loadConfig();
+        return () => {
+            disposed = true;
+        };
+    }, [address, blackjackPlayable, landId, open, readGameSnapshot, refreshScopeKey, selectedToken]);
 
     const configBettingToken = config?.bettingToken ?? null;
     const configMinBet = config?.minBet ?? null;
@@ -731,11 +984,11 @@ export default function BlackjackDialog({
                 setError('Deal did not confirm. Refresh and check the game before trying again.');
                 return;
             }
+            invalidatePendingRefreshes();
 
             // Check if game ended immediately (blackjack)
             // Check if game ended immediately (blackjack)
             if (result.gameResult !== undefined) {
-                invalidatePendingRefreshes();
                 setGameState(prev => ({
                     ...prev,
                     result: result.gameResult,
@@ -819,6 +1072,7 @@ export default function BlackjackDialog({
             await refreshGameState();
             return;
         }
+        invalidatePendingRefreshes();
 
         // Check if game ended - we have all data from event, don't need to refresh
         if (result.gameResult !== undefined) {
@@ -1015,19 +1269,38 @@ export default function BlackjackDialog({
         await syncActionButtonsWithRetries();
         refetchBalance();
         onGameComplete?.();
-    }, [refreshGameState, refetchBalance, syncActionButtonsWithRetries, onGameComplete]);
+    }, [invalidatePendingRefreshes, refreshGameState, refetchBalance, syncActionButtonsWithRetries, onGameComplete]);
 
     // Handle approval success
     const handleApproveSuccess = useCallback(async () => {
-        toast.success('Token approved!');
-        if (!address || !config) return;
+        const scopeSignal = scopeAbortControllerRef.current?.signal;
+        if (
+            !address ||
+            !config ||
+            !scopeSignal ||
+            scopeSignal.aborted ||
+            refreshScopeRef.current !== refreshScopeKey
+        ) return;
 
+        toast.success('Token approved!');
+        const allowanceGeneration = allowanceGenerationRef.current + 1;
+        allowanceGenerationRef.current = allowanceGeneration;
+        const isCurrentAllowance = () => (
+            !scopeSignal.aborted &&
+            refreshScopeRef.current === refreshScopeKey &&
+            allowanceGenerationRef.current === allowanceGeneration
+        );
         setAllowanceWei(MAX_TOKEN_APPROVAL);
 
         for (const delayMs of APPROVAL_REFRESH_DELAYS_MS) {
-            if (delayMs > 0) await wait(delayMs);
+            if (
+                delayMs > 0 &&
+                !await waitForAbortableDelay(delayMs, scopeSignal)
+            ) return;
+            if (!isCurrentAllowance()) return;
 
             const allowance = await checkCasinoApproval(address, config.bettingToken);
+            if (!isCurrentAllowance()) return;
             if (allowance >= requiredApprovalWei) {
                 setAllowanceWei(allowance);
                 return;
@@ -1035,7 +1308,7 @@ export default function BlackjackDialog({
         }
 
         console.warn('Approval transaction succeeded, but allowance read has not caught up yet.');
-    }, [address, config, requiredApprovalWei]);
+    }, [address, config, refreshScopeKey, requiredApprovalWei]);
 
     // Play again
     const handlePlayAgain = useCallback(() => {
@@ -1140,6 +1413,14 @@ export default function BlackjackDialog({
         (additionalActionBetWei <= BigInt(0) || !hasBalanceForAdditionalAction);
 
     const handleActionClick = useCallback(async (action: BlackjackAction): Promise<boolean | { handIndex: number }> => {
+        const scopeSignal = scopeAbortControllerRef.current?.signal;
+        const isCurrentActionScope = () => (
+            !!scopeSignal &&
+            !scopeSignal.aborted &&
+            refreshScopeRef.current === refreshScopeKey
+        );
+        if (!isCurrentActionScope()) return false;
+
         if (!actionButtonsReady) {
             toast.error('Syncing game state. Please wait...');
             return false;
@@ -1158,12 +1439,14 @@ export default function BlackjackDialog({
             return false;
         }
 
-        let latestSnapshot = await blackjackGetGameSnapshot(landId);
+        let latestSnapshot = await readGameSnapshot();
+        if (!isCurrentActionScope()) return false;
 
         // Retry once for transient stale reads before deciding state changed.
         if (!latestSnapshot || latestSnapshot.phase !== BlackjackPhase.PLAYER_TURN) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-            latestSnapshot = await blackjackGetGameSnapshot(landId);
+            if (!scopeSignal || !await waitForAbortableDelay(250, scopeSignal)) return false;
+            latestSnapshot = await readGameSnapshot();
+            if (!isCurrentActionScope()) return false;
         }
 
         if (!latestSnapshot) {
@@ -1225,17 +1508,25 @@ export default function BlackjackDialog({
         let latestBalanceWei = currentBalanceWei;
         try {
             const refreshed = await refetchBalance();
+            if (!isCurrentActionScope()) return false;
             latestBalanceWei = refreshed.data?.value ?? latestBalanceWei;
         } catch (err) {
+            if (!isCurrentActionScope()) return false;
             console.warn('Failed to refresh balance before action:', err);
         }
 
         let latestAllowanceWei = allowanceWei;
         if (address && config) {
+            const allowanceGeneration = allowanceGenerationRef.current + 1;
+            allowanceGenerationRef.current = allowanceGeneration;
             try {
                 latestAllowanceWei = await checkCasinoApproval(address, config.bettingToken);
-                setAllowanceWei(latestAllowanceWei);
+                if (!isCurrentActionScope()) return false;
+                if (allowanceGenerationRef.current === allowanceGeneration) {
+                    setAllowanceWei(latestAllowanceWei);
+                }
             } catch (err) {
+                if (!isCurrentActionScope()) return false;
                 console.warn('Failed to refresh allowance before action:', err);
             }
         }
@@ -1257,8 +1548,9 @@ export default function BlackjackDialog({
         setTxInProgress(action);
         return { handIndex: resolvedHandIndex };
     }, [
-        landId,
+        readGameSnapshot,
         refreshGameState,
+        refreshScopeKey,
         address,
         allowanceWei,
         config,
@@ -1327,6 +1619,20 @@ export default function BlackjackDialog({
     const showDealerHand =
         gameState.dealerCards.length > 0 ||
         (uiPhase === 'result' && gameState.result !== null);
+    const blackjackResultAnnouncement = uiPhase === 'result' && gameState.result !== null
+        ? gameState.splitResults && gameState.splitResults.length > 1
+            ? `Blackjack result. ${gameState.splitResults.map((hand, index) => `Hand ${index + 1}: ${getResultText(hand.result) || 'result'}, value ${hand.playerFinalValue}`).join('. ')}. Dealer value ${gameState.dealerValue}. Total payout ${gameState.payout} ${tokenSymbol}.`
+            : `Blackjack result: ${getResultText(gameState.result) || 'result'}. Your hand value ${gameState.playerValue}. Dealer value ${gameState.dealerValue}. Payout ${gameState.payout} ${tokenSymbol}.`
+        : '';
+    const blackjackAnnouncement = blackjackResultAnnouncement || (uiPhase === 'playing'
+        ? `${blackjackTurnStatusText}.${txInProgress === null && !actionButtonsReady
+            ? actionButtonsSyncing
+                ? ' Syncing valid actions.'
+                : actionButtonsSyncFailed
+                    ? ' Unable to verify valid actions.'
+                    : ' Waiting for trusted onchain action state.'
+            : ''}`
+        : '');
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
@@ -1346,6 +1652,9 @@ export default function BlackjackDialog({
                 <DialogDescription className="sr-only">
                     Blackjack game dialog with active hand state, onchain action controls, and transaction status.
                 </DialogDescription>
+                <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                    {blackjackAnnouncement}
+                </p>
                 <Button
                     type="button"
                     variant="headerIcon"

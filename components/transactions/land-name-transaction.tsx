@@ -36,6 +36,7 @@ export function LandNameTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`set-land-name:${landId}:${newName.trim()}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -46,5 +47,4 @@ export function LandNameTransaction({
     />
   );
 }
-
 

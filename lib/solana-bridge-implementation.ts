@@ -11,8 +11,12 @@ import {
   TransactionInstruction,
   SystemProgram,
 } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { parseUnits } from 'viem';
+import {
+  confirmSolanaTransaction,
+  type BridgeTransactionMetadata,
+  type SolanaBridgeLifecyclePhase,
+} from './solana-bridge-lifecycle';
 
 // ============ Types ============
 
@@ -71,6 +75,11 @@ export const BASE_MAINNET_CONFIG = {
 
 // Standard gas limit for bridge operations
 export const DEFAULT_GAS_LIMIT = BigInt(200000);
+
+// Canonical SPL Token Program. Pulling the full legacy `@solana/spl-token`
+// package for this single constant added vulnerable bigint/buffer transitive
+// code to the client bridge bundle.
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // ============ Browser-Compatible Buffer Helpers ============
 
@@ -162,6 +171,7 @@ export class SolanaBridgeImplementation {
   private bridgeProgramId: PublicKey;
   private baseRelayerProgramId: PublicKey;
   private gasFeeReceiver: PublicKey;
+  private readonly transactionMetadata = new WeakMap<Transaction, BridgeTransactionMetadata>();
   
   private static readonly CALL_TYPE_INDEX: Record<ContractCallType, number> = {
     call: 0,
@@ -189,6 +199,15 @@ export class SolanaBridgeImplementation {
    */
   getConnection(): Connection {
     return this.connection;
+  }
+
+  /** Metadata needed to prove the submitted message executed on Base. */
+  getBridgeTransactionMetadata(transaction: Transaction): BridgeTransactionMetadata {
+    const metadata = this.transactionMetadata.get(transaction);
+    if (!metadata) {
+      throw new Error('Bridge transaction metadata is unavailable');
+    }
+    return metadata;
   }
 
   /**
@@ -266,9 +285,10 @@ export class SolanaBridgeImplementation {
       );
 
       const transaction = new Transaction();
-      const { blockhash } = await this.connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = walletAddress;
+      let relayInstructionIncluded = false;
 
       try {
         const cfgAccountInfo = await this.connection.getAccountInfo(cfgAddress);
@@ -307,8 +327,15 @@ export class SolanaBridgeImplementation {
         // CRITICAL: Order matters. PayForRelay must come BEFORE bridge_sol.
         transaction.add(relayInstruction);
         transaction.add(bridgeInstruction);
+        relayInstructionIncluded = true;
       } catch (error) {
-        console.error('[SolanaBridge] Error with relay payment, falling back to bridge-only:', error);
+        if (call) {
+          throw new Error(
+            `Unable to include automatic Base relay payment: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+
+        console.error('[SolanaBridge] Error with relay payment, falling back to bridge-only transfer:', error);
 
         // Fallback: bridge without auto-relay
         const fallbackBridgeInstruction = this.createBridgeSolInstruction({
@@ -328,6 +355,14 @@ export class SolanaBridgeImplementation {
         transaction.add(fallbackBridgeInstruction);
       }
 
+      this.transactionMetadata.set(transaction, {
+        outgoingMessageAddress: outgoingMessagePda.toBase58(),
+        messageToRelayAddress: messageToRelayPda.toBase58(),
+        relayInstructionIncluded,
+        gasLimit: effectiveGasLimit,
+        recentBlockhash: blockhash,
+        lastValidBlockHeight,
+      });
       return transaction;
     } catch (error) {
       console.error('[SolanaBridge] Error creating bridge transaction:', error);
@@ -382,9 +417,10 @@ export class SolanaBridgeImplementation {
       );
 
       const transaction = new Transaction();
-      const { blockhash } = await this.connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = walletAddress;
+      let relayInstructionIncluded = false;
 
       try {
         const cfgAccountInfo = await this.connection.getAccountInfo(cfgAddress);
@@ -424,8 +460,15 @@ export class SolanaBridgeImplementation {
         // CRITICAL: Order matters. PayForRelay must come BEFORE bridge_spl.
         transaction.add(relayInstruction);
         transaction.add(bridgeInstruction);
+        relayInstructionIncluded = true;
       } catch (error) {
-        console.error('[SolanaBridge] Error with relay payment, falling back:', error);
+        if (call) {
+          throw new Error(
+            `Unable to include automatic Base relay payment: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+
+        console.error('[SolanaBridge] Error with relay payment, falling back to bridge-only transfer:', error);
 
         const fallbackBridgeInstruction = this.createBridgeSplInstruction({
           payer: walletAddress,
@@ -448,6 +491,14 @@ export class SolanaBridgeImplementation {
         transaction.add(fallbackBridgeInstruction);
       }
 
+      this.transactionMetadata.set(transaction, {
+        outgoingMessageAddress: outgoingMessagePda.toBase58(),
+        messageToRelayAddress: messageToRelayPda.toBase58(),
+        relayInstructionIncluded,
+        gasLimit: effectiveGasLimit,
+        recentBlockhash: blockhash,
+        lastValidBlockHeight,
+      });
       return transaction;
     } catch (error) {
       console.error('[SolanaBridge] Error creating SPL bridge transaction:', error);
@@ -798,7 +849,10 @@ export class SolanaBridgeImplementation {
   async submitBridgeTransaction(
     transaction: Transaction,
     walletAddress: PublicKey,
-    signTransaction: (transaction: Transaction) => Promise<Transaction>
+    signTransaction: (transaction: Transaction) => Promise<Transaction>,
+    options: {
+      onPhase?: (phase: SolanaBridgeLifecyclePhase) => void;
+    } = {},
   ): Promise<string> {
     // Sign the transaction with the user's wallet
     const signedTransaction = await signTransaction(transaction);
@@ -837,8 +891,17 @@ export class SolanaBridgeImplementation {
       }
     }
 
-    // Confirm transaction
-    await this.connection.confirmTransaction(signature, 'confirmed');
+    options.onPhase?.('submitted');
+
+    // Establish actual on-chain success. confirmTransaction can resolve with an
+    // InstructionError, so checking only for a returned signature is unsafe.
+    const metadata = this.getBridgeTransactionMetadata(transaction);
+    await confirmSolanaTransaction(this.connection, signature, {
+      onPhase: options.onPhase,
+      blockhash: metadata.recentBlockhash,
+      lastValidBlockHeight: metadata.lastValidBlockHeight,
+      outgoingMessageAddress: metadata.outgoingMessageAddress,
+    });
 
     return signature;
   }

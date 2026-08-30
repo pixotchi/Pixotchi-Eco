@@ -29,10 +29,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const { isTabVisible } = useTabVisibility();
   const isDashboardVisible = isTabVisible('dashboard');
   const [slots, setSlots] = React.useState<import('@/lib/contracts').QuestSlot[]>([]);
+  const [slotsLandId, setSlotsLandId] = React.useState<bigint | null>(null);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
   const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
+  const currentLandIdRef = React.useRef(landId);
+  const slotsRequestRef = React.useRef(0);
+  currentLandIdRef.current = landId;
   // Resolved from diamond storage, not env: setQuestRewardsWallet can rotate the
   // payer, and the NEXT_PUBLIC_QUEST_* vars silently point at the pre-rotation
   // constant when unset, which reads as an empty pool and locks the panel.
@@ -41,21 +45,51 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const questActionsBlocked = isRewardsUnavailable || !isRewardsReady;
 
   const fetchSlots = React.useCallback(async () => {
+    const requestLandId = landId;
+    if (currentLandIdRef.current !== requestLandId) return null;
+    const requestId = ++slotsRequestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await getQuestSlotsByLandId(landId);
+      const data = await getQuestSlotsByLandId(requestLandId);
+      if (
+        requestId !== slotsRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return null;
       setSlots(data);
+      setSlotsLandId(requestLandId);
+      return data;
     } catch {
+      if (
+        requestId !== slotsRequestRef.current
+        || currentLandIdRef.current !== requestLandId
+      ) return null;
+      setSlots([]);
+      setSlotsLandId(null);
       setError('Failed to load quests');
+      return null;
     } finally {
-      setLoading(false);
+      if (
+        requestId === slotsRequestRef.current
+        && currentLandIdRef.current === requestLandId
+      ) setLoading(false);
     }
   }, [landId]);
 
   React.useEffect(() => {
-    fetchSlots();
-  }, [fetchSlots]);
+    slotsRequestRef.current += 1;
+    setSlots([]);
+    setSlotsLandId(null);
+    setError(null);
+    setLoading(true);
+    setDifficulty({});
+    void fetchSlots();
+    return () => {
+      slotsRequestRef.current += 1;
+    };
+  }, [fetchSlots, landId]);
+
+  const currentSlots = slotsLandId === landId ? slots : [];
 
   // Initialize and watch the current block number immediately to avoid transient wrong UI.
   // ONE poller: `watch` alone drives viem's watchBlockNumber at the wagmi
@@ -99,7 +133,9 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     return `${s}s`;
   };
   const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean; awaitInProgress?: boolean }) => {
+    const operationLandId = landId;
     await fetchSlots();
+    if (currentLandIdRef.current !== operationLandId) return;
     onQuestUpdate();
     // Ensure building/land UI reflects changes immediately
     try { window.dispatchEvent(new Event('buildings:refresh')); } catch { }
@@ -108,8 +144,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     if (opts && typeof opts.slotIndex === 'number' && (opts.awaitCommitted || opts.awaitUncommitted || opts.awaitInProgress)) {
       for (let i = 0; i < 6; i++) {
         await new Promise((r) => setTimeout(r, 500));
+        if (currentLandIdRef.current !== operationLandId) return;
         try {
-          const fresh = await getQuestSlotsByLandId(landId);
+          const fresh = await getQuestSlotsByLandId(operationLandId);
+          if (currentLandIdRef.current !== operationLandId) return;
           const s = fresh?.[opts.slotIndex];
           const st = s ? statusOf(s) : undefined;
           if (opts.awaitCommitted && st === 'Committed') break;
@@ -136,7 +174,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
             </div>
           )}
           <div className="grid grid-cols-1 gap-2">
-            {slots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
+            {currentSlots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
               <div key={idx} className={QUEST_SLOT_SURFACE_CLASS}>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">
@@ -149,6 +187,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     )}
                     {statusOf(s) === 'Ready to commit' && (
                       <SponsoredTransaction
+                        intentKey={`quest:commit:${landId}:${idx}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                         buttonText="Return now"
                         buttonClassName="h-11 min-h-11 px-3 text-xs"
@@ -160,6 +199,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Loot bag ready</span>
                         <SponsoredTransaction
+                          intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Open now"
                           buttonClassName="h-11 min-h-11 px-3 text-xs"
@@ -198,6 +238,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         />
                       </div>
                       <SponsoredTransaction
+                        intentKey={`quest:start:${landId}:${idx}:${difficulty[idx] ?? 0}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                         buttonText="Start"
                         buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
@@ -231,7 +272,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                 )}
               </div>
             ))}
-            {slots.length === 0 && (
+            {currentSlots.length === 0 && (
               <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 text-center text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">No quest slots available.</div>
             )}
           </div>

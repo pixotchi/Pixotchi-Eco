@@ -5,8 +5,10 @@ import { handleExternalAnchorClick } from "@/lib/open-external";
 import { CardContent, CardHeader, CardTitle, TabCard } from '@/components/ui/card';
 import ErrorBoundary from '@/components/ui/error-boundary';
 import { ToggleGroup } from '@/components/ui/toggle-group';
+import { requestBalanceRefresh } from '@/lib/app-events';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { useFrameContext } from '@/lib/frame-context';
+import { TABLET_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   getAllPixotchiTokenInfo,
   INITIAL_SEED_SUPPLY,
@@ -20,7 +22,7 @@ import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { sdk } from '@farcaster/miniapp-sdk';
 import { Copy } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect,useRef,useState,type ReactNode } from 'react';
+import { useEffect,useRef,useState,type KeyboardEvent,type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
 import { erc20Abi } from 'viem';
 import { useAccount,useReadContract } from 'wagmi';
@@ -111,6 +113,7 @@ function TokenInfoPanel({
   rewardsData: SeedMarketData | null;
   setActiveToken: (token: InfoToken) => void;
 }) {
+  const tokenOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const activeTokenInfo =
     TOKEN_INFO_OPTIONS.find((token) => token.id === activeToken) ?? DEFAULT_TOKEN_INFO;
   const sections = getTokenInfoSections(activeToken, currentBurnedSupplyLabel, rewardsData);
@@ -124,6 +127,30 @@ function TokenInfoPanel({
     }
   };
 
+  const handleTokenOptionKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1) % TOKEN_INFO_OPTIONS.length;
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      nextIndex = (currentIndex - 1 + TOKEN_INFO_OPTIONS.length) % TOKEN_INFO_OPTIONS.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = TOKEN_INFO_OPTIONS.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextToken = TOKEN_INFO_OPTIONS[nextIndex];
+    if (!nextToken) return;
+    setActiveToken(nextToken.id);
+    tokenOptionRefs.current[nextIndex]?.focus();
+  };
+
   return (
     <div className="space-y-4 text-sm tablet:grid tablet:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)] tablet:items-start tablet:gap-5 tablet:space-y-0">
       <div className="space-y-3">
@@ -132,7 +159,7 @@ function TokenInfoPanel({
           role="radiogroup"
           aria-label="Token information"
         >
-          {TOKEN_INFO_OPTIONS.map((token) => {
+          {TOKEN_INFO_OPTIONS.map((token, index) => {
             const isSelected = activeToken === token.id;
             return (
               <button
@@ -142,8 +169,13 @@ function TokenInfoPanel({
                 aria-checked={isSelected}
                 aria-label={token.symbol}
                 title={token.symbol}
+                tabIndex={isSelected ? 0 : -1}
                 onClick={() => setActiveToken(token.id)}
-                className={`surface-control flex min-w-0 items-center justify-center gap-1 rounded-[var(--radius-nav)] border px-1.5 py-2 text-[10px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background min-[390px]:gap-1.5 min-[390px]:px-2 min-[390px]:text-xs tablet:justify-start tablet:px-3 ${
+                onKeyDown={(event) => handleTokenOptionKeyDown(event, index)}
+                ref={(node) => {
+                  tokenOptionRefs.current[index] = node;
+                }}
+                className={`surface-control flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-[var(--radius-nav)] border px-1.5 py-2 text-[10px] font-semibold transition-[background-color,border-color,color,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background min-[390px]:gap-1.5 min-[390px]:px-2 min-[390px]:text-xs tablet:justify-start tablet:px-3 ${
                   isSelected ? 'surface-control-selected' : 'text-foreground/80'
                 }`}
               >
@@ -185,7 +217,7 @@ function TokenInfoPanel({
           <button
             type="button"
             onClick={copyContractAddress}
-            className="mt-3 flex w-full items-center justify-between gap-2 border-t border-border/35 pt-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+            className="mt-3 flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/35 pt-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
             aria-label={`Copy ${activeTokenInfo.symbol} contract address`}
             title={`Copy ${activeTokenInfo.symbol} contract address`}
           >
@@ -506,18 +538,7 @@ export default function SwapTab() {
    * so there is no hydration mismatch to avoid, and starting false would mount a whole
    * swap panel on every desktop first paint just to tear it down a frame later.
    */
-  const [isDesktopSwapLayout, setIsDesktopSwapLayout] = useState(
-    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 54rem)').matches),
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mediaQuery = window.matchMedia('(min-width: 54rem)');
-    setIsDesktopSwapLayout(mediaQuery.matches);
-    const handleChange = (event: MediaQueryListEvent) => setIsDesktopSwapLayout(event.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  const isDesktopSwapLayout = useMediaQuery(TABLET_MEDIA_QUERY);
   const { data: seedTotalSupply } = useReadContract({
     address: SEED_ADDRESS,
     abi: erc20Abi,
@@ -540,9 +561,9 @@ export default function SwapTab() {
   useEffect(() => {
     if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
       lastVisibleFetchRef.current = Date.now();
-      window.dispatchEvent(new Event('balances:refresh'));
+      requestBalanceRefresh({ address, source: 'swap-tab-visible' });
     }
-  }, [isVisible]);
+  }, [address, isVisible]);
 
   // Fetch SEED market data (24h volume from DexScreener)
   useEffect(() => {

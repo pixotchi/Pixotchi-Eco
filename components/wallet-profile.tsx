@@ -24,6 +24,7 @@ import { clearPublicChatSession } from "@/lib/chat-auth-client";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
+import { clearOwnerResources } from "@/lib/owner-resource-invalidation";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { isSolanaEnabled } from "@/lib/solana-constants";
@@ -318,12 +319,20 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     return wallets.map((wallet) => ({ address: wallet.address }));
   }, [privyUser?.linkedAccounts]);
 
+  const effectiveSelectedEmbeddedAddress = useMemo(() => {
+    if (embeddedWallets.length === 0) return null;
+    const selected = selectedEmbeddedAddress?.toLowerCase();
+    return embeddedWallets.find((wallet) => wallet.address.toLowerCase() === selected)?.address
+      ?? embeddedWallets[0].address;
+  }, [embeddedWallets, selectedEmbeddedAddress]);
+
   useEffect(() => {
-    if (embeddedWallets.length > 0) {
-      setSelectedEmbeddedAddress((prev) => prev ?? embeddedWallets[0].address);
-    } else {
-      setSelectedEmbeddedAddress(null);
-    }
+    setSelectedEmbeddedAddress((previousAddress) => {
+      if (embeddedWallets.length === 0) return null;
+      const previous = previousAddress?.toLowerCase();
+      return embeddedWallets.find((wallet) => wallet.address.toLowerCase() === previous)?.address
+        ?? embeddedWallets[0].address;
+    });
   }, [embeddedWallets]);
 
   // Check if the currently connected wallet is an embedded Privy wallet
@@ -394,8 +403,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
     }
 
     const performExport = async () => {
-      if (embeddedWallets.length > 1 && selectedEmbeddedAddress) {
-        await exportWallet({ address: selectedEmbeddedAddress });
+      if (embeddedWallets.length > 1 && effectiveSelectedEmbeddedAddress) {
+        await exportWallet({ address: effectiveSelectedEmbeddedAddress });
       } else {
         await exportWallet();
       }
@@ -510,6 +519,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
   const handleDisconnect = async () => {
     try {
+      // Remove address-owned assets synchronously; Privy logout and Wagmi
+      // disconnect are asynchronous and must not leave the old wallet actionable.
+      clearOwnerResources(address);
       // First, close the dialog to provide immediate feedback
       onOpenChange(false);
       await sessionStorageManager.markPrivyLogoutIntent();
@@ -582,6 +594,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   };
 
   const handleCloseMiniApp = async () => {
+    clearOwnerResources(address);
     try {
       await sessionStorageManager.clearAuthState();
     } catch (storageError) {
@@ -1011,7 +1024,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         type="radio"
                         name="embedded-wallet-address"
                         value={wallet.address}
-                        checked={selectedEmbeddedAddress === wallet.address}
+                        checked={effectiveSelectedEmbeddedAddress === wallet.address}
                         onChange={handleEmbeddedWalletAddressChange}
                         className="h-5 w-5 border-border text-primary focus:ring-primary"
                         disabled={isExporting}

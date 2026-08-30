@@ -72,6 +72,7 @@ export default function SwapLandMintBundle({
     return (
         <SmartWalletTransaction
             calls={calls}
+            intentKey="swap:mint-land"
             onSuccess={onSuccess}
             onError={onError}
             buttonText={buttonText}

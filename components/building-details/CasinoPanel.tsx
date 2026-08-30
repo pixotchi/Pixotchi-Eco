@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,6 @@ import {
   casinoGetStatsByToken,
   casinoGetSupportedTokens,
   casinoGetTokenConfig,
-  casinoIsBuilt,
   checkCasinoApproval,
   LAND_CONTRACT_ADDRESS,
   type BaccaratTokenConfig,
@@ -47,6 +46,7 @@ import { getClientCasinoPolicy } from "@/lib/casino-client";
 
 interface CasinoPanelProps {
   landId: bigint;
+  initialIsBuilt: boolean;
   onSpinComplete?: () => void;
 }
 
@@ -97,7 +97,7 @@ function CasinoTokenLabel({
   );
 }
 
-export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps) {
+export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: CasinoPanelProps) {
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
   const casinoPolicy = getClientCasinoPolicy();
@@ -114,7 +114,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     return formatWholeNumber(roundedWhole);
   }, [formatWholeNumber]);
 
-  const [isBuilt, setIsBuilt] = useState<boolean | null>(null);
+  const [isBuilt, setIsBuilt] = useState(initialIsBuilt);
   const [buildingConfig, setBuildingConfig] = useState<{ token: string; cost: bigint } | null>(null);
   const [supportedTokens, setSupportedTokens] = useState<CasinoGameToken[]>([]);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
@@ -129,6 +129,14 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [blackjackOpen, setBlackjackOpen] = useState(false);
   const [baccaratOpen, setBaccaratOpen] = useState(false);
+  const normalizedAddress = address?.toLowerCase() ?? "disconnected";
+  const casinoIdentity = `${landId.toString()}:${normalizedAddress}`;
+  const currentCasinoIdentityRef = useRef(casinoIdentity);
+  const casinoStateRequestRef = useRef(0);
+  const casinoStatsRequestRef = useRef(0);
+  const [loadedCasinoIdentity, setLoadedCasinoIdentity] = useState<string | null>(null);
+  const [loadedStatsIdentity, setLoadedStatsIdentity] = useState<string | null>(null);
+  currentCasinoIdentityRef.current = casinoIdentity;
 
   const selectedTokenEntry = useMemo(
     () => supportedTokens.find((entry) => entry.address.toLowerCase() === selectedToken?.toLowerCase()) ?? null,
@@ -184,19 +192,29 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
   const { symbol: activeBaccaratSymbol } = useTokenMetadata(activeBaccaratToken);
 
   const loadSelectedTokenStats = useCallback(async () => {
+    const requestIdentity = casinoIdentity;
+    if (currentCasinoIdentityRef.current !== requestIdentity) return;
+    const requestId = ++casinoStatsRequestRef.current;
     if (!selectedToken || !isBuilt) {
       setStats(null);
       setBjStats(null);
       setBaccaratStats(null);
+      setLoadedStatsIdentity(null);
       return;
     }
 
+    const requestToken = selectedToken;
+    const statsIdentity = `${requestIdentity}:${requestToken.toLowerCase()}`;
     try {
       const [rouletteStats, blackjackStats, baccaratStatsResult] = await Promise.all([
-        casinoGetStatsByToken(landId, selectedToken),
-        blackjackGetStatsByToken(landId, selectedToken),
-        baccaratGetStatsByToken(landId, selectedToken),
+        casinoGetStatsByToken(landId, requestToken),
+        blackjackGetStatsByToken(landId, requestToken),
+        baccaratGetStatsByToken(landId, requestToken),
       ]);
+      if (
+        requestId !== casinoStatsRequestRef.current
+        || currentCasinoIdentityRef.current !== requestIdentity
+      ) return;
 
       setStats(
         rouletteStats
@@ -227,40 +245,41 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
             }
           : null
       );
+      setLoadedStatsIdentity(statsIdentity);
     } catch (err) {
       console.error("Failed to load casino token stats:", err);
+      if (
+        requestId !== casinoStatsRequestRef.current
+        || currentCasinoIdentityRef.current !== requestIdentity
+      ) return;
       setStats(null);
       setBjStats(null);
       setBaccaratStats(null);
+      setLoadedStatsIdentity(statsIdentity);
     }
-  }, [isBuilt, landId, selectedToken]);
+  }, [casinoIdentity, isBuilt, landId, selectedToken]);
 
-  const loadCasinoState = useCallback(async () => {
+  const loadCasinoState = useCallback(async (knownBuilt = initialIsBuilt) => {
+    const requestIdentity = casinoIdentity;
+    if (currentCasinoIdentityRef.current !== requestIdentity) return;
+    const requestId = ++casinoStateRequestRef.current;
+    const requestLandId = landId;
+    const requestAddress = address;
     try {
       setIsLoading(true);
       setError(null);
 
-      const [built, bConfig, tokenAddresses, activeRouletteBet, blackjackSnapshot, activeBaccaratGame] = await Promise.all([
-        casinoIsBuilt(landId),
+      const [bConfig, tokenAddresses, activeRouletteBet, blackjackSnapshot, activeBaccaratGame] = await Promise.all([
         casinoGetBuildingConfig(),
         casinoGetSupportedTokens(),
-        casinoGetActiveBetV2(landId),
-        blackjackGetGameSnapshot(landId),
-        baccaratGetActiveGame(landId),
+        casinoGetActiveBetV2(requestLandId),
+        blackjackGetGameSnapshot(requestLandId),
+        baccaratGetActiveGame(requestLandId),
       ]);
 
       const blackjackToken = blackjackSnapshot?.isActive
-        ? await blackjackGetGameToken(landId)
+        ? await blackjackGetGameToken(requestLandId)
         : null;
-
-      setIsBuilt(built);
-      setActiveRouletteToken(activeRouletteBet?.isActive ? activeRouletteBet.bettingToken : null);
-      setActiveBlackjackToken(blackjackSnapshot?.isActive ? blackjackToken : null);
-      setActiveBaccaratToken(activeBaccaratGame?.isActive ? activeBaccaratGame.bettingToken : null);
-
-      if (bConfig) {
-        setBuildingConfig({ token: bConfig.buildingToken, cost: bConfig.buildingCost });
-      }
 
       const tokenConfigs = await Promise.all(
         tokenAddresses.map(async (tokenAddress) => {
@@ -282,6 +301,22 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
       const selectableTokens = tokenConfigs.filter(
         (entry) => entry.rouletteConfig?.supported || entry.blackjackConfig?.supported || entry.baccaratConfig?.supported
       );
+      const approval = requestAddress && !knownBuilt && bConfig
+        ? await checkCasinoApproval(requestAddress, bConfig.buildingToken)
+        : BigInt(0);
+
+      if (
+        requestId !== casinoStateRequestRef.current
+        || currentCasinoIdentityRef.current !== requestIdentity
+      ) return;
+
+      setIsBuilt(knownBuilt);
+      setActiveRouletteToken(activeRouletteBet?.isActive ? activeRouletteBet.bettingToken : null);
+      setActiveBlackjackToken(blackjackSnapshot?.isActive ? blackjackToken : null);
+      setActiveBaccaratToken(activeBaccaratGame?.isActive ? activeBaccaratGame.bettingToken : null);
+      setBuildingConfig(bConfig
+        ? { token: bConfig.buildingToken, cost: bConfig.buildingCost }
+        : null);
       setSupportedTokens(selectableTokens);
 
       setSelectedToken((current) => {
@@ -298,53 +333,90 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
           ?? selectableTokens[0]?.address
           ?? null;
       });
-
-      if (address && !built && bConfig) {
-        const approval = await checkCasinoApproval(address, bConfig.buildingToken);
-        setAllowanceWei(approval);
-      } else {
-        setAllowanceWei(BigInt(0));
-      }
+      setAllowanceWei(approval);
+      setLoadedCasinoIdentity(requestIdentity);
     } catch (err) {
       console.error("Failed to load casino state:", err);
+      if (
+        requestId !== casinoStateRequestRef.current
+        || currentCasinoIdentityRef.current !== requestIdentity
+      ) return;
+      setIsBuilt(knownBuilt);
+      setBuildingConfig(null);
+      setSupportedTokens([]);
+      setSelectedToken(null);
+      setActiveRouletteToken(null);
+      setActiveBlackjackToken(null);
+      setActiveBaccaratToken(null);
+      setAllowanceWei(BigInt(0));
       setError("Failed to load casino data");
+      setLoadedCasinoIdentity(requestIdentity);
     } finally {
-      setIsLoading(false);
+      if (
+        requestId === casinoStateRequestRef.current
+        && currentCasinoIdentityRef.current === requestIdentity
+      ) setIsLoading(false);
     }
-  }, [address, landId]);
+  }, [address, casinoIdentity, initialIsBuilt, landId]);
 
   useEffect(() => {
-    loadCasinoState();
-  }, [loadCasinoState]);
+    casinoStateRequestRef.current += 1;
+    casinoStatsRequestRef.current += 1;
+    setLoadedCasinoIdentity(null);
+    setLoadedStatsIdentity(null);
+    setIsBuilt(initialIsBuilt);
+    setBuildingConfig(null);
+    setSupportedTokens([]);
+    setSelectedToken(null);
+    setActiveRouletteToken(null);
+    setActiveBlackjackToken(null);
+    setActiveBaccaratToken(null);
+    setStats(null);
+    setBjStats(null);
+    setBaccaratStats(null);
+    setAllowanceWei(BigInt(0));
+    setError(null);
+    setIsLoading(true);
+    setCasinoOpen(false);
+    setBlackjackOpen(false);
+    setBaccaratOpen(false);
+    void loadCasinoState(initialIsBuilt);
+
+    return () => {
+      casinoStateRequestRef.current += 1;
+      casinoStatsRequestRef.current += 1;
+    };
+  }, [casinoIdentity, initialIsBuilt, loadCasinoState]);
 
   useEffect(() => {
-    loadSelectedTokenStats();
+    void loadSelectedTokenStats();
   }, [loadSelectedTokenStats]);
 
   const onBuildSuccess = useCallback(async () => {
     toast.success("Casino built successfully!");
-    await loadCasinoState();
+    setIsBuilt(true);
+    setAllowanceWei(BigInt(0));
+    await loadCasinoState(true);
+    if (currentCasinoIdentityRef.current !== casinoIdentity) return;
     if (onSpinComplete) onSpinComplete();
-  }, [loadCasinoState, onSpinComplete]);
+  }, [casinoIdentity, loadCasinoState, onSpinComplete]);
 
   const onApproveSuccess = useCallback(async () => {
+    const operationIdentity = casinoIdentity;
     toast.success("Token approved!");
     await refetchBuildTokenBalance();
-    if (address && buildingConfig) {
-      const approval = await checkCasinoApproval(address, buildingConfig.token);
-      setAllowanceWei(approval);
-    }
-  }, [address, buildingConfig, refetchBuildTokenBalance]);
+    if (currentCasinoIdentityRef.current !== operationIdentity) return;
+    await loadCasinoState(false);
+  }, [casinoIdentity, loadCasinoState, refetchBuildTokenBalance]);
 
   const handleSpinComplete = useCallback(async () => {
-    await Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
-    for (const delayMs of [1500, 4000]) {
-      window.setTimeout(() => {
-        void Promise.all([loadCasinoState(), loadSelectedTokenStats()]);
-      }, delayMs);
-    }
+    const operationIdentity = casinoIdentity;
+    await loadCasinoState(isBuilt);
+    if (currentCasinoIdentityRef.current !== operationIdentity) return;
+    await loadSelectedTokenStats();
+    if (currentCasinoIdentityRef.current !== operationIdentity) return;
     if (onSpinComplete) onSpinComplete();
-  }, [loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
+  }, [casinoIdentity, isBuilt, loadCasinoState, loadSelectedTokenStats, onSpinComplete]);
 
   const handleOpenCasinoGame = useCallback((game: "roulette" | "blackjack" | "baccarat") => {
     if (!casinoPolicy.playable) {
@@ -384,8 +456,18 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
     casinoPolicy.playable &&
     !hasActiveBaccaratGame &&
     (!selectedToken || baccaratDisabledForToken);
+  const expectedStatsIdentity = selectedToken && isBuilt
+    ? `${casinoIdentity}:${selectedToken.toLowerCase()}`
+    : null;
+  const statsAreCurrent = expectedStatsIdentity !== null && loadedStatsIdentity === expectedStatsIdentity;
+  const currentStats = statsAreCurrent ? stats : null;
+  const currentBlackjackStats = statsAreCurrent ? bjStats : null;
+  const currentBaccaratStats = statsAreCurrent ? baccaratStats : null;
 
-  if (isLoading && isBuilt === null) {
+  if (
+    loadedCasinoIdentity !== casinoIdentity
+    || (isLoading && !buildingConfig && supportedTokens.length === 0)
+  ) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -451,6 +533,7 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
               />
             ) : (
               <SponsoredTransaction
+                intentKey={`casino:build:${landId}`}
                 calls={[buildCasinoBuildCall(landId)]}
                 onSuccess={onBuildSuccess}
                 onError={(err) => setError(err.message)}
@@ -519,30 +602,30 @@ export default function CasinoPanel({ landId, onSpinComplete }: CasinoPanelProps
         </div>
       )}
 
-      {(stats || bjStats) && selectedToken && (
+      {(currentStats || currentBlackjackStats || currentBaccaratStats) && selectedToken && (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground py-1">
-          {stats && (
+          {currentStats && (
             <div className="flex flex-wrap justify-center gap-3">
               <span>Roulette</span>
-              <span>Games: {stats.games.toString()}</span>
-              <span>Wagered: {formatTokenAmount(stats.wagered, selectedTokenDecimals)}</span>
-              <span>Won: {formatTokenAmount(stats.won, selectedTokenDecimals)}</span>
+              <span>Games: {currentStats.games.toString()}</span>
+              <span>Wagered: {formatTokenAmount(currentStats.wagered, selectedTokenDecimals)}</span>
+              <span>Won: {formatTokenAmount(currentStats.won, selectedTokenDecimals)}</span>
             </div>
           )}
-          {casinoPolicy.blackjackEnabled && bjStats && (
+          {casinoPolicy.blackjackEnabled && currentBlackjackStats && (
             <div className="flex flex-wrap justify-center gap-3">
               <span>Blackjack</span>
-              <span>Games: {bjStats.games.toString()}</span>
-              <span>Wagered: {formatTokenAmount(bjStats.wagered, selectedTokenDecimals)}</span>
-              <span>Won: {formatTokenAmount(bjStats.won, selectedTokenDecimals)}</span>
+              <span>Games: {currentBlackjackStats.games.toString()}</span>
+              <span>Wagered: {formatTokenAmount(currentBlackjackStats.wagered, selectedTokenDecimals)}</span>
+              <span>Won: {formatTokenAmount(currentBlackjackStats.won, selectedTokenDecimals)}</span>
             </div>
           )}
-          {baccaratStats && (
+          {currentBaccaratStats && (
             <div className="flex flex-wrap justify-center gap-3">
               <span>Baccarat</span>
-              <span>Games: {baccaratStats.games.toString()}</span>
-              <span>Wagered: {formatTokenAmount(baccaratStats.wagered, selectedTokenDecimals)}</span>
-              <span>Won: {formatTokenAmount(baccaratStats.won, selectedTokenDecimals)}</span>
+              <span>Games: {currentBaccaratStats.games.toString()}</span>
+              <span>Wagered: {formatTokenAmount(currentBaccaratStats.wagered, selectedTokenDecimals)}</span>
+              <span>Won: {formatTokenAmount(currentBaccaratStats.won, selectedTokenDecimals)}</span>
             </div>
           )}
         </div>

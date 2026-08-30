@@ -118,6 +118,7 @@ export default function SwapFencePurchaseBundle({
     return (
         <SmartWalletTransaction
             calls={calls}
+            intentKey={`swap:fence:${plantId}:${days}`}
             onSuccess={handleSuccess}
             onError={onError}
             buttonText={buttonText || defaultButtonText}

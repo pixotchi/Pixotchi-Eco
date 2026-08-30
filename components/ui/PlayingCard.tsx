@@ -11,6 +11,8 @@ interface PlayingCardProps {
     small?: boolean;
     /** Additional CSS classes */
     className?: string;
+    /** Optional contextual accessible name (for example, "Dealer face-down card"). */
+    ariaLabel?: string;
 }
 
 // Card display mappings
@@ -22,11 +24,23 @@ const SUIT_COLORS: Record<string, 'red' | 'black'> = {
     '♦': 'red',
     '♣': 'black'
 };
+const RANK_NAMES: Record<string, string> = {
+    A: 'Ace',
+    J: 'Jack',
+    Q: 'Queen',
+    K: 'King',
+};
+const SUIT_NAMES: Record<string, string> = {
+    '♠': 'spades',
+    '♥': 'hearts',
+    '♦': 'diamonds',
+    '♣': 'clubs',
+};
 
 /**
  * Get card display info from a 0-51 card value
  */
-export function getCardDisplay(value: number) {
+function getCardDisplay(value: number) {
     const rank = RANKS[value % 13];
     const suit = SUITS[Math.floor(value / 13)];
     const color = SUIT_COLORS[suit];
@@ -68,7 +82,7 @@ export function calculateHandValue(cards: number[]): number {
 /**
  * PlayingCard component - displays a playing card with rank and suit
  */
-export default function PlayingCard({ value, hidden = false, small = false, className = '' }: PlayingCardProps) {
+export default function PlayingCard({ value, hidden = false, small = false, className = '', ariaLabel }: PlayingCardProps) {
     // Original: 424x646 (Aspect Ratio: ~0.656)
     // Small: h-14 (56px) -> w-[36.7px]
     // Normal: h-24 (96px) -> w-[63px] (Increased size slightly for better visibility)
@@ -81,6 +95,8 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
     if (hidden) {
         return (
             <div
+                role="img"
+                aria-label={ariaLabel ?? "Face-down card"}
                 className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                     relative overflow-hidden shadow-lg ${className}`}
             >
@@ -94,17 +110,20 @@ export default function PlayingCard({ value, hidden = false, small = false, clas
     }
 
     const { rank, suit, color } = getCardDisplay(value);
+    const cardName = `${RANK_NAMES[rank] ?? rank} of ${SUIT_NAMES[suit]}`;
 
     return (
         <div
+            role="img"
+            aria-label={ariaLabel ?? cardName}
             className={`${sizeClasses} rounded-[3px] border-2 border-white/10
                   flex flex-col items-center justify-center shadow-lg bg-cover bg-center bg-no-repeat ${className}`}
             style={{ backgroundImage: "url('/icons/cardbjfront.png')" }}
         >
-            <span className={`font-bold ${color === 'red' ? 'text-red-600' : 'text-gray-900'}`}>
+            <span aria-hidden="true" className={`font-bold ${color === 'red' ? 'text-red-600' : 'text-gray-900'}`}>
                 {rank}
             </span>
-            <span className={`text-2xl ${color === 'red' ? 'text-red-600' : 'text-gray-900'}`}>
+            <span aria-hidden="true" className={`text-2xl ${color === 'red' ? 'text-red-600' : 'text-gray-900'}`}>
                 {suit}
             </span>
         </div>
@@ -139,44 +158,56 @@ export function CardHand({
     dealId?: string | number;
 }) {
     return (
-        <div className="flex min-w-0 flex-col items-center gap-2 rounded-[var(--radius-control)] border border-white/10 bg-black/25 px-3 py-3 shadow-[var(--shadow-hairline)]">
+        <div
+            className="flex min-w-0 flex-col items-center gap-2 rounded-[var(--radius-control)] border border-white/10 bg-black/25 px-3 py-3 shadow-[var(--shadow-hairline)]"
+            role="group"
+            aria-label={label}
+        >
             <span className="text-xs font-semibold tracking-normal text-white/75">{label}</span>
             {/* perspective makes the deal's rotateY an actual 3D flip — with no
                 perspective ancestor it rendered as a flat orthographic squash. */}
-            <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2 [perspective:800px]`}>
+            <div
+                className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2 [perspective:800px]`}
+                role="list"
+                aria-label={`${label} cards`}
+            >
                 {cards.map((card, index) => (
                     <div
                         key={`${dealId ?? 'hand'}-${card}-${index}`}
+                        role="listitem"
                         /* Base z on a CSS var so hover:z can actually win — the old
                            inline zIndex outranked hover:z-10 and lifted cards
                            stayed buried under their right-hand neighbour. */
-                        className={`animate-deal-card relative z-[var(--card-z)] transition-transform duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:z-50 hover:-translate-y-4`}
+                        className="animate-deal-card relative z-[var(--card-z)] transition-transform duration-[var(--motion-quick)] ease-[var(--ease-standard)] [@media(hover:hover)_and_(pointer:fine)]:hover:z-50 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-4"
                         style={{
-                            animationDelay: `${index * 100}ms`,
+                            animationDelay: `${index * 50}ms`,
                             '--card-z': index, // newer cards stack on top, left to right
                         } as React.CSSProperties}
                     >
                         <PlayingCard
                             value={card}
                             hidden={hideHoleCard && index === 1}
+                            ariaLabel={hideHoleCard && index === 1 ? `${label} face-down card` : undefined}
                             small={small}
                             className="shadow-2xl"
                         />
                     </div>
                 ))}
             </div>
-            {value !== undefined && !hideHoleCard && (
-                <div className="flex flex-col items-center gap-0.5">
-                    <span className={`text-lg font-semibold transition-colors duration-[var(--motion-standard)] ${value > 21 ? 'text-red-400 animate-[pulse_1s_ease-in-out_4]' : 'text-white'}`}>
-                        {value > 21 ? 'BUST!' : value}
-                    </span>
-                    {statusText && (
-                        <span className={`text-xs font-semibold ${statusClassName || 'text-white/80'}`}>
-                            {statusText}
+            <div>
+                {value !== undefined && !hideHoleCard && (
+                    <div className="flex flex-col items-center gap-0.5">
+                        <span className={`text-lg font-semibold transition-colors duration-[var(--motion-standard)] ${value > 21 ? 'text-red-400' : 'text-white'}`}>
+                            {value > 21 ? 'BUST!' : value}
                         </span>
-                    )}
-                </div>
-            )}
+                        {statusText && (
+                            <span className={`text-xs font-semibold ${statusClassName || 'text-white/80'}`}>
+                                {statusText}
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

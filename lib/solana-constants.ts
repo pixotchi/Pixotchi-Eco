@@ -63,8 +63,24 @@ export const BRIDGE_CONFIG = {
   // Minimum bridge amount in SOL (lamports)
   minBridgeAmount: BigInt(1000000), // 0.001 SOL
 
-  // Estimated time for bridge confirmation (ms)
-  estimatedBridgeTime: 30000, // 30 seconds
+  // Optimistic estimate shown before submission. Relay validation can take
+  // materially longer, so UI code must treat this as an estimate, not a timeout.
+  estimatedBridgeTime: 30000,
+
+  // Quotes are action/parameter scoped and may only be reused briefly.
+  quoteValidityMs: 20_000,
+
+  // Confirmation and relay polling bounds. Reaching either bound means
+  // "still pending"; it is never proof that the cross-chain action failed.
+  solanaConfirmationTimeoutMs: 45_000,
+  solanaConfirmationPollMs: 1_500,
+  relayStatusPollMs: 5_000,
+  relayInitialWaitMs: 75_000,
+  relayResumeWaitMs: 15_000,
+
+  // Persist submitted bridge actions long enough to resume status checks after
+  // navigation/reload without inviting a duplicate spend.
+  pendingActionMaxAgeMs: 24 * 60 * 60 * 1000,
 
   // Bridge fee in SOL (estimate)
   bridgeFeeEstimate: 0.003, // 0.003 SOL
@@ -374,5 +390,4 @@ export function isSolanaEnabled(): boolean {
 export function getSolanaExplorerTxUrl(signature: string): string {
   return `${SOLANA_BRIDGE_CONFIG.solana.blockExplorer}/tx/${signature}`;
 }
-
 

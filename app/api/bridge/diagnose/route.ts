@@ -6,7 +6,7 @@
  * 
  * Uses RPCs from environment variables (see lib/solana-constants.ts):
  * - NEXT_PUBLIC_SOLANA_RPC_URL: Solana mainnet RPC
- * - NEXT_PUBLIC_RPC_NODE: Base mainnet RPC
+ * - RPC_NODE or BASE_RPC_NODE: server-only Base mainnet RPC
  */
 
 import { NextRequest, NextResponse } from 'next/server';

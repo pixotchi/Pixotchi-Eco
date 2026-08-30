@@ -1,9 +1,10 @@
-import { redisGetJSON } from "@/lib/redis";
+import { redisGetJSONResult } from "@/lib/redis";
 import type { MintShareData } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,16 @@ const PLANT_IMAGE_BY_STRAIN: Record<number, string> = {
   4: "/icons/plant4WithFrame.svg",
   5: "/icons/plant5.png",
 };
+
+// `generateMetadata` and the page render request the same record. React cache
+// keeps that lookup request-scoped so social metadata does not double Redis IO.
+const getMintShare = cache((id: string) =>
+  redisGetJSONResult<MintShareData>(`share:mint:${id}`),
+);
+
+function throwShareUnavailable(error: unknown): never {
+  throw new Error("Mint share data is temporarily unavailable", { cause: error });
+}
 
 function getOgImageUrl(data: MintShareData, platform: 'twitter' | 'farcaster' = 'farcaster') {
   const og = new URL("/api/og/mint", BASE_URL);
@@ -37,9 +48,13 @@ export async function generateMetadata(
   const shareUrl = `${BASE_URL}/share/m/${id}`;
   
   // Resolve the short ID from Redis
-  const data = await redisGetJSON<MintShareData>(`share:mint:${id}`);
+  const result = await getMintShare(id);
 
-  if (!data) {
+  if (result.status === "unavailable") {
+    throwShareUnavailable(result.error);
+  }
+
+  if (result.status === "missing") {
     // Fallback metadata if share link expired or doesn't exist
     return {
       title: "Pixotchi Mini - Plant & Earn",
@@ -49,6 +64,8 @@ export async function generateMetadata(
       },
     };
   }
+
+  const data = result.value;
 
   // Generate platform-specific OG images
   const farcasterImageUrl = getOgImageUrl(data, 'farcaster');
@@ -111,11 +128,17 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
   const { id } = await params;
   
   // Resolve the short ID from Redis
-  const data = await redisGetJSON<MintShareData>(`share:mint:${id}`);
+  const result = await getMintShare(id);
 
-  if (!data) {
+  if (result.status === "unavailable") {
+    throwShareUnavailable(result.error);
+  }
+
+  if (result.status === "missing") {
     notFound();
   }
+
+  const data = result.value;
 
   const plantName = data.name || "Plant";
   const strainId = Number(data.strain || 1);

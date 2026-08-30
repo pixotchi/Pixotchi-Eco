@@ -30,6 +30,13 @@ getRevivePrice,
 getTokenBalance,
 } from "@/lib/contracts";
 import { usePaymaster } from "@/lib/paymaster-context";
+import {
+invalidateOwnerResources,
+isAbortError,
+onOwnerResourceInvalidation,
+ownerInvalidationMatches,
+retryOwnerRead,
+} from "@/lib/owner-resource-invalidation";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { GardenItem,Plant,ShopItem } from "@/lib/types";
@@ -40,7 +47,7 @@ Flower2
 } from "lucide-react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useId,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
@@ -137,6 +144,32 @@ function FittedEthRewardValue({ amount }: { amount: string }) {
   );
 }
 
+type PlantInvariant = (plants: Plant[]) => boolean;
+
+type PlantFetchOptions = {
+  force?: boolean;
+  until?: PlantInvariant;
+};
+
+type QueuedPlantFetch = {
+  force: boolean;
+  invariants: PlantInvariant[];
+};
+
+function didPlantSnapshotChange(before: Plant, after: Plant | undefined): boolean {
+  if (!after) return true;
+  return (
+    before.level !== after.level ||
+    before.name !== after.name ||
+    before.rewards !== after.rewards ||
+    before.score !== after.score ||
+    before.stars !== after.stars ||
+    before.status !== after.status ||
+    JSON.stringify(before.extensions) !== JSON.stringify(after.extensions) ||
+    JSON.stringify(before.fenceV2) !== JSON.stringify(after.fenceV2)
+  );
+}
+
 export default function PlantsView() {
   const { address: evmAddress } = useAccount();
 
@@ -149,6 +182,7 @@ export default function PlantsView() {
   const address = useMemo(() => {
     return evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
   }, [evmAddress, isSolana, twinAddress]);
+  const ownerKey = address?.toLowerCase() ?? null;
   const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
@@ -168,6 +202,8 @@ export default function PlantsView() {
   const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [reviveDataLoading, setReviveDataLoading] = useState(false);
+  const claimConfirmationId = useId();
+  const claimConfirmationDescriptionId = `${claimConfirmationId}-description`;
 
   // Use ref to track selected plant ID without causing re-renders or re-fetches
   const selectedPlantIdRef = useRef<number | null>(null);
@@ -175,9 +211,16 @@ export default function PlantsView() {
   const selectedPlantId = selectedPlant?.id ?? null;
   const selectedPlantStatus = selectedPlant?.status ?? null;
 
-  // Request deduplication ref to prevent multiple simultaneous calls
+  // Owner generation + abort protection prevents a late wallet-A read from
+  // committing into wallet B. A queued slot preserves a refresh requested while
+  // a read is already in flight instead of silently dropping it.
   const queryClient = useQueryClient();
-  const fetchDataPendingRef = useRef<string | null>(null);
+  const ownerKeyRef = useRef<string | null>(ownerKey);
+  const ownerGenerationRef = useRef(0);
+  const activeFetchAbortRef = useRef<AbortController | null>(null);
+  const fetchDataPendingRef = useRef<{ generation: number; ownerKey: string } | null>(null);
+  const fetchDataQueuedRef = useRef<QueuedPlantFetch | null>(null);
+  const lastVisibleFetchRef = useRef(0);
 
   const fenceStatuses = useMemo(() => {
     if (!selectedPlant) return [];
@@ -193,88 +236,133 @@ export default function PlantsView() {
     }));
   };
 
-  const getItemQuantity = (itemId: string) => {
+  const getItemQuantity = useCallback((itemId: string) => {
     // For regular wallets, default to 1 for garden items since they can't change quantity
     // For smart wallets, default to 0 (user selects quantity)
     const defaultQuantity = (!isSmartWallet && !smartWalletLoading && itemType === 'garden') ? 1 : 0;
     return itemQuantities[itemId] || defaultQuantity;
-  };
+  }, [isSmartWallet, smartWalletLoading, itemType, itemQuantities]);
 
-  /**
-   * `force` bypasses the cache. Visibility-driven refetches (tab switches) can be
-   * served from cache — getPlantsByOwner is a raw multicall with nothing in front
-   * of it, so Farm -> Ranking -> Farm used to re-issue it every time.
-   *
-   * Post-transaction callers MUST pass force: a claim/revive/purchase changes
-   * on-chain state, and a cached read would show the user stale plants.
-   */
-  const fetchData = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    if (!address) {
-      fetchDataPendingRef.current = null;
-      loadedPlantsAddressRef.current = null;
+  const fetchData = useCallback(async ({ force = false, until }: PlantFetchOptions = {}) => {
+    if (!address || !ownerKey) return;
+
+    const pending = fetchDataPendingRef.current;
+    if (pending?.ownerKey === ownerKey) {
+      const queued = fetchDataQueuedRef.current ?? { force: false, invariants: [] };
+      queued.force ||= force;
+      if (until) queued.invariants.push(until);
+      fetchDataQueuedRef.current = queued;
       return;
     }
 
-    // Prevent duplicate calls for the same address
-    if (fetchDataPendingRef.current === address) {
-      return;
-    }
-
-    fetchDataPendingRef.current = address;
+    const generation = ownerGenerationRef.current;
+    const requestIdentity = { generation, ownerKey };
+    const controller = new AbortController();
+    activeFetchAbortRef.current?.abort();
+    activeFetchAbortRef.current = controller;
+    fetchDataPendingRef.current = requestIdentity;
 
     try {
-      // Only show full page loader on initial load for this wallet.
-      if (loadedPlantsAddressRef.current !== address) {
-        setLoading(true);
-      }
+      if (loadedPlantsAddressRef.current !== ownerKey) setLoading(true);
       setError(null);
 
-      const plantsQueryKey = queryKeys.plantsByOwner(address);
-      if (force) {
-        await queryClient.invalidateQueries({ queryKey: plantsQueryKey });
-      }
-      const plantsData = await queryClient.fetchQuery({
-        queryKey: plantsQueryKey,
-        queryFn: () => getPlantsByOwner(address),
-        staleTime: 30_000,
-      });
-
-      // Only update if address hasn't changed during the fetch
-      if (fetchDataPendingRef.current === address) {
-        setPlants(plantsData);
-
-        // After refetching, try to find the previously selected plant in the new data
-        // Use ref to get the current selected ID without causing dependency issues
-        if (plantsData.length > 0) {
-          const currentSelectedId = selectedPlantIdRef.current;
-          const newSelectedPlant = currentSelectedId
-            ? plantsData.find(p => p.id === currentSelectedId)
-            : null;
-          // Always update with fresh data - either preserve selection or select first
-          const plantToSelect = newSelectedPlant || plantsData[0];
-          setSelectedPlant(plantToSelect);
-          // Update ref to match the selected plant
-          selectedPlantIdRef.current = plantToSelect.id;
-        } else {
-          setSelectedPlant(null);
-          selectedPlantIdRef.current = null;
+      const plantsQueryKey = queryKeys.plantsByOwner(ownerKey);
+      const readPlants = async () => {
+        if (force || until) {
+          await queryClient.invalidateQueries({
+            exact: true,
+            queryKey: plantsQueryKey,
+            refetchType: "none",
+          });
         }
-        loadedPlantsAddressRef.current = address;
+        return queryClient.fetchQuery({
+          queryKey: plantsQueryKey,
+          queryFn: () => getPlantsByOwner(address),
+          staleTime: force || until ? 0 : 30_000,
+        });
+      };
+
+      const plantsData = until
+        ? await retryOwnerRead(readPlants, { accept: until, signal: controller.signal })
+        : await readPlants();
+
+      const isCurrentOwner =
+        !controller.signal.aborted &&
+        ownerKeyRef.current === ownerKey &&
+        ownerGenerationRef.current === generation &&
+        fetchDataPendingRef.current?.generation === generation;
+      if (!isCurrentOwner) return;
+
+      setPlants(plantsData);
+      if (plantsData.length > 0) {
+        const currentSelectedId = selectedPlantIdRef.current;
+        const freshSelection = currentSelectedId
+          ? plantsData.find((plant) => plant.id === currentSelectedId)
+          : null;
+        const plantToSelect = freshSelection ?? plantsData[0];
+        setSelectedPlant(plantToSelect);
+        selectedPlantIdRef.current = plantToSelect.id;
+      } else {
+        setSelectedPlant(null);
+        selectedPlantIdRef.current = null;
       }
+      loadedPlantsAddressRef.current = ownerKey;
     } catch (err) {
-      console.error("Error fetching dashboard data:", err);
-      // Only set error if address hasn't changed
-      if (fetchDataPendingRef.current === address) {
-        setError("Failed to load dashboard data. Please refresh.");
+      if (!isAbortError(err)) {
+        console.error("Error fetching dashboard data:", err);
+        if (ownerKeyRef.current === ownerKey && ownerGenerationRef.current === generation) {
+          setError("Failed to load dashboard data. Please refresh.");
+        }
       }
     } finally {
-      // Clear pending flag only if address hasn't changed
-      if (fetchDataPendingRef.current === address) {
-        setLoading(false);
+      const ownsPendingSlot =
+        fetchDataPendingRef.current?.ownerKey === ownerKey &&
+        fetchDataPendingRef.current?.generation === generation;
+      if (ownsPendingSlot) {
         fetchDataPendingRef.current = null;
+        setLoading(false);
+        const queued = fetchDataQueuedRef.current;
+        fetchDataQueuedRef.current = null;
+        if (queued && ownerKeyRef.current === ownerKey) {
+          const queuedInvariant = queued.invariants.length
+            ? (nextPlants: Plant[]) => queued.invariants.every((invariant) => invariant(nextPlants))
+            : undefined;
+          queueMicrotask(() => {
+            void fetchData({ force: queued.force, until: queuedInvariant });
+          });
+        }
       }
     }
-  }, [address, queryClient]); // Selection and initial-load state are handled through refs.
+  }, [address, ownerKey, queryClient]);
+
+  // Clear wallet-owned state before paint on disconnect/address changes. The
+  // generation and abort also make every already-running callback stale.
+  useLayoutEffect(() => {
+    if (ownerKeyRef.current === ownerKey) return;
+    const previousOwner = ownerKeyRef.current;
+    ownerKeyRef.current = ownerKey;
+    ownerGenerationRef.current += 1;
+    activeFetchAbortRef.current?.abort();
+    activeFetchAbortRef.current = null;
+    fetchDataPendingRef.current = null;
+    fetchDataQueuedRef.current = null;
+    lastVisibleFetchRef.current = 0;
+    loadedPlantsAddressRef.current = null;
+    selectedPlantIdRef.current = null;
+    setPlants([]);
+    setSelectedPlant(null);
+    setError(null);
+    setLoading(Boolean(ownerKey));
+    setClaimOpen(false);
+    setArcadeOpen(false);
+    setClaimConfirmationText("");
+    setSeedBalance(BigInt(0));
+    if (previousOwner) {
+      void queryClient.cancelQueries({ queryKey: queryKeys.plantsByOwner(previousOwner) });
+    }
+  }, [ownerKey, queryClient]);
+
+  useEffect(() => () => activeFetchAbortRef.current?.abort(), []);
 
   // Sync ref when selectedPlant changes (so ref is always up to date)
   useEffect(() => {
@@ -336,20 +424,159 @@ export default function PlantsView() {
   // Refetch on tab visibility, but not more than once per 30s: every switch
   // back to this tab used to fire an unconditional refetch (toggling two tabs
   // twice cost ~10 network round-trips app-wide).
-  const lastVisibleFetchRef = useRef(0);
   useEffect(() => {
     if (isVisible && address && Date.now() - lastVisibleFetchRef.current > 30_000) {
       lastVisibleFetchRef.current = Date.now();
-      fetchData();
+      void fetchData();
     }
   }, [isVisible, address, fetchData]);
 
+  useEffect(() => {
+    const unsubscribe = onOwnerResourceInvalidation((detail) => {
+      if (!ownerInvalidationMatches(detail, ownerKey, "plants")) return;
+      if (detail.clear) {
+        ownerGenerationRef.current += 1;
+        activeFetchAbortRef.current?.abort();
+        activeFetchAbortRef.current = null;
+        fetchDataPendingRef.current = null;
+        fetchDataQueuedRef.current = null;
+        loadedPlantsAddressRef.current = null;
+        selectedPlantIdRef.current = null;
+        setPlants([]);
+        setSelectedPlant(null);
+        setLoading(false);
+        setError(null);
+        setClaimOpen(false);
+        setArcadeOpen(false);
+        return;
+      }
+      // Local mutation callbacks below already enqueue a stronger invariant.
+      if (detail.source?.startsWith("plants-view:")) return;
+
+      const expected = detail.expected;
+      const baseline = [...plants];
+      const baselineById = new Map(baseline.map((plant) => [plant.id, plant]));
+      const hasExplicitExpectation = Boolean(
+        expected?.plantCountAtLeast !== undefined ||
+        expected?.plantIdsAbsent?.length ||
+        expected?.plantIdsPresent?.length
+      );
+      const shouldObserveMutation = Boolean(
+        detail.transactionHash ||
+        detail.source?.includes("arcade") ||
+        detail.source?.includes("mint") ||
+        detail.source?.includes("transfer")
+      );
+      const until = hasExplicitExpectation || shouldObserveMutation
+        ? (nextPlants: Plant[]) => {
+            const ids = new Set(nextPlants.map((plant) => plant.id));
+            if (expected?.plantCountAtLeast !== undefined && nextPlants.length < expected.plantCountAtLeast) return false;
+            if (expected?.plantIdsPresent?.some((id) => !ids.has(id))) return false;
+            if (expected?.plantIdsAbsent?.some((id) => ids.has(id))) return false;
+            if (hasExplicitExpectation) return true;
+            if (nextPlants.length !== baseline.length) return true;
+            if (baseline.some((plant) => !ids.has(plant.id))) return true;
+            return nextPlants.some((plant) => didPlantSnapshotChange(baselineById.get(plant.id) ?? plant, plant));
+          }
+        : undefined;
+
+      void fetchData({ force: detail.force, until });
+    });
+    return unsubscribe;
+  }, [fetchData, ownerKey, plants]);
+
+  const lastLifecycleReconcileRef = useRef(0);
+  useEffect(() => {
+    if (!address || !isVisible) return;
+    const reconcile = () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      const now = Date.now();
+      if (now - lastLifecycleReconcileRef.current < 15_000) return;
+      lastLifecycleReconcileRef.current = now;
+      void fetchData({ force: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("online", reconcile);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [address, fetchData, isVisible]);
+
   const onPurchaseSuccess = useCallback(() => {
     toast.success("Purchase successful! Updating plant data...");
-    fetchData({ force: true }); // Refetch all data — must bypass the cache
-    // Manually trigger a balance refresh across the app
-    window.dispatchEvent(new Event('balances:refresh'));
-  }, [fetchData]);
+    const baseline = selectedPlant;
+    const quantity = selectedItem ? getItemQuantity(selectedItem.id) : 1;
+    const gardenItem = itemType === "garden" ? selectedItem as GardenItem | null : null;
+    const until = baseline
+      ? (nextPlants: Plant[]) => {
+          const updated = nextPlants.find((plant) => plant.id === baseline.id);
+          if (!updated) return false;
+          if (gardenItem) {
+            const pointsDelta = Math.max(0, Number(gardenItem.points || 0) * Math.max(1, quantity));
+            const lifetimeDelta = Math.max(0, Number(gardenItem.timeExtension || 0) * Math.max(1, quantity));
+            if (pointsDelta > 0 && updated.score >= baseline.score + pointsDelta) return true;
+            if (lifetimeDelta > 0 && updated.timeUntilStarving > baseline.timeUntilStarving) return true;
+          }
+          return didPlantSnapshotChange(baseline, updated);
+        }
+      : undefined;
+
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["plants", "balances"],
+      source: "plants-view:purchase",
+    });
+    void fetchData({ force: true, until });
+  }, [fetchData, itemType, ownerKey, selectedItem, selectedPlant, getItemQuantity]);
+
+  const reconcileClaimSuccess = useCallback((message: string) => {
+    const baseline = selectedPlant;
+    setClaimOpen(false);
+    setClaimConfirmationText("");
+    toast.success(message);
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["plants", "balances"],
+      source: "plants-view:claim",
+    });
+    void fetchData({
+      force: true,
+      until: baseline
+        ? (nextPlants) => {
+            const updated = nextPlants.find((plant) => plant.id === baseline.id);
+            return Boolean(updated && (
+              updated.rewards < baseline.rewards ||
+              updated.score < baseline.score ||
+              updated.level < baseline.level
+            ));
+          }
+        : undefined,
+    });
+  }, [fetchData, ownerKey, selectedPlant]);
+
+  const reconcileReviveSuccess = useCallback(() => {
+    const revivedPlantId = selectedPlant?.id;
+    toast.success("You revived your plant.");
+    invalidateOwnerResources({
+      address: ownerKey,
+      domains: ["plants", "balances"],
+      source: "plants-view:revive",
+    });
+    void fetchData({
+      force: true,
+      until: revivedPlantId === undefined
+        ? undefined
+        : (nextPlants) => nextPlants.some(
+            (plant) => plant.id === revivedPlantId && plant.status !== 4,
+          ),
+    });
+  }, [fetchData, ownerKey, selectedPlant?.id]);
 
   const renderNoPlantsView = () => (
     <EmptyState
@@ -624,14 +851,18 @@ export default function PlantsView() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
+                  <p id={claimConfirmationDescriptionId}>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
                   <div className="flex items-center gap-2 font-medium text-foreground">
                     <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
                     <span>{formatEth(selectedPlant.rewards)} ETH</span>
                   </div>
                   <div className="space-y-2 pt-2">
-                    <p className="text-sm font-medium text-foreground">Type <strong>CONFIRM</strong> to claim:</p>
+                    <label htmlFor={claimConfirmationId} className="text-sm font-medium text-foreground">
+                      Type <strong>CONFIRM</strong> to claim:
+                    </label>
                     <Input
+                      id={claimConfirmationId}
+                      aria-describedby={claimConfirmationDescriptionId}
                       value={claimConfirmationText}
                       onChange={(e) => setClaimConfirmationText(e.target.value)}
                       placeholder="CONFIRM"
@@ -654,11 +885,7 @@ export default function PlantsView() {
                         buttonClassName="w-full"
                         disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                         onSuccess={() => {
-                          setClaimOpen(false);
-                          setClaimConfirmationText("");
-                          toast.success('Rewards claimed via bridge!');
-                          fetchData({ force: true });
-                          window.dispatchEvent(new Event('balances:refresh'));
+                          reconcileClaimSuccess("Rewards claimed via bridge!");
                         }}
                         onError={() => {
                           toast.error('Claim failed');
@@ -672,11 +899,7 @@ export default function PlantsView() {
                         disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                         minimal
                         onSuccess={() => {
-                          setClaimOpen(false);
-                          setClaimConfirmationText("");
-                          toast.success('Rewards claimed!');
-                          fetchData({ force: true });
-                          window.dispatchEvent(new Event('balances:refresh'));
+                          reconcileClaimSuccess("Rewards claimed!");
                         }}
                         onError={() => {
                           toast.error('Claim failed');
@@ -760,9 +983,7 @@ export default function PlantsView() {
                           buttonClassName="w-full"
                           disabled={reviveDataLoading || seedBalance < revivePrice}
                           onSuccess={() => {
-                            toast.success('You revived your plant.');
-                            fetchData({ force: true });
-                            window.dispatchEvent(new Event('balances:refresh'));
+                            reconcileReviveSuccess();
                           }}
                           onError={() => {
                             toast.error('Revive failed');

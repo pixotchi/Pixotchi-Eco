@@ -74,6 +74,7 @@ export default function KillTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`plant:kill:${deadId}:${tokenId}`}
       calls={calls}
       onSuccess={handleSuccess}
       onError={onError}

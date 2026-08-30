@@ -151,5 +151,3 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 		</Dialog>
 	);
 }
-
-export default EditLandName;

@@ -17,6 +17,16 @@ import {
   MAX_UINT256,
   SWAP_DEADLINE_SECONDS,
 } from "../lib/swap/bundle-calls";
+import { sanitizeSwapDecimalInput } from "../lib/swap/rules";
+
+// User-entered amounts remain exact strings until parseUnits converts them to
+// bigint. Exponents and malformed values must never be rounded or reinterpreted.
+assert.equal(sanitizeSwapDecimalInput("9007199254740993.000000000000000001"), "9007199254740993.000000000000000001");
+assert.equal(sanitizeSwapDecimalInput("1,25"), "1.25");
+assert.equal(sanitizeSwapDecimalInput("1,234,567.89"), "1234567.89");
+for (const invalidAmount of ["1e6", "2E-3", "-1", "+1", "1foo2", "1..2", "1,2,3"]) {
+  assert.equal(sanitizeSwapDecimalInput(invalidAmount), null, invalidAmount);
+}
 
 // --- the pre-refactor shape, transcribed verbatim from the old components ------
 const LEGACY_UNISWAP_ROUTER_ABI = [

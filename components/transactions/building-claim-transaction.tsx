@@ -35,6 +35,7 @@ export default function BuildingClaimTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`building:claim:${landId}:${buildingId}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
@@ -45,4 +46,3 @@ export default function BuildingClaimTransaction({
     />
   );
 }
-

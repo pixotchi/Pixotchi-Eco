@@ -5,7 +5,6 @@
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
-    "orientation": "portrait",
     "theme_color": "#2d3c53",
     "background_color": "#2d3c53",
     "categories": ["games", "entertainment", "simulation"],

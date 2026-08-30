@@ -52,6 +52,7 @@ export default function AttackTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`plant:attack:${attackerId}:${targetId}`}
       calls={calls}
       onSuccess={(tx) => {
         onSuccess?.(tx);

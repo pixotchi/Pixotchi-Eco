@@ -2,11 +2,10 @@ import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { formatAddress } from "@/lib/format-address";
 import { stakingAbi } from '@/public/abi/staking-abi';
 import UniswapAbi from '@/public/abi/Uniswap.json';
-import { encodeFunctionData,formatUnits,getAddress,keccak256,parseUnits,toBytes,toHex,WalletClient } from 'viem';
-import { base } from 'viem/chains';
+import { encodeFunctionData,formatUnits,getAddress,keccak256,parseUnits,toBytes,toHex } from 'viem';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
-import { BaseRpcError,getBaseReadClient,waitForBaseReceipt } from './base-rpc';
+import { BaseRpcError,getBaseReadClient } from './base-rpc';
 import { appendBuilderSuffix } from './builder-code';
 import { CLIENT_ENV } from './env-config';
 import { PIXOTCHI_SOLANA_CONFIG, SOLANA_TWIN_ADAPTER_ABI } from './solana-constants';
@@ -764,13 +763,6 @@ export type PixotchiReadClient = ReturnType<typeof getBaseReadClient>;
 
 export const getReadClient = (): PixotchiReadClient => getBaseReadClient();
 
-const waitForBaseTransactionSuccess = async (
-  hash: `0x${string}`,
-): Promise<boolean> => {
-  const receipt = await waitForBaseReceipt(hash);
-  return receipt.status === 'success';
-};
-
 // Retry logic for rate limiting and network issues
 export const retryWithBackoff = async <T>(
   fn: () => Promise<T>,
@@ -1000,6 +992,19 @@ const ERC721_MIN_ABI = [
     stateMutability: 'view',
     type: 'function',
   }
+] as const;
+
+const ERC721_OPERATOR_APPROVAL_ABI = [
+  {
+    inputs: [
+      { name: 'operator', type: 'address' },
+      { name: 'approved', type: 'bool' },
+    ],
+    name: 'setApprovalForAll',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;
 
 const PIXOTCHI_TOKEN_ABI = [
@@ -1452,88 +1457,69 @@ export const getLandsByIds = async (
 
 // -------------------- ASSET TRANSFERS --------------------
 
-/**
- * Transfer a batch of plant NFTs to a destination wallet.
- */
-export const transferPlants = async (
-  walletClient: WalletClient,
-  toAddress: string,
-  plantIds: number[],
-): Promise<{ successIds: number[]; failedIds: number[] }> => {
-  if (!walletClient?.account) throw new Error('No account connected');
-  const from = walletClient.account.address;
-  const to = getAddress(toAddress);
-
-  const successIds: number[] = [];
-  const failedIds: number[] = [];
-
-  for (const id of plantIds) {
-    try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution.
-      const encodedData = encodeFunctionData({
-        abi: ERC721_MIN_ABI,
-        functionName: 'transferFrom',
-        args: [from, to, BigInt(id)],
-      });
-      const dataWithSuffix = appendBuilderSuffix(encodedData);
-
-      const hash = await walletClient.sendTransaction({
-        to: PIXOTCHI_NFT_ADDRESS,
-        data: dataWithSuffix,
-        account: walletClient.account,
-        chain: base,
-      });
-      const success = await waitForBaseTransactionSuccess(hash);
-      if (success) successIds.push(id);
-      else failedIds.push(id);
-    } catch {
-      failedIds.push(id);
-    }
-  }
-
-  return { successIds, failedIds };
+export type PreparedAssetTransferCall = {
+  data: `0x${string}`;
+  to: `0x${string}`;
 };
 
 /**
- * Transfer a batch of land NFTs to a destination wallet.
+ * Prepare an ERC-721 operator approval without touching the wallet. Submission,
+ * durable tracking and canonical receipt recovery belong to Transaction.
  */
-export const transferLands = async (
-  walletClient: WalletClient,
+export const createNftOperatorApprovalCall = (
+  collectionAddress: string,
+  operatorAddress: string,
+): PreparedAssetTransferCall => ({
+  data: appendBuilderSuffix(encodeFunctionData({
+    abi: ERC721_OPERATOR_APPROVAL_ABI,
+    functionName: 'setApprovalForAll',
+    args: [getAddress(operatorAddress), true],
+  })),
+  to: getAddress(collectionAddress),
+});
+
+const createNftTransferCall = (
+  collectionAddress: string,
+  fromAddress: string,
   toAddress: string,
-  landTokenIds: bigint[],
-): Promise<{ successIds: bigint[]; failedIds: bigint[] }> => {
-  if (!walletClient?.account) throw new Error('No account connected');
-  const from = walletClient.account.address;
-  const to = getAddress(toAddress);
+  tokenId: bigint,
+): PreparedAssetTransferCall => ({
+  data: appendBuilderSuffix(encodeFunctionData({
+    abi: ERC721_MIN_ABI,
+    functionName: 'transferFrom',
+    args: [getAddress(fromAddress), getAddress(toAddress), tokenId],
+  })),
+  to: getAddress(collectionAddress),
+});
 
-  const successIds: bigint[] = [];
-  const failedIds: bigint[] = [];
-
-  for (const id of landTokenIds) {
-    try {
-      // Encode function data and append builder code suffix for ERC-8021 attribution.
-      const encodedData = encodeFunctionData({
-        abi: ERC721_MIN_ABI,
-        functionName: 'transferFrom',
-        args: [from, to, id],
-      });
-      const dataWithSuffix = appendBuilderSuffix(encodedData);
-
-      const hash = await walletClient.sendTransaction({
-        to: LAND_CONTRACT_ADDRESS,
-        data: dataWithSuffix,
-        account: walletClient.account,
-        chain: base,
-      });
-      const success = await waitForBaseTransactionSuccess(hash);
-      if (success) successIds.push(id);
-      else failedIds.push(id);
-    } catch {
-      failedIds.push(id);
-    }
+export const createPlantTransferCall = (
+  fromAddress: string,
+  toAddress: string,
+  plantId: number,
+): PreparedAssetTransferCall => {
+  if (!Number.isSafeInteger(plantId) || plantId < 0) {
+    throw new Error('Invalid plant token id');
   }
+  return createNftTransferCall(
+    PIXOTCHI_NFT_ADDRESS,
+    fromAddress,
+    toAddress,
+    BigInt(plantId),
+  );
+};
 
-  return { successIds, failedIds };
+export const createLandTransferCall = (
+  fromAddress: string,
+  toAddress: string,
+  landTokenId: bigint,
+): PreparedAssetTransferCall => {
+  if (landTokenId < BigInt(0)) throw new Error('Invalid land token id');
+  return createNftTransferCall(
+    LAND_CONTRACT_ADDRESS,
+    fromAddress,
+    toAddress,
+    landTokenId,
+  );
 };
 
 
@@ -1761,6 +1747,7 @@ export const getStrainInfo = async (
           id: strainId,
           name: strain.name || '',
           mintPrice: Number(strain.mintPrice) / 1e18, // Convert from wei
+          mintPriceRaw: BigInt(strain.mintPrice),
           totalSupply: Number(strain.totalSupply),
           totalMinted: Number(strain.totalMinted),
           maxSupply: Number(strain.maxSupply),
@@ -2711,21 +2698,27 @@ export const getLandLeaderboard = async (
 
 // -------------------- ROUTER-BASED BULK TRANSFER --------------------
 
-export const routerBatchTransfer = async (
-  walletClient: WalletClient,
+export const createRouterBatchTransferCall = (
   toAddress: string,
-  plantIds: number[],
-  landIds: bigint[],
-): Promise<{ hash: `0x${string}`; success: boolean }> => {
-  if (!walletClient?.account) throw new Error('No account connected');
-  if (!BATCH_ROUTER_ADDRESS) throw new Error('Batch router not configured');
+  plantIds: readonly number[],
+  landIds: readonly bigint[],
+  routerAddress: string | undefined = BATCH_ROUTER_ADDRESS,
+): PreparedAssetTransferCall => {
+  if (!routerAddress) throw new Error('Batch router not configured');
+  const router = getAddress(routerAddress);
   const to = getAddress(toAddress);
+
+  if (plantIds.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+    throw new Error('Invalid plant token id');
+  }
+  if (landIds.some((id) => id < BigInt(0))) {
+    throw new Error('Invalid land token id');
+  }
 
   // Build arguments
   const hasPlants = plantIds.length > 0;
   const hasLands = landIds.length > 0;
 
-  let hash: `0x${string}`;
   let encodedData: `0x${string}`;
 
   if (hasPlants && hasLands) {
@@ -2733,7 +2726,7 @@ export const routerBatchTransfer = async (
     const tokens = [PIXOTCHI_NFT_ADDRESS, LAND_CONTRACT_ADDRESS] as const;
     const tokenIdsPerToken = [
       plantIds.map((id) => BigInt(id)),
-      landIds
+      [...landIds]
     ];
     encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
@@ -2750,24 +2743,16 @@ export const routerBatchTransfer = async (
     encodedData = encodeFunctionData({
       abi: BATCH_ROUTER_ABI,
       functionName: 'batchTransfer721',
-      args: [LAND_CONTRACT_ADDRESS, to, landIds],
+      args: [LAND_CONTRACT_ADDRESS, to, [...landIds]],
     });
   } else {
     throw new Error('No assets to transfer');
   }
 
-  // Append builder code suffix for ERC-8021 attribution.
-  const dataWithSuffix = appendBuilderSuffix(encodedData);
-
-  hash = await walletClient.sendTransaction({
-    to: BATCH_ROUTER_ADDRESS,
-    data: dataWithSuffix,
-    account: walletClient.account,
-    chain: base,
-  });
-
-  const success = await waitForBaseTransactionSuccess(hash);
-  return { hash, success };
+  return {
+    data: appendBuilderSuffix(encodedData),
+    to: router,
+  };
 };
 
 // -------------------- KILL COOLDOWN HELPERS --------------------
@@ -3126,89 +3111,6 @@ export const casinoGetStatsByToken = async (landId: bigint, token: string): Prom
   }
 };
 
-
-/**
- * Build casino on a land (transaction)
- */
-export const casinoBuild = async (walletClient: WalletClient, landId: bigint): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: casinoAbi,
-    functionName: 'casinoBuild',
-    args: [landId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-/**
- * Place multiple bets on the casino roulette table (transaction)
- */
-export const casinoPlaceBets = async (
-  walletClient: WalletClient,
-  landId: bigint,
-  betTypes: CasinoBetType[],
-  betNumbersArray: number[][],
-  betAmounts: bigint[]
-): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: casinoAbi,
-    functionName: 'casinoPlaceBets',
-    args: [landId, betTypes, betNumbersArray, betAmounts],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-export const casinoPlaceBetsWithToken = async (
-  walletClient: WalletClient,
-  landId: bigint,
-  token: string,
-  betTypes: CasinoBetType[],
-  betNumbersArray: number[][],
-  betAmounts: bigint[]
-): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: casinoAbi,
-    functionName: 'casinoPlaceBetsWithToken',
-    args: [landId, token as `0x${string}`, betTypes, betNumbersArray, betAmounts],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
-
-/**
- * Reveal the casino spin result (transaction)
- * Returns the transaction hash, result must be parsed from receipt logs
- */
-export const casinoReveal = async (walletClient: WalletClient, landId: bigint): Promise<string> => {
-  if (!walletClient.account) throw new Error('No account connected');
-
-  const hash = await walletClient.writeContract({
-    address: LAND_CONTRACT_ADDRESS,
-    abi: casinoAbi,
-    functionName: 'casinoReveal',
-    args: [landId],
-    account: walletClient.account,
-    chain: base,
-  });
-
-  return hash;
-};
 
 /**
  * Build call data for casinoBuild (for batched transactions)

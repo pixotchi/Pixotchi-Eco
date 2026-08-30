@@ -7,8 +7,8 @@
  * MAINNET ONLY - No devnet support
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { getTwinAddress, getTwinAddressInfo, isTwinSetup, type TwinAddressInfo } from './solana-twin';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { getTwinAddressInfo, isTwinSetup, type TwinAddressInfo } from './solana-twin';
 import { getPixotchiSolanaConfig, isSolanaEnabled, SOLANA_BRIDGE_CONFIG } from './solana-constants';
 // NOTE: @solana/web3.js is ~321 KB and is imported dynamically below rather than
 // statically. This module is reached from useIsSolanaWallet(), which is called by
@@ -47,6 +47,32 @@ export interface SolanaWalletState {
 
 const SolanaWalletContext = createContext<SolanaWalletState | null>(null);
 
+type SolanaWalletSnapshot = {
+  ownerKey: string | null;
+  twinAddress: string | null;
+  twinSetup: boolean;
+  twinInfo: TwinAddressInfo | null;
+  solBalance: bigint;
+  isLoading: boolean;
+  error: string | null;
+};
+
+function createEmptySnapshot(
+  ownerKey: string | null = null,
+  isLoading = false,
+  error: string | null = null,
+): SolanaWalletSnapshot {
+  return {
+    ownerKey,
+    twinAddress: null,
+    twinSetup: false,
+    twinInfo: null,
+    solBalance: BigInt(0),
+    isLoading,
+    error,
+  };
+}
+
 // ============ Provider Props ============
 
 interface SolanaWalletProviderProps {
@@ -64,62 +90,89 @@ export function SolanaWalletProvider({
   solanaAddress = null,
   isConnected = false,
 }: SolanaWalletProviderProps) {
-  const [twinAddress, setTwinAddress] = useState<string | null>(null);
-  const [twinSetup, setTwinSetup] = useState(false);
-  const [twinInfo, setTwinInfo] = useState<TwinAddressInfo | null>(null);
-  const [solBalance, setSolBalance] = useState<bigint>(BigInt(0));
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
   const isEnabled = isSolanaEnabled();
+  const ownerKey = isEnabled && isConnected && solanaAddress ? solanaAddress : null;
+  const ownerKeyRef = useRef(ownerKey);
+  const requestGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  ownerKeyRef.current = ownerKey;
+
+  const [snapshot, setSnapshot] = useState<SolanaWalletSnapshot>(() => createEmptySnapshot());
+  const visibleSnapshot = useMemo(
+    () => snapshot.ownerKey === ownerKey
+      ? snapshot
+      : createEmptySnapshot(ownerKey, Boolean(ownerKey)),
+    [ownerKey, snapshot],
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+    };
+  }, []);
   
   // Fetch Twin info and SOL balance when Solana address changes
   const fetchTwinInfo = useCallback(async () => {
-    if (!solanaAddress || !isEnabled) {
-      setTwinAddress(null);
-      setTwinSetup(false);
-      setTwinInfo(null);
-      setSolBalance(BigInt(0));
+    const requestedOwnerKey = ownerKey;
+    const requestedSolanaAddress = solanaAddress;
+
+    // Context callbacks may outlive the render that created them. A stale manual
+    // refresh must not invalidate the replacement wallet's active request.
+    if (!mountedRef.current || ownerKeyRef.current !== requestedOwnerKey) return;
+
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+
+    if (!requestedSolanaAddress || !requestedOwnerKey) {
+      if (mountedRef.current) setSnapshot(createEmptySnapshot());
       return;
     }
-    
-    setIsLoading(true);
-    setError(null);
+
+    const isCurrentRequest = () =>
+      mountedRef.current
+      && requestGenerationRef.current === generation
+      && ownerKeyRef.current === requestedOwnerKey;
+
+    setSnapshot(createEmptySnapshot(requestedOwnerKey, true));
     
     try {
       const config = getPixotchiSolanaConfig();
       if (SOLANA_DEBUG) {
-        console.log('[SolanaWalletContext] Fetching Twin info for:', solanaAddress);
+        console.log('[SolanaWalletContext] Fetching Twin info for:', requestedSolanaAddress);
         console.log('[SolanaWalletContext] TwinAdapter address:', config.twinAdapter);
       }
-      
+
+      let nextSolBalance = BigInt(0);
+      let balanceError: string | null = null;
+
       // Fetch SOL balance from Solana
       try {
         const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
         const connection = new Connection(SOLANA_BRIDGE_CONFIG.solana.rpcUrl);
-        const walletPubkey = new PublicKey(solanaAddress);
+        const walletPubkey = new PublicKey(requestedSolanaAddress);
         const balance = await connection.getBalance(walletPubkey);
-        setSolBalance(BigInt(balance));
+        nextSolBalance = BigInt(balance);
         if (SOLANA_DEBUG) {
           console.log('[SolanaWalletContext] SOL balance:', balance / LAMPORTS_PER_SOL, 'SOL');
         }
       } catch (balErr) {
+        balanceError = 'Native SOL balance could not be loaded';
         if (SOLANA_DEBUG) {
           console.warn('[SolanaWalletContext] Failed to fetch SOL balance:', balErr);
         }
-        setSolBalance(BigInt(0));
       }
       
-      // Get Twin address (mainnet only)
-      const address = await getTwinAddress(solanaAddress);
-      setTwinAddress(address);
+      // Resolve the Twin and its balances in one read flow. getTwinAddressInfo
+      // already derives the address, so calling getTwinAddress first duplicated a
+      // Base RPC request on every profile load and refresh.
+      const info = await getTwinAddressInfo(requestedSolanaAddress);
+      const address = info.twinAddress;
       if (SOLANA_DEBUG) {
         console.log('[SolanaWalletContext] Twin address:', address);
       }
-      
-      // Get full Twin info (mainnet only)
-      const info = await getTwinAddressInfo(solanaAddress);
-      setTwinInfo(info);
+
       if (SOLANA_DEBUG) {
         console.log('[SolanaWalletContext] Twin info:', {
           isDeployed: info.isDeployed,
@@ -129,55 +182,61 @@ export function SolanaWalletProvider({
       }
       
       // Check if Twin is set up (has wSOL approval)
+      let setup = false;
       if (config.twinAdapter) {
-        const setup = await isTwinSetup(address, config.twinAdapter);
+        setup = await isTwinSetup(address, config.twinAdapter);
         if (SOLANA_DEBUG) {
           console.log('[SolanaWalletContext] isTwinSetup result:', setup);
         }
-        setTwinSetup(setup);
       } else {
         if (SOLANA_DEBUG) {
           console.warn('[SolanaWalletContext] No twinAdapter configured, cannot check setup status');
         }
       }
+
+      if (!isCurrentRequest()) return;
+      setSnapshot({
+        ownerKey: requestedOwnerKey,
+        twinAddress: address,
+        twinSetup: setup,
+        twinInfo: info,
+        solBalance: nextSolBalance,
+        isLoading: false,
+        error: balanceError,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Twin info';
-      setError(message);
       if (SOLANA_DEBUG) {
         console.error('[SolanaWalletContext] Error fetching Twin info:', err);
       }
-    } finally {
-      setIsLoading(false);
+      if (isCurrentRequest()) {
+        setSnapshot(createEmptySnapshot(requestedOwnerKey, false, message));
+      }
     }
-  }, [solanaAddress, isEnabled]);
+  }, [ownerKey, solanaAddress]);
   
   // Fetch Twin info on mount and when address changes
   useEffect(() => {
-    fetchTwinInfo();
+    void fetchTwinInfo();
   }, [fetchTwinInfo]);
   
   // Memoized state value
   const state = useMemo<SolanaWalletState>(() => ({
     isEnabled,
-    isConnected: isConnected && !!solanaAddress,
+    isConnected: Boolean(ownerKey),
     solanaAddress,
-    twinAddress,
-    isTwinSetup: twinSetup,
-    twinInfo,
-    solBalance,
-    isLoading,
-    error,
+    twinAddress: visibleSnapshot.twinAddress,
+    isTwinSetup: visibleSnapshot.twinSetup,
+    twinInfo: visibleSnapshot.twinInfo,
+    solBalance: visibleSnapshot.solBalance,
+    isLoading: visibleSnapshot.isLoading,
+    error: visibleSnapshot.error,
     refreshTwinInfo: fetchTwinInfo,
   }), [
     isEnabled,
-    isConnected,
+    ownerKey,
     solanaAddress,
-    twinAddress,
-    twinSetup,
-    twinInfo,
-    solBalance,
-    isLoading,
-    error,
+    visibleSnapshot,
     fetchTwinInfo,
   ]);
   

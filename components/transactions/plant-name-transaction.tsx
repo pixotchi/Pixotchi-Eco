@@ -1,23 +1,17 @@
 "use client";
 
-import React, { useCallback, useMemo } from 'react';
-import {
-  Transaction,
-  TransactionButton,
-} from './transaction-kit';
-import GlobalTransactionToast from './global-transaction-toast';
-import type { LifecycleStatus } from './transaction-kit';
+import { useMemo } from 'react';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
+import SponsoredTransaction from './sponsored-transaction';
 
 const PIXOTCHI_NFT_ABI = [
   {
     inputs: [
       { name: '_id', type: 'uint256' },
-      { name: '_name', type: 'string' }
+      { name: '_name', type: 'string' },
     ],
     name: 'setPlantName',
     outputs: [],
@@ -48,36 +42,16 @@ export function PlantNameTransaction({
   buttonClassName,
   disabled = false,
   hideLabel = false,
-  onButtonClick
+  onButtonClick,
 }: PlantNameTransactionProps) {
-
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  const builderCapabilities = getBuilderCapabilities();
-
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
     functionName: 'setPlantName',
     args: [BigInt(plantId), newName],
-  }], [plantId, newName]);
-
-  // Normalize to raw serializable calls for embedded-wallet compatibility.
-  // Builder attribution is appended by transform helper + wallet_sendCalls capability.
-  const transformedCalls = useMemo(() =>
-    transformCallsWithBuilderCode(calls as UntypedValue[]),
-    [calls]
-  );
-
-  const handleOnSuccess = useCallback((tx: UntypedValue) => {
-    onSuccess?.(tx);
-  }, [onSuccess]);
-
-  const handleOnStatus = useCallback((status: LifecycleStatus) => {
-    if (status.statusName === 'success') {
-      handleOnSuccess(status.statusData.transactionReceipts[0]);
-    }
-  }, [handleOnSuccess]);
+  }], [newName, plantId]);
 
   return (
     <div className="space-y-2">
@@ -88,32 +62,16 @@ export function PlantNameTransaction({
         </div>
       )}
 
-      <Transaction
-        calls={transformedCalls}
+      <SponsoredTransaction
+        intentKey={`set-plant-name:${plantId}:${newName.trim()}`}
+        calls={calls}
+        onSuccess={onSuccess}
         onError={onError}
-        onStatus={handleOnStatus}
-        isSponsored={isSponsored}
-        capabilities={builderCapabilities}
-        resetAfter={2000}
-      >
-        <TransactionButton
-          text={buttonText}
-          className={buttonClassName}
-          disabled={disabled}
-          onClick={() => {
-            if (disabled) return;
-            try {
-              onButtonClick?.();
-            } catch (error) {
-              console.warn('Pre-transaction handler failed', error);
-            }
-          }}
-        />
-
-        <GlobalTransactionToast />
-      </Transaction>
+        buttonText={buttonText}
+        buttonClassName={buttonClassName}
+        disabled={disabled}
+        onButtonClick={onButtonClick}
+      />
     </div>
   );
 }
-
-export default PlantNameTransaction;

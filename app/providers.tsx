@@ -1,19 +1,14 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { base } from "wagmi/chains";
 import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProvider } from "@privy-io/react-auth";
-import { sdk } from "@farcaster/miniapp-sdk";
-import { WagmiProvider as CoreWagmiProvider } from "wagmi";
+import { WagmiProvider as CoreWagmiProvider, type Config } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
-import { wagmiWebBaseConfig } from "@/lib/wagmi-web-base-config";
-import { wagmiMiniAppConfig } from "@/lib/wagmi-miniapp-config";
-import { wagmiPrivyConfig } from "@/lib/wagmi-privy-config";
-import { wagmiLocalTestConfig } from "@/lib/wagmi-local-test-config";
 import { FrameProvider } from "@/lib/frame-context";
 import {
   HostEnvironmentProvider,
@@ -26,17 +21,25 @@ import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
-import { SnowEffect } from "@/components/ui/snow-effect";
-import { SnowProvider } from "@/lib/snow-context";
+import { SnowProvider, useSnow } from "@/lib/snow-context";
 import { AmbientAudioProvider } from "@/lib/ambient-audio-context";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
-import { SolanaWalletProvider, isSolanaEnabled } from '@/components/solana';
+import { SolanaWalletProvider } from '@/components/solana/SolanaWalletProvider';
+import { isSolanaEnabled } from '@/lib/solana-constants';
 import { ChatProvider } from "@/components/chat/chat-context";
-import { AppUpdateBanner } from "@/components/app-update-banner";
 import { AppToaster } from "@/components/ui/app-toaster";
 import { PerformanceModeController } from "@/components/ui/performance-mode";
 import { ScrollFadeController } from "@/components/ui/scroll-fade-controller";
-import { usePathname } from "next/navigation";
+import { SlideshowProvider, useSlideshow } from "@/components/tutorial/SlideshowProvider";
+import { onTasksDialogOpen, openTasksDialog } from "@/lib/app-events";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AuthSurface,
   DEFAULT_AUTH_SURFACE,
@@ -45,7 +48,6 @@ import {
 import {
   clearConfirmedMiniAppSession,
 } from "@/lib/confirmed-miniapp-session";
-import { getPrivySolanaConnectors, hasUsableSolanaConnectors } from "@/lib/solana-auth-availability";
 
 const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
 const DESKTOP_EVM_WALLET_LIST = [
@@ -72,6 +74,16 @@ const MOBILE_SOLANA_WALLET_LIST = [
   'solflare',
   'backpack',
 ] as const;
+// Privy's server-side app configuration can enable Solana authentication even
+// while this browser session intentionally renders the EVM-only surface. A
+// valid empty connector store keeps that surface honest (no Solana wallets are
+// offered) without eagerly loading the Solana wallet-standard bundle merely to
+// satisfy Privy's connector contract.
+const EMPTY_SOLANA_CONNECTORS = Object.freeze({
+  get: () => [],
+  onMount: () => undefined,
+  onUnmount: () => undefined,
+});
 const PRIVY_LOGIN_METHODS: Array<'wallet' | 'email'> = ['wallet', 'email'];
 
 function isMobileWalletBrowser() {
@@ -102,34 +114,255 @@ function toSolanaRpcSubscriptionsUrl(rpcUrl: string) {
   }
 }
 
-// Solana RPC config for Privy - mainnet only
-const getSolanaRpcConfig = () => {
-  if (typeof window === 'undefined' || !isSolanaEnabled()) return undefined;
+type PrivySolanaBootstrap = {
+  connectors?: UntypedValue;
+  hasUsableConnectors: boolean;
+  rpcConfig?: UntypedValue;
+};
 
+async function loadPrivySolanaBootstrap(): Promise<PrivySolanaBootstrap> {
   const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || DEFAULT_SOLANA_RPC_URL;
   const rpcSubscriptionsUrl = toSolanaRpcSubscriptionsUrl(rpcUrl);
 
   try {
-    const { createSolanaRpc, createSolanaRpcSubscriptions } = require('@solana/kit');
+    const [solanaKit, solanaAuth] = await Promise.all([
+      import('@solana/kit'),
+      import('@/lib/solana-auth-availability'),
+    ]);
+    const connectors = solanaAuth.getPrivySolanaConnectors();
 
     return {
-      rpcs: {
-        'solana:mainnet': {
-          blockExplorerUrl: 'https://explorer.solana.com',
-          rpc: createSolanaRpc(rpcUrl),
-          rpcSubscriptions: createSolanaRpcSubscriptions(rpcSubscriptionsUrl),
+      connectors,
+      hasUsableConnectors: solanaAuth.hasUsableSolanaConnectors(connectors),
+      rpcConfig: {
+        rpcs: {
+          'solana:mainnet': {
+            blockExplorerUrl: 'https://explorer.solana.com',
+            rpc: solanaKit.createSolanaRpc(rpcUrl),
+            rpcSubscriptions: solanaKit.createSolanaRpcSubscriptions(rpcSubscriptionsUrl),
+          },
         },
       },
     };
   } catch (error) {
-    console.warn('[Providers] Failed to load Solana RPC clients for Privy:', error);
-    return undefined;
+    console.warn('[Providers] Failed to load Privy Solana support:', error);
+    return { hasUsableConnectors: false };
   }
+}
+
+type WagmiConfigKey = 'base' | 'miniapp' | 'privy' | 'test';
+
+const wagmiConfigLoaders: Record<WagmiConfigKey, () => Promise<Config>> = {
+  base: () => import('@/lib/wagmi-web-base-config').then((module) => module.wagmiWebBaseConfig as Config),
+  miniapp: () => import('@/lib/wagmi-miniapp-config').then((module) => module.wagmiMiniAppConfig as Config),
+  privy: () => import('@/lib/wagmi-privy-config').then((module) => module.wagmiPrivyConfig as Config),
+  test: () => import('@/lib/wagmi-local-test-config').then((module) => module.wagmiLocalTestConfig as Config),
 };
 
-const TutorialBundle = dynamic(() => import("@/components/tutorial/TutorialBundle"), { ssr: false });
-const SlideshowModal = dynamic(() => import("@/components/tutorial/SlideshowModal"), { ssr: false });
-const TasksInfoDialog = dynamic(() => import("@/components/tasks/TasksInfoDialog"), { ssr: false });
+const wagmiConfigPromises = new Map<WagmiConfigKey, Promise<Config>>();
+
+function loadWagmiConfig(key: WagmiConfigKey) {
+  const cached = wagmiConfigPromises.get(key);
+  if (cached) return cached;
+
+  const promise = wagmiConfigLoaders[key]().catch((error) => {
+    wagmiConfigPromises.delete(key);
+    throw error;
+  });
+  wagmiConfigPromises.set(key, promise);
+  return promise;
+}
+
+function resolveWagmiConfigKey(
+  authSurface: AuthSurface,
+  hostEnvironmentState: HostEnvironmentState,
+): WagmiConfigKey {
+  if (hostEnvironmentState.isMiniApp) return 'miniapp';
+  if (authSurface === 'base') return 'base';
+  if (authSurface === 'test') return 'test';
+  return 'privy';
+}
+
+const SnowEffect = dynamic(() => import("@/components/ui/snow-effect"), { ssr: false });
+
+let slideshowDialogModulePromise: Promise<{ default: ComponentType }> | null = null;
+let tasksDialogModulePromise: Promise<{ default: ComponentType }> | null = null;
+
+function loadSlideshowDialog() {
+  if (!slideshowDialogModulePromise) {
+    slideshowDialogModulePromise = (import("@/components/tutorial/SlideshowModal") as Promise<{
+      default: ComponentType;
+    }>).catch((error) => {
+      slideshowDialogModulePromise = null;
+      throw error;
+    });
+  }
+  return slideshowDialogModulePromise;
+}
+
+function loadTasksDialog() {
+  if (!tasksDialogModulePromise) {
+    tasksDialogModulePromise = (import("@/components/tasks/TasksInfoDialog") as Promise<{
+      default: ComponentType;
+    }>).catch((error) => {
+      tasksDialogModulePromise = null;
+      throw error;
+    });
+  }
+  return tasksDialogModulePromise;
+}
+
+function DeferredSlideshowModal() {
+  const { open, close } = useSlideshow();
+  const [DialogComponent, setDialogComponent] = useState<ComponentType | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+
+  const beginLoad = useCallback(() => {
+    if (loadingRef.current || DialogComponent) return;
+    loadingRef.current = true;
+    setIsLoading(true);
+    setLoadError(null);
+    void loadSlideshowDialog()
+      .then((module) => {
+        setDialogComponent(() => module.default);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        loadingRef.current = false;
+        setIsLoading(false);
+        setLoadError('The tutorial could not be loaded. Check your connection and retry.');
+        console.error('[Providers] Failed to load tutorial dialog:', error);
+      });
+  }, [DialogComponent]);
+
+  useEffect(() => {
+    if (open && !DialogComponent && !loadError) beginLoad();
+  }, [DialogComponent, beginLoad, loadError, open]);
+
+  // Once loaded, keep the modal mounted so Radix can play its exit transition.
+  if (DialogComponent) return <DialogComponent />;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) close();
+      }}
+    >
+      <DialogContent surface="soft" className="w-[min(92vw,26rem)]">
+        <DialogHeader>
+          <DialogTitle>Pixotchi tutorial</DialogTitle>
+          <DialogDescription>
+            {loadError ?? 'Preparing the step-by-step guide.'}
+          </DialogDescription>
+        </DialogHeader>
+        {loadError ? (
+          <Button onClick={beginLoad} className="w-full" size="touchCompact">
+            Retry loading tutorial
+          </Button>
+        ) : (
+          <div role="status" className="flex min-h-20 items-center justify-center gap-3 text-sm text-muted-foreground">
+            <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+            {isLoading ? 'Loading tutorial…' : 'Preparing tutorial…'}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeferredTasksInfoDialog() {
+  const [DialogComponent, setDialogComponent] = useState<ComponentType | null>(null);
+  const [requestedOpen, setRequestedOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const replayOpenRef = useRef(false);
+
+  const beginLoad = useCallback(() => {
+    // Every open intent must be replayed after the cold chunk mounts. This has
+    // to happen before the in-flight guard: a user can close the loading shell
+    // and reopen it while the same import promise is still pending.
+    replayOpenRef.current = true;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setIsLoading(true);
+    setLoadError(null);
+    void loadTasksDialog()
+      .then((module) => {
+        setDialogComponent(() => module.default);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        loadingRef.current = false;
+        replayOpenRef.current = false;
+        setIsLoading(false);
+        setLoadError('Tasks could not be loaded. Check your connection and retry.');
+        console.error('[Providers] Failed to load Tasks dialog:', error);
+      });
+  }, []);
+
+  useEffect(() => onTasksDialogOpen(() => {
+    setRequestedOpen(true);
+    if (!DialogComponent) beginLoad();
+  }), [DialogComponent, beginLoad]);
+
+  useEffect(() => {
+    if (!DialogComponent || !replayOpenRef.current) return;
+    replayOpenRef.current = false;
+    setRequestedOpen(false);
+
+    // Replay only after the dynamically loaded dialog has committed and
+    // installed its own event listener.
+    let innerFrame = 0;
+    const outerFrame = window.requestAnimationFrame(() => {
+      innerFrame = window.requestAnimationFrame(() => openTasksDialog());
+    });
+
+    return () => {
+      window.cancelAnimationFrame(outerFrame);
+      if (innerFrame) window.cancelAnimationFrame(innerFrame);
+    };
+  }, [DialogComponent]);
+
+  if (DialogComponent) return <DialogComponent />;
+
+  return (
+    <Dialog
+      open={requestedOpen}
+      onOpenChange={(nextOpen) => {
+        setRequestedOpen(nextOpen);
+        if (!nextOpen) replayOpenRef.current = false;
+      }}
+    >
+      <DialogContent surface="soft" className="w-[min(92vw,26rem)]">
+        <DialogHeader>
+          <DialogTitle>Farmer&apos;s Tasks</DialogTitle>
+          <DialogDescription>
+            {loadError ?? 'Loading your current tasks and rewards.'}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div role="status" className="flex min-h-20 items-center justify-center gap-3 text-sm text-muted-foreground">
+            <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+            Loading tasks…
+          </div>
+        ) : loadError ? (
+          <Button onClick={beginLoad} className="w-full" size="touchCompact">
+            Retry loading tasks
+          </Button>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeferredSnowEffect() {
+  const { isEnabled } = useSnow();
+  return isEnabled ? <SnowEffect /> : null;
+}
 
 function createQueryClient() {
   return new QueryClient({
@@ -149,14 +382,49 @@ function createQueryClient() {
 function WagmiRouter({
   authSurface,
   children,
+  fallback,
   hostEnvironmentState,
 }: {
   authSurface: AuthSurface;
   children: ReactNode;
+  fallback?: ReactNode;
   hostEnvironmentState: HostEnvironmentState;
 }) {
-  const isMiniApp = hostEnvironmentState.isMiniApp;
-  const surface = authSurface;
+  // HostEnvironment's web -> miniapp upgrade is a confirmed, monotonic state
+  // transition. Context/client metadata updates do not change this key, while a
+  // late Mini App context changes it exactly once.
+  const desiredConfigKey = resolveWagmiConfigKey(authSurface, hostEnvironmentState);
+  const isMiniApp = desiredConfigKey === 'miniapp';
+  const [loadedConfig, setLoadedConfig] = useState<{
+    config: Config;
+    key: WagmiConfigKey;
+  } | null>(null);
+  const [loadError, setLoadError] = useState<{
+    error: Error;
+    key: WagmiConfigKey;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadWagmiConfig(desiredConfigKey)
+      .then((config) => {
+        if (active) {
+          setLoadError(null);
+          setLoadedConfig({ config, key: desiredConfigKey });
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setLoadError({
+            error: error instanceof Error ? error : new Error(String(error)),
+            key: desiredConfigKey,
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [desiredConfigKey]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -173,34 +441,25 @@ function WagmiRouter({
     document.title = isMiniApp ? miniTitle : webTitle;
   }, [isMiniApp]);
 
-  if (isMiniApp) {
-    return (
-      <CoreWagmiProvider config={wagmiMiniAppConfig}>
-        {children}
-      </CoreWagmiProvider>
-    );
-  }
+  if (loadError?.key === desiredConfigKey) throw loadError.error;
+  // On a confirmed late upgrade, immediately remove the old provider subtree.
+  // It returns only when the matching Mini App config is ready, so descendants
+  // can never observe Mini App host context under a web wallet provider.
+  if (loadedConfig?.key !== desiredConfigKey) return <>{fallback ?? null}</>;
 
-  if (surface === 'base') {
+  if (loadedConfig.key === 'privy') {
     return (
-      <CoreWagmiProvider config={wagmiWebBaseConfig}>
+      <PrivyWagmiProvider key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
         {children}
-      </CoreWagmiProvider>
-    );
-  }
-
-  if (surface === 'test') {
-    return (
-      <CoreWagmiProvider config={wagmiLocalTestConfig}>
-        {children}
-      </CoreWagmiProvider>
+      </PrivyWagmiProvider>
     );
   }
 
   return (
-    <PrivyWagmiProvider config={wagmiPrivyConfig}>
+    <CoreWagmiProvider key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
+      {isMiniApp ? <MiniAppReadySignal hostEnvironment={hostEnvironmentState} /> : null}
       {children}
-    </PrivyWagmiProvider>
+    </CoreWagmiProvider>
   );
 }
 
@@ -238,8 +497,25 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
         }),
   );
   const [isMobilePrivyBrowser] = useState(() => isMobileWalletBrowser());
+  const [solanaEnabled] = useState(isSolanaEnabled);
+  const [solanaBootstrap, setSolanaBootstrap] = useState<PrivySolanaBootstrap | null>(null);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
   const [queryClient] = useState(createQueryClient);
+  const requiresSolanaBootstrap = authSurface === 'privysolana' && solanaEnabled;
+  const solanaBootstrapPending = requiresSolanaBootstrap && solanaBootstrap === null;
+
+  useEffect(() => {
+    if (!requiresSolanaBootstrap) return;
+    let active = true;
+
+    void loadPrivySolanaBootstrap().then((bootstrap) => {
+      if (active) setSolanaBootstrap(bootstrap);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [requiresSolanaBootstrap]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -280,7 +556,6 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
   // Determine PrivyProvider wallet config based on surface
   const privyWalletConfig = useMemo(() => {
     const isSolanaMode = authSurface === 'privysolana';
-    const solanaEnabled = isSolanaEnabled();
     const evmWalletList = (
       isMobilePrivyBrowser
         ? MOBILE_EVM_WALLET_LIST
@@ -291,14 +566,12 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
         ? MOBILE_SOLANA_WALLET_LIST
         : DESKTOP_SOLANA_WALLET_LIST
     ) as UntypedValue;
-    const solanaConnectors = solanaEnabled ? getPrivySolanaConnectors() : undefined;
+    const solanaConnectors = solanaBootstrap?.connectors;
 
     // Solana-only mode: only show Solana wallets
     if (isSolanaMode && solanaEnabled) {
-      const solanaRpcs = getSolanaRpcConfig();
-
       // Safety check: connectors must be present for Solana mode
-      if (hasUsableSolanaConnectors(solanaConnectors)) {
+      if (solanaBootstrap?.hasUsableConnectors) {
         return {
           embeddedWallets: {
             ethereum: { createOnLogin: 'off' as const },
@@ -314,11 +587,13 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
             },
           },
           // Privy Solana RPC config for embedded wallet UIs.
-          solana: solanaRpcs,
+          solana: solanaBootstrap.rpcConfig,
         };
       }
 
-      console.warn('[Providers] Solana enabled but connectors failed to load. Falling back to EVM-only mode.');
+      if (solanaBootstrap) {
+        console.warn('[Providers] Solana enabled but connectors failed to load. Falling back to EVM-only mode.');
+      }
     }
 
     // EVM-only mode (default): only show Ethereum wallets
@@ -331,16 +606,14 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
       walletChainType: 'ethereum-only' as const,
       // Explicit wallets keep Privy usable on mobile, while detected wallets + QR cover desktop.
       walletList: evmWalletList,
-      externalWallets: solanaConnectors
-        ? {
-          solana: {
-            connectors: solanaConnectors,
-          },
-        }
-        : undefined,
+      externalWallets: {
+        solana: {
+          connectors: EMPTY_SOLANA_CONNECTORS,
+        },
+      },
       solana: undefined,
     };
-  }, [authSurface, isMobilePrivyBrowser]);
+  }, [authSurface, isMobilePrivyBrowser, solanaBootstrap, solanaEnabled]);
   const privyConfig = useMemo(() => ({
     appearance: {
       theme: 'light' as const,
@@ -376,39 +649,32 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
         <SnowProvider>
           <AmbientAudioProvider>
             <PaymasterProvider>
-              <PrivyProvider
-                appId={privyAppId}
-                config={privyConfig}
-              >
-                <QueryClientProvider client={queryClient}>
-                  <HostEnvironmentProvider>
-                    <ProvidersContent
-                      authSurface={authSurface}
-                      fallback={props.fallback}
-                      surfaceInitialized={surfaceInitialized}
-                    >
-                      {props.children}
-                    </ProvidersContent>
-                  </HostEnvironmentProvider>
-                </QueryClientProvider>
-              </PrivyProvider>
+              {solanaBootstrapPending ? (
+                <>{props.fallback ?? null}</>
+              ) : (
+                <PrivyProvider
+                  appId={privyAppId}
+                  config={privyConfig}
+                >
+                  <QueryClientProvider client={queryClient}>
+                    <HostEnvironmentProvider>
+                      <ProvidersContent
+                        authSurface={authSurface}
+                        fallback={props.fallback}
+                        surfaceInitialized={surfaceInitialized}
+                      >
+                        {props.children}
+                      </ProvidersContent>
+                    </HostEnvironmentProvider>
+                  </QueryClientProvider>
+                </PrivyProvider>
+              )}
             </PaymasterProvider>
           </AmbientAudioProvider>
         </SnowProvider>
       </ServerThemeProvider>
     </ErrorBoundary>
   );
-}
-
-function RouteAwareChatProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isStatusRoute = pathname === '/status' || pathname.startsWith('/status/');
-
-  if (isStatusRoute) {
-    return <>{children}</>;
-  }
-
-  return <ChatProvider>{children}</ChatProvider>;
 }
 
 function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
@@ -419,7 +685,7 @@ function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
       return;
     }
 
-    if (!hostEnvironment.initialized) {
+    if (!hostEnvironment.initialized || !hostEnvironment.isMiniApp) {
       return;
     }
 
@@ -427,14 +693,13 @@ function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
 
     (async () => {
       try {
+        const { sdk } = await import('@farcaster/miniapp-sdk');
         await sdk.actions.ready();
         if (!cancelled) {
           readySignalledRef.current = true;
         }
       } catch (error) {
-        if (hostEnvironment.isMiniApp) {
-          console.warn('[Providers] Failed to signal sdk.actions.ready():', error);
-        }
+        console.warn('[Providers] Failed to signal sdk.actions.ready():', error);
       }
     })();
 
@@ -445,6 +710,11 @@ function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
     hostEnvironment.initialized,
     hostEnvironment.isMiniApp,
   ]);
+}
+
+function MiniAppReadySignal({ hostEnvironment }: { hostEnvironment: HostEnvironmentState }) {
+  useMiniAppReadySignal(hostEnvironment);
+  return null;
 }
 
 function ProvidersContent({
@@ -463,8 +733,6 @@ function ProvidersContent({
     typeof window === 'undefined',
   );
   const didBootstrapSanitizeRef = useRef(typeof window === 'undefined');
-
-  useMiniAppReadySignal(hostEnvironment);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -515,28 +783,28 @@ function ProvidersContent({
   }
 
   return (
-    <WagmiRouter authSurface={authSurface} hostEnvironmentState={hostEnvironment}>
+    <WagmiRouter
+      authSurface={authSurface}
+      fallback={fallback}
+      hostEnvironmentState={hostEnvironment}
+    >
       <FrameProvider>
         <SmartWalletProvider>
           <EthModeProvider>
             <SolanaWalletProvider>
               <BalanceProvider>
-                  <RouteAwareChatProvider>
-                    <TutorialBundle>
-                      <AppUpdateBanner disabled={hostEnvironment.isMiniApp} />
-                      {/* Tutorial slideshow provider at root so it can render a modal on top of everything */}
-                      {/* It internally reads NEXT_PUBLIC_TUTORIAL_SLIDESHOW */}
-                      {/** added provider wrapper **/}
+                  <ChatProvider>
+                    <SlideshowProvider>
                       <AppToaster />
                       <PerformanceModeController />
                       <ScrollFadeController />
                       {children}
-                      <SlideshowModal />
-                    </TutorialBundle>
-                    <TasksInfoDialog />
+                      <DeferredSlideshowModal />
+                    </SlideshowProvider>
+                    <DeferredTasksInfoDialog />
                     <SecretGardenListener />
-                    <SnowEffect />
-                  </RouteAwareChatProvider>
+                    <DeferredSnowEffect />
+                  </ChatProvider>
               </BalanceProvider>
             </SolanaWalletProvider>
           </EthModeProvider>

@@ -265,6 +265,7 @@ export default function BaccaratTransaction({
 
   return (
     <SponsoredTransaction
+      intentKey={`baccarat:${mode}:${landId}`}
       calls={calls}
       onStatusUpdate={handleStatus}
       buttonText={buttonText || (mode === "placeBet" ? "Deal Baccarat" : "Reveal Baccarat")}

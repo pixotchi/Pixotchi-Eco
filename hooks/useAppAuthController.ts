@@ -1545,11 +1545,17 @@ export function useAppAuthController() {
             return;
           }
 
-          ensureLocalTestWallet();
-          await connectAsync({ connector: testConnector as UntypedValue });
-          await completeBaseAuthentication(testConnector as UntypedValue);
-          if (storedAuto === "test") {
-            await sessionStorageManager.removeAutologin();
+          try {
+            ensureLocalTestWallet();
+            await connectAsync({ connector: testConnector as UntypedValue });
+            await completeBaseAuthentication(testConnector as UntypedValue);
+          } finally {
+            // ChatProvider treats the autologin marker as an auth-readiness
+            // signal. Always settle it, including failed local SIWE attempts,
+            // so chat can leave its bounded bootstrap wait and show recovery.
+            if (storedAuto === "test") {
+              await sessionStorageManager.removeAutologin();
+            }
           }
           return;
         }

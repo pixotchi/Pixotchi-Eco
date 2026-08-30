@@ -30,6 +30,21 @@ const LOCALSTORAGE_KEY_PREFIXES = [
   "pixotchi:",
 ];
 
+// A cache/auth reset must never erase evidence for an in-flight onchain action.
+// These records are wallet/account scoped, so preserving them across disconnect
+// is both safe and necessary for canonical recovery without a duplicate send.
+const DURABLE_TRANSACTION_STORAGE_PREFIXES = [
+  "pixotchi:pending-evm:v2:",
+  "pixotchi:transfer-assets:v1:",
+  "pixotchi:efp-workflow:v1:",
+  "pixotchi:solana-bridge:pending:v2:",
+  "pixotchi:spinleaf:pending:",
+];
+
+function isDurableTransactionKey(lowerKey: string) {
+  return DURABLE_TRANSACTION_STORAGE_PREFIXES.some((prefix) => lowerKey.startsWith(prefix));
+}
+
 export async function clearAppCaches(options: ClearOptions = {}) {
   try {
     // 1) LocalStorage keys (targeted by prefixes)
@@ -48,6 +63,9 @@ export async function clearAppCaches(options: ClearOptions = {}) {
         if (preserveSet.has(lower)) {
           continue;
         }
+        if (isDurableTransactionKey(lower)) {
+          continue;
+        }
         if (targetPrefixes.some((p) => lower.startsWith(p))) {
           toDelete.push(key);
         }
@@ -64,7 +82,11 @@ export async function clearAppCaches(options: ClearOptions = {}) {
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
         if (!key) continue;
-        if (targetPrefixes.some((p) => key.toLowerCase().startsWith(p))) {
+        const lower = key.toLowerCase();
+        if (isDurableTransactionKey(lower)) {
+          continue;
+        }
+        if (targetPrefixes.some((p) => lower.startsWith(p))) {
           toDelete.push(key);
         }
       }
@@ -93,5 +115,4 @@ export async function clearAppCaches(options: ClearOptions = {}) {
     }
   } catch {}
 }
-
 

@@ -26,6 +26,7 @@ import { DisabledReason, InlineBalanceNotice } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
 import { getAliveTokenIds,getKillCooldown,getLandLeaderboard,getPlantsByOwner,getPlantsInfoExtended,getRevivePrice,getTokenBalance } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
@@ -159,6 +160,7 @@ export default function LeaderboardTab() {
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('leaderboard');
+  const usesCompactPageScroll = useMediaQuery("(max-width: 53.99rem) and (max-height: 700px)");
   // See the 30s freshness guard on the visibility refetch effect below.
   const lastVisibleFetchRef = useRef(0);
 
@@ -227,8 +229,13 @@ export default function LeaderboardTab() {
       setCurrentPage((page) => Math.max(1, Math.min(page, getTotalPages(totalItemsForBoard, nextSize))));
     };
 
-    mq.addEventListener('change', handleChange);
-    return () => mq.removeEventListener('change', handleChange);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handleChange);
+      return () => mq.removeEventListener('change', handleChange);
+    }
+
+    mq.addListener(handleChange);
+    return () => mq.removeListener(handleChange);
   }, [setCurrentPage]);
 
   const [myPlants, setMyPlants] = useState<Plant[]>([]);
@@ -848,7 +855,8 @@ export default function LeaderboardTab() {
     window.requestAnimationFrame(() => {
       const rankingScroll = document.querySelector<HTMLElement>('[data-ranking-scroll]');
       const contentShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
-      (rankingScroll ?? contentShell)?.scrollTo({
+      const scrollOwner = usesCompactPageScroll ? contentShell : (rankingScroll ?? contentShell);
+      scrollOwner?.scrollTo({
         top: 0,
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       });
@@ -925,10 +933,22 @@ export default function LeaderboardTab() {
     renderRow: (row: T, compact?: boolean) => React.ReactNode,
     fillDesktop = false
   ) {
+    const usePageScroll = usesCompactPageScroll && !isDesktopBoard;
+
     return (
-      <div className={cn("flex h-full min-h-0 flex-col gap-3", fillDesktop && "tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col")}>
+      <div className={cn(
+        "flex min-h-0 flex-col gap-3",
+        usePageScroll ? "h-auto" : "h-full",
+        fillDesktop && "tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col",
+      )}>
         {!isDesktopBoard && (
-          <div data-ranking-scroll className="surface-scroll-area min-h-0 flex-1 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:hidden">
+          <div
+            data-ranking-scroll
+            className={cn(
+              "surface-scroll-area min-h-0 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:hidden",
+              usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
+            )}
+          >
             {mobileRows.map((row) => renderRow(row))}
           </div>
         )}
@@ -942,11 +962,16 @@ export default function LeaderboardTab() {
   }
 
   function renderRankingState(content: React.ReactNode) {
+    const usePageScroll = usesCompactPageScroll && !isDesktopBoard;
+
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className={cn("flex min-h-0 flex-col", usePageScroll ? "h-auto" : "h-full")}>
         <div
           data-ranking-scroll
-          className="surface-scroll-area min-h-0 flex-1 overflow-y-auto rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3"
+          className={cn(
+            "surface-scroll-area min-h-0 rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
+            usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
+          )}
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
@@ -1435,8 +1460,13 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className="h-full min-h-0 space-y-4 tablet:mx-auto tablet:max-w-7xl">
-      <TabCard className="flex h-full min-h-[26rem] flex-col overflow-hidden">
+    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-full tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
+      <TabCard className={cn(
+        "flex flex-col",
+        usesCompactPageScroll
+          ? "h-auto min-h-0 overflow-visible"
+          : "h-full min-h-[26rem] overflow-hidden",
+      )}>
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
@@ -1535,7 +1565,7 @@ export default function LeaderboardTab() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-visible">
+        <CardContent className={cn("min-h-0 overflow-visible", usesCompactPageScroll ? "flex-none" : "flex-1")}>
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (

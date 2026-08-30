@@ -83,7 +83,7 @@ Built on Base and designed to be fast, simple, and fun.
 ## Local development
 1. Install dependencies: `npm install`
 2. Copy the example environment: `cp .env.example .env.local`
-3. Configure at least `NEXT_PUBLIC_URL` and `NEXT_PUBLIC_RPC_NODE` for core local reads. Add unique RPC backups if available.
+3. Configure at least `NEXT_PUBLIC_URL` plus the server-only `RPC_NODE` or `BASE_RPC_NODE` for core local reads. Add unique server-only RPC backups if available; do not expose provider credentials through `NEXT_PUBLIC_*` variables.
 4. Add Redis/KV plus `ADMIN_TOKEN` when testing chat, admin, broadcasts, gamification, airdrops, claim records, notifications, or other stateful flows.
 5. Add production-like integrations as needed: `NEXT_PUBLIC_PONDER_API_URL` or `INDEXER_UPSTREAM_URL`, `INDEXER_SHARED_SECRET`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `NEXT_PUBLIC_CDP_CLIENT_API_KEY`, notification provider keys, and AI provider keys.
 6. Run locally: `npm run dev`

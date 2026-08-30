@@ -78,11 +78,7 @@ const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_QUEST_MAX_SIZE || 10
 
 const SECONDS_PER_BLOCK = 2;
 
-/**
- * Coalescing window for buildings:refresh. dispatchPostTransactionRefresh emits
- * that event five times (0/650/1800/3800/6500ms) to outrun RPC lag, and each one
- * would otherwise trigger a full multicall sweep of every owned land.
- */
+/** Coalesce simultaneous building-domain refresh requests into one land sweep. */
 const REFRESH_DEBOUNCE_MS = 900;
 
 const embeddedSurfaceClassName =
@@ -290,6 +286,18 @@ export default function BatchQuestStartCard({
 
     return [burnCall, ...startCalls];
   }, [burnAmountWei, currentBatchSlots, difficulty, shouldBurn]);
+
+  const batchQuestIntentKey = useMemo(() => {
+    const pairs = [...currentBatchSlots]
+      .sort((a, b) => {
+        if (a.landId < b.landId) return -1;
+        if (a.landId > b.landId) return 1;
+        return a.slotIndex - b.slotIndex;
+      })
+      .map((slot) => `${slot.landId}/${slot.slotIndex}`)
+      .join(",");
+    return `batch-quest-start:${difficulty}:${shouldBurn ? "burn" : "paid"}:${pairs}`;
+  }, [currentBatchSlots, difficulty, shouldBurn]);
 
   const handleDifficultyChange = useCallback((nextValue: string | number) => {
     const parsed = Number(nextValue);
@@ -507,6 +515,7 @@ export default function BatchQuestStartCard({
               </div>
               <SmartWalletTransaction
                 key={txKey}
+                intentKey={batchQuestIntentKey}
                 calls={calls}
                 buttonText={
                   hasMultipleBatches
@@ -545,7 +554,11 @@ export default function BatchQuestStartCard({
                   onSuccess?.();
                   // buildings:refresh drives the re-scan through the debounced
                   // listener above, so no direct scanQuests() call here.
-                  dispatchPostTransactionRefresh(["balances:refresh", "buildings:refresh"]);
+                  dispatchPostTransactionRefresh(["buildings:refresh"], undefined, {
+                    address,
+                    source: "batch-quest-start",
+                    transactionHash: extractTransactionHash(tx),
+                  });
 
                   try {
                     const payload: Record<string, UntypedValue> = {

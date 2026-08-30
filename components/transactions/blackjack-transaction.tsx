@@ -161,6 +161,7 @@ export default function BlackjackTransaction({
     const [error, setError] = useState<string | null>(null);
     const [calls, setCalls] = useState<UntypedValue[]>([]);
     const [preparedExpiresAt, setPreparedExpiresAt] = useState<number | null>(null);
+    const [preparedHandIndex, setPreparedHandIndex] = useState(handIndex);
 
     // Normalize to raw serializable calls for embedded-wallet compatibility.
     // Builder attribution is appended by transform helper + wallet_sendCalls capability.
@@ -280,6 +281,7 @@ export default function BlackjackTransaction({
 
 
             setCalls([call]);
+            setPreparedHandIndex(resolvedHandIndex);
             setPreparedExpiresAt(typeof result.expiresAt === "number" ? result.expiresAt : null);
             setPhase("ready");
 
@@ -630,6 +632,9 @@ export default function BlackjackTransaction({
     if (transformedCalls.length > 0) {
         return (
             <Transaction
+                intentKey={mode === "deal"
+                    ? `blackjack:deal:${landId}`
+                    : `blackjack:action:${landId}:${preparedHandIndex}:${action}`}
                 onStatus={handleStatus}
                 calls={transformedCalls}
                 isSponsored={isSponsored}

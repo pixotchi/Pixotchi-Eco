@@ -7,8 +7,6 @@ const EDGE_SESSION_REQUIRED_API_PATHS = new Set([
   '/api/chat/send',
   '/api/chat/ai/messages',
   '/api/chat/ai/send',
-  '/api/agent/chat',
-  '/api/agent/mint',
 ]);
 const EDGE_SAME_ORIGIN_ONLY_API_PATHS = new Set([
   '/api/chat/auth/session',
@@ -92,7 +90,12 @@ function isCrossSiteBrowserRequest(request: NextRequest): boolean {
 export async function proxy(request: NextRequest) {
   // Get the pathname of the request
   const pathname = request.nextUrl.pathname;
-  const statusOnly = process.env.NEXT_PUBLIC_STATUS_ONLY === 'true';
+  // Keep the legacy public name for existing deployments, but prefer a
+  // server-only flag so maintenance mode is evaluated at request time without
+  // adding another value to the client environment.
+  const statusOnly =
+    process.env.STATUS_ONLY === 'true'
+    || process.env.NEXT_PUBLIC_STATUS_ONLY === 'true';
 
   if (statusOnly && pathname === '/') {
     const url = new URL('/status', request.url);
@@ -218,13 +221,15 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // API routes always need the security/CORS/session layer, regardless of
+    // whether a route name happens to contain a file-like suffix.
+    '/api/:path*',
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)  
-     * - favicon.ico (favicon file)
-     * - public files
+     * Apply the proxy to application/document routes, not immutable public
+     * assets. Fonts, audio and the PWA manifest previously paid the full CSP
+     * and proxy cost on every request. JSON is deliberately not excluded so
+     * `/.well-known/farcaster.json` continues through the security layer.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.svg$|.*\\.gif$|.*\\.webp$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|svg|gif|webp|avif|ico|css|js|map|txt|xml|woff2?|ttf|otf|eot|mp3|wav|ogg|m4a|mp4|webm|webmanifest)$).*)',
   ],
 };

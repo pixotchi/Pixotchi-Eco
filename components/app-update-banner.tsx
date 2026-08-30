@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
-import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
@@ -19,9 +18,11 @@ const UPDATE_CHECK_INTERVAL_MS = Math.max(
   CLIENT_ENV.APP_UPDATE_CHECK_INTERVAL_SECONDS * 1000,
 );
 
-export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
-  const pathname = usePathname();
-  const isStatusRoute = pathname === "/status" || pathname.startsWith("/status/");
+export function AppUpdateBanner({
+  disabled = false,
+}: {
+  disabled?: boolean;
+}) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const checkingRef = useRef(false);
@@ -29,7 +30,6 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
   const checkForUpdate = useCallback(async () => {
     if (
       disabled ||
-      isStatusRoute ||
       updateAvailable ||
       typeof window === "undefined" ||
       document.visibilityState === "hidden" ||
@@ -67,10 +67,10 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
     } finally {
       checkingRef.current = false;
     }
-  }, [disabled, isStatusRoute, updateAvailable]);
+  }, [disabled, updateAvailable]);
 
   useEffect(() => {
-    if (disabled || isStatusRoute || typeof window === "undefined") {
+    if (disabled || typeof window === "undefined") {
       return;
     }
 
@@ -100,7 +100,7 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
       window.removeEventListener("pageshow", handleVisibleCheck);
       document.removeEventListener("visibilitychange", handleVisibleCheck);
     };
-  }, [checkForUpdate, disabled, isStatusRoute]);
+  }, [checkForUpdate, disabled]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -112,12 +112,16 @@ export function AppUpdateBanner({ disabled = false }: { disabled?: boolean }) {
     }
   }, []);
 
-  if (!updateAvailable || disabled || isStatusRoute) {
+  if (!updateAvailable || disabled) {
     return null;
   }
 
   return (
-    <div className="pointer-events-none fixed left-1/2 top-[calc(max(0.75rem,env(safe-area-inset-top),var(--safe-area-inset-top),var(--browser-safe-area-top))+4.75rem)] z-[var(--z-banner)] w-[calc(100%-1rem)] max-w-md -translate-x-1/2 px-2">
+    <div
+      className="pointer-events-none mx-auto w-full max-w-md px-2 pb-2 pt-2"
+      role="status"
+      aria-live="polite"
+    >
       <div className="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--border-strong)/0.38)] bg-card bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-raised)]">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <div className="mt-0.5 rounded-full bg-primary/10 p-1">

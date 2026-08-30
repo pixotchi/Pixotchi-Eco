@@ -31,8 +31,13 @@ export function useMediaQuery(query: string): boolean {
     const sync = () => setMatches(mediaQuery.matches);
 
     sync();
-    mediaQuery.addEventListener("change", sync);
-    return () => mediaQuery.removeEventListener("change", sync);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", sync);
+      return () => mediaQuery.removeEventListener("change", sync);
+    }
+
+    mediaQuery.addListener(sync);
+    return () => mediaQuery.removeListener(sync);
   }, [query]);
 
   return matches;

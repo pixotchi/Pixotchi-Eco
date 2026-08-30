@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { usePerformanceMode } from '@/components/ui/performance-mode';
+
+const CONTINUOUS_WHEEL_SPEED_DEGREES_PER_SECOND = 720;
+const CONTINUOUS_BALL_SPEED_DEGREES_PER_SECOND = 900;
+const SETTLE_DURATION_MS = 3000;
 
 // European roulette wheel numbers in order (37 pockets: 0 and 1-36)
 const EUROPEAN_WHEEL_NUMBERS = [
@@ -21,6 +26,9 @@ export default function EuropeanRouletteWheel({
     winningNumber,
     onSpinComplete
 }: EuropeanRouletteWheelProps) {
+    const { enabled: performanceModeEnabled } = usePerformanceMode();
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+    const [pageVisible, setPageVisible] = useState(true);
     // The continuous spin is driven straight into the DOM rather than through
     // React state. Calling setState per animation frame re-rendered all 74 SVG
     // nodes (37 pockets + 37 labels) at 60fps, which visibly janked the casino
@@ -30,7 +38,35 @@ export default function EuropeanRouletteWheel({
     const rotationRef = useRef(0);
     const ballAngleRef = useRef(0);
     const animationRef = useRef<number | null>(null);
+    const lastFrameTimeRef = useRef<number | null>(null);
     const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const completedWinningNumberRef = useRef<number | null>(null);
+    const onSpinCompleteRef = useRef(onSpinComplete);
+    const motionDisabled = performanceModeEnabled || prefersReducedMotion || !pageVisible;
+
+    useEffect(() => {
+        onSpinCompleteRef.current = onSpinComplete;
+    }, [onSpinComplete]);
+
+    useEffect(() => {
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const syncPreference = () => setPrefersReducedMotion(reducedMotion.matches);
+        syncPreference();
+        try {
+            reducedMotion.addEventListener('change', syncPreference);
+            return () => reducedMotion.removeEventListener('change', syncPreference);
+        } catch {
+            reducedMotion.addListener(syncPreference);
+            return () => reducedMotion.removeListener(syncPreference);
+        }
+    }, []);
+
+    useEffect(() => {
+        const syncVisibility = () => setPageVisible(document.visibilityState === 'visible');
+        syncVisibility();
+        document.addEventListener('visibilitychange', syncVisibility);
+        return () => document.removeEventListener('visibilitychange', syncVisibility);
+    }, []);
 
     const applyTransforms = useCallback((transition: string) => {
         if (wheelRef.current) {
@@ -53,7 +89,10 @@ export default function EuropeanRouletteWheel({
     const getNumberAngle = (num: number): number => {
         const index = EUROPEAN_WHEEL_NUMBERS.indexOf(num);
         if (index === -1) return 0;
-        return (index / 37) * 360;
+        // SVG pockets span index..index+1; target their center rather than the
+        // boundary between two numbers, which otherwise parks the pointer line
+        // (and ball) ambiguously between adjacent results.
+        return ((index + 0.5) / EUROPEAN_WHEEL_NUMBERS.length) * 360;
     };
 
     const cancelContinuousSpin = useCallback(() => {
@@ -61,6 +100,7 @@ export default function EuropeanRouletteWheel({
             cancelAnimationFrame(animationRef.current);
             animationRef.current = null;
         }
+        lastFrameTimeRef.current = null;
     }, []);
 
     const clearSettleTimer = useCallback(() => {
@@ -72,22 +112,28 @@ export default function EuropeanRouletteWheel({
 
     // Animate wheel spin
     useEffect(() => {
-        if (!spinning || animationRef.current !== null) return;
+        if (!spinning || winningNumber !== null || motionDisabled) {
+            cancelContinuousSpin();
+            return;
+        }
+        if (animationRef.current !== null) return;
 
         clearSettleTimer();
 
-        const animate = () => {
-            // Continuous fast spin while waiting for result
-            rotationRef.current = (rotationRef.current + 12) % 360;
-            // Ball spins opposite
-            ballAngleRef.current = (ballAngleRef.current - 12) % 360;
+        const animate = (timestamp: number) => {
+            const previousTimestamp = lastFrameTimeRef.current ?? timestamp;
+            const elapsedSeconds = Math.min((timestamp - previousTimestamp) / 1000, 0.05);
+            lastFrameTimeRef.current = timestamp;
+
+            rotationRef.current = (rotationRef.current + CONTINUOUS_WHEEL_SPEED_DEGREES_PER_SECOND * elapsedSeconds) % 360;
+            ballAngleRef.current = (ballAngleRef.current - CONTINUOUS_BALL_SPEED_DEGREES_PER_SECOND * elapsedSeconds) % 360;
             applyTransforms('none');
 
             animationRef.current = requestAnimationFrame(animate);
         };
 
         animationRef.current = requestAnimationFrame(animate);
-    }, [applyTransforms, clearSettleTimer, spinning]);
+    }, [applyTransforms, cancelContinuousSpin, clearSettleTimer, motionDisabled, spinning, winningNumber]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -98,6 +144,9 @@ export default function EuropeanRouletteWheel({
     }, [cancelContinuousSpin, clearSettleTimer]);
 
     useEffect(() => {
+        if (winningNumber === null) {
+            completedWinningNumberRef.current = null;
+        }
         if (spinning || winningNumber !== null) return;
 
         cancelContinuousSpin();
@@ -106,40 +155,69 @@ export default function EuropeanRouletteWheel({
 
     // Handle landing on winning number
     useEffect(() => {
-        if (winningNumber !== null) {
+        if (winningNumber !== null && completedWinningNumberRef.current !== winningNumber) {
             // Stop continuous animation before settling on the winning pocket.
             cancelContinuousSpin();
             clearSettleTimer();
 
             // Calculate final position to land on winning number
             const targetAngle = getNumberAngle(winningNumber);
-            const extraSpins = 3 * 360; // 3 full rotations for effect
-            const finalRotation = extraSpins + (360 - targetAngle);
+            const currentRotation = rotationRef.current;
+            const currentNormalized = ((currentRotation % 360) + 360) % 360;
+            const targetNormalized = (360 - targetAngle) % 360;
+            const clockwiseDelta = (targetNormalized - currentNormalized + 360) % 360;
+            const finalRotation = currentRotation + (3 * 360) + clockwiseDelta;
 
             // Animate to final position.
             // Wheel spins clockwise to put winning number at top (0deg).
             // Ball spins counter-clockwise and must also end at top (0deg), so it
             // gets a whole number of extra turns for relative motion.
-            const ballSpins = 5 * 360; // 5 full rotations relative to start
+            const ballNormalized = ((ballAngleRef.current % 360) + 360) % 360;
+            const ballSpins = (5 * 360) + ballNormalized;
             rotationRef.current = finalRotation;
-            ballAngleRef.current = -ballSpins;
+            ballAngleRef.current -= ballSpins;
+
+            const completeSpin = () => {
+                if (completedWinningNumberRef.current === winningNumber) return;
+                completedWinningNumberRef.current = winningNumber;
+                onSpinCompleteRef.current?.();
+            };
+
+            if (motionDisabled) {
+                applyTransforms('none');
+                completeSpin();
+                return;
+            }
 
             // The transition runs from whatever transform the RAF loop last wrote,
             // so the settle continues smoothly out of the continuous spin.
-            applyTransforms('transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)');
+            applyTransforms(`transform ${SETTLE_DURATION_MS}ms cubic-bezier(0.23, 1, 0.32, 1)`);
 
-            // Notify completion after animation
+            const wheel = wheelRef.current;
+            const handleTransitionEnd = (event: TransitionEvent) => {
+                if (event.propertyName !== 'transform') return;
+                clearSettleTimer();
+                completeSpin();
+            };
+            wheel?.addEventListener('transitionend', handleTransitionEnd);
+
+            // Fallback for background tabs or engines that drop transitionend.
             settleTimeoutRef.current = setTimeout(() => {
                 settleTimeoutRef.current = null;
-                onSpinComplete?.();
-            }, 3000);
+                completeSpin();
+            }, SETTLE_DURATION_MS + 100);
+
+            return () => {
+                wheel?.removeEventListener('transitionend', handleTransitionEnd);
+                clearSettleTimer();
+            };
         }
-    }, [applyTransforms, cancelContinuousSpin, clearSettleTimer, winningNumber, onSpinComplete]);
+    }, [applyTransforms, cancelContinuousSpin, clearSettleTimer, motionDisabled, winningNumber]);
 
     const pocketAngle = 360 / 37;
 
     return (
-        <div className="relative w-full h-full">
+        <div aria-hidden="true" className="relative w-full h-full">
             {/* Outer ring */}
             <div className="absolute inset-0 rounded-full bg-gradient-to-b from-amber-700 to-amber-900 shadow-lg" />
 

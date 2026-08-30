@@ -188,10 +188,14 @@ export default function SpinGameTransaction({
   if (mode === "reveal") defaultText = "Reveal Spin";
 
   const finalDisabled = disabled || calls.length === 0;
+  const intentKey = commitment
+    ? `spin:${mode}:${plantId}:${commitment.toLowerCase()}`
+    : undefined;
 
   return (
     <SponsoredTransaction
       calls={calls as UntypedValue}
+      intentKey={intentKey}
       buttonText={buttonText ?? defaultText}
       buttonClassName={buttonClassName}
       disabled={finalDisabled}

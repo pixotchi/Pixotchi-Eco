@@ -8,8 +8,19 @@ import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { useAccount } from 'wagmi';
 
 const POLL_INTERVAL = 90000; // 90 seconds
+const MIN_FETCH_INTERVAL = 10000;
 const STORAGE_KEY = 'pixotchi:dismissed-broadcasts';
 const TUTORIAL_STORAGE_KEY = 'pixotchi:tutorial';
+
+type BroadcastSnapshot = {
+  identityKey: string;
+  loading: boolean;
+  messages: BroadcastMessage[];
+};
+
+type FetchBroadcastOptions = {
+  force?: boolean;
+};
 
 // Helper to check if tutorial is completed
 function isTutorialCompleted(): boolean {
@@ -29,26 +40,8 @@ export function useBroadcastMessages() {
   const { user, authenticated, ready } = usePrivy();
   const frameContext = useFrameContext();
   const { surface: authSurface } = useAuthSurface();
-  const [messages, setMessages] = useState<BroadcastMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
-    try {
-      if (typeof window === 'undefined') return new Set();
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return new Set(parsed);
-      }
-    } catch (error) {
-      console.warn('Failed to load dismissed broadcasts:', error);
-    }
-    return new Set();
-  });
-  const lastFetchRef = useRef<number>(0);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const fetchCountRef = useRef<number>(0);
 
-  // Build a cross-session identity for server-side dismissal when wallet is unavailable
+  // Build a cross-session identity for server-side dismissal when wallet is unavailable.
   const identity = useMemo(() => {
     const fid =
       typeof frameContext?.context === 'object'
@@ -62,6 +55,42 @@ export function useBroadcastMessages() {
     if (typeof fid === 'number' && fid > 0) return `fid:${fid}`;
     return undefined;
   }, [address, authSurface, authenticated, ready, user?.id, frameContext?.context]);
+  const identityKey = identity ?? 'public';
+
+  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(() => {
+    try {
+      if (typeof window === 'undefined') return new Set();
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return new Set(parsed);
+      }
+    } catch (error) {
+      console.warn('Failed to load dismissed broadcasts:', error);
+    }
+    return new Set();
+  });
+  const [snapshot, setSnapshot] = useState<BroadcastSnapshot>(() => ({
+    identityKey,
+    loading: true,
+    messages: [],
+  }));
+  const currentSnapshot = useMemo(
+    () => snapshot.identityKey === identityKey
+      ? snapshot
+      : { identityKey, loading: true, messages: [] },
+    [identityKey, snapshot],
+  );
+
+  const activeRequestControllerRef = useRef<AbortController | null>(null);
+  const identityKeyRef = useRef(identityKey);
+  const lastFetchByIdentityRef = useRef(new Map<string, number>());
+  const localDismissedIdsRef = useRef(localDismissedIds);
+  const mountedRef = useRef(true);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const requestGenerationRef = useRef(0);
+  identityKeyRef.current = identityKey;
+  localDismissedIdsRef.current = localDismissedIds;
 
   // Local dismissed IDs are loaded synchronously in state initializer
 
@@ -70,65 +99,101 @@ export function useBroadcastMessages() {
   // JSON.parse via a NON-lazy useState initializer on every single render of
   // the app shell, and its setters triggered renders nothing observed.
 
-  // Track mounted state to prevent state updates after unmount
-  const mountedRef = useRef(true);
-  
-  // Fetch active messages - relaxed to not require wallet connection
-  const fetchMessages = useCallback(async () => {
-    // Guard against calls after unmount
-    if (!mountedRef.current) return;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+      activeRequestControllerRef.current?.abort();
+      activeRequestControllerRef.current = null;
+    };
+  }, []);
+
+  // Fetch active messages. Every request owns an immutable identity and
+  // generation; a retained callback from a previous wallet cannot cancel or
+  // commit over the current identity's request.
+  const fetchMessages = useCallback(async (options: FetchBroadcastOptions = {}) => {
+    const requestedIdentity = identity;
+    const requestedIdentityKey = identityKey;
+    if (!mountedRef.current || identityKeyRef.current !== requestedIdentityKey) return;
     
     // Require tutorial completion only; wallet connection is optional
     if (!isTutorialCompleted()) {
-      // Ensure we clear any messages if tutorial isn't completed
-      if (mountedRef.current) {
-        setMessages(prev => (prev.length > 0 ? [] : prev));
-        setLoading(false);
-      }
+      requestGenerationRef.current += 1;
+      activeRequestControllerRef.current?.abort();
+      activeRequestControllerRef.current = null;
+      setSnapshot({ identityKey: requestedIdentityKey, loading: false, messages: [] });
       return;
     }
 
-    // Prevent excessive polling - minimum 10 seconds between fetches
+    // Prevent excessive polling per identity. Identity changes and explicit
+    // refreshes use force so a recent request for account A cannot suppress B.
     const now = Date.now();
-    if (now - lastFetchRef.current < 10000) {
+    const lastFetch = lastFetchByIdentityRef.current.get(requestedIdentityKey) ?? 0;
+    if (!options.force && now - lastFetch < MIN_FETCH_INTERVAL) {
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[Broadcast] Skipping fetch - only ${((now - lastFetchRef.current) / 1000).toFixed(1)}s since last fetch`);
+        console.debug(`[Broadcast] Skipping ${requestedIdentityKey} fetch - only ${((now - lastFetch) / 1000).toFixed(1)}s since last fetch`);
       }
       return;
     }
-    lastFetchRef.current = now;
-    fetchCountRef.current += 1;
+    lastFetchByIdentityRef.current.set(requestedIdentityKey, now);
+    if (lastFetchByIdentityRef.current.size > 20) {
+      const oldestIdentity = lastFetchByIdentityRef.current.keys().next().value as string | undefined;
+      if (oldestIdentity) lastFetchByIdentityRef.current.delete(oldestIdentity);
+    }
+
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+    activeRequestControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestControllerRef.current = controller;
+    setSnapshot((previous) => ({
+      identityKey: requestedIdentityKey,
+      loading: true,
+      messages: previous.identityKey === requestedIdentityKey ? previous.messages : [],
+    }));
+
+    const isCurrentRequest = () =>
+      mountedRef.current
+      && !controller.signal.aborted
+      && requestGenerationRef.current === generation
+      && identityKeyRef.current === requestedIdentityKey
+      && activeRequestControllerRef.current === controller;
 
     try {
-      const url = identity ? `/api/broadcast/active?address=${encodeURIComponent(identity)}` : '/api/broadcast/active';
+      const url = requestedIdentity
+        ? `/api/broadcast/active?address=${encodeURIComponent(requestedIdentity)}`
+        : '/api/broadcast/active';
 
-      const response = await fetch(url);
-      
-      // Check if component is still mounted before processing response
-      if (!mountedRef.current) return;
-      
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) throw new Error(`Broadcast request failed (${response.status})`);
       const data = await response.json();
-      
-      // Check again after async operation
-      if (!mountedRef.current) return;
-      
+      if (!isCurrentRequest()) return;
+
       if (data.success && Array.isArray(data.messages)) {
-        // Filter out locally dismissed messages (persisted between sessions)
         const activeMessages = data.messages.filter(
-          (msg: BroadcastMessage) => !localDismissedIds.has(msg.id)
+          (msg: BroadcastMessage) => !localDismissedIdsRef.current.has(msg.id),
         );
-        
-        setMessages(activeMessages);
+
+        setSnapshot({
+          identityKey: requestedIdentityKey,
+          loading: false,
+          messages: activeMessages,
+        });
       }
     } catch (error) {
-      console.error('[Broadcast] Failed to fetch messages:', error);
+      if ((error as Error)?.name !== 'AbortError') {
+        console.error('[Broadcast] Failed to fetch messages:', error);
+      }
     } finally {
-      // Only update loading state if component is still mounted
-      if (mountedRef.current) {
-        setLoading(false);
+      if (isCurrentRequest()) {
+        activeRequestControllerRef.current = null;
+        setSnapshot((previous) => previous.identityKey === requestedIdentityKey
+          ? { ...previous, loading: false }
+          : previous);
       }
     }
-  }, [identity, localDismissedIds]);
+  }, [identity, identityKey]);
 
   const fetchMessagesRef = useRef(fetchMessages);
 
@@ -136,14 +201,38 @@ export function useBroadcastMessages() {
     fetchMessagesRef.current = fetchMessages;
   }, [fetchMessages]);
 
+  // Clear synchronously for the committed identity and bypass its throttle. The
+  // render-time snapshot gate above also prevents a one-frame previous-owner flash
+  // before this effect runs.
+  useEffect(() => {
+    requestGenerationRef.current += 1;
+    activeRequestControllerRef.current?.abort();
+    activeRequestControllerRef.current = null;
+    setSnapshot({ identityKey, loading: true, messages: [] });
+    void fetchMessagesRef.current({ force: true });
+
+    return () => {
+      requestGenerationRef.current += 1;
+      activeRequestControllerRef.current?.abort();
+      activeRequestControllerRef.current = null;
+    };
+  }, [identityKey]);
+
   // Dismiss a message
   const dismissMessage = useCallback(async (messageId: string) => {
+    const requestedIdentity = identity;
+    const requestedIdentityKey = identityKey;
+    if (!mountedRef.current || identityKeyRef.current !== requestedIdentityKey) return;
+
     // Optimistically remove from UI
-    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    setSnapshot((previous) => previous.identityKey === requestedIdentityKey
+      ? { ...previous, messages: previous.messages.filter((message) => message.id !== messageId) }
+      : previous);
     
     // Track dismissal locally
-    const newDismissed = new Set(localDismissedIds);
+    const newDismissed = new Set(localDismissedIdsRef.current);
     newDismissed.add(messageId);
+    localDismissedIdsRef.current = newDismissed;
     setLocalDismissedIds(newDismissed);
     
     // Persist to localStorage (persists across sessions)
@@ -154,18 +243,18 @@ export function useBroadcastMessages() {
     }
     
     // Send dismissal to server (only when connected)
-    if (identity && (isConnected || ((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated))) {
+    if (requestedIdentity && (isConnected || ((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated))) {
       try {
         await fetch('/api/broadcast/dismiss', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId, address: identity }),
+          body: JSON.stringify({ messageId, address: requestedIdentity }),
         });
       } catch (error) {
         console.error('Failed to record dismissal:', error);
       }
     }
-  }, [authSurface, identity, isConnected, authenticated, localDismissedIds, ready]);
+  }, [authSurface, identity, identityKey, isConnected, authenticated, ready]);
 
   // Track impression (message was shown)
   const trackImpression = useCallback(async (messageId: string) => {
@@ -183,12 +272,8 @@ export function useBroadcastMessages() {
     }
   }, []);
 
-  // Initial fetch and setup polling - run once on mount
+  // Set up polling once; the ref always points at the current identity loader.
   useEffect(() => {
-    mountedRef.current = true;
-    // Initial fetch
-    fetchMessagesRef.current();
-
     // Set up polling interval (only once).
     // Skip ticks while the tab is hidden — this fired every 90s regardless,
     // costing ~40 requests/hour per backgrounded session. The chat polls already
@@ -210,7 +295,6 @@ export function useBroadcastMessages() {
 
     // Cleanup on unmount
     return () => {
-      mountedRef.current = false;
       if (process.env.NODE_ENV === 'development') {
         console.debug('[Broadcast] Cleaning up polling system');
       }
@@ -222,23 +306,16 @@ export function useBroadcastMessages() {
     };
   }, []); // Empty deps - only run once
 
-  // Refresh when wallet connects/disconnects (but don't restart polling)
-  useEffect(() => {
-    if (!mountedRef.current) return;
-    
-    if (address !== undefined || (((authSurface === 'privy' || authSurface === 'privysolana') && ready && authenticated) && user?.id)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('[Broadcast] Wallet address changed, fetching messages');
-      }
-      fetchMessages();
-    }
-  }, [address, authSurface, authenticated, fetchMessages, ready, user?.id]); // Identity-related triggers
+  const refreshMessages = useCallback(
+    () => fetchMessages({ force: true }),
+    [fetchMessages],
+  );
 
   return {
-    messages,
-    loading,
+    messages: currentSnapshot.messages,
+    loading: currentSnapshot.loading,
     dismissMessage,
     trackImpression,
-    refresh: fetchMessages,
+    refresh: refreshMessages,
   };
 }

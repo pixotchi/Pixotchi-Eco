@@ -3,25 +3,13 @@
  * Export all Solana-related components
  */
 
-// Provider
-export { SolanaWalletProvider, withSolanaWallet } from './SolanaWalletProvider';
-
-// Gating components
-export { 
-  SolanaGate, 
-  SolanaOnly, 
-  HideFromSolana, 
-  SolanaNotSupported,
-  SolanaBridgeBadge,
-} from './SolanaGate';
+export { SolanaNotSupported, SolanaBridgeBadge } from './SolanaGate';
 
 // Re-export hooks for convenience
 export { 
   useSolanaWallet, 
   useIsSolanaWallet, 
   useTwinAddress,
-  useTwinAddressLookup,
-  useTwinInfo,
 } from '@/hooks/useSolanaWallet';
 
 /*
@@ -32,6 +20,3 @@ export {
  * lib/solana-wallet-context.tsx. Import it from '@/hooks/useSolanaBridge'
  * directly (its one consumer is the mint tab, which is already a lazy chunk).
  */
-
-// Re-export utility functions
-export { isSolanaEnabled } from '@/lib/solana-constants';

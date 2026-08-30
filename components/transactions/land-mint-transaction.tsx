@@ -1,7 +1,3 @@
-"use client";
-
-import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
 import { landAbi as LAND_ABI } from '@/public/abi/pixotchi-v3-abi';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import type { TransactionCall } from '@/lib/types';
@@ -12,34 +8,3 @@ export const getLandMintCall = (): TransactionCall => ({
   functionName: 'mint',
   args: [],
 });
-
-interface LandMintTransactionProps {
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
-  buttonText?: string;
-  buttonClassName?: string;
-  disabled?: boolean;
-  showToast?: boolean;
-}
-
-export default function LandMintTransaction({
-  onSuccess,
-  onError,
-  buttonText = "Mint Land",
-  buttonClassName,
-  disabled = false,
-  showToast = true,
-}: LandMintTransactionProps) {
-
-  return (
-    <SponsoredTransaction
-      calls={[getLandMintCall()]}
-      onSuccess={onSuccess}
-      onError={onError}
-      buttonText={buttonText}
-      buttonClassName={buttonClassName}
-      disabled={disabled}
-      showToast={showToast}
-    />
-  );
-}

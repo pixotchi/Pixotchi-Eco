@@ -2,7 +2,7 @@
 
 import { getTerrainNoise,getTokenIdFromCoordinate,getVisualTerrainType,visualToContract } from '@/lib/land-utils';
 import { Land } from "@/lib/types";
-import React,{ useEffect,useMemo,useRef,useState } from 'react';
+import React,{ useEffect,useId,useMemo,useRef,useState } from 'react';
 
 interface LandMapCanvasProps {
   center: { x: number; y: number }; // Visual coordinates
@@ -33,6 +33,8 @@ export function LandMapCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const instructionsId = useId();
+  const statusId = useId();
   const centerRef = useRef(center);
   const isDraggingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
@@ -528,8 +530,37 @@ export function LandMapCanvas({
     }
   };
 
+  const mapStatus = useMemo(() => {
+    const x = Math.round(center.x);
+    const y = Math.round(center.y);
+    const contractX = visualToContract(x);
+    const contractY = visualToContract(y);
+
+    if (contractX === null || contractY === null) {
+      return `Centre coordinates ${x}, ${y}. ${getVisualTerrainType(x, y)} wilderness.`;
+    }
+
+    const tokenId = getTokenIdFromCoordinate(contractX, contractY);
+    const ownership = ownedTokenIds.has(tokenId)
+      ? 'You own this plot.'
+      : isNormalMintedLandId(tokenId, totalSupply)
+        ? 'This plot is owned.'
+        : 'This plot is available.';
+    const selection = selectedLand && Number(selectedLand.tokenId) === tokenId
+      ? ' Selected.'
+      : '';
+
+    return `Centre coordinates ${x}, ${y}. Plot ${tokenId}. ${ownership}${selection}`;
+  }, [center.x, center.y, ownedTokenIds, selectedLand, totalSupply]);
+
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden cursor-move">
+      <p id={instructionsId} className="sr-only">
+        Use the arrow keys to pan. Hold Shift to move five plots at a time. Press Enter or Space to select the centre plot.
+      </p>
+      <p id={statusId} className="sr-only" aria-live="polite" aria-atomic="true">
+        {mapStatus}
+      </p>
       {/* pointercancel: OS gestures / browser back-swipes end a captured drag
           with neither pointerup nor pointerleave — without the handler the map
           kept panning with no button pressed. */}
@@ -538,8 +569,10 @@ export function LandMapCanvas({
         className="block touch-none select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ width: '100%', height: '100%' }}
         tabIndex={0}
-        role="application"
-        aria-label="Land map. Use the arrow keys to pan (Shift for larger steps) and Enter to select the centre plot."
+        role="region"
+        aria-roledescription="interactive land map"
+        aria-label="Land map"
+        aria-describedby={`${instructionsId} ${statusId}`}
         onKeyDown={handleCanvasKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

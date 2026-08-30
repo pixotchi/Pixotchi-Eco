@@ -29,7 +29,7 @@ import {
 } from "@/public/abi/baccarat-abi";
 import { Loader2, X } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useBalance, useBlockNumber } from "wagmi";
@@ -47,6 +47,7 @@ interface BaccaratDialogProps {
 type BaccaratUiPhase = "idle" | "betting" | "waiting" | "revealing";
 
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
+const BACCARAT_STATE_POLL_INTERVAL_MS = 4000;
 const BACCARAT_FAILURE_STATUSES = new Set([
   "error",
   "failed",
@@ -65,9 +66,9 @@ const BACCARAT_ACTIONS_CLASS =
 const BACCARAT_ACTION_BUTTON_BASE =
   "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-4 py-3 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
 const BACCARAT_APPROVE_BUTTON =
-  `${BACCARAT_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
+  `${BACCARAT_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
 const BACCARAT_REVEAL_BUTTON =
-  `${BACCARAT_ACTION_BUTTON_BASE} border border-amber-300/35 bg-amber-500 bg-[image:var(--gradient-warning)] text-amber-950 hover:brightness-[1.03]`;
+  `${BACCARAT_ACTION_BUTTON_BASE} border border-amber-300/35 bg-amber-500 bg-[image:var(--gradient-warning)] text-amber-950 [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
 
 const BET_OPTIONS = [
   {
@@ -79,7 +80,7 @@ const BET_OPTIONS = [
     selectedClassName:
       "border-sky-300/70 bg-sky-500/22 text-sky-50 shadow-[0_0_0_1px_rgba(125,211,252,0.35),0_12px_28px_rgba(14,116,144,0.26)]",
     actionClassName:
-      "border border-sky-300/45 bg-sky-600 bg-[image:linear-gradient(180deg,rgba(56,189,248,0.95)_0%,rgba(2,132,199,0.94)_55%,rgba(3,105,161,0.98)_100%)] text-white hover:brightness-[1.04]",
+      "border border-sky-300/45 bg-sky-600 bg-[image:linear-gradient(180deg,rgba(56,189,248,0.95)_0%,rgba(2,132,199,0.94)_55%,rgba(3,105,161,0.98)_100%)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
   {
     value: BaccaratBetType.BANKER,
@@ -90,7 +91,7 @@ const BET_OPTIONS = [
     selectedClassName:
       "border-rose-300/70 bg-rose-500/22 text-rose-50 shadow-[0_0_0_1px_rgba(253,164,175,0.35),0_12px_28px_rgba(190,18,60,0.24)]",
     actionClassName:
-      "border border-rose-300/45 bg-rose-700 bg-[image:linear-gradient(180deg,rgba(244,63,94,0.96)_0%,rgba(190,18,60,0.94)_56%,rgba(136,19,55,0.98)_100%)] text-white hover:brightness-[1.04]",
+      "border border-rose-300/45 bg-rose-700 bg-[image:linear-gradient(180deg,rgba(244,63,94,0.96)_0%,rgba(190,18,60,0.94)_56%,rgba(136,19,55,0.98)_100%)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
   {
     value: BaccaratBetType.TIE,
@@ -101,7 +102,7 @@ const BET_OPTIONS = [
     selectedClassName:
       "border-amber-300/75 bg-amber-400/22 text-amber-50 shadow-[0_0_0_1px_rgba(252,211,77,0.36),0_12px_28px_rgba(180,83,9,0.24)]",
     actionClassName:
-      "border border-amber-300/45 bg-amber-500 bg-[image:linear-gradient(180deg,rgba(251,191,36,0.98)_0%,rgba(217,119,6,0.96)_56%,rgba(146,64,14,0.98)_100%)] text-amber-950 hover:brightness-[1.04]",
+      "border border-amber-300/45 bg-amber-500 bg-[image:linear-gradient(180deg,rgba(251,191,36,0.98)_0%,rgba(217,119,6,0.96)_56%,rgba(146,64,14,0.98)_100%)] text-amber-950 [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
 ];
 
@@ -133,18 +134,21 @@ function BaccaratHandArea({
           ? "border-sky-300/20 bg-sky-950/22"
           : "border-rose-300/20 bg-rose-950/24"
       )}
+      role="group"
+      aria-label={`${label} hand`}
     >
       <div className="flex w-full items-center justify-center gap-2">
         <span className={cn("h-1.5 w-1.5 rounded-full", tone === "player" ? "bg-sky-300" : "bg-rose-300")} />
         <span className="text-xs font-semibold tracking-normal text-white/78">{label}</span>
       </div>
-      <div className="flex min-h-[6.25rem] items-center justify-center -space-x-5 pl-2">
+      <div className="flex min-h-[6.25rem] items-center justify-center -space-x-5 pl-2" role="list" aria-label={`${label} cards`}>
         {hasCards
           ? cards.map((card, index) => (
             <div
               key={`${label}-${card}-${index}`}
-              className="animate-deal-card relative transition-transform hover:-translate-y-2 hover:z-10"
-              style={{ animationDelay: `${index * 100}ms`, zIndex: index }}
+              role="listitem"
+              className="animate-deal-card relative z-[var(--card-z)] transition-transform duration-[var(--motion-quick)] ease-[var(--ease-standard)] [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:hover:z-10"
+              style={{ animationDelay: `${index * 50}ms`, '--card-z': index } as CSSProperties}
             >
               <PlayingCard value={card} className="shadow-2xl" />
             </div>
@@ -152,6 +156,7 @@ function BaccaratHandArea({
           : placeholders.map((card, index) => (
             <div
               key={`${label}-placeholder-${card}`}
+              aria-hidden="true"
               className="relative opacity-85"
               style={{ transform: `rotate(${index === 0 ? -4 : 4}deg)`, zIndex: index }}
             >
@@ -159,11 +164,13 @@ function BaccaratHandArea({
             </div>
           ))}
       </div>
-      {hasCards && value !== undefined && (
-        <div className="flex min-h-8 flex-col items-center justify-center gap-0.5">
-          <span className="text-lg font-semibold text-white">{value}</span>
-        </div>
-      )}
+      <div>
+        {hasCards && value !== undefined && (
+          <div className="flex min-h-8 flex-col items-center justify-center gap-0.5">
+            <span className="text-lg font-semibold text-white">{value}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -178,9 +185,18 @@ export default function BaccaratDialog({
   const { address } = useAccount();
   const casinoPolicy = getClientCasinoPolicy();
   const betAmountInputId = useId();
+  const betOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const betMotionFrameRef = useRef<number | null>(null);
+  const refreshGenerationRef = useRef(0);
+  const refreshScopeRef = useRef("");
+  const loadingGenerationRef = useRef<number | null>(null);
+  const loadedScopeRef = useRef("");
+  const optimisticBalanceTimerRef = useRef<number | null>(null);
+  const allowanceGenerationRef = useRef(0);
 
   const [phase, setPhase] = useState<BaccaratUiPhase>("idle");
   const [betType, setBetType] = useState<BaccaratBetType>(BaccaratBetType.BANKER);
+  const [suppressBetOptionMotion, setSuppressBetOptionMotion] = useState(false);
   const [betAmount, setBetAmount] = useState("10");
   const [tokenConfig, setTokenConfig] = useState<BaccaratTokenConfig | null>(null);
   const [activeGame, setActiveGame] = useState<BaccaratActiveGame | null>(null);
@@ -275,6 +291,34 @@ export default function BaccaratDialog({
     hasBalance &&
     hasApproval &&
     !bettingLocked;
+  const refreshScopeKey = [
+    open ? "open" : "closed",
+    casinoPolicy.playable ? "playable" : "disabled",
+    address?.toLowerCase() ?? "",
+    landId.toString(),
+    selectedToken?.toLowerCase() ?? "",
+    effectiveToken?.toLowerCase() ?? "",
+    tokenDecimals.toString(),
+  ].join(":");
+  const loadingScopeKey = [
+    address?.toLowerCase() ?? "",
+    landId.toString(),
+    selectedToken?.toLowerCase() ?? "",
+  ].join(":");
+
+  useEffect(() => {
+    refreshScopeRef.current = refreshScopeKey;
+    refreshGenerationRef.current += 1;
+    allowanceGenerationRef.current += 1;
+
+    return () => {
+      if (refreshScopeRef.current === refreshScopeKey) {
+        refreshScopeRef.current = "";
+      }
+      refreshGenerationRef.current += 1;
+      allowanceGenerationRef.current += 1;
+    };
+  }, [refreshScopeKey]);
 
   const refetchBalanceAfterTx = useCallback(() => {
     dispatchPostTransactionRefresh();
@@ -296,11 +340,31 @@ export default function BaccaratDialog({
     });
 
     const clearDelay = POST_TRANSACTION_REFRESH_DELAYS_MS[POST_TRANSACTION_REFRESH_DELAYS_MS.length - 1] + 1500;
-    window.setTimeout(() => setOptimisticBalanceWei(null), clearDelay);
+    if (optimisticBalanceTimerRef.current !== null) {
+      window.clearTimeout(optimisticBalanceTimerRef.current);
+    }
+    optimisticBalanceTimerRef.current = window.setTimeout(() => {
+      optimisticBalanceTimerRef.current = null;
+      setOptimisticBalanceWei(null);
+    }, clearDelay);
   }, [balanceData?.value]);
 
-  const refreshBaccaratState = useCallback(async (options?: { keepPendingWhenMissing?: boolean }) => {
-    if (!casinoPolicy.playable) return null;
+  const refreshBaccaratState = useCallback(async (options?: { keepPendingWhenMissing?: boolean; showLoading?: boolean }) => {
+    if (!open || !casinoPolicy.playable || refreshScopeRef.current !== refreshScopeKey) return null;
+
+    const requestGeneration = refreshGenerationRef.current + 1;
+    refreshGenerationRef.current = requestGeneration;
+    const allowanceGeneration = allowanceGenerationRef.current + 1;
+    allowanceGenerationRef.current = allowanceGeneration;
+    const controlsLoading = options?.showLoading || loadingGenerationRef.current !== null;
+    if (controlsLoading) {
+      loadingGenerationRef.current = requestGeneration;
+      if (options?.showLoading) setIsLoading(true);
+    }
+    const isCurrentRequest = () => (
+      refreshScopeRef.current === refreshScopeKey &&
+      refreshGenerationRef.current === requestGeneration
+    );
 
     try {
       setError(null);
@@ -308,9 +372,15 @@ export default function BaccaratDialog({
         baccaratGetActiveGame(landId),
         baccaratGetConfig(),
       ]);
+      if (!isCurrentRequest()) return null;
+      if (!active || !globalConfig) {
+        throw new Error("Baccarat game state read failed");
+      }
+
       const token = active?.isActive ? active.bettingToken : selectedToken;
 
-      if (!token || !globalConfig?.enabled) {
+      if (!token || (!globalConfig.enabled && !active.isActive)) {
+        if (!isCurrentRequest()) return null;
         setTokenConfig(null);
         setActiveGame(null);
         setAllowanceWei(BigInt(0));
@@ -319,8 +389,18 @@ export default function BaccaratDialog({
       }
 
       const cfg = await baccaratGetTokenConfig(token);
-      setTokenConfig(cfg);
+      if (!isCurrentRequest()) return null;
+      if (!cfg) {
+        throw new Error("Baccarat token config read failed");
+      }
 
+      let approval = BigInt(0);
+      if (address && cfg?.supported) {
+        approval = await checkCasinoApproval(address, token);
+      }
+      if (!isCurrentRequest()) return null;
+
+      setTokenConfig(cfg);
       if (active?.isActive) {
         setActiveGame(active);
         setBetType(active.betType);
@@ -330,21 +410,24 @@ export default function BaccaratDialog({
         setActiveGame(null);
         setPhase((current) => current === "betting" ? current : "idle");
       }
-
-      if (address && cfg?.supported) {
-        const approval = await checkCasinoApproval(address, token);
+      if (allowanceGenerationRef.current === allowanceGeneration) {
         setAllowanceWei(approval);
-      } else {
-        setAllowanceWei(BigInt(0));
       }
 
       return active;
     } catch (err) {
-      console.error("Failed to load baccarat state:", err);
-      setError("Failed to load Baccarat data");
+      if (isCurrentRequest()) {
+        console.error("Failed to load baccarat state:", err);
+        setError("Failed to load Baccarat data");
+      }
       return null;
+    } finally {
+      if (isCurrentRequest() && loadingGenerationRef.current === requestGeneration) {
+        loadingGenerationRef.current = null;
+        setIsLoading(false);
+      }
     }
-  }, [address, casinoPolicy.playable, landId, selectedToken, tokenDecimals]);
+  }, [address, casinoPolicy.playable, landId, open, refreshScopeKey, selectedToken, tokenDecimals]);
 
   useEffect(() => {
     if (!open || casinoPolicy.playable) return;
@@ -353,13 +436,29 @@ export default function BaccaratDialog({
   }, [casinoPolicy.message, casinoPolicy.playable, onOpenChange, open]);
 
   useEffect(() => {
-    if (!open) return;
-    setIsLoading(true);
-    refreshBaccaratState().finally(() => setIsLoading(false));
-  }, [open, refreshBaccaratState]);
+    if (!open || !casinoPolicy.playable) {
+      loadingGenerationRef.current = null;
+      loadedScopeRef.current = "";
+      setIsLoading(false);
+      return;
+    }
+    const showLoading = loadedScopeRef.current !== loadingScopeKey;
+    loadedScopeRef.current = loadingScopeKey;
+    void refreshBaccaratState({ showLoading });
+  }, [casinoPolicy.playable, loadingScopeKey, open, refreshBaccaratState]);
 
   useEffect(() => {
+    if (optimisticBalanceTimerRef.current !== null) {
+      window.clearTimeout(optimisticBalanceTimerRef.current);
+      optimisticBalanceTimerRef.current = null;
+    }
     setOptimisticBalanceWei(null);
+    return () => {
+      if (optimisticBalanceTimerRef.current !== null) {
+        window.clearTimeout(optimisticBalanceTimerRef.current);
+        optimisticBalanceTimerRef.current = null;
+      }
+    };
   }, [balanceScopeKey]);
 
   useEffect(() => {
@@ -375,12 +474,25 @@ export default function BaccaratDialog({
   }, [activeGame?.isActive, effectiveToken, formattedMinBet, open, tokenConfig, tokenDecimals, uiMaxBet, uiMinBet]);
 
   useEffect(() => {
-    if (!open || !hasPendingGame || walletTxPending) return;
-    const interval = window.setInterval(() => {
-      void refreshBaccaratState({ keepPendingWhenMissing: true });
-    }, 4000);
-    return () => window.clearInterval(interval);
-  }, [hasPendingGame, open, refreshBaccaratState, walletTxPending]);
+    const waitingForActiveGame = !activeGame?.isActive && phase === "waiting" && !hasResolvedRound;
+    if (!open || (!hasPendingGame && !waitingForActiveGame) || walletTxPending) return;
+
+    let disposed = false;
+    let timeoutId: number | null = null;
+    const keepPendingWhenMissing = waitingForActiveGame;
+    const poll = async () => {
+      await refreshBaccaratState({ keepPendingWhenMissing });
+      if (!disposed) {
+        timeoutId = window.setTimeout(() => void poll(), BACCARAT_STATE_POLL_INTERVAL_MS);
+      }
+    };
+
+    timeoutId = window.setTimeout(() => void poll(), BACCARAT_STATE_POLL_INTERVAL_MS);
+    return () => {
+      disposed = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [activeGame?.isActive, hasPendingGame, hasResolvedRound, open, phase, refreshBaccaratState, walletTxPending]);
 
   const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
     const statusName = status.statusName ?? "";
@@ -432,16 +544,26 @@ export default function BaccaratDialog({
   }, [applyOptimisticBalanceDelta, onGameComplete, refetchBalanceAfterTx, tokenDecimals]);
 
   const handleApproveSuccess = useCallback(async () => {
+    if (!address || !effectiveToken || refreshScopeRef.current !== refreshScopeKey) return;
     toast.success(`${tokenSymbol} approved for Baccarat`);
+
+    const allowanceGeneration = allowanceGenerationRef.current + 1;
+    allowanceGenerationRef.current = allowanceGeneration;
+    const isCurrentAllowanceRequest = () => (
+      refreshScopeRef.current === refreshScopeKey &&
+      allowanceGenerationRef.current === allowanceGeneration
+    );
+
     for (const delay of APPROVAL_REFRESH_DELAYS_MS) {
       if (delay > 0) await wait(delay);
-      if (address && effectiveToken) {
-        const approval = await checkCasinoApproval(address, effectiveToken);
-        setAllowanceWei(approval);
-        if (approval >= betWei) break;
-      }
+      if (!isCurrentAllowanceRequest()) return;
+
+      const approval = await checkCasinoApproval(address, effectiveToken);
+      if (!isCurrentAllowanceRequest()) return;
+      setAllowanceWei(approval);
+      if (approval >= betWei) break;
     }
-  }, [address, betWei, effectiveToken, tokenSymbol]);
+  }, [address, betWei, effectiveToken, refreshScopeKey, tokenSymbol]);
 
   const handleBetAmountChange = useCallback((value: string) => {
     if (!isPotentialCasinoAmountInput(value)) return;
@@ -481,6 +603,51 @@ export default function BaccaratDialog({
     () => `${BACCARAT_ACTION_BUTTON_BASE} ${selectedBetOption.actionClassName}`,
     [selectedBetOption.actionClassName]
   );
+  const baccaratAnnouncement = expiredResult
+    ? `Baccarat round expired. ${expiredResult.forfeitedAmount} ${tokenSymbol} forfeited.`
+    : result && resultOutcome
+      ? `Baccarat result: ${resultOutcome} wins. ${resultBet} bet ${result.won ? "won" : isPushResult ? "pushed" : "lost"}. Payout ${result.payout ?? "0"} ${tokenSymbol}.`
+      : "";
+  const suppressBetMotionForKeyboard = useCallback(() => {
+    if (betMotionFrameRef.current !== null) {
+      cancelAnimationFrame(betMotionFrameRef.current);
+    }
+    setSuppressBetOptionMotion(true);
+    betMotionFrameRef.current = requestAnimationFrame(() => {
+      betMotionFrameRef.current = requestAnimationFrame(() => {
+        betMotionFrameRef.current = null;
+        setSuppressBetOptionMotion(false);
+      });
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (betMotionFrameRef.current !== null) {
+      cancelAnimationFrame(betMotionFrameRef.current);
+      betMotionFrameRef.current = null;
+    }
+  }, []);
+
+  const handleBetOptionKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      nextIndex = (index - 1 + TABLE_BET_OPTIONS.length) % TABLE_BET_OPTIONS.length;
+    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      nextIndex = (index + 1) % TABLE_BET_OPTIONS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = TABLE_BET_OPTIONS.length - 1;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    suppressBetMotionForKeyboard();
+    setBetType(TABLE_BET_OPTIONS[nextIndex].value);
+    betOptionRefs.current[nextIndex]?.focus();
+  }, [suppressBetMotionForKeyboard]);
+
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : handleClose())}>
       <DialogContent
@@ -500,6 +667,9 @@ export default function BaccaratDialog({
         <DialogDescription className="sr-only">
           Punto Banco Baccarat with Player, Banker, and Tie bets.
         </DialogDescription>
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {baccaratAnnouncement}
+        </p>
         <Button
           type="button"
           variant="headerIcon"
@@ -514,8 +684,9 @@ export default function BaccaratDialog({
         <div className="flex min-h-0 flex-1 flex-col bg-black/50 text-white">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-4 sm:px-4 sm:pt-5">
             {isLoading ? (
-              <div className="flex min-h-[22rem] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+              <div className="flex min-h-[22rem] items-center justify-center" role="status" aria-live="polite">
+                <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-white/70" />
+                <span className="sr-only">Loading Baccarat game</span>
               </div>
             ) : (
               <div className="mx-auto flex w-full max-w-[38rem] flex-col gap-3 sm:gap-4">
@@ -590,8 +761,9 @@ export default function BaccaratDialog({
                       className="flex flex-col items-center gap-1.5 rounded-[var(--radius-control)] border border-yellow-500/15 bg-red-950/20 px-2 py-2"
                       role="radiogroup"
                       aria-label="Baccarat bet type"
+                      aria-orientation="vertical"
                     >
-                      {TABLE_BET_OPTIONS.map((option) => {
+                      {TABLE_BET_OPTIONS.map((option, optionIndex) => {
                         const selected = option.value === betType;
                         return (
                           <button
@@ -600,14 +772,23 @@ export default function BaccaratDialog({
                             role="radio"
                             aria-checked={selected}
                             aria-label={option.ariaLabel}
+                            tabIndex={selected ? 0 : -1}
                             disabled={bettingLocked}
-                            onClick={() => setBetType(option.value)}
+                            onClick={(event) => {
+                              if (event.detail === 0) suppressBetMotionForKeyboard();
+                              setBetType(option.value);
+                            }}
+                            onKeyDown={(event) => handleBetOptionKeyDown(event, optionIndex)}
+                            ref={(node) => {
+                              betOptionRefs.current[optionIndex] = node;
+                            }}
                             className={cn(
                               "group relative flex min-h-11 min-w-0 items-center justify-center overflow-visible rounded-full border px-8 py-2 text-center text-sm font-extrabold uppercase leading-none text-yellow-200 shadow-[var(--shadow-hairline)] transition-[background-color,border-color,color,filter,box-shadow,transform] duration-[var(--motion-quick)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:translate-y-px disabled:pointer-events-none disabled:opacity-60",
+                              suppressBetOptionMotion && "transition-none",
                               option.widthClassName,
                               selected
                                 ? "border-yellow-300/85 bg-red-800/95 bg-[linear-gradient(180deg,rgba(127,29,29,0.98)_0%,rgba(91,12,12,0.98)_54%,rgba(61,6,6,0.98)_100%)] shadow-[0_0_0_1px_rgba(252,211,77,0.34),0_12px_28px_rgba(127,29,29,0.34)]"
-                                : "border-yellow-600/50 bg-red-950/75 bg-[linear-gradient(180deg,rgba(94,14,14,0.72)_0%,rgba(69,10,10,0.78)_58%,rgba(37,5,5,0.86)_100%)] text-yellow-200/80 hover:border-yellow-400/70 hover:text-yellow-100"
+                                : "border-yellow-600/50 bg-red-950/75 bg-[linear-gradient(180deg,rgba(94,14,14,0.72)_0%,rgba(69,10,10,0.78)_58%,rgba(37,5,5,0.86)_100%)] text-yellow-200/80 [@media(hover:hover)_and_(pointer:fine)]:hover:border-yellow-400/70 [@media(hover:hover)_and_(pointer:fine)]:hover:text-yellow-100"
                             )}
                           >
                             <span

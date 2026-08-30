@@ -65,6 +65,7 @@ export type Strain = {
   id: number;
   name: string;
   mintPrice: number;
+  mintPriceRaw: bigint;
   totalSupply: number;
   totalMinted: number;
   maxSupply: number;

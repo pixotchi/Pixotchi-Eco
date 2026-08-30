@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useSlideshow } from "./SlideshowProvider";
+import { slides as allSlides } from "./slides";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
@@ -57,7 +58,11 @@ function Art({ type }: { type?: string }) {
 }
 
 export default function SlideshowModal() {
-  const { open, index, slides, next, prev, close } = useSlideshow();
+  const { open, index, slideIds, next, prev, close } = useSlideshow();
+  const slides = useMemo(
+    () => allSlides.filter((slide) => slideIds.includes(slide.id)),
+    [slideIds],
+  );
 
   /*
    * Arrow-key navigation only. Escape is deliberately NOT handled here: Radix
