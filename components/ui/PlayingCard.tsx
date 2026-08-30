@@ -121,7 +121,8 @@ export function CardHand({
     hideHoleCard = false,
     small = false,
     statusText,
-    statusClassName
+    statusClassName,
+    dealId
 }: {
     cards: number[];
     label: string;
@@ -130,19 +131,30 @@ export function CardHand({
     small?: boolean;
     statusText?: string;
     statusClassName?: string;
+    /**
+     * Bump per deal/round: the key used to be `value-index` alone, so a new
+     * round dealing the same rank at the same position reconciled onto the old
+     * DOM node and the deal animation silently skipped.
+     */
+    dealId?: string | number;
 }) {
     return (
         <div className="flex min-w-0 flex-col items-center gap-2 rounded-[var(--radius-control)] border border-white/10 bg-black/25 px-3 py-3 shadow-[var(--shadow-hairline)]">
             <span className="text-xs font-semibold tracking-normal text-white/75">{label}</span>
-            <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2`}>
+            {/* perspective makes the deal's rotateY an actual 3D flip — with no
+                perspective ancestor it rendered as a flat orthographic squash. */}
+            <div className={`flex ${small ? '-space-x-4' : '-space-x-6'} pl-2 [perspective:800px]`}>
                 {cards.map((card, index) => (
                     <div
-                        key={`${card}-${index}`}
-                        className={`animate-deal-card relative transition-all hover:-translate-y-4 hover:z-10`}
+                        key={`${dealId ?? 'hand'}-${card}-${index}`}
+                        /* Base z on a CSS var so hover:z can actually win — the old
+                           inline zIndex outranked hover:z-10 and lifted cards
+                           stayed buried under their right-hand neighbour. */
+                        className={`animate-deal-card relative z-[var(--card-z)] transition-transform duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:z-50 hover:-translate-y-4`}
                         style={{
                             animationDelay: `${index * 100}ms`,
-                            zIndex: index, // Ensure newer cards are on top (or bottom, depending on pref. Standard is usually left-to-right on top)
-                        }}
+                            '--card-z': index, // newer cards stack on top, left to right
+                        } as React.CSSProperties}
                     >
                         <PlayingCard
                             value={card}
@@ -155,7 +167,7 @@ export function CardHand({
             </div>
             {value !== undefined && !hideHoleCard && (
                 <div className="flex flex-col items-center gap-0.5">
-                    <span className={`text-lg font-semibold transition-all duration-300 ${value > 21 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                    <span className={`text-lg font-semibold transition-colors duration-[var(--motion-standard)] ${value > 21 ? 'text-red-400 animate-[pulse_1s_ease-in-out_4]' : 'text-white'}`}>
                         {value > 21 ? 'BUST!' : value}
                     </span>
                     {statusText && (

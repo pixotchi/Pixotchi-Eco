@@ -45,7 +45,6 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from '../ui/card';
 import { Skeleton } from '../ui/skeleton';
-import { BaseExpandedLoadingPageLoader } from '../ui/loading';
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const SOLANA_DEBUG = process.env.NEXT_PUBLIC_SOLANA_DEBUG === 'true';

@@ -253,6 +253,7 @@ export default function BlackjackDialog({
     // Transaction in progress tracking - tracks specific action for hiding other buttons
     const [txInProgress, setTxInProgress] = useState<'deal' | BlackjackAction | null>(null);
     const [walletTxPending, setWalletTxPending] = useState(false);
+    const [roundId, setRoundId] = useState(0);
     // Action buttons are only shown when onchain action state is trusted.
     const [actionButtonsReady, setActionButtonsReady] = useState(false);
     const [actionButtonsSyncing, setActionButtonsSyncing] = useState(false);
@@ -1039,6 +1040,9 @@ export default function BlackjackDialog({
     // Play again
     const handlePlayAgain = useCallback(() => {
         invalidatePendingRefreshes();
+        // New round id so CardHand keys change and the deal animation replays
+        // even when the same ranks land in the same positions.
+        setRoundId((previous) => previous + 1);
         setGameState(prev => ({ ...initialGameState, betAmountInput: prev.betAmountInput }));
         setError(null);
         refetchBalance();
@@ -1357,6 +1361,7 @@ export default function BlackjackDialog({
                     {/* Dealer Hand */}
                     {showDealerHand && (
                         <CardHand
+                            dealId={roundId}
                             cards={gameState.dealerCards}
                             label="Dealer"
                             value={uiPhase === 'result' && gameState.result !== null ? gameState.dealerValue : undefined}
@@ -1368,6 +1373,7 @@ export default function BlackjackDialog({
                     {gameState.playerCards.length > 0 && (
                         <div className="flex justify-center gap-8">
                             <CardHand
+                                dealId={roundId}
                                 cards={gameState.playerCards}
                                 label={gameState.hasSplit ? "Hand 1" : "Your Hand"}
                                 value={gameState.playerValue}
@@ -1391,6 +1397,7 @@ export default function BlackjackDialog({
                             />
                             {gameState.hasSplit && gameState.splitCards.length > 0 && (
                                 <CardHand
+                                    dealId={roundId}
                                     cards={gameState.splitCards}
                                     label="Hand 2"
                                     value={gameState.splitValue}

@@ -78,14 +78,19 @@ assert.match(dialogUi, /surface-scroll-fade[\s\S]*min-h-0[\s\S]*flex-1[\s\S]*ove
 
 const tasksInfoDialog = projectFile('components/tasks/TasksInfoDialog.tsx');
 assert.match(tasksInfoDialog, /data-task-summary-card/);
-assert.match(tasksInfoDialog, /mr-\[-2\.75rem\]/);
+// The summary card no longer escapes the header padding with a negative
+// margin (that hack depended on DialogContent clipping and broke centring
+// whenever header padding changed).
+assert.doesNotMatch(tasksInfoDialog, /mr-\[-2\.75rem\]/);
 assert.match(tasksInfoDialog, /<DialogDescription className="leading-relaxed">[\s\S]*\{!effectiveDisabled && summaryCard\}[\s\S]*<\/DialogHeader>/);
 assert.doesNotMatch(tasksInfoDialog, /sticky top-3 z-10/);
 assert.doesNotMatch(tasksInfoDialog, /sticky top-0 z-10/);
 assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1">/);
 
 const premiumUi = projectFile('components/ui/premium.tsx');
-assert.match(premiumUi, /surface-footer-divider dialog-footer-surface sticky[\s\S]*pt-3[\s\S]*sm:-bottom-6/);
+// ActionBar (a byte-for-byte copy of DialogFooter sticky) was removed; the
+// dialog.tsx assertion above covers the one canonical sticky footer.
+assert.doesNotMatch(premiumUi, /ActionBar/);
 
 const marketplaceDialog = projectFile('components/transactions/marketplace-dialog.tsx');
 assert.match(marketplaceDialog, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
@@ -104,7 +109,7 @@ assert.match(webQueryState, /pixotchi:web-query-state/);
 assert.match(webQueryState, /window\.dispatchEvent\(new Event\(WEB_QUERY_STATE_EVENT\)\)/);
 
 const dashboardTab = projectFile('components/tabs/dashboard-tab.tsx');
-assert.match(dashboardTab, /hidden justify-center min-\[54rem\]:flex/);
+assert.match(dashboardTab, /hidden justify-center tablet:flex/);
 
 const mintTab = projectFile('components/tabs/mint-tab.tsx');
 assert.match(mintTab, /ApprovalActionTransaction/);
@@ -146,7 +151,7 @@ assert.doesNotMatch(blackjackDialog, /<DialogHeader/);
 assert.match(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS/);
 assert.match(blackjackDialog, /data-blackjack-action-footer/);
 assert.match(blackjackDialog, /dialog-footer-surface sticky/);
-assert.match(blackjackDialog, /bg-\[linear-gradient\(180deg,rgba\(0,0,0,0\.82\)_0%,rgba\(0,0,0,0\.96\)_42%,rgba\(0,0,0,1\)_100%\)\]/);
+assert.match(blackjackDialog, /bg-\[linear-gradient\(180deg,rgb\(0,0,0\)_0%,rgb\(0,0,0\)_42%,rgb\(0,0,0\)_100%\)\]/);
 assert.doesNotMatch(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS = .*bg-black\/75/);
 
 const casinoDialog = projectFile('components/transactions/CasinoDialog.tsx');
@@ -159,7 +164,7 @@ assert.doesNotMatch(casinoDialog, /<DialogHeader/);
 assert.match(casinoDialog, /showRoundResult = !!result && !isSpinning && !wheelSpinning/);
 assert.match(casinoDialog, /No win this spin/);
 assert.doesNotMatch(casinoDialog, /<span className="font-bold">No win<\/span>/);
-assert.match(casinoDialog, /bg-\[linear-gradient\(180deg,rgba\(0,0,0,0\.82\)_0%,rgba\(0,0,0,0\.96\)_42%,rgba\(0,0,0,1\)_100%\)\]/);
+assert.match(casinoDialog, /bg-\[linear-gradient\(180deg,rgb\(0,0,0\)_0%,rgb\(0,0,0\)_42%,rgb\(0,0,0\)_100%\)\]/);
 assert.doesNotMatch(casinoDialog, /<DialogFooter sticky className="[^"]*bg-black\/75/);
 
 for (const transactionWrapper of [

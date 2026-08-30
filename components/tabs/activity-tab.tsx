@@ -363,7 +363,6 @@ export default function ActivityTab() {
   useEffect(() => {
     setActivitiesByView((previous) => (previous.my.length ? { ...previous, my: [] } : previous));
     setLoadingByView((previous) => ({ ...previous, my: Boolean(myAddress) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myAddress]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {

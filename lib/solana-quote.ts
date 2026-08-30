@@ -8,7 +8,7 @@
  * longer needs external swap calldata or an external quote provider here.
  */
 
-import { formatUnits, getAddress, parseUnits } from 'viem';
+import { formatUnits, getAddress } from 'viem';
 import { getBaseReadClient } from './base-rpc';
 import {
   PIXOTCHI_SOLANA_CONFIG,

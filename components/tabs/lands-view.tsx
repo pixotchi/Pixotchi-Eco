@@ -11,7 +11,6 @@ DropdownMenuContent,
 DropdownMenuItem,
 DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import {
 barracksGetLandStateV2,
 casinoIsBuilt,
