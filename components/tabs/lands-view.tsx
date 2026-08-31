@@ -25,17 +25,16 @@ getVillageBuildingsByLandId
 import { CLIENT_ENV } from "@/lib/env-config";
 import {
 invalidateOwnerResources,
-isAbortError,
 onOwnerResourceInvalidation,
 ownerInvalidationMatches,
-retryOwnerRead,
+type OwnerResourceInvalidationDetail,
 } from "@/lib/owner-resource-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback,useEffect,useLayoutEffect,useRef,useState } from "react";
+import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { useAccount,useWatchBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
@@ -43,6 +42,7 @@ import { EditLandName } from "@/components/edit-land-name";
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
+import { useOwnerResourceList } from "@/hooks/useOwnerResourceList";
 import { ChevronDown,LandPlot } from "lucide-react";
 import LandImage from "../LandImage";
 
@@ -79,7 +79,6 @@ const BUILDING_TYPE_STORAGE_KEY = 'pixotchi:selected-building-type';
 const BUILDING_ID_STORAGE_KEY = 'pixotchi:selected-building-id';
 type LandUtilityPanel = 'batch-claim' | 'batch-quests';
 type LandInvariant = (lands: Land[]) => boolean;
-type QueuedLandFetch = { force: boolean; invariants: LandInvariant[] };
 type ApprovalFetchIdentity = { generation: number; ownerKey: string };
 type BuildingFetchIdentity = {
   buildingType: BuildingType;
@@ -245,23 +244,13 @@ function LandsViewContent() {
   const ownerKey = address?.toLowerCase() ?? null;
   const queryClient = useQueryClient();
   useSmartWallet();
-  const [lands, setLands] = useState<Land[]>([]);
-  const [selectedLand, setSelectedLand] = useState<Land | null>(null);
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('dashboard');
-  // See the 30s freshness guard on the visibility refetch effect below.
-  const lastVisibleFetchRef = useRef(0);
   const isDocumentVisible = useDocumentVisible();
   // Real gate for the duplicated grids below (the CSS classes remain as the
   // first-frame guard between a resize and this state syncing).
   const isDesktopLand = useMediaQuery(DESKTOP_MEDIA_QUERY);
   const [isMapOpen, setIsMapOpen] = useState(false);
-
-  // Map data hook
-  const { totalSupply, neighborData } = useLandMap(lands);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Building management state
   const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
@@ -269,23 +258,20 @@ function LandsViewContent() {
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
   const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
-  const selectedLandId = selectedLand?.tokenId ?? null;
   const selectedBuildingId = selectedBuilding?.id ?? null;
   const [buildingsLoading, setBuildingsLoading] = useState(false);
   const [currentBlock, setCurrentBlock] = useState<bigint>(BigInt(0));
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
 
-  // Owner generation guards every async path. In-flight invalidations are
-  // coalesced into one queued pass instead of being discarded.
+  // Owner generation still guards the per-land building and approval reads,
+  // which stay imperative because they are keyed on a transient selection.
+  // The land list itself is owned by React Query (see useOwnerResourceList).
   const ownerKeyRef = useRef<string | null>(ownerKey);
   const ownerGenerationRef = useRef(0);
-  const activeLandFetchAbortRef = useRef<AbortController | null>(null);
   const selectedLandIdRef = useRef<bigint | null>(null);
   const buildingTypeRef = useRef(buildingType);
   const buildingFetchRequestGenerationRef = useRef(0);
-  const fetchDataPendingRef = useRef<{ generation: number; ownerKey: string } | null>(null);
-  const fetchDataQueuedRef = useRef<QueuedLandFetch | null>(null);
   const fetchApprovalStatusPendingRef = useRef<ApprovalFetchIdentity | null>(null);
   const fetchApprovalStatusQueuedRef = useRef<ApprovalFetchIdentity | null>(null);
   const fetchBuildingDataPendingRef = useRef<BuildingFetchIdentity | null>(null);
@@ -294,6 +280,103 @@ function LandsViewContent() {
   // Token approval state for land interactions
   const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
+
+  // Only the selected token id is local. `selectedLand` is derived from the
+  // query cache so the dropdown, the stage and the warehouse panel can never
+  // disagree about the same land.
+  const [preferredLandId, setPreferredLandId] = useState<bigint | null>(
+    () => readStoredBigInt(LAND_SELECTION_STORAGE_KEY),
+  );
+
+  const landsQueryKey = useMemo(() => queryKeys.landsByOwner(ownerKey), [ownerKey]);
+  const readLands = useCallback(async () => {
+    if (!address) return [];
+    return getLandsByOwner(address);
+  }, [address]);
+
+  const handleLandsCleared = useCallback(() => {
+    selectedLandIdRef.current = null;
+    setPreferredLandId(null);
+    setVillageBuildings([]);
+    setTownBuildings([]);
+    setSelectedBuilding(null);
+    setSelectedUtilityPanel(null);
+    setBuildingsLoading(false);
+    setIsMapOpen(false);
+  }, []);
+
+  const buildLandsInvariant = useCallback(
+    (detail: OwnerResourceInvalidationDetail, baseline: Land[]): LandInvariant | undefined => {
+      const baselineById = new Map(baseline.map((land) => [land.tokenId.toString(), land]));
+      const expected = detail.expected;
+      const hasExpectation = Boolean(
+        expected?.landCountAtLeast !== undefined ||
+        expected?.landIdsAbsent?.length ||
+        expected?.landIdsPresent?.length
+      );
+      const shouldObserveMutation = Boolean(
+        detail.transactionHash ||
+        detail.source?.includes("claim") ||
+        detail.source?.includes("transfer") ||
+        detail.source?.includes("mint")
+      );
+      if (!hasExpectation && !shouldObserveMutation) return undefined;
+
+      return (nextLands: Land[]) => {
+        const ids = new Set(nextLands.map((land) => land.tokenId.toString()));
+        if (expected?.landCountAtLeast !== undefined && nextLands.length < expected.landCountAtLeast) return false;
+        if (expected?.landIdsPresent?.some((id) => !ids.has(id.toString()))) return false;
+        if (expected?.landIdsAbsent?.some((id) => ids.has(id.toString()))) return false;
+        if (hasExpectation) return true;
+        if (nextLands.length !== baseline.length) return true;
+        if (baseline.some((land) => !ids.has(land.tokenId.toString()))) return true;
+        return nextLands.some((land) => {
+          const before = baselineById.get(land.tokenId.toString());
+          return before ? didLandSnapshotChange(before, land) : true;
+        });
+      };
+    },
+    [],
+  );
+
+  const {
+    isError: landsFailed,
+    isLoading: landsLoading,
+    items: lands,
+    reconcile: reconcileLands,
+  } = useOwnerResourceList<Land>({
+    buildInvariant: buildLandsInvariant,
+    domain: "lands",
+    isVisible,
+    onClear: handleLandsCleared,
+    ownerKey,
+    queryFn: readLands,
+    queryKey: landsQueryKey,
+  });
+
+  const selectedLand = useMemo(() => {
+    if (lands.length === 0) return null;
+    return lands.find((land) => land.tokenId === preferredLandId) ?? lands[0];
+  }, [lands, preferredLandId]);
+  const selectedLandId = selectedLand?.tokenId ?? null;
+
+  /**
+   * Merges a freshly read single land back into the owner's cached list.
+   *
+   * The Warehouse and building flows read `landGetById` for up-to-the-second
+   * production values. That snapshot used to be written to a separate
+   * `selectedLand` state, so the dropdown and the map kept rendering the older
+   * copy of the very same land. Writing it into the list keeps one truth.
+   */
+  const patchLandInCache = useCallback((next: Land) => {
+    queryClient.setQueryData<Land[]>(landsQueryKey, (current) =>
+      current?.map((land) => (land.tokenId === next.tokenId ? next : land)),
+    );
+  }, [landsQueryKey, queryClient]);
+
+  // Map data hook. The full-range leaderboard read only happens once the map is
+  // actually opened; the plot count stays eager so the header never shows 0.
+  const { totalSupply, neighborData } = useLandMap(lands, { enabled: isMapOpen });
 
   // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
@@ -370,126 +453,31 @@ function LandsViewContent() {
     }
   }, [address, ownerKey]);
 
-  const fetchData = useCallback(async (
-    { force = false, until }: { force?: boolean; until?: LandInvariant } = {},
-  ) => {
-    if (!address || !ownerKey) return;
-
-    const pending = fetchDataPendingRef.current;
-    if (pending?.ownerKey === ownerKey) {
-      const queued = fetchDataQueuedRef.current ?? { force: false, invariants: [] };
-      queued.force ||= force;
-      if (until) queued.invariants.push(until);
-      fetchDataQueuedRef.current = queued;
-      return;
-    }
-
-    const generation = ownerGenerationRef.current;
-    const controller = new AbortController();
-    activeLandFetchAbortRef.current?.abort();
-    activeLandFetchAbortRef.current = controller;
-    fetchDataPendingRef.current = { generation, ownerKey };
-    if (lands.length === 0) setLoading(true);
-    setError(null);
-
-    try {
-      const landsQueryKey = queryKeys.landsByOwner(ownerKey);
-      const readLands = async () => {
-        if (force || until) {
-          await queryClient.invalidateQueries({
-            exact: true,
-            queryKey: landsQueryKey,
-            refetchType: "none",
-          });
-        }
-        return queryClient.fetchQuery({
-          queryKey: landsQueryKey,
-          queryFn: () => getLandsByOwner(address),
-          staleTime: force || until ? 0 : 30_000,
-        });
-      };
-      const landsData = until
-        ? await retryOwnerRead(readLands, { accept: until, signal: controller.signal })
-        : await readLands();
-      const isCurrentOwner =
-        !controller.signal.aborted &&
-        ownerKeyRef.current === ownerKey &&
-        ownerGenerationRef.current === generation &&
-        fetchDataPendingRef.current?.generation === generation;
-      if (!isCurrentOwner) return;
-
-      setLands(landsData);
-      if (landsData.length > 0) {
-        const preferredSelectedId = selectedLandIdRef.current ?? readStoredBigInt(LAND_SELECTION_STORAGE_KEY);
-        const freshSelection = landsData.find((land) => land.tokenId === preferredSelectedId);
-        const landToSelect = freshSelection ?? landsData[0];
-        selectedLandIdRef.current = landToSelect.tokenId;
-        setSelectedLand(landToSelect);
-      } else {
-        selectedLandIdRef.current = null;
-        setSelectedLand(null);
-      }
-    } catch (err) {
-      if (!isAbortError(err)) {
-        console.error("Error fetching lands data:", err);
-        if (ownerKeyRef.current === ownerKey && ownerGenerationRef.current === generation) {
-          setError("Failed to load your lands. Please try again.");
-        }
-      }
-    } finally {
-      const ownsPendingSlot =
-        fetchDataPendingRef.current?.ownerKey === ownerKey &&
-        fetchDataPendingRef.current?.generation === generation;
-      if (ownsPendingSlot) {
-        fetchDataPendingRef.current = null;
-        setLoading(false);
-        const queued = fetchDataQueuedRef.current;
-        fetchDataQueuedRef.current = null;
-        if (queued && ownerKeyRef.current === ownerKey) {
-          const queuedInvariant = queued.invariants.length
-            ? (nextLands: Land[]) => queued.invariants.every((invariant) => invariant(nextLands))
-            : undefined;
-          queueMicrotask(() => {
-            void fetchData({ force: queued.force, until: queuedInvariant });
-          });
-        }
-      }
-    }
-  }, [address, lands.length, ownerKey, queryClient]);
-
   useLayoutEffect(() => {
     if (ownerKeyRef.current === ownerKey) return;
     const previousOwner = ownerKeyRef.current;
     ownerKeyRef.current = ownerKey;
     ownerGenerationRef.current += 1;
-    activeLandFetchAbortRef.current?.abort();
-    activeLandFetchAbortRef.current = null;
-    fetchDataPendingRef.current = null;
-    fetchDataQueuedRef.current = null;
-    lastVisibleFetchRef.current = 0;
     fetchApprovalStatusPendingRef.current = null;
     fetchApprovalStatusQueuedRef.current = null;
     fetchBuildingDataPendingRef.current = null;
     fetchBuildingDataQueuedRef.current = null;
     selectedLandIdRef.current = null;
-    setLands([]);
-    setSelectedLand(null);
+    setPreferredLandId(null);
     setVillageBuildings([]);
     setTownBuildings([]);
     setSelectedBuilding(null);
     setSelectedUtilityPanel(null);
     setLeafAllowance(BigInt(0));
     setSeedAllowance(BigInt(0));
-    setError(null);
-    setLoading(Boolean(ownerKey));
     setBuildingsLoading(false);
     setIsMapOpen(false);
+    // The land list itself needs no clearing: its query key carries the owner,
+    // so wallet B can never observe wallet A's entry.
     if (previousOwner) {
       void queryClient.cancelQueries({ queryKey: queryKeys.landsByOwner(previousOwner) });
     }
   }, [ownerKey, queryClient]);
-
-  useEffect(() => () => activeLandFetchAbortRef.current?.abort(), []);
 
   useLayoutEffect(() => {
     selectedLandIdRef.current = selectedLandId;
@@ -730,15 +718,14 @@ function LandsViewContent() {
           ownerKeyRef.current === requestedOwner &&
           selectedLandIdRef.current === requestedLandId
         ) {
-          // Update only the selected land info (keeping array intact to avoid extra renders)
-          setSelectedLand(latest);
+          patchLandInCache(latest);
         }
       } catch {
         // noop
       }
     };
     refreshWarehouseOnSelect();
-  }, [selectedBuildingId, buildingType, selectedLandId, ownerKey]);
+  }, [buildingType, ownerKey, patchLandInCache, selectedBuildingId, selectedLandId]);
 
   const refreshBuildingSnapshot = useCallback(() => {
     const generation = ownerGenerationRef.current;
@@ -755,12 +742,12 @@ function LandsViewContent() {
             ownerKeyRef.current === requestedOwner &&
             selectedLandIdRef.current === requestedLandId
           ) {
-            setSelectedLand(latest);
+            patchLandInCache(latest);
           }
         }
       } catch { }
     })();
-  }, [fetchBuildingData, ownerKey, selectedLandId]);
+  }, [fetchBuildingData, ownerKey, patchLandInCache, selectedLandId]);
 
   // One mutation signal owns reconciliation. Child panels may still emit the
   // legacy buildings event while migrating; the listener below coalesces it.
@@ -780,82 +767,36 @@ function LandsViewContent() {
     });
   }, [ownerKey]);
 
-  // Refresh when dashboard becomes visible
-  useEffect(() => {
-    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
-      lastVisibleFetchRef.current = Date.now();
-      void fetchData();
-    }
-  }, [isVisible, fetchData]);
-
   useEffect(() => {
     if (address) {
       fetchApprovalStatus();
     }
   }, [address, fetchApprovalStatus]);
 
+  // The land list reconciles itself inside useOwnerResourceList. This listener
+  // owns only the per-land building snapshot, which is keyed on the transient
+  // selection and therefore cannot live in the owner-scoped query.
   const lastOwnerBuildingInvalidationRef = useRef(0);
   useEffect(() => onOwnerResourceInvalidation((detail) => {
-    if (ownerInvalidationMatches(detail, ownerKey, "lands")) {
-      if (detail.clear) {
-        ownerGenerationRef.current += 1;
-        activeLandFetchAbortRef.current?.abort();
-        activeLandFetchAbortRef.current = null;
-        fetchDataPendingRef.current = null;
-        fetchDataQueuedRef.current = null;
-        fetchApprovalStatusPendingRef.current = null;
-        fetchApprovalStatusQueuedRef.current = null;
-        fetchBuildingDataPendingRef.current = null;
-        fetchBuildingDataQueuedRef.current = null;
-        selectedLandIdRef.current = null;
-        setLands([]);
-        setSelectedLand(null);
-        setVillageBuildings([]);
-        setTownBuildings([]);
-        setSelectedBuilding(null);
-        setSelectedUtilityPanel(null);
-        setLoading(false);
-        setBuildingsLoading(false);
-        setError(null);
-        return;
-      }
-      const baseline = [...lands];
-      const baselineById = new Map(baseline.map((land) => [land.tokenId.toString(), land]));
-      const expected = detail.expected;
-      const hasExpectation = Boolean(
-        expected?.landCountAtLeast !== undefined ||
-        expected?.landIdsAbsent?.length ||
-        expected?.landIdsPresent?.length
-      );
-      const shouldObserveMutation = Boolean(
-        detail.transactionHash ||
-        detail.source?.includes("claim") ||
-        detail.source?.includes("transfer") ||
-        detail.source?.includes("mint")
-      );
-      const until = hasExpectation || shouldObserveMutation
-        ? (nextLands: Land[]) => {
-            const ids = new Set(nextLands.map((land) => land.tokenId.toString()));
-            if (expected?.landCountAtLeast !== undefined && nextLands.length < expected.landCountAtLeast) return false;
-            if (expected?.landIdsPresent?.some((id) => !ids.has(id.toString()))) return false;
-            if (expected?.landIdsAbsent?.some((id) => ids.has(id.toString()))) return false;
-            if (hasExpectation) return true;
-            if (nextLands.length !== baseline.length) return true;
-            if (baseline.some((land) => !ids.has(land.tokenId.toString()))) return true;
-            return nextLands.some((land) => {
-              const before = baselineById.get(land.tokenId.toString());
-              return before ? didLandSnapshotChange(before, land) : true;
-            });
-          }
-        : undefined;
-      void fetchData({ force: detail.force, until });
+    if (!ownerInvalidationMatches(detail, ownerKey, "buildings")) return;
+
+    if (detail.clear) {
+      ownerGenerationRef.current += 1;
+      fetchApprovalStatusPendingRef.current = null;
+      fetchApprovalStatusQueuedRef.current = null;
+      fetchBuildingDataPendingRef.current = null;
+      fetchBuildingDataQueuedRef.current = null;
+      setVillageBuildings([]);
+      setTownBuildings([]);
+      setSelectedBuilding(null);
+      setSelectedUtilityPanel(null);
+      setBuildingsLoading(false);
+      return;
     }
 
-    if (ownerInvalidationMatches(detail, ownerKey, "buildings")) {
-      lastOwnerBuildingInvalidationRef.current = Date.now();
-      refreshBuildingSnapshot();
-    }
-  }), [fetchData, lands, ownerKey, refreshBuildingSnapshot]);
+    lastOwnerBuildingInvalidationRef.current = Date.now();
+    refreshBuildingSnapshot();
+  }), [ownerKey, refreshBuildingSnapshot]);
 
   // Backward compatibility for panels not yet migrated to the owner-domain API.
   useEffect(() => {
@@ -867,16 +808,18 @@ function LandsViewContent() {
     return () => window.removeEventListener('buildings:refresh', handler as EventListener);
   }, [refreshBuildingSnapshot]);
 
+  // The land list refetches through React Query's focus and reconnect managers.
+  // Buildings are read per selected land, so they still need their own hook.
   const lastLifecycleReconcileRef = useRef(0);
   useEffect(() => {
     if (!address || !isVisible) return;
     const reconcile = () => {
       if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (selectedLandIdRef.current === null) return;
       const now = Date.now();
       if (now - lastLifecycleReconcileRef.current < 15_000) return;
       lastLifecycleReconcileRef.current = now;
-      void fetchData({ force: true });
-      if (selectedLandIdRef.current !== null) refreshBuildingSnapshot();
+      refreshBuildingSnapshot();
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") reconcile();
@@ -889,7 +832,7 @@ function LandsViewContent() {
       window.removeEventListener("online", reconcile);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [address, fetchData, isVisible, refreshBuildingSnapshot]);
+  }, [address, isVisible, refreshBuildingSnapshot]);
 
   // Remove aggressive image preloads; Next/Image will handle efficient lazy-loading
 
@@ -918,12 +861,12 @@ function LandsViewContent() {
           ownerKeyRef.current === requestedOwner &&
           selectedLandIdRef.current === requestedLandId
         ) {
-          setSelectedLand(latest);
+          patchLandInCache(latest);
         }
       } catch { }
     })();
     return () => { cancelled = true; };
-  }, [selectedLandId, ownerKey]);
+  }, [ownerKey, patchLandInCache, selectedLandId]);
 
   // Track last selected building id to persist across land switches
   useEffect(() => {
@@ -983,7 +926,7 @@ function LandsViewContent() {
 
 
   // Only block render if we have NO lands data at all
-  if (loading && lands.length === 0) {
+  if (landsLoading) {
     // Skeleton shaped like the real layout (selector + land stage + name),
     // mirroring plants-view's documented pattern, so content doesn't jump in.
     return (
@@ -1001,10 +944,17 @@ function LandsViewContent() {
     );
   }
 
-  if (error) {
+  // A failed background refresh keeps the last good snapshot on screen; only a
+  // first read with nothing cached is allowed to surface as an error.
+  if (landsFailed && lands.length === 0) {
     return (
       <Card>
-        <CardContent className="py-4 text-center text-destructive">{error}</CardContent>
+        <CardContent className="space-y-3 py-4 text-center">
+          <p className="text-destructive">Failed to load your lands.</p>
+          <Button variant="outline" onClick={() => { void reconcileLands({ force: true }); }}>
+            Retry
+          </Button>
+        </CardContent>
       </Card>
     );
   }
@@ -1043,7 +993,7 @@ function LandsViewContent() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
                     {lands.map((land) => (
-                      <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setSelectedLand(land)}>
+                      <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setPreferredLandId(land.tokenId)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <LandPlot className="h-4 w-4 shrink-0" />
                           <span className="truncate"><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
@@ -1108,7 +1058,7 @@ function LandsViewContent() {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
                           const prevIndex = (idx - 1 + lands.length) % lands.length;
-                          setSelectedLand(lands[prevIndex]);
+                          setPreferredLandId(lands[prevIndex].tokenId);
                         }
                       }}
                       direction="previous"
@@ -1120,7 +1070,7 @@ function LandsViewContent() {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
                           const nextIndex = (idx + 1) % lands.length;
-                          setSelectedLand(lands[nextIndex]);
+                          setPreferredLandId(lands[nextIndex].tokenId);
                         }
                       }}
                       direction="next"
@@ -1138,8 +1088,11 @@ function LandsViewContent() {
                   <EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
-                      setSelectedLand(prev => prev ? { ...prev, name: newName } : null);
-                      // update any cached arrays if present
+                      // Patch the shared cache entry so the selector, the map
+                      // and the stage all pick the new name up at once.
+                      queryClient.setQueryData<Land[]>(landsQueryKey, (current) =>
+                        current?.map((land) => (land.tokenId === landId ? { ...land, name: newName } : land)),
+                      );
                     }}
                     iconSize={18}
                     className="h-11 min-h-11 w-11 min-w-11 shrink-0"
@@ -1334,7 +1287,7 @@ function LandsViewContent() {
           userLands={lands}
           selectedLand={selectedLand}
           onSelectLand={(land) => {
-            setSelectedLand(land);
+            setPreferredLandId(land.tokenId);
             setIsMapOpen(false);
           }}
           totalSupply={totalSupply}

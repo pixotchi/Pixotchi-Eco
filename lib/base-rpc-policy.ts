@@ -1,5 +1,40 @@
 export type BaseRpcPolicy = 'read' | 'receipt' | 'log' | 'probe';
 
+/**
+ * Maximum JSON-RPC calls the browser may pack into one HTTP request.
+ *
+ * The same-origin proxy (app/api/rpc/route.ts) rejects an oversized batch as a
+ * whole, so the client-side batcher and the server-side cap must be one number.
+ * They were 40 and 20: any batch of 21-40 calls came back as a single HTTP 400
+ * and failed every call inside it at once, with no per-call failover possible.
+ */
+export const BASE_RPC_MAX_BATCH_SIZE = 20;
+
+/**
+ * Maximum calldata, in bytes, viem packs into one Multicall3 aggregate3 call.
+ */
+export const BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES = 8_192;
+
+/**
+ * Largest body the proxy must accept, derived from what the browser batcher can
+ * legitimately emit rather than picked independently.
+ *
+ * This is the same defect as the batch-count mismatch above, one layer down: a
+ * flat 128KB cap sat below the client's own worst case of
+ * `20 requests x 8192 bytes of hex-encoded calldata` (~330KB), so a busy screen
+ * could produce a request the proxy rejected wholesale with HTTP 413 — every
+ * read in it failing at once, with no per-call failover available.
+ *
+ * Deriving it keeps the guard meaningful (nothing larger than our own client can
+ * produce is accepted) while making it impossible for the two to drift apart.
+ */
+const JSON_RPC_REQUEST_OVERHEAD_BYTES = 512;
+
+export const BASE_RPC_MAX_BODY_BYTES =
+  BASE_RPC_MAX_BATCH_SIZE
+    * (BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES * 2 + JSON_RPC_REQUEST_OVERHEAD_BYTES)
+  + 1_024;
+
 export type BaseRpcVendor =
   | 'alchemy'
   | 'ankr'

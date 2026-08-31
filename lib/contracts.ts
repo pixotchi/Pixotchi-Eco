@@ -763,16 +763,23 @@ export type PixotchiReadClient = ReturnType<typeof getBaseReadClient>;
 
 export const getReadClient = (): PixotchiReadClient => getBaseReadClient();
 
-// Retry logic for rate limiting and network issues
-export const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> => {
-  void maxRetries;
-  void baseDelay;
-  return fn();
-};
+/**
+ * Marks a contract read as retry-managed elsewhere. It deliberately does not
+ * retry.
+ *
+ * Retry lives in exactly two places, and adding a third here would multiply
+ * them together on every failure of a paid endpoint:
+ *
+ * 1. `lib/base-rpc.ts` retries across ranked upstream providers (server-side
+ *    failover, hedging and circuit breaking).
+ * 2. React Query retries the request that wrapped this read.
+ *
+ * The name is kept because it marks the read boundary that
+ * `scripts/check-base-rpc-hardening.mjs` scans to prove no broadcast is
+ * enclosed in a retryable block. The old `maxRetries` / `baseDelay` parameters
+ * were ignored and are gone, so no caller can believe it is configuring one.
+ */
+export const retryWithBackoff = async <T>(fn: () => Promise<T>): Promise<T> => fn();
 
 // Simplified contract ABIs (only the functions we need)
 const PIXOTCHI_NFT_ABI = [
@@ -3520,7 +3527,7 @@ export const blackjackGetGameSnapshot = async (landId: bigint): Promise<Blackjac
         functionName: 'blackjackGetGameSnapshot',
         args: [landId],
       });
-    }, 1, 250) as UntypedValue;
+    }) as UntypedValue;
 
     // Support both tuple-object and flat array decoding shapes.
     const snapshot = Array.isArray(raw)

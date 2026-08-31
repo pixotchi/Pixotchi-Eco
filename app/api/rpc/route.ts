@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseLogClient, getBaseReadClient, getBaseReceiptClient } from '@/lib/base-rpc';
+import { BASE_RPC_MAX_BATCH_SIZE, BASE_RPC_MAX_BODY_BYTES } from '@/lib/base-rpc-policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -74,8 +75,13 @@ const RECEIPT_METHODS = new Set([
 
 const LOG_METHODS = new Set(['eth_getLogs']);
 
-const MAX_BATCH_SIZE = 20;
-const MAX_BODY_BYTES = 128 * 1024;
+// Shared with the browser-side batcher in lib/base-rpc.ts so the two cannot
+// drift: a client batch larger than this is rejected whole, taking every call
+// inside it down with no chance of per-call failover.
+const MAX_BATCH_SIZE = BASE_RPC_MAX_BATCH_SIZE;
+// Derived from the browser batcher's own worst case, not chosen independently:
+// a cap below what our client can legitimately emit rejects the whole batch.
+const MAX_BODY_BYTES = BASE_RPC_MAX_BODY_BYTES;
 // eth_getLogs over a huge span is the one cheap-to-ask, expensive-to-serve call
 // here, so bound the window rather than passing it straight through.
 const MAX_LOG_BLOCK_RANGE = BigInt(10_000);
@@ -137,6 +143,26 @@ function rpcError(id: JsonRpcId, code: number, message: string) {
   return { error: { code, message }, id: id ?? null, jsonrpc: '2.0' as const };
 }
 
+/**
+ * Rejections this proxy makes on its own, before anything is forwarded upstream.
+ *
+ * These matter beyond diagnostics. The client cannot normally tell a
+ * "your request was refused here" failure from a "we forwarded it and lost the
+ * response" one, so it has to assume the worst: an `eth_sendRawTransaction`
+ * that fails ambiguously leaves a durable reservation that locks the wallet
+ * until the player confirms nothing was sent. When *we* refuse the call, we know
+ * for a fact it never reached a node, so we say so and the client can release
+ * that lock immediately instead of stranding the player.
+ *
+ * The marker travels in the message because a non-2xx response reaches viem as
+ * an opaque HttpRequestError whose body is only ever surfaced as text.
+ */
+const NOT_FORWARDED_MARKER = 'PIXOTCHI_PROXY_NOT_FORWARDED';
+
+function notForwardedError(id: JsonRpcId, code: number, message: string) {
+  return rpcError(id, code, `${message} [${NOT_FORWARDED_MARKER}]`);
+}
+
 function rpcResult(id: JsonRpcId, result: unknown) {
   return { id: id ?? null, jsonrpc: '2.0' as const, result };
 }
@@ -178,25 +204,25 @@ async function handleSingle(payload: JsonRpcRequest) {
   const id = (payload?.id ?? null) as JsonRpcId;
 
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return rpcError(id, INVALID_REQUEST, 'Invalid JSON-RPC request');
+    return notForwardedError(id, INVALID_REQUEST, 'Invalid JSON-RPC request');
   }
 
   const method = payload.method;
   if (typeof method !== 'string' || !method) {
-    return rpcError(id, INVALID_REQUEST, 'Missing JSON-RPC method');
+    return notForwardedError(id, INVALID_REQUEST, 'Missing JSON-RPC method');
   }
 
   if (!isMethodAllowed(method)) {
-    return rpcError(id, METHOD_NOT_FOUND, `Method ${method} is not supported`);
+    return notForwardedError(id, METHOD_NOT_FOUND, `Method ${method} is not supported`);
   }
 
   const params = payload.params === undefined ? [] : payload.params;
   if (!Array.isArray(params)) {
-    return rpcError(id, INVALID_PARAMS, 'params must be an array');
+    return notForwardedError(id, INVALID_PARAMS, 'params must be an array');
   }
 
   if (method === 'eth_getLogs' && isLogRangeTooWide(params)) {
-    return rpcError(
+    return notForwardedError(
       id,
       INVALID_PARAMS,
       `eth_getLogs range is limited to ${MAX_LOG_BLOCK_RANGE} blocks`,
@@ -226,7 +252,7 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   if (rawBody.length > MAX_BODY_BYTES) {
-    return NextResponse.json(rpcError(null, INVALID_REQUEST, 'Request body is too large'), {
+    return NextResponse.json(notForwardedError(null, INVALID_REQUEST, 'Request body is too large'), {
       headers: { 'Cache-Control': 'private, no-store' },
       status: 413,
     });
@@ -236,7 +262,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return NextResponse.json(rpcError(null, PARSE_ERROR, 'Invalid JSON'), {
+    return NextResponse.json(notForwardedError(null, PARSE_ERROR, 'Invalid JSON'), {
       headers: { 'Cache-Control': 'private, no-store' },
       status: 400,
     });
@@ -246,7 +272,7 @@ export async function POST(request: NextRequest) {
   const requests = (isBatch ? payload : [payload]) as JsonRpcRequest[];
 
   if (isBatch && requests.length === 0) {
-    return NextResponse.json(rpcError(null, INVALID_REQUEST, 'Empty batch'), {
+    return NextResponse.json(notForwardedError(null, INVALID_REQUEST, 'Empty batch'), {
       headers: { 'Cache-Control': 'private, no-store' },
       status: 400,
     });
@@ -254,13 +280,13 @@ export async function POST(request: NextRequest) {
 
   if (requests.length > MAX_BATCH_SIZE) {
     return NextResponse.json(
-      rpcError(null, INVALID_REQUEST, `Batch size is limited to ${MAX_BATCH_SIZE}`),
+      notForwardedError(null, INVALID_REQUEST, `Batch size is limited to ${MAX_BATCH_SIZE}`),
       { headers: { 'Cache-Control': 'private, no-store' }, status: 400 },
     );
   }
 
   if (isRateLimited(getClientKey(request), requests.length)) {
-    return NextResponse.json(rpcError(null, INTERNAL_ERROR, 'Rate limit exceeded'), {
+    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, 'Rate limit exceeded'), {
       headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '60' },
       status: 429,
     });

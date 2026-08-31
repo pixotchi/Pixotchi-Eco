@@ -10,7 +10,7 @@ import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import packageJson from '@/package.json';
-import { Loader2,MessageCircle,PlayCircle,Radio } from "lucide-react";
+import { BookOpen,Loader2,MessageCircle,PlayCircle,Radio } from "lucide-react";
 import { useId,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -165,11 +165,23 @@ export default function AboutTab() {
               <Button
                 variant="outline"
                 onClick={() => openExternalUrl('https://status.pixotchi.tech')}
-                className={enabled ? "col-span-2 tablet:col-span-1 tablet:w-auto" : "tablet:w-auto"}
+                className="tablet:w-auto"
                 aria-label="Open Pixotchi status"
               >
                 <Radio className="w-4 h-4 mr-2" />
                 Status
+              </Button>
+              {/* The mobile grid is two columns, so only an odd number of
+                  actions needs a full-width last row. With the tutorial button
+                  present that is four (a clean 2x2); without it, three. */}
+              <Button
+                variant="outline"
+                onClick={() => openExternalUrl('https://doc.pixotchi.tech')}
+                className={enabled ? "tablet:w-auto" : "col-span-2 tablet:col-span-1 tablet:w-auto"}
+                aria-label="Open Pixotchi documentation"
+              >
+                <BookOpen className="w-4 h-4 mr-2" />
+                Docs
               </Button>
             </div>
           </div>

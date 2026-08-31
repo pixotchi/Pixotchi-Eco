@@ -45,7 +45,12 @@ export function InlineBalanceNotice({
   return (
     <div
       className={cn(
-        "mt-2 flex min-h-10 w-full items-center justify-start gap-2 rounded-full border border-destructive/35 bg-destructive/10 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.10)_0%,hsl(var(--destructive)/0.06)_100%)] px-3.5 py-2 text-left text-xs font-medium leading-snug text-foreground/70 shadow-[var(--shadow-hairline)]",
+        // Matches the control it sits under. `rounded-full` read as a pill only
+        // while the text fit on one line; as soon as it wrapped (the common
+        // case for "Balance: x • Required: y") the capsule radius grew with the
+        // height and broke the app's corner language. DisabledReason below
+        // already uses a radius token for the same reason.
+        "mt-2 flex min-h-10 w-full items-center justify-start gap-2 rounded-[var(--radius-control)] border border-destructive/35 bg-destructive/10 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.10)_0%,hsl(var(--destructive)/0.06)_100%)] px-3.5 py-2 text-left text-xs font-medium leading-snug text-foreground/70 shadow-[var(--shadow-hairline)]",
         className
       )}
       role="status"

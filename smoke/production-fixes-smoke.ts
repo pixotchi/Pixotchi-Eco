@@ -15,6 +15,11 @@ import { extractBestSpinRewardFromLogs } from '../lib/spin-game-events';
 import { onBalanceRefresh } from '../lib/app-events';
 import { waitForCanonicalBaseReceipt } from '../lib/base-rpc';
 import {
+  BASE_RPC_MAX_BATCH_SIZE,
+  BASE_RPC_MAX_BODY_BYTES,
+  BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES,
+} from '../lib/base-rpc-policy';
+import {
   createLandTransferCall,
   createNftOperatorApprovalCall,
   createPlantTransferCall,
@@ -27,8 +32,10 @@ import {
   getMarketplacePriceRatio,
 } from '../lib/marketplace-price';
 import {
+  PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS,
   PENDING_EVM_HARD_LOCK_MS,
   PENDING_EVM_MAX_RECORD_SIZE,
+  PENDING_EVM_PROXY_NOT_FORWARDED_MARKER,
   acknowledgePendingEvmRecord,
   canDurablyPersistPendingEvmTransactions,
   createPendingEvmCallsDigest,
@@ -380,6 +387,8 @@ assert.equal(
 );
 
 const landsView = projectFile('components/tabs/lands-view.tsx');
+const landsViewSource = landsView;
+const plantsViewSource = projectFile('components/tabs/plants-view.tsx');
 // A superseded land request must not consume or replay the selected land's
 // queued building refresh. The queue carries the same full identity as the
 // pending slot, and only the exact owner may drain it.
@@ -396,6 +405,139 @@ assert.doesNotMatch(landsView, /fetchBuildingDataQueuedRef = useRef\(false\)/);
 assert.match(landsView, /fetchApprovalStatusQueuedRef = useRef<ApprovalFetchIdentity \| null>\(null\)/);
 assert.match(landsView, /approvalFetchIdentityMatches\(fetchApprovalStatusPendingRef\.current, requestIdentity\)[\s\S]{0,160}fetchApprovalStatusQueuedRef\.current = requestIdentity/);
 assert.match(landsView, /const queuedIdentity = fetchApprovalStatusQueuedRef\.current;[\s\S]{0,500}ownerGenerationRef\.current === requestIdentity\.generation[\s\S]{0,300}void fetchApprovalStatus\(\)/);
+
+// --- Owner-scoped onchain lists render straight from the query cache ---------
+//
+// Regression fence for the "No Lands Yet! / No Plants Yet! while the data sits
+// in the cache" class of bug. Plants and Lands each used to copy a fetchQuery
+// result into useState behind an abort guard, and re-arm a 30s timestamp that
+// gated the only retry. A cleanup that fires without a real unmount -- React
+// StrictMode in dev, and <Activity mode="hidden"> on any top-level tab switch --
+// aborted the in-flight read, so the copy step dropped a result that had already
+// landed in the cache while its finally block still cleared `loading`. The view
+// settled on the empty state and could not refetch for 30 seconds.
+//
+// The fix is structural: nothing copies query data into component state. Assert
+// that neither view has grown a second source of truth again.
+const ownerResourceList = projectFile('hooks/useOwnerResourceList.ts');
+assert.match(
+  ownerResourceList,
+  /const query = useQuery<TItem\[\]>\(\{/,
+  'owner-scoped lists must be rendered by a live query observer, not copied into state',
+);
+assert.match(
+  ownerResourceList,
+  /queryClient\.fetchQuery<TItem\[\]>\(\{/,
+  'reconciliation must write through the cache so a cancelled pass cannot discard data',
+);
+assert.match(
+  ownerResourceList,
+  /refetchOnWindowFocus: true/,
+  'owner lists must refresh on focus; stale onchain state is the failure mode here',
+);
+
+for (const [label, source] of [
+  ['plants-view', plantsViewSource],
+  ['lands-view', landsViewSource],
+] as const) {
+  assert.match(
+    source,
+    /useOwnerResourceList</,
+    `${label} must read its owner list through the shared query-backed hook`,
+  );
+  assert.doesNotMatch(
+    source,
+    /controller\.signal\.aborted/,
+    `${label} must not gate committing a completed owner read on an abort flag`,
+  );
+  assert.doesNotMatch(
+    source,
+    /lastVisibleFetchRef/,
+    `${label} must not re-introduce a timestamp guard that can be burned by a discarded read`,
+  );
+  assert.doesNotMatch(
+    source,
+    /Date\.now\(\) - \w+\.current > 30_000/,
+    `${label} must not re-introduce a 30s lockout on the owner list refetch`,
+  );
+}
+
+// The land list must stay derived from the query, never mirrored into state.
+assert.doesNotMatch(landsViewSource, /setLands\(/);
+assert.doesNotMatch(landsViewSource, /setSelectedLand\(/);
+assert.doesNotMatch(plantsViewSource, /setPlants\(/);
+assert.doesNotMatch(plantsViewSource, /setSelectedPlant\(/);
+
+// --- Browser batching may never exceed what the proxy accepts ----------------
+//
+// The proxy rejects an oversized batch as a whole, so a client cap above the
+// server cap turns every call in that batch into a single HTTP 400 with no
+// per-call failover available.
+const baseRpcSource = projectFile('lib/base-rpc.ts');
+const rpcProxySource = projectFile('app/api/rpc/route.ts');
+const rpcRouteSource = projectFile('app/api/rpc/route.ts');
+assert.match(
+  baseRpcSource,
+  /const HTTP_BATCH_SIZE = IS_BROWSER \? BASE_RPC_MAX_BATCH_SIZE : UPSTREAM_HTTP_BATCH_SIZE;/,
+  'the browser batcher must be capped by the shared proxy limit',
+);
+assert.match(
+  rpcRouteSource,
+  /const MAX_BATCH_SIZE = BASE_RPC_MAX_BATCH_SIZE;/,
+  'the proxy must use the shared batch limit rather than its own literal',
+);
+assert.equal(BASE_RPC_MAX_BATCH_SIZE, 20);
+
+// The body cap is the same defect one layer down: the browser batcher's own
+// worst case (20 requests x hex-encoded multicall calldata) has to fit, or a
+// busy screen produces a request the proxy rejects wholesale with HTTP 413.
+const worstCaseClientBody =
+  BASE_RPC_MAX_BATCH_SIZE * (BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES * 2 + 2);
+assert.ok(
+  BASE_RPC_MAX_BODY_BYTES >= worstCaseClientBody,
+  `proxy body cap ${BASE_RPC_MAX_BODY_BYTES} must cover the client worst case ${worstCaseClientBody}`,
+);
+assert.match(
+  rpcProxySource,
+  /const MAX_BODY_BYTES = BASE_RPC_MAX_BODY_BYTES;/,
+  'the proxy body cap must be derived from the shared batching envelope',
+);
+assert.match(
+  baseRpcSource,
+  /const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;/,
+  'multicall sizing must come from the shared envelope the body cap is derived from',
+);
+
+// A provider that refuses the method outright cannot have executed it, so the
+// reservation must be released rather than locking the wallet. transaction-kit
+// recovers via its batch->direct fallback; the swap panel has no such path and
+// relied entirely on this classifier.
+for (const refusal of [
+  { code: 4200, name: 'UnsupportedProviderMethodError', message: 'wallet does not support wallet_sendCalls' },
+  { code: -32601, name: 'MethodNotFoundRpcError', message: 'the method does not exist' },
+  { code: -32004, name: 'MethodNotSupportedRpcError', message: 'method not supported' },
+]) {
+  assert.equal(
+    isDefinitivePendingEvmPreSubmissionError(Object.assign(new Error(refusal.message), refusal)),
+    true,
+    `a refused method must release the reservation: ${refusal.code}`,
+  );
+}
+// ...but a refusal code arriving alongside transport ambiguity still locks.
+assert.equal(
+  isDefinitivePendingEvmPreSubmissionError(
+    Object.assign(new Error('wallet_sendCalls request timed out'), { code: 4200, name: 'TimeoutError' }),
+  ),
+  false,
+);
+
+// The browser talks to a proxy that performs its own ranked failover, so its
+// read timeout has to outlast that cascade instead of racing it.
+assert.match(
+  baseRpcSource,
+  /read: \{ fallbackRetryCount: 0, timeoutMs: 12_000 \}/,
+  'browser reads must allow for the proxy-side failover they sit in front of',
+);
 
 const appEvents = projectFile('lib/app-events.ts');
 assert.match(appEvents, /export function openTasksDialog\(\) \{\s*dispatchTypedEvent\(TASKS_OPEN_EVENT\);\s*\}/);
@@ -593,6 +735,45 @@ assert.equal(
   ),
   false,
 );
+// A wallet that refuses wallet_sendCalls with a bare, uncoded Error must still
+// fall back to a direct transaction. Treating that refusal as "might have been
+// broadcast" kept the batch reservation, which locked every transaction button
+// while nothing had ever reached a node — production claims simply stopped with
+// "Wallet confirmation may still be pending".
+for (const refusal of [
+  'Local test wallet does not support wallet_sendCalls.',
+  'wallet_sendCalls is unsupported by this wallet',
+  'wallet_sendCalls is not supported by this wallet',
+]) {
+  assert.equal(
+    isDefinitiveUnsupportedEvmBatchError(new Error(refusal)),
+    true,
+    `an explicit refusal must release the batch reservation: ${refusal}`,
+  );
+}
+// ...but only when the message names the batch method and carries no transport
+// ambiguity. These must all stay locked.
+for (const ambiguous of [
+  'wallet_sendCalls failed: network connection lost',
+  'eth_signTypedData_v4 is unsupported',
+  'something went wrong',
+]) {
+  assert.equal(
+    isDefinitiveUnsupportedEvmBatchError(new Error(ambiguous)),
+    false,
+    `must not release a batch reservation on: ${ambiguous}`,
+  );
+}
+// The local test connector must report unsupported methods with an EIP-1193
+// code, the way a real wallet does, rather than a bare Error.
+const localTestConnectorSource = projectFile('lib/local-test-connector.ts');
+assert.match(localTestConnectorSource, /class LocalTestUnsupportedMethodError extends Error \{\s*code = 4200;/);
+assert.match(localTestConnectorSource, /throw new LocalTestUnsupportedMethodError\("wallet_sendCalls"\)/);
+assert.doesNotMatch(
+  localTestConnectorSource,
+  /throw new Error\(`?"?Local test wallet does not support/,
+  'unsupported-method refusals must carry a provider error code',
+);
 const directHash = `0x${'11'.repeat(32)}` as Hex;
 const directRecord = createPendingEvmRecord({
   attemptId: 'attempt-direct-1',
@@ -726,6 +907,98 @@ assert.equal(getPendingEvmPhase(staleRecord), 'stale');
 assert.equal(acknowledgePendingEvmRecord(pendingStorage, staleRecord), true);
 assert.equal(readPendingEvmRecord(pendingStorage, staleIdentity), null);
 assert.equal(acknowledgePendingEvmRecord(pendingStorage, newerRecord), false);
+
+// Exercised inside runAsyncPendingTransactionSmoke below: the lease check needs
+// an async scope, and this file's transform has no top-level await.
+let ambiguousAckFixture: {
+  identity: { accountAddress: string; chainId: number; intentKey: string };
+  record: ReturnType<typeof createPendingEvmRecord>;
+} | null = null;
+
+// --- A stuck proofless reservation must not strand the wallet -----------------
+//
+// An ambiguous transport failure leaves a reservation with no hash and no calls
+// id. That used to inherit the 30-minute submission lock, so any hiccup froze
+// every transaction button in the app for half an hour: the UI said "check your
+// wallet activity" and then offered no way to act on what the player found.
+// A proofless record has nothing to watch and nothing that can resolve it on its
+// own, so it unlocks on the short window; anything carrying proof still does not.
+{
+  const ambiguousIdentity = { ...pendingIdentity, intentKey: 'smoke:ambiguous-ack' };
+  const agedReservation = createPendingEvmRecord({
+    attemptId: 'attempt-ambiguous-ack',
+    callsDigest: pendingCallsDigest,
+    identity: ambiguousIdentity,
+    method: 'direct',
+    proof: { kind: 'reservation' },
+    submittedAt: Date.now() - PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS - 1,
+  });
+  assert.equal(getPendingEvmPhase(agedReservation), 'stale');
+
+  const freshReservation = createPendingEvmRecord({
+    attemptId: 'attempt-ambiguous-fresh',
+    callsDigest: pendingCallsDigest,
+    identity: ambiguousIdentity,
+    method: 'direct',
+    proof: { kind: 'reservation' },
+    submittedAt: Date.now() - 1_000,
+  });
+  assert.equal(getPendingEvmPhase(freshReservation), 'hard');
+
+  // Proof-bearing records keep the long lock at the same age.
+  const provenAtSameAge = createPendingEvmRecord({
+    attemptId: 'attempt-proven-same-age',
+    callsDigest: pendingCallsDigest,
+    identity: { ...pendingIdentity, intentKey: 'smoke:proven-same-age' },
+    method: 'direct',
+    proof: { kind: 'hash', hash: directHash },
+    submittedAt: Date.now() - PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS - 1,
+  });
+  assert.equal(getPendingEvmPhase(provenAtSameAge), 'hard');
+  assert.ok(PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS < PENDING_EVM_HARD_LOCK_MS);
+
+  ambiguousAckFixture = { identity: ambiguousIdentity, record: agedReservation };
+}
+
+
+// A rejection our own proxy made before forwarding anything upstream is proof
+// that nothing was broadcast, so it releases the reservation instead of locking
+// the wallet. It must outrank the "reads network-ish" ambiguity heuristic.
+{
+  const proxyRejection = Object.assign(new Error(
+    `HTTP request failed.
+
+Status code: 429
+URL: http://localhost:3000/api/rpc
+Details: Rate limit exceeded [${PENDING_EVM_PROXY_NOT_FORWARDED_MARKER}]`,
+  ), { name: 'HttpRequestError', status: 429 });
+  assert.equal(isDefinitivePendingEvmPreSubmissionError(proxyRejection), true);
+
+  const batchTooLarge = Object.assign(new Error(
+    `HTTP request failed.
+
+Status code: 400
+Details: Batch size is limited to 20 [${PENDING_EVM_PROXY_NOT_FORWARDED_MARKER}]`,
+  ), { name: 'HttpRequestError', status: 400 });
+  assert.equal(isDefinitivePendingEvmPreSubmissionError(batchTooLarge), true);
+
+  // An unmarked transport failure stays ambiguous: it may have been forwarded.
+  const upstreamTimeout = Object.assign(new Error('The request took too long to respond.'), {
+    name: 'TimeoutError',
+  });
+  assert.equal(isDefinitivePendingEvmPreSubmissionError(upstreamTimeout), false);
+}
+
+assert.match(
+  rpcProxySource,
+  new RegExp(`const NOT_FORWARDED_MARKER = '${PENDING_EVM_PROXY_NOT_FORWARDED_MARKER}';`),
+  'the proxy marker must stay in sync with the client-side classifier',
+);
+assert.doesNotMatch(
+  rpcProxySource,
+  /return NextResponse\.json\(rpcError\(null, INVALID_REQUEST, `Batch size/,
+  'proxy-side gate rejections must be marked as never forwarded',
+);
 
 const batchIdentity = { ...pendingIdentity, intentKey: 'smoke:batch' };
 const batchRecord = createPendingEvmRecord({
@@ -883,9 +1156,24 @@ assert.doesNotMatch(
 );
 delete (globalThis as { window?: unknown }).window;
 
+// The About tab's docs link was removed in 436d689 and pinned out with a pair
+// of doesNotMatch assertions. It was reinstated on request as a fourth action
+// button, so the pin now asserts the intended shape instead of its absence.
 const aboutTab = projectFile('components/tabs/about-tab.tsx');
-assert.doesNotMatch(aboutTab, /Documentation/);
-assert.doesNotMatch(aboutTab, /doc\.pixotchi\.tech/);
+assert.match(aboutTab, /openExternalUrl\('https:\/\/doc\.pixotchi\.tech'\)/);
+assert.match(aboutTab, /aria-label="Open Pixotchi documentation"/);
+// The mobile action grid is two columns, so only an odd number of buttons may
+// take a full-width final row. With the tutorial button that is four, without
+// it three — the span therefore belongs to the last button, not to Status.
+assert.match(
+  aboutTab,
+  /className=\{enabled \? "tablet:w-auto" : "col-span-2 tablet:col-span-1 tablet:w-auto"\}/,
+);
+assert.doesNotMatch(
+  aboutTab,
+  /onClick=\{\(\) => openExternalUrl\('https:\/\/status\.pixotchi\.tech'\)\}\s*\n\s*className=\{enabled \? "col-span-2/,
+  'Status must no longer carry the odd-count row span',
+);
 
 const appPage = projectFile('app/(game)/page.tsx');
 assert.match(appPage, /function SharedFarmMintMobileToggle/);
@@ -1714,6 +2002,23 @@ async function runAsyncPendingTransactionSmoke() {
   assert.equal(leaseWakeLocked, false);
   unregisterLeaseWake();
   delete (globalThis as { window?: unknown }).window;
+
+  // A wallet prompt still open (in this tab or another) holds the submission
+  // lease, and must keep the shortened ambiguous window from unlocking beneath it.
+  if (ambiguousAckFixture) {
+    const { identity: ambiguousIdentity, record: agedReservation } = ambiguousAckFixture;
+    const ackStorage = new MemoryStorage();
+    writePendingEvmRecord(ackStorage, agedReservation);
+    await withPendingEvmSubmissionLease(ackStorage, pendingIdentity, async () => {
+      assert.equal(
+        acknowledgePendingEvmRecord(ackStorage, agedReservation),
+        false,
+        'a live submission lease must block the ambiguous acknowledgement',
+      );
+    });
+    assert.equal(acknowledgePendingEvmRecord(ackStorage, agedReservation), true);
+    assert.equal(readPendingEvmRecord(ackStorage, ambiguousIdentity), null);
+  }
 }
 
 void runAsyncPendingTransactionSmoke()

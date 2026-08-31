@@ -888,29 +888,27 @@ export default function LeaderboardTab() {
   function renderDesktopColumns<T extends RankedRow>(
     rows: T[],
     renderRow: (row: T, compact?: boolean) => React.ReactNode,
-    fillHeight = false
   ) {
     const columns = splitDesktopRows(rows);
 
+    // A desktop page is always DESKTOP_ITEMS_PER_PAGE rows split across two
+    // columns, so the content height is bounded and known. These columns used
+    // to be stretched to the viewport (`flex-1`) with an inner scroller, which
+    // on any tall window left a band of dead space under the last row inside
+    // each card and pushed the pagination to the bottom of the screen. Sizing
+    // them to their rows removes the gap; the two columns still match each
+    // other's height because grid items stretch by default.
     return (
-      <div className={cn("hidden tablet:grid tablet:grid-cols-2 tablet:gap-4", fillHeight && "tablet:min-h-0 tablet:flex-1")}>
+      <div className="hidden tablet:grid tablet:grid-cols-2 tablet:gap-4">
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
-            className={cn(
-              "tablet:flex tablet:flex-col tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-[hsl(var(--edge-panel))] tablet:bg-[image:var(--gradient-scroll-surface)] tablet:px-3 tablet:py-2 tablet:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]",
-              fillHeight && "tablet:min-h-0"
-            )}
+            className="tablet:flex tablet:flex-col tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-[hsl(var(--edge-panel))] tablet:bg-[image:var(--gradient-scroll-surface)] tablet:px-3 tablet:py-2 tablet:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]"
           >
             <div className="flex h-8 flex-none items-center justify-between border-b border-[hsl(var(--divider)/0.66)] text-xs font-semibold text-muted-foreground">
               <span>{getRankRangeLabel(column)}</span>
             </div>
-            <div className={cn(
-              "divide-y divide-[hsl(var(--divider)/0.62)]",
-              fillHeight
-                ? "surface-scroll-fade min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                : "overflow-visible"
-            )}>
+            <div className="divide-y divide-[hsl(var(--divider)/0.62)] overflow-visible">
               {column.length > 0 ? (
                 column.map((row) => renderRow(row, true))
               ) : (
@@ -939,7 +937,10 @@ export default function LeaderboardTab() {
       <div className={cn(
         "flex min-h-0 flex-col gap-3",
         usePageScroll ? "h-auto" : "h-full",
-        fillDesktop && "tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col",
+        // Desktop pages are a fixed row count, so the panel hugs its content
+        // instead of stretching to the viewport and leaving a dead band above
+        // the pagination. Mobile keeps its fill-and-scroll behaviour.
+        fillDesktop && "tablet:flex tablet:h-auto tablet:min-h-0 tablet:flex-col",
       )}>
         {!isDesktopBoard && (
           <div
@@ -953,7 +954,7 @@ export default function LeaderboardTab() {
           </div>
         )}
 
-        {isDesktopBoard && renderDesktopColumns(desktopRows, renderRow, fillDesktop)}
+        {isDesktopBoard && renderDesktopColumns(desktopRows, renderRow)}
 
         {!isDesktopBoard && renderPagination(mobilePageCount, "tablet:hidden")}
         {isDesktopBoard && renderPagination(desktopPageCount, "hidden tablet:flex")}
@@ -1460,12 +1461,17 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-full tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
+    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
       <TabCard className={cn(
         "flex flex-col",
         usesCompactPageScroll
           ? "h-auto min-h-0 overflow-visible"
-          : "h-full min-h-[26rem] overflow-hidden",
+          // `overflow-hidden` must stay: the pagination footer bleeds to the
+          // card edges (-mx-4 -mb-4) with square bottom corners and relies on
+          // this clip to inherit the card's radius. The desktop panel is sized
+          // to its content, so nothing needs to escape the card anyway — a
+          // window too short for it scrolls in the shell's own scroller.
+          : "h-full min-h-[26rem] overflow-hidden tablet:h-auto",
       )}>
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">

@@ -31,6 +31,30 @@ function normalizeMessageParam(value: UntypedValue): string | { raw: Hex } {
   return String(value ?? "");
 }
 
+/**
+ * EIP-1193 reports an unsupported method with a provider error *code*, not a
+ * bare Error, and wallet stacks branch on that code.
+ *
+ * This connector used to throw `new Error("...does not support wallet_sendCalls")`.
+ * viem passes an uncoded error straight through, so the app could not tell
+ * "this wallet cannot batch" from "the request may have been forwarded and the
+ * response lost". It has to assume the worst: the durable pending reservation
+ * stays, every transaction button locks, and the batch->direct fallback that
+ * exists for exactly this case never runs. Claiming production simply stopped
+ * with "Wallet confirmation may still be pending" and no transaction was sent.
+ *
+ * 4200 is the EIP-1193 "unsupported method" code; viem maps it to
+ * UnsupportedProviderMethodError, which the fallback recognises.
+ */
+class LocalTestUnsupportedMethodError extends Error {
+  code = 4200;
+
+  constructor(method: string) {
+    super(`Local test wallet does not support ${method}.`);
+    this.name = "UnsupportedProviderMethodError";
+  }
+}
+
 function assertLocalTestAllowed() {
   if (!isLocalTestAuthAllowed()) {
     throw new Error("Local test wallet is only available on localhost in development.");
@@ -299,10 +323,10 @@ export function localTestConnector() {
         }
 
         if (method === "wallet_sendCalls") {
-          throw new Error("Local test wallet does not support wallet_sendCalls.");
+          throw new LocalTestUnsupportedMethodError("wallet_sendCalls");
         }
 
-        throw new Error(`Local test wallet does not support ${method}.`);
+        throw new LocalTestUnsupportedMethodError(method);
       };
 
       return custom({ request })({ retryCount: 0 });

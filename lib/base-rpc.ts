@@ -12,6 +12,8 @@ import {
 import { base, mainnet } from 'viem/chains';
 import { getRpcConfig } from './env-config';
 import {
+  BASE_RPC_MAX_BATCH_SIZE,
+  BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES,
   type BaseRpcEndpointDescriptor,
   type BaseRpcExecutionWave,
   type BaseRpcPolicy,
@@ -19,6 +21,14 @@ import {
   buildBaseRpcExecutionPlan,
   rankBaseRpcEndpoints,
 } from './base-rpc-policy';
+
+/**
+ * The browser and the server run this same module against different endpoints:
+ * the server talks to the keyed provider pool, the browser talks to the
+ * same-origin proxy in front of it. Batch limits, timeouts and failover all
+ * differ accordingly, so the split is named once here.
+ */
+const IS_BROWSER = typeof window !== 'undefined';
 
 export type BaseRpcEndpointStatus = {
   url: string;
@@ -90,9 +100,14 @@ type BaseRpcCircuitState = {
 const LATENCY_ALPHA = 0.2;
 const RANKING_CALL_ADDRESS = '0xeb4e16c804AE9275a655AbBc20cD0658A91F9235' as const;
 const TOTAL_SUPPLY_SELECTOR = '0x18160ddd' as const;
-const HTTP_BATCH_SIZE = 40;
+// Upstream providers accept large batches; our own proxy caps them so it cannot
+// be repurposed as a free archive node against the paid quota.
+const UPSTREAM_HTTP_BATCH_SIZE = 40;
+const HTTP_BATCH_SIZE = IS_BROWSER ? BASE_RPC_MAX_BATCH_SIZE : UPSTREAM_HTTP_BATCH_SIZE;
 const HTTP_BATCH_WAIT_MS = 16;
-const MULTICALL_BATCH_SIZE = 8_192;
+// Shared with the proxy's body-size cap so the two cannot drift (see
+// BASE_RPC_MAX_BODY_BYTES).
+const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 const CANONICAL_RECEIPT_TIMEOUT_MS = 180_000;
@@ -153,6 +168,37 @@ const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
     sampleCount: 8,
   },
 };
+
+/**
+ * Browser-side policy overrides.
+ *
+ * In the browser the only "endpoint" is our own proxy, and that proxy already
+ * performs ranked, hedged failover across every upstream provider. Two things
+ * follow:
+ *
+ * - Timeouts must cover the server's own cascade. A 4.5s client timeout could
+ *   abandon a read the proxy was about to satisfy on its second upstream,
+ *   turning a recoverable provider blip into a user-visible failure.
+ * - A client-side fallback wave would replay that entire server-side cascade
+ *   rather than reach a different provider, so retry belongs one layer up in
+ *   React Query instead of here.
+ */
+const BROWSER_POLICY_OVERRIDES: Partial<
+  Record<BaseRpcPolicy, Partial<BaseRpcPolicyConfig>>
+> = {
+  log: { fallbackRetryCount: 0, timeoutMs: 15_000 },
+  read: { fallbackRetryCount: 0, timeoutMs: 12_000 },
+  receipt: { fallbackRetryCount: 0, hedgeDelayMs: 0, timeoutMs: 8_000 },
+};
+
+const RESOLVED_POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = IS_BROWSER
+  ? (Object.fromEntries(
+      (Object.keys(POLICY_CONFIG) as BaseRpcPolicy[]).map((policy) => [
+        policy,
+        { ...POLICY_CONFIG[policy], ...(BROWSER_POLICY_OVERRIDES[policy] ?? {}) },
+      ]),
+    ) as Record<BaseRpcPolicy, BaseRpcPolicyConfig>)
+  : POLICY_CONFIG;
 
 const policyMetrics = new Map<
   BaseRpcPolicy,
@@ -489,7 +535,7 @@ const sleep = async (ms: number) => {
 };
 
 const shouldRefreshReadRank = () => {
-  const interval = POLICY_CONFIG.read.rankIntervalMs;
+  const interval = RESOLVED_POLICY_CONFIG.read.rankIntervalMs;
   return Date.now() - readRankRefreshedAt >= interval;
 };
 
@@ -497,9 +543,14 @@ const recordRankSample = (
   url: string,
   sample: BaseRpcRankSample,
 ) => {
+  // Ranking compares providers against each other. The browser only ever sees
+  // the single proxy endpoint, so sampling and re-sorting it on every response
+  // is pure work for an ordering that cannot change.
+  if (IS_BROWSER) return;
+
   const samples = readRankSamples.get(url) ?? [];
   samples.push(sample);
-  const maxSamples = POLICY_CONFIG.read.sampleCount;
+  const maxSamples = RESOLVED_POLICY_CONFIG.read.sampleCount;
   readRankSamples.set(url, samples.slice(-maxSamples));
   recomputeReadRank();
   readRankRefreshedAt = sample.at;
@@ -508,7 +559,7 @@ const recordRankSample = (
 const pingEndpointForRanking = async (url: string) => {
   const started = Date.now();
   try {
-    await getRequestClient(url, POLICY_CONFIG.read.rankTimeoutMs).request({
+    await getRequestClient(url, RESOLVED_POLICY_CONFIG.read.rankTimeoutMs).request({
       method: 'eth_blockNumber',
       params: [],
     });
@@ -572,7 +623,7 @@ const ensureReadRank = async ({
 const probeEndpoint = async (url: string) => {
   const started = Date.now();
   try {
-    const client = getRequestClient(url, POLICY_CONFIG.probe.timeoutMs);
+    const client = getRequestClient(url, RESOLVED_POLICY_CONFIG.probe.timeoutMs);
     const [blockNumber, callResult] = await Promise.all([
       client.request({
         method: 'eth_blockNumber',
@@ -642,7 +693,7 @@ const invokeEndpoint = async (
   const started = Date.now();
 
   try {
-    const result = await getRequestClient(url, POLICY_CONFIG[policy].timeoutMs).request({
+    const result = await getRequestClient(url, RESOLVED_POLICY_CONFIG[policy].timeoutMs).request({
       method,
       params,
     });
@@ -754,8 +805,8 @@ const executePolicyRequest = async (
   const orderedUrls = getOrderedUrls(policy, inputUrls);
   const attemptedUrls: string[] = [];
   const executionPlan = buildBaseRpcExecutionPlan(policy, orderedUrls, {
-    fallbackRetryCount: POLICY_CONFIG[policy].fallbackRetryCount,
-    hedgeDelayMs: POLICY_CONFIG[policy].hedgeDelayMs,
+    fallbackRetryCount: RESOLVED_POLICY_CONFIG[policy].fallbackRetryCount,
+    hedgeDelayMs: RESOLVED_POLICY_CONFIG[policy].hedgeDelayMs,
   });
 
   let lastError: UntypedValue = new Error('Base RPC request failed before execution');
@@ -770,10 +821,10 @@ const executePolicyRequest = async (
       if (
         previousWaveSignature &&
         signature !== previousWaveSignature &&
-        POLICY_CONFIG[policy].retryDelayMs > 0 &&
+        RESOLVED_POLICY_CONFIG[policy].retryDelayMs > 0 &&
         wave.urls.length === 1
       ) {
-        await sleep(POLICY_CONFIG[policy].retryDelayMs);
+        await sleep(RESOLVED_POLICY_CONFIG[policy].retryDelayMs);
       }
       previousWaveSignature = signature;
     }
@@ -810,7 +861,7 @@ const createBaseTransport = (
         },
         retryCount: 0,
         retryDelay: 0,
-        timeout: POLICY_CONFIG[policy].timeoutMs,
+        timeout: RESOLVED_POLICY_CONFIG[policy].timeoutMs,
         type: 'http',
       },
       {
@@ -831,7 +882,7 @@ const createBaseClient = (policy: 'read' | 'receipt' | 'log') =>
       },
     },
     chain: base,
-    pollingInterval: POLICY_CONFIG[policy].pollingIntervalMs,
+    pollingInterval: RESOLVED_POLICY_CONFIG[policy].pollingIntervalMs,
     transport: createBaseTransport(policy),
   });
 
@@ -1087,7 +1138,7 @@ export const waitForCanonicalBaseReceipt = async (
   hash: Hex,
   {
     now = Date.now,
-    pollingIntervalMs = POLICY_CONFIG.receipt.pollingIntervalMs,
+    pollingIntervalMs = RESOLVED_POLICY_CONFIG.receipt.pollingIntervalMs,
     timeoutMs = CANONICAL_RECEIPT_TIMEOUT_MS,
     wait = sleep,
   }: CanonicalReceiptWaitOptions = {},

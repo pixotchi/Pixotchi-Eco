@@ -15,6 +15,9 @@ export const queryKeys = {
     ["landById", address?.toLowerCase() ?? "anonymous", landId?.toString() ?? "none"] as const,
   buildingsByLand: (address: string | null | undefined, landId: bigint | number | string | null | undefined) =>
     ["buildingsByLand", address?.toLowerCase() ?? "anonymous", landId?.toString() ?? "none"] as const,
+  // Global (not owner-scoped): the map renders every minted plot.
+  landSupply: () => ["landSupply"] as const,
+  landLeaderboard: () => ["landLeaderboard"] as const,
 } as const;
 
 export type QueryKey = readonly UntypedValue[];

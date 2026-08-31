@@ -51,7 +51,32 @@ export type PendingEvmChange = {
   operation: "acknowledge" | "claim" | "prune" | "release" | "remove" | "write";
 };
 
+/**
+ * How long an in-flight wallet submission may run before it is abandoned. This
+ * has to cover a player who leaves a wallet prompt open, so it stays generous.
+ */
 export const PENDING_EVM_HARD_LOCK_MS = 30 * 60 * 1_000;
+
+/**
+ * How long a *stuck* record stays locked before the player may say "I checked
+ * my wallet, nothing was sent" and unlock the app.
+ *
+ * These used to be the same 30 minutes, which meant any ambiguous transport
+ * failure froze every transaction button in the app for half an hour with no
+ * recourse — the UI told the player to check their wallet activity and then
+ * gave them no way to act on what they found.
+ *
+ * A record carrying a hash or calls id keeps the long lock: there is something
+ * concrete to watch, monitoring can still resolve it on its own, and a late
+ * confirmation is a real possibility. A proofless reservation has neither, so
+ * waiting adds no information the player does not already have — only the
+ * player can resolve it, and on Base a genuine broadcast settles long inside
+ * this window.
+ */
+export const PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS = 5 * 60 * 1_000;
+
+/** Marker the RPC proxy stamps on rejections it never forwarded upstream. */
+export const PENDING_EVM_PROXY_NOT_FORWARDED_MARKER = "PIXOTCHI_PROXY_NOT_FORWARDED";
 export const PENDING_EVM_MAX_RECORD_SIZE = 4_096;
 export const PENDING_EVM_STALE_MESSAGE =
   "This transaction is still unconfirmed. Check your wallet before allowing a new transaction.";
@@ -94,7 +119,11 @@ export class PendingEvmStorageUnavailableError extends Error {
  */
 export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolean {
   const hasDefinitiveMessage = (message: string) => (
-    /user\s+(?:rejected|denied|cancell?ed)|request\s+(?:rejected|cancell?ed)\s+by\s+(?:the\s+)?user|user\s+rejected\s+the\s+request/.test(message)
+    // Our own RPC proxy stamps the rejections it makes before forwarding
+    // anything upstream. Those provably never reached a node, so they are
+    // pre-submission facts rather than broadcast ambiguity.
+    message.includes(PENDING_EVM_PROXY_NOT_FORWARDED_MARKER.toLowerCase())
+    || /user\s+(?:rejected|denied|cancell?ed)|request\s+(?:rejected|cancell?ed)\s+by\s+(?:the\s+)?user|user\s+rejected\s+the\s+request/.test(message)
     || message.includes("insufficient funds")
     || message.includes("chain mismatch")
     || message.includes("unsupported chain")
@@ -133,6 +162,13 @@ export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolea
     current = typed.cause;
   }
 
+  // A proxy rejection is proof, not a hint, so it outranks the ambiguity
+  // heuristic below (a rate-limit refusal reads as "network-ish" but was never
+  // forwarded).
+  if (nodes.some(({ message }) => (
+    message.includes(PENDING_EVM_PROXY_NOT_FORWARDED_MARKER.toLowerCase())
+  ))) return true;
+
   // Explicit transport/broadcast ambiguity always wins over a nested or
   // message-level rejection label. Some providers report "request rejected"
   // only after forwarding the request and losing the response.
@@ -149,6 +185,21 @@ export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolea
       || code === 3
       || code === -32602
       || code === "ACTION_REJECTED"
+      // A refused method cannot have been executed: the provider rejected it
+      // outright rather than acting on it. transaction-kit already recovers
+      // from this through its batch->direct fallback, but every other caller
+      // (the swap panel's submitTrackedAttempt) went straight to "ambiguous"
+      // and kept the reservation, locking the wallet over a request that
+      // provably never reached a node.
+      || code === -32601
+      || code === "-32601"
+      || code === -32004
+      || code === "-32004"
+      || code === 4200
+      || code === "4200"
+      || name.includes("methodnotfound")
+      || name.includes("methodnotsupported")
+      || name.includes("unsupportedprovidermethod")
       || name.includes("userrejected")
       || name.includes("insufficientfunds")
       || name.includes("chainmismatch")
@@ -208,7 +259,7 @@ export function isDefinitiveUnsupportedEvmBatchError(error: unknown): boolean {
   ));
   if (hasAmbiguousTransportEvidence) return false;
 
-  return nodes.some(({ code, name }) => (
+  if (nodes.some(({ code, name }) => (
     code === -32601
     || code === "-32601"
     || code === -32004
@@ -218,6 +269,20 @@ export function isDefinitiveUnsupportedEvmBatchError(error: unknown): boolean {
     || name.includes("methodnotfound")
     || name.includes("methodnotsupported")
     || name.includes("unsupportedprovidermethod")
+  ))) return true;
+
+  // Last resort for wallets that refuse the method with a bare, uncoded Error.
+  // Deliberately narrow: the message must name wallet_sendCalls *and* say it is
+  // unsupported, and we only get here with no transport-ambiguity evidence at
+  // all. A forwarded request that timed out mentioning the method name is
+  // already excluded above, which is the case this rule must not swallow.
+  //
+  // Without it, such a wallet can never batch and never falls back: the batch
+  // reservation is kept as "might have been broadcast" and every transaction
+  // button stays locked, even though nothing ever reached a node.
+  return nodes.some(({ message }) => (
+    message.includes("wallet_sendcalls")
+    && /\b(?:un|not )supported|does\s+not\s+support|no\s+support\s+for|cannot\s+(?:be\s+)?(?:handle|support)/.test(message)
   ));
 }
 
@@ -664,14 +729,37 @@ export function createPendingEvmRecord({
   return record;
 }
 
-export function getPendingEvmPhase(record: Pick<PendingEvmRecord, "submittedAt">, now = Date.now()): PendingEvmPhase {
+/**
+ * How long this record blocks the wallet before the player may acknowledge it.
+ * Proofless reservations use the short window; anything carrying a hash or
+ * calls id keeps the full submission lock. See PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS.
+ */
+export function getPendingEvmAckLockMs(
+  record: Pick<PendingEvmRecord, "proof">,
+): number {
+  return record.proof?.kind === "reservation"
+    ? PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS
+    : PENDING_EVM_HARD_LOCK_MS;
+}
+
+/** When this record becomes acknowledgeable, ignoring any live submission lease. */
+export function getPendingEvmAckUnlockAt(
+  record: Pick<PendingEvmRecord, "proof" | "submittedAt">,
+): number {
+  return record.submittedAt + getPendingEvmAckLockMs(record);
+}
+
+export function getPendingEvmPhase(
+  record: Pick<PendingEvmRecord, "proof" | "submittedAt">,
+  now = Date.now(),
+): PendingEvmPhase {
   const ageMs = now - record.submittedAt;
   // A browser/system clock can move backwards after a proof is persisted.
   // Never discard that proof or let a future timestamp create an unbounded
   // hard lock; retain it and require the explicit stale acknowledgement path.
   if (
     record.submittedAt > now + PENDING_EVM_CLOCK_SKEW_MS
-    || ageMs >= PENDING_EVM_HARD_LOCK_MS
+    || ageMs >= getPendingEvmAckLockMs(record)
   ) return "stale";
   return "hard";
 }
@@ -1081,6 +1169,16 @@ export function acknowledgePendingEvmRecord(
   now = Date.now(),
 ) {
   if (getPendingEvmPhase(record, now) !== "stale") return false;
+  // A live submission lease means a wallet interaction is still running for this
+  // account — in this tab or another one. The player cannot have finished
+  // checking a prompt that is still open, so the shortened ambiguous window must
+  // never unlock underneath it.
+  const leaseExpiresAt = getPendingEvmSubmissionLeaseExpiresAt(
+    storage,
+    { accountAddress: record.accountAddress, chainId: record.chainId },
+    now,
+  );
+  if (leaseExpiresAt !== null && leaseExpiresAt > now) return false;
   return compareAndDeletePendingEvmRecord(storage, record, "acknowledge");
 }
 

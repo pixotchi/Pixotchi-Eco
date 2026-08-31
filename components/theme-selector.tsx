@@ -240,7 +240,11 @@ export function ThemeSelector({
         {/* Winter Mode Toggle - only shown when feature is enabled via env */}
         {isSnowFeatureEnabled && (
           <>
-            <DropdownMenuSeparator />
+            {/* The shared separator's my-1 is tuned for text rows, which carry
+                their own padding. Here it divides a dense grid of hard-edged
+                swatches, so 4px left the line closer to the squares than the
+                squares are to each other (gap-2). Match the grid's own rhythm. */}
+            <DropdownMenuSeparator className="my-2" />
             <MenuSwitchItem
               label="Winter Mode"
               checked={isSnowEnabled}
@@ -250,7 +254,7 @@ export function ThemeSelector({
         )}
         {showMusicToggle && (
           <>
-            {!isSnowFeatureEnabled && <DropdownMenuSeparator />}
+            {!isSnowFeatureEnabled && <DropdownMenuSeparator className="my-2" />}
             <MenuSwitchItem
               label="Music"
               checked={isMusicEnabled}

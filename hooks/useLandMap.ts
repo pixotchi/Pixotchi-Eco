@@ -1,95 +1,64 @@
-import { getLandLeaderboard,getLandSupply,LandLeaderboardEntry } from '@/lib/contracts';
+"use client";
+
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+
+import { getLandLeaderboard, getLandSupply, LandLeaderboardEntry } from '@/lib/contracts';
+import { queryKeys } from '@/lib/query-keys';
 import { Land } from '@/lib/types';
-import { useEffect,useState } from 'react';
 
-// Cache neighbor data to avoid refetching
-let cachedLeaderboard: LandLeaderboardEntry[] = [];
-let lastFetchTime = 0;
-const CACHE_DURATION = 60000; // 1 minute
+const MAP_DATA_STALE_TIME_MS = 60_000;
 
-// Request deduplication - prevent multiple simultaneous fetches
-let fetchPending = false;
+/**
+ * Supply + neighbour metadata for the land map.
+ *
+ * This used to keep its cache in module-level `let`s (`cachedLeaderboard`,
+ * `lastFetchTime`, `fetchPending`). Those outlived every wallet switch and
+ * remount, could not be invalidated after a mint, and hand-rolled the request
+ * deduplication that React Query already provides.
+ *
+ * `getLandLeaderboard` reads every minted plot in one range call, and the result
+ * is only ever rendered inside the map modal, so it is gated on the modal
+ * actually being open. Supply stays eager: it is a single cheap read and it is
+ * what the map header shows first.
+ */
+export function useLandMap(userLands: Land[], { enabled = true }: { enabled?: boolean } = {}) {
+  const supplyQuery = useQuery({
+    queryFn: getLandSupply,
+    queryKey: queryKeys.landSupply(),
+    staleTime: MAP_DATA_STALE_TIME_MS,
+  });
 
-export function useLandMap(initialUserLands: Land[]) {
-  const [totalSupply, setTotalSupply] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [neighborData, setNeighborData] = useState<Record<number, LandLeaderboardEntry>>({});
+  const leaderboardQuery = useQuery({
+    enabled,
+    queryFn: () => getLandLeaderboard(),
+    queryKey: queryKeys.landLeaderboard(),
+    staleTime: MAP_DATA_STALE_TIME_MS,
+  });
 
-  // Fetch total supply and leaderboard data (which contains name/xp/id for all minted lands)
-  // We use getLandLeaderboard because it efficiently returns basic metadata for range of IDs
-  // This is a "hack" to get map data without a dedicated indexer API
-  const userLandsKey = initialUserLands.map((land) => String(land.tokenId)).join(',');
+  const totalSupply = useMemo(() => {
+    const supply = supplyQuery.data?.totalSupply;
+    if (typeof supply === 'number' && supply > 0) return supply;
+    // Without a supply read the map still needs an upper bound wide enough to
+    // contain every plot the player owns.
+    const maxUserTokenId = userLands.reduce(
+      (max, land) => Math.max(max, Number(land.tokenId)),
+      0,
+    );
+    return supplyQuery.isError ? Math.max(500, maxUserTokenId) : 0;
+  }, [supplyQuery.data?.totalSupply, supplyQuery.isError, userLands]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchData = async () => {
-      // Prevent duplicate simultaneous calls
-      if (fetchPending) {
-        return;
-      }
-
-      fetchPending = true;
-
-      try {
-        // 1. Get Total Supply
-        const { totalSupply: supply } = await getLandSupply();
-        if (!mounted) {
-          fetchPending = false;
-          return;
-        }
-        setTotalSupply(supply);
-
-        // 2. Get Neighbor Data (using leaderboard cache)
-        const now = Date.now();
-        if (cachedLeaderboard.length === 0 || now - lastFetchTime > CACHE_DURATION) {
-          try {
-            const entries = await getLandLeaderboard();
-            cachedLeaderboard = entries;
-            lastFetchTime = now;
-          } catch (e) {
-            console.warn("Failed to fetch map neighbor data", e);
-          }
-        }
-
-        // Convert array to map for O(1) lookup
-        const map: Record<number, LandLeaderboardEntry> = {};
-        cachedLeaderboard.forEach(entry => {
-          map[entry.landId] = entry;
-        });
-
-        if (mounted) {
-          setNeighborData(map);
-          setIsLoading(false);
-        }
-
-      } catch (err) {
-        console.error("Failed to fetch land map data:", err);
-        if (mounted) {
-          // Fallback
-          const maxUserTokenId = initialUserLands.reduce((max, land) => Math.max(max, Number(land.tokenId)), 0);
-          setTotalSupply(Math.max(500, maxUserTokenId));
-          setIsLoading(false);
-        }
-      } finally {
-        fetchPending = false;
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      mounted = false;
-    };
-    // Keyed on a derived primitive: the caller passes a state array whose
-    // identity changes on every refetch, which re-ran this effect (and an extra
-    // getLandSupply RPC round-trip) even when the actual land set was unchanged.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userLandsKey]);
+  const neighborData = useMemo(() => {
+    const map: Record<number, LandLeaderboardEntry> = {};
+    for (const entry of leaderboardQuery.data ?? []) {
+      map[entry.landId] = entry;
+    }
+    return map;
+  }, [leaderboardQuery.data]);
 
   return {
-    totalSupply,
+    isLoading: supplyQuery.isPending || (enabled && leaderboardQuery.isPending),
     neighborData,
-    isLoading
+    totalSupply,
   };
 }

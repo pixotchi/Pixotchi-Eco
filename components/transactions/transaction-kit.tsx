@@ -20,12 +20,12 @@ import { Button } from "@/components/ui/button";
 import {
   canDurablyPersistPendingEvmTransactions,
   PendingEvmStaleError,
-  PENDING_EVM_HARD_LOCK_MS,
   acknowledgePendingEvmRecord,
   createPendingEvmCallsDigest,
   createPendingEvmRecord,
   finalizePendingEvmRecord,
   getPendingEvmCompatibility,
+  getPendingEvmAckUnlockAt,
   getPendingEvmPhase,
   getPendingEvmIntentDigest,
   getBrowserPendingEvmStorage,
@@ -560,7 +560,7 @@ function getStatusLabelData({
   }
 
   if (status.statusName === "submissionAmbiguous") {
-    label = "Wallet confirmation may still be pending — check your wallet activity.";
+    label = "Wallet confirmation may still be pending — check your wallet activity. You can unlock this shortly.";
   }
 
   if (status.statusName === "transactionStale") {
@@ -843,10 +843,9 @@ export function Transaction({
     });
 
     if (phase === "hard") {
-      const staleInMs = Math.max(
-        0,
-        record.submittedAt + PENDING_EVM_HARD_LOCK_MS - Date.now(),
-      );
+      // A proofless reservation unlocks on the short ambiguous window; a record
+      // that carries a hash or calls id keeps the full lock.
+      const staleInMs = Math.max(0, getPendingEvmAckUnlockAt(record) - Date.now());
       blockerStaleTimerRef.current = setTimeout(() => {
         if (activePendingRecordRef.current?.attemptId !== record.attemptId) return;
         emitStatus({

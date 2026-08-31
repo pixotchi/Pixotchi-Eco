@@ -1183,22 +1183,28 @@ export default function MintTab() {
             {renderDesktopPlantMinting()}
           </section>
 
-          <aside className={mintType === 'land' ? 'block min-w-0' : 'hidden min-w-0 min-[54rem]:block'}>
-            {renderDesktopLandMinting()}
-          </aside>
+          {/* Land minting and the claim card share one column cell rather than
+              occupying two grid rows. As separate rows, the claim card started
+              at row 2 — which begins below the much taller plant column — so on
+              desktop it floated hundreds of pixels beneath the land card with
+              dead space between them. `flex` + `gap` (not `space-y`) keeps that
+              spacing correct when one child is display:none below 54rem. */}
+          <aside className="flex min-w-0 flex-col gap-3">
+            <div className={mintType === 'land' ? 'block min-w-0' : 'hidden min-w-0 min-[54rem]:block'}>
+              {renderDesktopLandMinting()}
+            </div>
 
-          <section className={mintType === 'plant'
-            ? 'block min-[54rem]:col-start-2'
-            : 'hidden min-[54rem]:col-start-2 min-[54rem]:block'}>
-            <VerifyClaim
-              strainId={4}
-              onClaimSuccess={({ strainId, mintTxHash }) => {
-                incrementForcedFetch();
-                const claimStrain = PLANT_STRAINS_BY_ID[strainId];
-                openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
-              }}
-            />
-          </section>
+            <div className={mintType === 'plant' ? 'block' : 'hidden min-[54rem]:block'}>
+              <VerifyClaim
+                strainId={4}
+                onClaimSuccess={({ strainId, mintTxHash }) => {
+                  incrementForcedFetch();
+                  const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+                  openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
+                }}
+              />
+            </div>
+          </aside>
         </div>
 
         <MintShareModal
