@@ -196,9 +196,9 @@ export default function PlantsView() {
 
   const queryClient = useQueryClient();
   const plantsQueryKey = useMemo(() => queryKeys.plantsByOwner(ownerKey), [ownerKey]);
-  const readPlants = useCallback(async () => {
+  const readPlants = useCallback(async (options?: { blockNumber?: bigint }) => {
     if (!address) return [];
-    return getPlantsByOwner(address);
+    return getPlantsByOwner(address, undefined, options?.blockNumber);
   }, [address]);
 
   const handlePlantsCleared = useCallback(() => {
@@ -226,7 +226,6 @@ export default function PlantsView() {
         expected?.plantIdsPresent?.length
       );
       const shouldObserveMutation = Boolean(
-        detail.transactionHash ||
         detail.source?.includes("arcade") ||
         detail.source?.includes("mint") ||
         detail.source?.includes("transfer")
@@ -655,12 +654,19 @@ export default function PlantsView() {
                       }
                       setClaimOpen(true);
                     }}
-                    title={`${formatEth(selectedPlant.rewards)} ETH rewards`}
-                    aria-label={`Claim ${formatEth(selectedPlant.rewards)} ETH rewards`}
+                    disabled={Number(selectedPlant.rewards) <= 0}
+                    title={Number(selectedPlant.rewards) <= 0
+                      ? "No rewards are available to claim yet"
+                      : `${formatEth(selectedPlant.rewards)} ETH rewards`}
+                    aria-label={Number(selectedPlant.rewards) <= 0
+                      ? "No rewards are available to claim yet"
+                      : `Claim ${formatEth(selectedPlant.rewards)} ETH rewards`}
                   >
                     <StandardContainer className="surface-control flex min-h-[3.25rem] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden px-2 py-1.5 text-center transition-[filter] group-hover:brightness-105 sm:min-h-[3.5rem]">
                       <p className="text-xs font-semibold leading-tight">Rewards</p>
-                      <FittedEthRewardValue amount={formatEth(selectedPlant.rewards)} />
+                      {Number(selectedPlant.rewards) <= 0
+                        ? <p className="text-[11px] font-medium text-muted-foreground">Nothing to claim yet</p>
+                        : <FittedEthRewardValue amount={formatEth(selectedPlant.rewards)} />}
                     </StandardContainer>
                   </Button>
 

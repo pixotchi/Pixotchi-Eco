@@ -352,9 +352,19 @@ export default function BatchQuestStartCard({
       </div>
 
       {!hasAnySlots ? (
-        <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
-          None of your lands have a Farmer House yet. Upgrade one to unlock farmer
-          slots and send them on quests.
+        <div className="space-y-3">
+          {!smartWalletLoading && !isSmartWallet && (
+            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                <Lock className="h-3 w-3" />
+                Smart Wallet Required
+              </div>
+            </div>
+          )}
+          <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
+            None of your lands have a Farmer House yet. Upgrade one to unlock farmer
+            slots and send them on quests.
+          </div>
         </div>
       ) : (
         <>
@@ -465,6 +475,15 @@ export default function BatchQuestStartCard({
             </div>
           )}
 
+          {!smartWalletLoading && !isSmartWallet && (
+            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                <Lock className="h-3 w-3" />
+                Smart Wallet Required
+              </div>
+            </div>
+          )}
+
           {idleSlots.length === 0 ? (
             <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
               No idle farmers right now. They will show up here as quests finish and
@@ -482,12 +501,7 @@ export default function BatchQuestStartCard({
               </div>
             </div>
           ) : !smartWalletLoading && !isSmartWallet ? (
-            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                <Lock className="h-3 w-3" />
-                Smart Wallet Required
-              </div>
-            </div>
+            null
           ) : !hasEnoughTokens ? (
             <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-value">
@@ -514,6 +528,7 @@ export default function BatchQuestStartCard({
                 )}
               </div>
               <SmartWalletTransaction
+                effects={{ domains: ["balances"] }}
                 key={txKey}
                 intentKey={batchQuestIntentKey}
                 calls={calls}

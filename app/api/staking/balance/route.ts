@@ -21,8 +21,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('🔍 Fetching SEED balance for:', address);
-
     const balance = await getTokenBalance(address);
 
     return NextResponse.json({
@@ -30,14 +28,13 @@ export async function GET(request: NextRequest) {
       balance: balance?.toString() || '0', // Convert bigint to string for JSON
     });
 
-  } catch (error) {
-    console.error('❌ Error fetching SEED balance:', error);
+  } catch {
+    console.error('❌ Error fetching SEED balance');
     
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Failed to fetch balance',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to fetch balance'
       },
       { status: 500 }
     );

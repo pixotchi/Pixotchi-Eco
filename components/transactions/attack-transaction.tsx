@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import type { TransactionFeedbackMode } from './transaction-kit';
 
@@ -51,8 +51,9 @@ export default function AttackTransaction({
   }];
 
   return (
-    <SponsoredTransaction
-      intentKey={`plant:attack:${attackerId}:${targetId}`}
+    <GameTransaction
+      effects={{ domains: ["plants", "balances"] }}
+      intentKey={`plant:attack:${attackerId}`}
       calls={calls}
       onSuccess={(tx) => {
         onSuccess?.(tx);

@@ -146,6 +146,7 @@ export default function MintTab() {
   const [, setTokenBalance] = useState<number>(0);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
+  const submittedStrainRef = useRef<Strain | null>(null);
   const [paymentTokenSnapshot, setPaymentTokenSnapshot] = useState<PaymentTokenSnapshot>(() => ({
     allowance: BigInt(0),
     balance: BigInt(0),
@@ -936,8 +937,11 @@ export default function MintTab() {
               {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && (
                 <div className="space-y-2">
                   <ApprovalActionTransaction
-                    intentKey={`mint:plant:${selectedStrain.id}`}
+                    intentKey="mint:plant"
                     actionCalls={[getPlantMintCall(selectedStrain.id)]}
+                    onButtonClick={() => {
+                      submittedStrainRef.current = selectedStrain;
+                    }}
                     approvalSpender={PIXOTCHI_NFT_ADDRESS}
                     approvalTokenAddress={paymentToken}
                     needsApproval={needsPlantApproval}
@@ -947,11 +951,12 @@ export default function MintTab() {
                       incrementForcedFetch();
                     }}
                     onSuccess={(tx) => {
+                      const submittedStrain = submittedStrainRef.current ?? selectedStrain;
                       toast.success(needsPlantApproval && isSmartWallet ? 'Approved and minted successfully!' : 'Plant minted successfully!');
                       refreshPaymentTokenSnapshot();
                       incrementForcedFetch();
-                      openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
-                      void notifyMintSuccess(selectedStrain.name);
+                      openMintShareModal(submittedStrain.id, submittedStrain.name, tx?.transactionHash);
+                      void notifyMintSuccess(submittedStrain.name);
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                     batchButtonText="Approve + Mint"

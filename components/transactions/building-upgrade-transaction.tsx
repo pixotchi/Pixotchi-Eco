@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import { BuildingData, BuildingType } from "@/lib/types";
 import { landAbi } from "../../public/abi/pixotchi-v3-abi";
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
@@ -43,7 +43,8 @@ export default function BuildingUpgradeTransaction({
   }];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["buildings", "lands", "balances"] }}
       intentKey={`building:upgrade:${buildingType}:${landId}:${building.id}:${building.level + 1}:${finalFunctionName}`}
       calls={calls}
       onSuccess={onSuccess}

@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import UniversalTransaction from './universal-transaction';
+import GameTransaction from './game-transaction';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -48,7 +48,9 @@ export default function ClaimRewardsTransaction({
         </div>
       )}
 
-      <UniversalTransaction
+      <GameTransaction
+        effects={{ domains: ["plants", "balances", "rewards"] }}
+        trackStreak={false}
         intentKey={`claim-plant-rewards:${plantId}`}
         calls={calls}
         onSuccess={onSuccess}
@@ -56,7 +58,7 @@ export default function ClaimRewardsTransaction({
         buttonText={buttonText}
         buttonClassName={buttonClassName}
         disabled={disabled}
-        forceUnsponsored
+        sponsorship="none"
       />
     </div>
   );

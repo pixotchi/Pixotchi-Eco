@@ -10,12 +10,17 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { track } from "@vercel/analytics";
 import type { Hex } from "viem";
 import { handleExternalAnchorClick, openExternalUrl } from "@/lib/open-external";
 import { base } from "viem/chains";
 import { useAccount, useChainId, useWalletClient } from "wagmi";
 import { useShowCallsStatus } from "wagmi/experimental";
 import { waitForBaseReceipt } from "@/lib/base-rpc";
+import {
+  reconcileOwnerResources,
+  type OwnerResourceInvalidationRequest,
+} from "@/lib/owner-resource-invalidation";
 import { Button } from "@/components/ui/button";
 import {
   canDurablyPersistPendingEvmTransactions,
@@ -33,6 +38,7 @@ import {
   isDefinitiveUnsupportedEvmBatchError,
   readPendingEvmRecord,
   removePendingEvmRecord,
+  replacePendingEvmProof,
   resumePendingEvmRecord,
   withPendingEvmHardDeadline,
   withPendingEvmMonitorLease,
@@ -50,7 +56,11 @@ import {
   requestPendingEvmCoordinatorReconcile,
 } from "@/lib/pending-evm-coordinator";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { extractTransactionHash, normalizeTransactionReceipt } from "@/lib/transaction-utils";
+import {
+  extractTransactionHash,
+  getHighestTransactionReceiptBlock,
+  normalizeTransactionReceipt,
+} from "@/lib/transaction-utils";
 import { cn } from "@/lib/utils";
 
 type TransactionReceiptLike = UntypedValue;
@@ -62,6 +72,7 @@ type StatusName =
   | "submissionAmbiguous"
   | "transactionUnresolved"
   | "transactionStale"
+  | "confirmedSyncing"
   | "success"
   | "error"
   | "failed"
@@ -79,8 +90,49 @@ export type LifecycleStatus = {
     error?: UntypedValue;
     transactionHash?: Hex;
     transactionId?: string;
+    atomic?: boolean;
+    correlationId?: string;
+    /** True when this status came from a durable proof restored after remount/reload. */
+    recovered?: boolean;
+    /** Whether the currently rendered calls still match the originally submitted payload. */
+    callsMatch?: boolean;
     transactionReceipts: TransactionReceiptLike[];
   };
+};
+
+export type TransactionPhase =
+  | "idle"
+  | "awaiting-wallet"
+  | "submitted"
+  | "confirming"
+  | "confirmed-syncing"
+  | "succeeded"
+  | "reverted"
+  | "unresolved";
+
+function getTransactionPhase(status: LifecycleStatus): TransactionPhase {
+  if (status.statusName === "idle") return "idle";
+  if (status.statusName === "buildingTransaction") return "awaiting-wallet";
+  if (status.statusName === "transactionPending") {
+    return status.statusData.transactionHash || status.statusData.transactionId
+      ? "submitted"
+      : "awaiting-wallet";
+  }
+  if (status.statusName === "confirmedSyncing") return "confirmed-syncing";
+  if (status.statusName === "success") return "succeeded";
+  if (
+    status.statusName === "reverted"
+    || status.statusName === "cancelled"
+    || status.statusName === "canceled"
+  ) return "reverted";
+  return "unresolved";
+}
+
+export type TransactionProof = TransactionReceiptLike & {
+  atomic: boolean;
+  callsId?: string;
+  kind: "batch" | "direct";
+  transactionReceipts: TransactionReceiptLike[];
 };
 
 type RawTransactionCall = {
@@ -92,7 +144,12 @@ type RawTransactionCall = {
 
 type TransactionProps = {
   calls: RawTransactionCall[];
+  effects: "none" | {
+    domains: OwnerResourceInvalidationRequest["domains"];
+    expected?: OwnerResourceInvalidationRequest["expected"];
+  };
   onError?: (error: UntypedValue) => void;
+  onConfirmed?: (status: LifecycleStatus) => void | Promise<void>;
   onStatus?: (status: LifecycleStatus) => void;
   isSponsored?: boolean;
   capabilities?: Record<string, UntypedValue>;
@@ -113,6 +170,7 @@ type TransactionContextValue = {
   isToastVisible: boolean;
   receipt: TransactionReceiptLike | null;
   retryWalletRouting: () => void;
+  retrySync: () => void;
   setIsToastVisible: (value: boolean) => void;
   status: LifecycleStatus;
   submit: (beforeSubmit?: (() => void) | null) => void;
@@ -179,6 +237,7 @@ const IDLE_STATUS: LifecycleStatus = {
 };
 
 const TERMINAL_STATUSES = new Set<StatusName>([
+  "confirmedSyncing",
   "success",
   "error",
   "failed",
@@ -211,30 +270,32 @@ const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
 const BG_SURFACE = "chat-white-surface bg-card bg-[image:var(--gradient-surface)]";
 const TOAST_SHADOW = "shadow-[var(--shadow-hairline)]";
+const TOAST_ACTION_LAYOUT =
+  "relative -ml-2.5 px-2.5 after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']";
 const unsupportedSendCallsKeys = new Set<string>();
 /**
- * A successful EIP-5792 lifecycle may carry only a calls id. Treat that id as
- * verifiable lifecycle proof instead of making all success UI depend on an
- * optional receipt array.
+ * Terminal success requires canonical onchain receipt evidence. A calls id is
+ * durable recovery proof, but is not proof that the game mutation executed.
  */
 export function getLifecycleTransactionProof(
   status: LifecycleStatus,
-): TransactionReceiptLike | null {
+): TransactionProof | null {
   if (status.statusName !== "success") return null;
 
-  const receipt = status.statusData.transactionReceipts[0];
-  if (receipt) return normalizeTransactionReceipt(receipt);
+  const receipts = status.statusData.transactionReceipts.map(normalizeTransactionReceipt);
+  const receipt = receipts[0];
+  if (receipt) {
+    const isBatch = Boolean(status.statusData.transactionId);
+    return {
+      ...receipt,
+      atomic: status.statusData.atomic ?? !isBatch,
+      ...(status.statusData.transactionId ? { callsId: status.statusData.transactionId } : {}),
+      kind: isBatch ? "batch" : "direct",
+      transactionReceipts: receipts,
+    };
+  }
 
-  const transactionHash = status.statusData.transactionHash;
-  const transactionId = status.statusData.transactionId;
-  if (!transactionHash && !transactionId) return null;
-
-  return {
-    status: "success",
-    ...(transactionHash ? { transactionHash } : {}),
-    ...(transactionId ? { transactionId } : {}),
-    transactionReceipts: [],
-  };
+  return null;
 }
 
 function Spinner({ className }: { className?: string }) {
@@ -330,10 +391,7 @@ function getErrorMessage(error: UntypedValue): string {
 
 function getErrorStatusName(error: UntypedValue): StatusName {
   const message = getErrorMessage(error).toLowerCase();
-  const code =
-    typeof (error as { code?: UntypedValue })?.code === "number"
-      ? Number((error as { code?: number }).code)
-      : null;
+  const code = getNestedErrorCode(error);
 
   if (
     code === 4001
@@ -342,6 +400,10 @@ function getErrorStatusName(error: UntypedValue): StatusName {
     || message.includes("transaction rejected")
   ) {
     return "transactionRejected";
+  }
+
+  if (message.includes("transaction cancelled") || message.includes("transaction canceled")) {
+    return "cancelled";
   }
 
   if (
@@ -356,11 +418,29 @@ function getErrorStatusName(error: UntypedValue): StatusName {
     return "buildError";
   }
 
+  if (code === 4100 || code === 5700 || code === 5710 || code === 5740 || code === 5760) {
+    return "buildError";
+  }
+
   if (message.includes("revert")) {
     return "reverted";
   }
 
   return "error";
+}
+
+function getNestedErrorCode(error: UntypedValue): number | null {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current && !visited.has(current); depth += 1) {
+    visited.add(current);
+    if (typeof current !== "object") break;
+    const typed = current as { cause?: unknown; code?: unknown };
+    const numeric = typeof typed.code === "string" ? Number(typed.code) : typed.code;
+    if (typeof numeric === "number" && Number.isFinite(numeric)) return numeric;
+    current = typed.cause;
+  }
+  return null;
 }
 
 function getFriendlyTransactionMessage(message: string) {
@@ -372,6 +452,10 @@ function getFriendlyTransactionMessage(message: string) {
 
   if (normalized.includes("wallet client unavailable") || normalized.includes("wallet not connected")) {
     return "Connect your wallet, then try again.";
+  }
+
+  if (normalized.includes("atomic execution") || normalized.includes("atomic bundled transactions")) {
+    return "This wallet cannot safely complete the required atomic action.";
   }
 
   if (normalized.includes("insufficient") && normalized.includes("balance")) {
@@ -453,7 +537,9 @@ function isUnresolvedWaitError(error: UntypedValue) {
 function isDefinitivePostSubmissionError(error: UntypedValue) {
   const message = getErrorMessage(error).toLowerCase();
   return message.includes("transaction reverted")
-    || message.includes("execution reverted");
+    || message.includes("execution reverted")
+    || message.includes("transaction cancelled")
+    || message.includes("transaction canceled");
 }
 
 function createMonitoringAbortError() {
@@ -567,6 +653,12 @@ function getStatusLabelData({
     label = "Still unconfirmed. Check your wallet, then allow a new transaction.";
   }
 
+  if (status.statusName === "confirmedSyncing") {
+    label = status.statusData.error
+      ? "Transaction confirmed; state refresh delayed."
+      : "Transaction confirmed; syncing game state...";
+  }
+
   if (status.statusName === "success") {
     label = "Successful";
   }
@@ -615,6 +707,12 @@ function getToastLabelData({
     label = "Still unconfirmed. Check wallet before allowing a new transaction";
   }
 
+  if (status.statusName === "confirmedSyncing") {
+    label = status.statusData.error
+      ? "Transaction confirmed; state refresh delayed"
+      : "Transaction confirmed; syncing game state";
+  }
+
   if (status.statusName === "success") {
     label = "Successful";
   }
@@ -637,7 +735,9 @@ function useTransactionContext() {
 
 export function Transaction({
   calls,
+  effects,
   onError,
+  onConfirmed,
   onStatus,
   isSponsored = false,
   capabilities,
@@ -669,24 +769,54 @@ export function Transaction({
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transactionIdRef = useRef<string | null>(null);
   const transactionHashRef = useRef<Hex | undefined>(undefined);
+  const confirmedFallbackRecordRef = useRef<PendingEvmRecord | null>(null);
+  const confirmedSyncStatusRef = useRef<LifecycleStatus | null>(null);
+  const lastTelemetryKeyRef = useRef<string | null>(null);
   const beforeSubmitRef = useRef<(() => void) | undefined>(undefined);
   const activePendingRecordRef = useRef<PendingEvmRecord | null>(null);
   const notifyStatusCallbacksRef = useRef(true);
   const blockerStaleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const capabilitiesRef = useRef(capabilities);
+  const effectsRef = useRef(effects);
+  const onConfirmedRef = useRef(onConfirmed);
+  const onErrorRef = useRef(onError);
+  const onStatusRef = useRef(onStatus);
+  capabilitiesRef.current = capabilities;
+  effectsRef.current = effects;
+  onConfirmedRef.current = onConfirmed;
+  onErrorRef.current = onError;
+  onStatusRef.current = onStatus;
 
-  const normalizedCalls = useMemo(
-    () =>
-      calls.map((call) => ({
-        data: call.data,
-        to: call.to ?? call.address,
-        value: call.value ?? BigInt(0),
-      })),
-    [calls],
-  );
-  const pendingCallsDigest = useMemo(
-    () => createPendingEvmCallsDigest(normalizedCalls),
-    [normalizedCalls],
-  );
+  /*
+   * Most game callers build `calls={[...]}` inline. Panels that watch Base's
+   * block number therefore receive a new array every block even when the
+   * transaction is byte-for-byte identical. Depending on that array identity
+   * re-registered the pending controller, whose cleanup aborts its active
+   * receipt monitor. On two-second Base block renders this could livelock a
+   * successful transaction in "in progress" forever.
+   *
+   * Keep the normalized call objects stable while their durable digest is
+   * stable. A real calldata/target/value change still produces a new digest,
+   * registration, and recovery compatibility check.
+   */
+  const nextNormalizedCalls = calls.map((call) => ({
+    data: call.data,
+    to: call.to ?? call.address,
+    value: call.value ?? BigInt(0),
+  }));
+  const nextPendingCallsDigest = createPendingEvmCallsDigest(nextNormalizedCalls);
+  const stableCallsRef = useRef<{
+    digest: Hex;
+    normalizedCalls: typeof nextNormalizedCalls;
+  } | null>(null);
+  if (stableCallsRef.current?.digest !== nextPendingCallsDigest) {
+    stableCallsRef.current = {
+      digest: nextPendingCallsDigest,
+      normalizedCalls: nextNormalizedCalls,
+    };
+  }
+  const normalizedCalls = stableCallsRef.current.normalizedCalls;
+  const pendingCallsDigest = stableCallsRef.current.digest;
   const resolvedIntentKey = intentKey.trim() || `calls:${pendingCallsDigest}`;
   const currentConnectorId = connector?.id;
   const recoveryRegistryIdentity = useMemo(() => {
@@ -778,6 +908,7 @@ export function Transaction({
 
   const emitStatus = useCallback(
     (nextStatus: LifecycleStatus) => {
+      const activeRecord = activePendingRecordRef.current;
       let ownsTerminalCallback = true;
       if (TERMINAL_STATUSES.has(nextStatus.statusName)) {
         const removedOwnRecord = clearPersistedPendingRecord();
@@ -787,10 +918,29 @@ export function Transaction({
       if (!mountedRef.current && !isTerminal) return false;
       if (mountedRef.current) setStatus(nextStatus);
 
+      const phase = getTransactionPhase(nextStatus);
+      const correlationId = nextStatus.statusData.correlationId ?? activeRecord?.attemptId;
+      if (correlationId) {
+        const telemetryKey = `${correlationId}:${phase}`;
+        if (lastTelemetryKeyRef.current !== telemetryKey) {
+          lastTelemetryKeyRef.current = telemetryKey;
+          try {
+            track("game_transaction_lifecycle", {
+              correlationId,
+              executionPath: activeRecord?.method ?? "unselected",
+              phase,
+              walletType,
+            });
+          } catch {
+            // Observability must never affect transaction execution.
+          }
+        }
+      }
+
       const shouldNotifyCallbacks = notifyStatusCallbacksRef.current && ownsTerminalCallback;
       if (shouldNotifyCallbacks) {
         try {
-          void Promise.resolve(onStatus?.(nextStatus)).catch((error) => {
+          void Promise.resolve(onStatusRef.current?.(nextStatus)).catch((error) => {
             console.warn("Transaction status callback failed", error);
           });
         } catch (error) {
@@ -798,13 +948,80 @@ export function Transaction({
         }
       }
 
-      if (mountedRef.current && isTerminal) {
+      // Failures stay actionable until dismissed or a new attempt starts.
+      // Success may still reset after the caller's configured display window.
+      if (mountedRef.current && nextStatus.statusName === "success") {
         scheduleReset();
       }
       return shouldNotifyCallbacks;
     },
-    [clearPersistedPendingRecord, onStatus, scheduleReset],
+    [clearPersistedPendingRecord, scheduleReset, walletType],
   );
+
+  const runConfirmedReconciliation = useCallback(async (
+    status: LifecycleStatus,
+    fallbackRecord?: PendingEvmRecord,
+  ) => {
+    if (!fallbackRecord) {
+      await onConfirmedRef.current?.(status);
+      return;
+    }
+
+    const fallbackEffects = fallbackRecord.effects ?? {
+      domains: [
+        "allowances",
+        "arcade",
+        "balances",
+        "buildings",
+        "lands",
+        "plants",
+        "rewards",
+      ] as const,
+    };
+    if (fallbackEffects === "none") return;
+    const reconciled = await reconcileOwnerResources({
+      address: fallbackRecord.accountAddress,
+      domains: fallbackEffects.domains,
+      expected: fallbackEffects.expected,
+      receiptBlock: getHighestTransactionReceiptBlock(status.statusData.transactionReceipts),
+      source: "pending-transaction-recovery",
+      transactionHash: status.statusData.transactionHash,
+      transactionId: status.statusData.transactionId,
+    });
+    if (!reconciled) {
+      throw new Error("Transaction confirmed; state refresh delayed.");
+    }
+  }, []);
+
+  const completeConfirmedTransaction = useCallback(async (
+    statusData: LifecycleStatus["statusData"],
+    fallbackRecord?: PendingEvmRecord,
+  ): Promise<boolean> => {
+    const syncingStatus: LifecycleStatus = {
+      statusData,
+      statusName: "confirmedSyncing",
+    };
+    confirmedSyncStatusRef.current = syncingStatus;
+    confirmedFallbackRecordRef.current = fallbackRecord ?? null;
+    emitStatus(syncingStatus);
+
+    try {
+      await runConfirmedReconciliation(syncingStatus, fallbackRecord);
+    } catch (error) {
+      const delayedStatus: LifecycleStatus = {
+        statusData: { ...statusData, error },
+        statusName: "confirmedSyncing",
+      };
+      confirmedSyncStatusRef.current = delayedStatus;
+      emitStatus(delayedStatus);
+      return false;
+    }
+
+    confirmedSyncStatusRef.current = null;
+    confirmedFallbackRecordRef.current = null;
+    emitStatus({ statusData, statusName: "success" });
+    return true;
+  }, [emitStatus, runConfirmedReconciliation]);
 
   const presentPendingBlocker = useCallback((record: PendingEvmRecord) => {
     setIsPeerBlocked(false);
@@ -865,6 +1082,7 @@ export function Transaction({
     recoveryRecord?: PendingEvmRecord,
     notifyCallbacks = true,
     recoverySignal?: AbortSignal,
+    fallbackRecovery = false,
   ) => {
     if (
       !walletRoutingIdentity
@@ -877,6 +1095,7 @@ export function Transaction({
     }
     throwIfMonitoringAborted(recoverySignal);
     let monitoringSignal = recoverySignal;
+    let recoveryCallsMatch = true;
 
     clearResetTimer();
     if (!recoveryRecord) {
@@ -891,7 +1110,7 @@ export function Transaction({
         statusData: { error, transactionReceipts: [] },
         statusName: "buildError",
       });
-      onError?.(error);
+      onErrorRef.current?.(error);
       return;
     }
 
@@ -901,7 +1120,7 @@ export function Transaction({
         statusData: { error, transactionReceipts: [] },
         statusName: "buildError",
       });
-      onError?.(error);
+      onErrorRef.current?.(error);
       return;
     }
 
@@ -914,7 +1133,7 @@ export function Transaction({
         statusData: { error, transactionReceipts: [] },
         statusName: "buildError",
       });
-      onError?.(error);
+      onErrorRef.current?.(error);
       return;
     }
 
@@ -938,6 +1157,7 @@ export function Transaction({
         callsDigest: pendingCallsDigest,
         connectorId: currentConnectorId,
       });
+      recoveryCallsMatch = compatibility.callsMatch;
       if (
         !storedRecord
         || storedRecord.attemptId !== recoveryRecord.attemptId
@@ -1006,7 +1226,7 @@ export function Transaction({
       || process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL
       || undefined;
     const mergedCapabilities = {
-      ...(capabilities || {}),
+      ...(capabilitiesRef.current || {}),
       ...(
         isSponsored && paymasterUrl
           ? { paymasterService: { optional: true, url: paymasterUrl } }
@@ -1019,6 +1239,7 @@ export function Transaction({
       const reservation = createPendingEvmRecord({
         callsDigest: pendingCallsDigest,
         ...(method === "batch" ? { connectorId: currentConnectorId ?? "unavailable" } : {}),
+        effects: effectsRef.current,
         identity: {
           accountAddress: walletClient.account.address,
           chainId: chain.id,
@@ -1130,21 +1351,45 @@ export function Transaction({
     };
 
     const waitForCanonicalReceipt = async (hash: Hex, pendingRecord: PendingEvmRecord) => {
-      const requestCanonicalReceipt = () => waitForBaseReceipt(hash);
+      let currentHash = hash;
+      let currentPendingRecord = pendingRecord;
+      let replacementCancelled = false;
+      const requestCanonicalReceipt = () => waitForBaseReceipt(currentHash, {
+        onReplaced: ({ reason, transaction }) => {
+          const replacementHash = transaction.hash;
+          currentHash = replacementHash;
+          replacementCancelled = replacementCancelled || reason === "cancelled";
+          transactionHashRef.current = replacementHash;
+          if (mountedRef.current) setTransactionHash(replacementHash);
+
+          const replacementRecord = replacePendingEvmProof(
+            getBrowserPendingEvmStorage(),
+            currentPendingRecord,
+            { hash: replacementHash, kind: "hash" },
+          );
+          if (replacementRecord) {
+            currentPendingRecord = replacementRecord;
+            activePendingRecordRef.current = replacementRecord;
+            coordinatedPendingRecord = replacementRecord;
+          }
+        },
+      });
       let pendingReceipt = requestCanonicalReceipt();
       let initialReceiptRejected = false;
       void pendingReceipt.catch(() => {
         initialReceiptRejected = true;
       });
       try {
-        return await withMonitoringAbort(withPendingEvmHardDeadline(
+        const confirmed = await withMonitoringAbort(withPendingEvmHardDeadline(
           withTimeout(
             pendingReceipt,
             DIRECT_RECEIPT_TIMEOUT_MS,
             RECEIPT_TIMEOUT_MESSAGE,
           ),
-          pendingRecord,
+          currentPendingRecord,
         ), monitoringSignal);
+        if (replacementCancelled) throw new Error("Transaction cancelled by wallet replacement.");
+        return confirmed;
       } catch (error) {
         if (!isUnresolvedWaitError(error)) throw error;
         emitUnresolvedStatus(error);
@@ -1162,10 +1407,12 @@ export function Transaction({
       }
       while (true) {
         try {
-          return await withMonitoringAbort(
-            withPendingEvmHardDeadline(pendingReceipt, pendingRecord),
+          const confirmed = await withMonitoringAbort(
+            withPendingEvmHardDeadline(pendingReceipt, currentPendingRecord),
             monitoringSignal,
           );
+          if (replacementCancelled) throw new Error("Transaction cancelled by wallet replacement.");
+          return confirmed;
         } catch (error) {
           if (!isUnresolvedWaitError(error)) throw error;
           emitUnresolvedStatus(error);
@@ -1259,24 +1506,24 @@ export function Transaction({
                   : {}),
                 transactionReceipts: completedReceipts,
               },
-              statusName: "reverted",
+              statusName: getErrorStatusName(error),
             });
-            if (shouldNotifyError) onError?.(error);
+            if (shouldNotifyError) onErrorRef.current?.(error);
             return;
           }
           throwIfMonitoringAborted(monitoringSignal);
           if (!isLeaseCurrent()) {
             throw new Error("Transaction confirmation ownership changed.");
           }
-          emitStatus({
-            statusData: {
-              ...(transactionHashRef.current
-                ? { transactionHash: transactionHashRef.current }
-                : {}),
-              transactionReceipts: completedReceipts,
-            },
-            statusName: "success",
-          });
+          await completeConfirmedTransaction({
+            callsMatch: recoveryRecord ? recoveryCallsMatch : true,
+            correlationId: submitted.pendingRecord.attemptId,
+            recovered: Boolean(recoveryRecord),
+            ...(transactionHashRef.current
+              ? { transactionHash: transactionHashRef.current }
+              : {}),
+            transactionReceipts: completedReceipts,
+          }, fallbackRecovery ? recoveryRecord : undefined);
         },
       );
       if (!monitorLease.acquired) {
@@ -1349,17 +1596,19 @@ export function Transaction({
               },
             }) as Promise<UntypedValue>
           );
-          const getBatchTransactionHash = (result: UntypedValue) => {
+          const getBatchTransactionHashes = (result: UntypedValue): Hex[] => {
             const resultReceipts = Array.isArray(result?.receipts)
               ? result.receipts as TransactionReceiptLike[]
               : [];
-            return (
+            return [...new Set(
               resultReceipts
                 .map((resultReceipt) => extractTransactionHash(resultReceipt) as Hex | undefined)
-                .find((hash): hash is Hex => Boolean(hash))
-              ?? extractTransactionHash(result) as Hex | undefined
-            );
+                .filter((hash): hash is Hex => Boolean(hash)),
+            )];
           };
+          const getBatchTransactionHash = (result: UntypedValue) => (
+            getBatchTransactionHashes(result)[0]
+          );
           const hasCanonicalReceiptTarget = (result: UntypedValue) => {
             if (result?.status !== "success" || getBatchTransactionHash(result)) return true;
             emitUnresolvedStatus(
@@ -1431,42 +1680,66 @@ export function Transaction({
           let receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
             normalizeTransactionReceipt(receipt),
           );
-          let nextTransactionHash = getBatchTransactionHash(result);
+          const reportedHashes = getBatchTransactionHashes(result);
+          let nextTransactionHash: Hex | undefined = reportedHashes[0];
           if (nextTransactionHash) {
             transactionHashRef.current = nextTransactionHash;
             if (mountedRef.current) setTransactionHash(nextTransactionHash);
           }
 
-          // Base may expose a provisional receipt with a zero block hash even
-          // after a wallet calls-status endpoint says success. When a concrete
-          // hash exists, canonical RPC evidence is mandatory before terminal
-          // callbacks or pending-proof removal; receipt log presence is not a
-          // finality signal.
-          if (result?.status === "success") {
+          const statusCode = typeof result?.statusCode === "number"
+            ? result.statusCode
+            : undefined;
+          const reportedSuccess = result?.status === "success"
+            && (statusCode === undefined || (statusCode >= 200 && statusCode < 300));
+
+          if (reportedSuccess && reportedHashes.length === 0) {
+            throw new Error(
+              "Wallet reported success without a transaction hash; canonical Base receipt is not confirmed.",
+            );
+          }
+          if (requiresAtomicBundle && result?.atomic !== true) {
+            throw new Error("Wallet did not confirm atomic execution for this transaction bundle.");
+          }
+
+          // A calls status can contain multiple ordered receipts. Canonicalize
+          // every hash (including partial/reverted results), rather than letting
+          // the first receipt stand in for the entire bundle.
+          if (reportedHashes.length > 0) {
+            const canonicalReceipts = await Promise.all(
+              reportedHashes.map(async (hash) => normalizeTransactionReceipt(
+                await waitForCanonicalReceipt(hash, pendingRecord),
+              )),
+            );
+            const canonicalHashes = new Set(
+              canonicalReceipts
+                .map((receipt) => extractTransactionHash(receipt))
+                .filter((hash): hash is Hex => Boolean(hash)),
+            );
+            receipts = [
+              ...canonicalReceipts,
+              ...receipts.filter((receipt) => {
+                const hash = extractTransactionHash(receipt);
+                return !hash || !canonicalHashes.has(hash as Hex);
+              }),
+            ];
+            nextTransactionHash = extractTransactionHash(canonicalReceipts[0]) as Hex | undefined;
+          } else if (reportedSuccess) {
             if (!nextTransactionHash) {
               throw new Error(
                 "Wallet reported success without a transaction hash; canonical Base receipt is not confirmed.",
               );
             }
-            const canonicalReceipt = normalizeTransactionReceipt(
-              await waitForCanonicalReceipt(nextTransactionHash, pendingRecord),
-            );
-            const canonicalHash = (
-              extractTransactionHash(canonicalReceipt) ?? nextTransactionHash
-            ) as Hex;
-            receipts = [
-              canonicalReceipt,
-              ...receipts.filter((receipt) => extractTransactionHash(receipt) !== canonicalHash),
-            ];
-            nextTransactionHash = canonicalHash;
           }
+
+          completedReceipts = receipts;
 
           transactionHashRef.current = nextTransactionHash;
           if (mountedRef.current) {
             setTransactionHash(nextTransactionHash);
           }
 
-          if (result?.status !== "success" || receipts.some(isFailedReceipt)) {
+          if (!reportedSuccess || receipts.length === 0 || receipts.some(isFailedReceipt)) {
             const error = new Error("Transaction reverted.");
             throwIfMonitoringAborted(monitoringSignal);
             if (!isLeaseCurrent()) {
@@ -1481,26 +1754,30 @@ export function Transaction({
               },
               statusName: "reverted",
             });
-            if (shouldNotifyError) onError?.(error);
+            if (shouldNotifyError) onErrorRef.current?.(error);
             return;
           }
 
-          const successStatus: LifecycleStatus = {
-            statusData: {
-              ...(nextTransactionHash ? { transactionHash: nextTransactionHash } : {}),
-              ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
-              transactionReceipts: receipts,
-            },
-            statusName: "success",
+          const successStatusData: LifecycleStatus["statusData"] = {
+            atomic: result?.atomic === true,
+            callsMatch: recoveryRecord ? recoveryCallsMatch : true,
+            correlationId: pendingRecord.attemptId,
+            recovered: Boolean(recoveryRecord),
+            ...(nextTransactionHash ? { transactionHash: nextTransactionHash } : {}),
+            ...(nextTransactionId ? { transactionId: nextTransactionId } : {}),
+            transactionReceipts: receipts,
           };
-          if (!getLifecycleTransactionProof(successStatus)) {
+          if (!getLifecycleTransactionProof({ statusData: successStatusData, statusName: "success" })) {
             throw new Error("Wallet reported success without transaction proof.");
           }
           throwIfMonitoringAborted(monitoringSignal);
           if (!isLeaseCurrent()) {
             throw new Error("Transaction confirmation ownership changed.");
           }
-          emitStatus(successStatus);
+          await completeConfirmedTransaction(
+            successStatusData,
+            fallbackRecovery ? recoveryRecord : undefined,
+          );
             },
           );
           if (!monitorLease.acquired) {
@@ -1613,7 +1890,7 @@ export function Transaction({
         },
         statusName,
       });
-      if (shouldNotifyError) onError?.(error);
+      if (shouldNotifyError) onErrorRef.current?.(error);
     } finally {
       executingRef.current = false;
       if (coordinatedPendingRecord) {
@@ -1628,17 +1905,16 @@ export function Transaction({
       }
     }
   }, [
-    capabilities,
     clearPersistedPendingRecord,
     clearResetTimer,
     clearTransactionArtifacts,
+    completeConfirmedTransaction,
     emitStatus,
     connector?.id,
     currentConnectorId,
     isSmartWallet,
     isSponsored,
     normalizedCalls,
-    onError,
     pendingCallsDigest,
     presentPendingBlocker,
     resolvedIntentKey,
@@ -1689,7 +1965,15 @@ export function Transaction({
         setIsPeerBlocked(false);
         if (!executingRef.current) clearDisplayedPendingBlocker();
       },
-      recover: (record, signal) => execute(record, intentKey.trim() !== "", signal),
+      recover: (record, signal) => execute(
+        record,
+        getPendingEvmCompatibility(record, {
+          callsDigest: pendingCallsDigest,
+          connectorId: currentConnectorId,
+        }).callsMatch,
+        signal,
+      ),
+      recoverFallback: (record, signal) => execute(record, false, signal, true),
     });
   }, [
     clearDisplayedPendingBlocker,
@@ -1719,6 +2003,37 @@ export function Transaction({
     }
     void execute();
   }, [execute, recoveryGateActive]);
+
+  const retrySync = useCallback(() => {
+    const syncingStatus = confirmedSyncStatusRef.current;
+    if (!syncingStatus || executingRef.current) return;
+
+    const cleanStatus: LifecycleStatus = {
+      statusData: { ...syncingStatus.statusData, error: undefined },
+      statusName: "confirmedSyncing",
+    };
+    executingRef.current = true;
+    setIsExecuting(true);
+    emitStatus(cleanStatus);
+    void Promise.resolve(runConfirmedReconciliation(
+      cleanStatus,
+      confirmedFallbackRecordRef.current ?? undefined,
+    )).then(() => {
+      confirmedSyncStatusRef.current = null;
+      confirmedFallbackRecordRef.current = null;
+      emitStatus({ statusData: cleanStatus.statusData, statusName: "success" });
+    }).catch((error) => {
+      const delayedStatus: LifecycleStatus = {
+        statusData: { ...cleanStatus.statusData, error },
+        statusName: "confirmedSyncing",
+      };
+      confirmedSyncStatusRef.current = delayedStatus;
+      emitStatus(delayedStatus);
+    }).finally(() => {
+      executingRef.current = false;
+      if (mountedRef.current) setIsExecuting(false);
+    });
+  }, [emitStatus, runConfirmedReconciliation]);
 
   const acknowledgeStale = useCallback(() => {
     if (status.statusName !== "transactionStale") return;
@@ -1767,6 +2082,7 @@ export function Transaction({
       || status.statusName === "submissionAmbiguous"
       || status.statusName === "transactionUnresolved"
       || status.statusName === "transactionStale"
+      || status.statusName === "confirmedSyncing"
     ) {
       return null;
     }
@@ -1794,6 +2110,7 @@ export function Transaction({
       submissionLockMessage: walletRoutingLockMessage,
       isToastVisible,
       receipt,
+      retrySync,
       retryWalletRouting,
       setIsToastVisible,
       status,
@@ -1811,6 +2128,7 @@ export function Transaction({
       walletRoutingLockMessage,
       isToastVisible,
       receipt,
+      retrySync,
       retryWalletRouting,
       status,
       submit,
@@ -1846,6 +2164,7 @@ export function TransactionButton({
     isSubmissionLocked,
     submissionLockMessage,
     receipt,
+    retrySync,
     retryWalletRouting,
     status: lifecycleStatus,
     submit,
@@ -1857,11 +2176,14 @@ export function TransactionButton({
   const isSubmissionAmbiguous = lifecycleStatus.statusName === "submissionAmbiguous";
   const isUnresolved = lifecycleStatus.statusName === "transactionUnresolved";
   const isStale = lifecycleStatus.statusName === "transactionStale";
+  const isConfirmedSyncing = lifecycleStatus.statusName === "confirmedSyncing";
   const isCheckOnly = isUnresolved || isStale;
   const isWalletRoutingRetry = submissionLockMessage === "Retry wallet check";
-  const isDisabled = !isSuccessful
-    && !isCheckOnly
-    && (isExecuting || (isSubmissionLocked && !isWalletRoutingRetry) || disabled);
+  const isDisabled = isConfirmedSyncing
+    ? isExecuting
+    : !isSuccessful
+      && !isCheckOnly
+      && (isExecuting || (isSubmissionLocked && !isWalletRoutingRetry) || disabled);
 
   const handleSuccess = useCallback(() => {
     if (receipt && transactionId && transactionHash && chainId && address) {
@@ -1903,6 +2225,9 @@ export function TransactionButton({
     if (isSuccessful) {
       return "View transaction";
     }
+    if (isConfirmedSyncing) {
+      return "Retry sync";
+    }
     if (isCheckOnly) {
       return "Check transaction";
     }
@@ -1928,6 +2253,7 @@ export function TransactionButton({
     errorMessage,
     idleText,
     isCheckOnly,
+    isConfirmedSyncing,
     isExecuting,
     isSubmissionAmbiguous,
     isSuccessful,
@@ -1935,6 +2261,10 @@ export function TransactionButton({
   ]);
 
   const handleSubmit = useCallback(() => {
+    if (isConfirmedSyncing) {
+      retrySync();
+      return;
+    }
     if (isSuccessful || isCheckOnly) {
       handleSuccess();
       return;
@@ -1945,7 +2275,7 @@ export function TransactionButton({
     }
 
     submit(onClick ?? null);
-  }, [handleSuccess, isCheckOnly, isSuccessful, isWalletRoutingRetry, onClick, retryWalletRouting, submit]);
+  }, [handleSuccess, isCheckOnly, isConfirmedSyncing, isSuccessful, isWalletRoutingRetry, onClick, retrySync, retryWalletRouting, submit]);
 
   const status = useMemo<"default" | "error" | "pending" | "success">(() => {
     if (isSuccessful) {
@@ -1957,15 +2287,17 @@ export function TransactionButton({
     if (isWalletRoutingRetry) {
       return "error";
     }
-    if (isExecuting || isCheckOnly || submissionLockMessage !== null) {
+    if (isExecuting || isCheckOnly || isConfirmedSyncing || submissionLockMessage !== null) {
       return "pending";
     }
     return "default";
-  }, [errorMessage, isCheckOnly, isExecuting, isSuccessful, isWalletRoutingRetry, submissionLockMessage]);
+  }, [errorMessage, isCheckOnly, isConfirmedSyncing, isExecuting, isSuccessful, isWalletRoutingRetry, submissionLockMessage]);
 
   const resolvedAriaLabel = ariaLabel
     ?? (isSuccessful
       ? "View transaction"
+      : isConfirmedSyncing
+        ? "Retry state sync"
       : isCheckOnly
         ? "Check transaction"
         : submissionLockMessage
@@ -2201,7 +2533,7 @@ export function TransactionToast({
     <div
       aria-live="polite"
       className={cn(
-        "fixed z-[var(--z-toast)] flex max-w-[calc(100vw-2rem)] items-start justify-between rounded-[var(--radius-control)] border border-border/60 p-2 sm:max-w-sm",
+        "fixed z-[var(--z-toast)] w-[calc(100vw-2rem)] max-w-[28rem] rounded-[var(--radius-control)] border border-border/60 px-4 py-3 pr-12",
         BG_SURFACE,
         TEXT_DEFAULT,
         TOAST_SHADOW,
@@ -2213,23 +2545,30 @@ export function TransactionToast({
       role="status"
       data-testid="ockToast"
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 p-2">
+      <div
+        className={cn(
+          "min-w-0",
+          children
+            ? "flex flex-wrap items-center gap-2"
+            : "grid grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-3 gap-y-0.5",
+        )}
+      >
         {children ?? (
           <>
-            <TransactionToastIcon />
-            <TransactionToastLabel />
-            <TransactionToastAction />
+            <TransactionToastIcon className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center text-primary" />
+            <TransactionToastLabel className="col-start-2 row-start-1 max-w-none pr-1 leading-5" />
+            <TransactionToastAction className="col-start-2 row-start-2" />
           </>
         )}
       </div>
       <button
-        className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="absolute right-1.5 top-1.5 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors duration-[var(--motion-quick)] hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={dismissToast}
         type="button"
         data-testid="ockCloseButton"
         aria-label="Dismiss transaction status"
       >
-        <CloseSvg />
+        <CloseSvg className="h-4 w-4 text-current" />
       </button>
     </div>
   );
@@ -2308,7 +2647,12 @@ export function TransactionToastAction({
       const viewHref =
         explorerHref || getExplorerHref(transactionHash, base.blockExplorers?.default.url) || undefined;
       return (
-        <Button asChild size="touchCompact" variant="ghost" className={cn(TEXT_LABEL1, TEXT_PRIMARY)}>
+        <Button
+          asChild
+          size="compact"
+          variant="ghost"
+          className={cn(TEXT_LABEL1, TEXT_PRIMARY, TOAST_ACTION_LAYOUT)}
+        >
           <a
             href={viewHref}
             target="_blank"
@@ -2327,10 +2671,10 @@ export function TransactionToastAction({
       return (
         <Button
           onClick={() => showCallsStatus({ id: transactionId })}
-          size="touchCompact"
+          size="compact"
           type="button"
           variant="ghost"
-          className={cn(TEXT_LABEL1, TEXT_PRIMARY)}
+          className={cn(TEXT_LABEL1, TEXT_PRIMARY, TOAST_ACTION_LAYOUT)}
         >
           View transaction
         </Button>
@@ -2340,8 +2684,8 @@ export function TransactionToastAction({
     if (errorMessage) {
       return (
         <Button
-          className={cn(TEXT_LABEL1, TEXT_PRIMARY)}
-          size="touchCompact"
+          className={cn(TEXT_LABEL1, TEXT_PRIMARY, TOAST_ACTION_LAYOUT)}
+          size="compact"
           type="button"
           variant="ghost"
           onClick={() => submit()}
@@ -2359,7 +2703,7 @@ export function TransactionToastAction({
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto", className)}>
+    <div className={cn(TEXT_LABEL1, "flex min-w-0 flex-wrap items-center justify-start gap-2", className)}>
       {actionElement}
       {isStale && (
         <Button

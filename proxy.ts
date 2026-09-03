@@ -87,6 +87,23 @@ function isCrossSiteBrowserRequest(request: NextRequest): boolean {
   return secFetchSite === 'cross-site';
 }
 
+function rpcBoundaryError(message: string) {
+  return NextResponse.json(
+    {
+      error: {
+        code: -32600,
+        message: `${message} [PIXOTCHI_PROXY_NOT_FORWARDED]`,
+      },
+      id: null,
+      jsonrpc: '2.0',
+    },
+    {
+      headers: { 'Cache-Control': 'private, no-store' },
+      status: 403,
+    },
+  );
+}
+
 export async function proxy(request: NextRequest) {
   // Get the pathname of the request
   const pathname = request.nextUrl.pathname;
@@ -106,6 +123,9 @@ export async function proxy(request: NextRequest) {
 
   if (isEdgeSessionRequiredApiPath(pathname) || isEdgeSameOriginOnlyApiPath(pathname)) {
     if (isCrossSiteBrowserRequest(request)) {
+      if (pathname === '/api/rpc') {
+        return rpcBoundaryError('Origin is not allowed');
+      }
       return NextResponse.json(
         { error: 'Cross-site browser access is not allowed for this endpoint.' },
         {
@@ -166,6 +186,9 @@ export async function proxy(request: NextRequest) {
       }
     } else {
       if (origin && !allowedPublicApiOrigins.has(origin)) {
+        if (pathname === '/api/rpc') {
+          return rpcBoundaryError('Origin is not allowed');
+        }
         return new Response('Forbidden', { status: 403 });
       }
 

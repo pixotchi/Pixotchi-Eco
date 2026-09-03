@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import type { TransactionFeedbackMode } from './transaction-kit';
 import type { TransactionCall } from '@/lib/types';
@@ -66,7 +66,8 @@ export function BuyShopItemTransaction({
 }: BuyShopItemTransactionProps) {
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["plants", "balances"] }}
       intentKey={`purchase:shop:${plantId}:${itemId}`}
       calls={[getBuyShopItemCall(plantId, itemId)]}
       onSuccess={onSuccess}
@@ -102,7 +103,8 @@ export function BuyGardenItemTransaction({
 }: BuyGardenItemTransactionProps) {
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["plants", "balances"] }}
       intentKey={`purchase:garden:${plantId}:${itemId}`}
       calls={[getBuyGardenItemCall(plantId, itemId)]}
       onSuccess={onSuccess}

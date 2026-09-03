@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useCallback } from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import {
   buildBaccaratPlaceBetCall,
   buildBaccaratPlaceBetWithTokenCall,
@@ -264,8 +264,9 @@ export default function BaccaratTransaction({
   }, [address, mode, onComplete, onStatusUpdate, tokenDecimals, tokenSymbol]);
 
   return (
-    <SponsoredTransaction
-      intentKey={`baccarat:${mode}:${landId}`}
+    <GameTransaction
+      effects={{ domains: ["arcade", "balances"] }}
+      intentKey={`baccarat:${landId}`}
       calls={calls}
       onStatusUpdate={handleStatus}
       buttonText={buttonText || (mode === "placeBet" ? "Deal Baccarat" : "Reveal Baccarat")}

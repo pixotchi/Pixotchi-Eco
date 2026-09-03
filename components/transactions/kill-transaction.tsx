@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
 import { useAccount } from "wagmi";
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -73,7 +73,8 @@ export default function KillTransaction({
   };
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["plants", "balances"] }}
       intentKey={`plant:kill:${deadId}:${tokenId}`}
       calls={calls}
       onSuccess={handleSuccess}

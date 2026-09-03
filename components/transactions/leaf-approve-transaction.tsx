@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 
 const LEAF_TOKEN_ABI = [
@@ -44,7 +44,8 @@ export default function LeafApproveTransaction({
   }];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["allowances"] }}
       intentKey={`approve:${LEAF_CONTRACT_ADDRESS.toLowerCase()}:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${maxApproval}`}
       calls={calls}
       onSuccess={onSuccess}

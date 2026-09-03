@@ -1,6 +1,6 @@
 "use client";
 
-import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import GameTransaction from '@/components/transactions/game-transaction';
 import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
@@ -186,7 +186,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <div className={QUEST_STATUS_PILL_CLASS}>Loading...</div>
                     )}
                     {statusOf(s) === 'Ready to commit' && (
-                      <SponsoredTransaction
+                      <GameTransaction
+                        effects="none"
                         intentKey={`quest:commit:${landId}:${idx}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                         buttonText="Return now"
@@ -198,14 +199,18 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     {statusOf(s) === 'Committed' && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Loot bag ready</span>
-                        <SponsoredTransaction
+                        <GameTransaction
+                          effects={{ domains: ["balances"] }}
                           intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Open now"
                           buttonClassName="h-11 min-h-11 px-3 text-xs"
                           hideStatus
                           disabled={questActionsBlocked}
-                          onSuccess={() => { toast.success('Loot bag opened!'); handleSuccess({ slotIndex: idx, awaitUncommitted: true }); }}
+                          onSuccess={async () => {
+                            await handleSuccess({ slotIndex: idx, awaitUncommitted: true });
+                            toast.success('Loot bag opened!');
+                          }}
                         />
                       </div>
                     )}
@@ -237,15 +242,16 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           )}
                         />
                       </div>
-                      <SponsoredTransaction
-                        intentKey={`quest:start:${landId}:${idx}:${difficulty[idx] ?? 0}`}
+                      <GameTransaction
+                        effects="none"
+                        intentKey={`quest:start:${landId}:${idx}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                         buttonText="Start"
                         buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
                         hideStatus
                         disabled={questActionsBlocked}
-                        onSuccess={(tx: UntypedValue) => {
-                          handleSuccess({ slotIndex: idx, awaitInProgress: true });
+                        onSuccess={async (tx: UntypedValue) => {
+                          await handleSuccess({ slotIndex: idx, awaitInProgress: true });
                           try {
                             const payload: Record<string, UntypedValue> = { address, taskId: 's3_send_quest' };
                             const txHash = extractTransactionHash(tx);

@@ -38,8 +38,7 @@ export async function GET(request: NextRequest) {
     integrationPoints: {
       description: 'Dual integration: capabilities.dataSuffix for wallet_sendCalls + calldata suffix appending for sendTransaction fallbacks',
       onchainKit: [
-        'components/transactions/sponsored-transaction.tsx',
-        'components/transactions/universal-transaction.tsx',
+        'components/transactions/game-transaction.tsx',
         'components/transactions/smart-wallet-transaction.tsx',
         'components/transactions/claim-rewards-transaction.tsx',
         'components/transactions/plant-name-transaction.tsx',

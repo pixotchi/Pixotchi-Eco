@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import PixotchiNFT from '@/public/abi/PixotchiNFT.json';
 import { decodeEventLog } from 'viem';
@@ -110,8 +110,9 @@ export default function BoxGameTransaction({
   };
 
   return (
-    <SponsoredTransaction
-      intentKey={`box:${plantId}:${seed}:${withStar ? "star" : "standard"}`}
+    <GameTransaction
+      effects={{ domains: ["arcade", "balances"] }}
+      intentKey={`box:${plantId}`}
       calls={calls as UntypedValue}
       onSuccess={handleSuccess}
       onError={onError}

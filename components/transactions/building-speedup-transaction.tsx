@@ -3,7 +3,7 @@
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { BuildingData } from '@/lib/types';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 
 interface BuildingSpeedUpTransactionProps {
   building: BuildingData;
@@ -40,7 +40,8 @@ export default function BuildingSpeedUpTransaction({
   }];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["buildings", "lands", "balances"] }}
       intentKey={`building:speedup:${buildingType}:${landId}:${building.id}:${building.blockHeightUpgradeInitiated}`}
       calls={calls}
       onSuccess={onSuccess}

@@ -1,19 +1,21 @@
 "use client";
 
+import GameTransaction, { type GameTransactionEffects } from './game-transaction';
 import type { TransactionFeedbackMode } from './transaction-kit';
 import type { TransactionCall } from '@/lib/types';
-import UniversalTransaction from './universal-transaction';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
   onSuccess?: (tx: UntypedValue) => void;
   onError?: (error: UntypedValue) => void;
+  onButtonClick?: () => void;
   buttonText: string;
   buttonClassName?: string;
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  intentKey?: string;
+  intentKey: string;
+  effects: GameTransactionEffects;
 }
 
 /**
@@ -22,5 +24,5 @@ interface SmartWalletTransactionProps {
  * post-transaction refresh implementation.
  */
 export default function SmartWalletTransaction(props: SmartWalletTransactionProps) {
-  return <UniversalTransaction {...props} />;
+  return <GameTransaction {...props} atomicity={props.calls.length > 1 ? "required" : "single"} />;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
 import type { LifecycleStatus, TransactionFeedbackMode } from "./transaction-kit";
@@ -188,12 +188,11 @@ export default function SpinGameTransaction({
   if (mode === "reveal") defaultText = "Reveal Spin";
 
   const finalDisabled = disabled || calls.length === 0;
-  const intentKey = commitment
-    ? `spin:${mode}:${plantId}:${commitment.toLowerCase()}`
-    : undefined;
+  const intentKey = `spin:${plantId}`;
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["arcade", "balances"] }}
       calls={calls as UntypedValue}
       intentKey={intentKey}
       buttonText={buttonText ?? defaultText}

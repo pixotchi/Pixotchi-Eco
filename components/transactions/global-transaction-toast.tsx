@@ -2,12 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import {
-  TransactionToast,
-  TransactionToastIcon,
-  TransactionToastLabel,
-  TransactionToastAction,
-} from './transaction-kit';
+import { TransactionToast } from './transaction-kit';
 
 interface GlobalTransactionToastProps {
   className?: string;
@@ -20,11 +15,7 @@ export default function GlobalTransactionToast({
 }: GlobalTransactionToastProps) {
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <TransactionToast className={className} position={position}>
-      <TransactionToastIcon />
-      <TransactionToastLabel />
-      <TransactionToastAction />
-    </TransactionToast>,
+    <TransactionToast className={className} position={position} />,
     document.body
   );
 }

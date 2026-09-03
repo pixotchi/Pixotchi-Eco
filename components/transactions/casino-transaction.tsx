@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useCallback } from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import {
     buildCasinoPlaceBetsCall,
     buildCasinoPlaceBetsWithTokenCall,
@@ -288,8 +288,9 @@ export default function CasinoTransaction({
     const finalDisabled = disabled || calls.length === 0;
 
     return (
-        <SponsoredTransaction
-            intentKey={`roulette:${mode}:${landId}`}
+        <GameTransaction
+          effects={{ domains: ["arcade", "balances"] }}
+            intentKey={`roulette:${landId}`}
             calls={calls as UntypedValue}
             buttonText={buttonText ?? defaultText}
             buttonClassName={buttonClassName}

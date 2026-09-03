@@ -9,10 +9,7 @@ const DIAGNOSTIC_ARRAY_LIMIT = 12;
 const DIAGNOSTIC_OBJECT_KEY_LIMIT = 20;
 const ALLOWED_DIAGNOSTIC_FIELDS = new Set([
   'connectorId',
-  'connectorName',
   'errorCode',
-  'message',
-  'normalizedAddress',
   'resultAccountSummary',
   'resultKeys',
   'stage',

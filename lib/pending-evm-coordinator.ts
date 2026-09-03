@@ -21,6 +21,7 @@ export type PendingEvmCoordinatorRegistration = {
   intentDigest: `0x${string}`;
   onSnapshot: (snapshot: PendingEvmCoordinatorSnapshot) => void;
   recover: (record: PendingEvmRecord, signal: AbortSignal) => Promise<void>;
+  recoverFallback?: (record: PendingEvmRecord, signal: AbortSignal) => Promise<void>;
 };
 
 type ActiveAttempt = {
@@ -39,6 +40,7 @@ type Coordinator = {
 };
 
 const coordinators = new Map<string, Coordinator>();
+const RECOVERY_RETRY_DELAY_MS = 250;
 
 function getCoordinatorKey(registry: PendingEvmRegistryIdentity) {
   return `${registry.chainId}:${registry.accountAddress.toLowerCase()}`;
@@ -161,9 +163,44 @@ function reconcileCoordinator(coordinator: Coordinator) {
       ) {
         coordinator.activeAttempt = null;
       }
-      queueCoordinatorReconcile(coordinator);
+      retryCoordinatorAfterSettledRecovery(coordinator);
     });
     return;
+  }
+
+  // The action that submitted a proof may no longer render after a reload
+  // (form values reset, a filled order disappears, or a game advances phase).
+  // Any controller for this wallet can run status-only recovery because the
+  // immutable record carries the proof and declared reconciliation effects.
+  if (record.proof.kind !== "reservation" && getPendingEvmPhase(record) === "hard") {
+    const fallbackRegistration = registrations.find(
+      (registration) => typeof registration.recoverFallback === "function",
+    ) ?? null;
+    if (fallbackRegistration) {
+      const abortController = new AbortController();
+      coordinator.activeAttempt = {
+        abortController,
+        attemptId: record.attemptId,
+        ownerId: fallbackRegistration.controllerId,
+      };
+      publish(coordinator, (registration) => ({
+        feedbackRecord: null,
+        locked: registration.controllerId !== fallbackRegistration.controllerId,
+      }));
+      void Promise.resolve(
+        fallbackRegistration.recoverFallback!(record, abortController.signal),
+      ).finally(() => {
+        if (
+          coordinator.activeAttempt?.attemptId === record.attemptId
+          && coordinator.activeAttempt.ownerId === fallbackRegistration.controllerId
+          && coordinator.activeAttempt.abortController === abortController
+        ) {
+          coordinator.activeAttempt = null;
+        }
+        retryCoordinatorAfterSettledRecovery(coordinator);
+      });
+      return;
+    }
   }
 
   // There is exactly one generic presenter per wallet+chain. Prefer a related
@@ -185,6 +222,17 @@ function queueCoordinatorReconcile(coordinator: Coordinator) {
     coordinator.reconcileQueued = false;
     reconcileCoordinator(coordinator);
   });
+}
+
+/**
+ * A controller may decline recovery while its previous execution is still
+ * unwinding after an abort. Re-queuing that synchronously creates an endless
+ * microtask loop: recover returns immediately, finally re-queues, and the page
+ * main thread never gets a chance to finish the abort or process RPC results.
+ * Yield to the task queue before trying the durable proof again.
+ */
+function retryCoordinatorAfterSettledRecovery(coordinator: Coordinator) {
+  setTimeout(() => queueCoordinatorReconcile(coordinator), RECOVERY_RETRY_DELAY_MS);
 }
 
 function getOrCreateCoordinator(registry: PendingEvmRegistryIdentity) {

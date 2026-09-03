@@ -5,7 +5,7 @@ import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import type { TransactionCall } from '@/lib/types';
 import SmartWalletTransaction from './smart-wallet-transaction';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import type { TransactionFeedbackMode } from './transaction-kit';
 
 const MAX_UINT256 = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
@@ -33,6 +33,7 @@ type ApprovalActionTransactionProps = {
   onApprovalSuccess?: (tx: UntypedValue) => void;
   onSuccess?: (tx: UntypedValue) => void;
   onError?: (error: UntypedValue) => void;
+  onButtonClick?: () => void;
   batchButtonText: string;
   approvalButtonText?: string;
   actionButtonText: string;
@@ -53,6 +54,7 @@ export default function ApprovalActionTransaction({
   onApprovalSuccess,
   onSuccess,
   onError,
+  onButtonClick,
   batchButtonText,
   approvalButtonText,
   actionButtonText,
@@ -88,10 +90,12 @@ export default function ApprovalActionTransaction({
   if (pendingApproval && isSmartWallet) {
     return (
       <SmartWalletTransaction
+        effects={{ domains: ["allowances", "balances", "plants", "lands", "buildings"] }}
         intentKey={intentKey}
         calls={[approvalCall, ...actionCalls]}
         onSuccess={onSuccess}
         onError={onError}
+        onButtonClick={onButtonClick}
         buttonText={batchButtonText}
         buttonClassName={buttonClassName}
         disabled={disabled || !hasActionCalls}
@@ -103,7 +107,8 @@ export default function ApprovalActionTransaction({
 
   if (pendingApproval) {
     return (
-      <SponsoredTransaction
+      <GameTransaction
+        effects={{ domains: ["allowances", "balances"] }}
         intentKey={`${intentKey}:approval:${approvalTokenAddress.toLowerCase()}:${approvalSpender.toLowerCase()}:${approvalAmount}`}
         calls={[approvalCall]}
         onSuccess={(tx) => {
@@ -111,6 +116,7 @@ export default function ApprovalActionTransaction({
           onApprovalSuccess?.(tx);
         }}
         onError={onError}
+        onButtonClick={onButtonClick}
         buttonText={approvalButtonText ?? batchButtonText}
         buttonClassName={buttonClassName}
         disabled={disabled}
@@ -121,11 +127,13 @@ export default function ApprovalActionTransaction({
   }
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["allowances", "balances", "plants", "lands", "buildings"] }}
       intentKey={intentKey}
       calls={actionCalls}
       onSuccess={onSuccess}
       onError={onError}
+      onButtonClick={onButtonClick}
       buttonText={actionButtonText}
       buttonClassName={buttonClassName}
       disabled={disabled || !hasActionCalls}

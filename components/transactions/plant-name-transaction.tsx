@@ -5,7 +5,7 @@ import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 
 const PIXOTCHI_NFT_ABI = [
   {
@@ -62,8 +62,9 @@ export function PlantNameTransaction({
         </div>
       )}
 
-      <SponsoredTransaction
-        intentKey={`set-plant-name:${plantId}:${newName.trim()}`}
+      <GameTransaction
+        effects={{ domains: ["plants"] }}
+        intentKey={`set-plant-name:${plantId}`}
         calls={calls}
         onSuccess={onSuccess}
         onError={onError}

@@ -261,6 +261,14 @@ export default function BatchClaimCard({
             <span className="font-semibold">Batch Claim</span>
             <span className="text-xs text-muted-foreground">Nothing ready</span>
           </div>
+          {!isSmartWallet && (
+            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                <Lock className="h-3 w-3" />
+                Smart Wallet Required
+              </div>
+            </div>
+          )}
           <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
             No accumulated village production is ready to claim yet.
           </div>
@@ -359,6 +367,7 @@ export default function BatchClaimCard({
               </span>
             </div>
             <SmartWalletTransaction
+              effects={{ domains: ["plants", "balances", "rewards"] }}
               key={txKey} // Force re-mount to reset button state after each batch
               intentKey={batchClaimIntentKey}
               calls={calls}

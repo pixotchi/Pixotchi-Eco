@@ -82,8 +82,9 @@ export default function SwapMintBundle({
 
     return (
         <SmartWalletTransaction
+          effects={{ domains: ["plants", "balances"] }}
             calls={calls}
-            intentKey={`swap:mint-plant:${strain}`}
+            intentKey="swap:mint-plant"
             onSuccess={onSuccess}
             onError={onError}
             buttonText={buttonText}

@@ -48,6 +48,8 @@ export type OwnerResourceListDomain = "plants" | "lands";
 export type OwnerResourceInvariant<TItem> = (items: TItem[]) => boolean;
 
 export type OwnerResourceReconcileOptions<TItem> = {
+  /** Sealed receipt block used as the first authoritative read boundary. */
+  blockNumber?: bigint;
   /** Bypass `staleTime` and read from chain even if the cache looks fresh. */
   force?: boolean;
   /**
@@ -77,7 +79,7 @@ type UseOwnerResourceListOptions<TItem> = {
   /** Local state to drop when the wallet disconnects. */
   onClear?: () => void;
   ownerKey: string | null;
-  queryFn: () => Promise<TItem[]>;
+  queryFn: (options?: { blockNumber?: bigint }) => Promise<TItem[]>;
   queryKey: QueryKey;
   /** Background refresh cadence while visible. `0` disables polling. */
   refetchIntervalMs?: number;
@@ -95,7 +97,7 @@ export type OwnerResourceListResult<TItem> = {
   /** True only while the first read for this owner is still outstanding. */
   isLoading: boolean;
   items: TItem[];
-  reconcile: (options?: OwnerResourceReconcileOptions<TItem>) => Promise<void>;
+  reconcile: (options?: OwnerResourceReconcileOptions<TItem>) => Promise<boolean>;
 };
 
 const DEFAULT_STALE_TIME_MS = 30_000;
@@ -126,7 +128,7 @@ export function useOwnerResourceList<TItem>({
   const query = useQuery<TItem[]>({
     enabled: isEnabled,
     gcTime: gcTimeMs,
-    queryFn,
+    queryFn: () => queryFn(),
     queryKey,
     // React Query's focus manager already listens for `visibilitychange`, and
     // the reconnect hook covers `online`. Both used to be hand-wired listeners
@@ -164,13 +166,13 @@ export function useOwnerResourceList<TItem>({
   const activeReconcilesRef = useRef(new Set<AbortController>());
 
   const reconcile = useCallback(
-    async ({ force = false, until }: OwnerResourceReconcileOptions<TItem> = {}) => {
+    async ({ blockNumber, force = false, until }: OwnerResourceReconcileOptions<TItem> = {}) => {
       const owner = ownerKeyRef.current;
-      if (!owner) return;
+      if (!owner) return false;
 
       // A plain refresh is fully subsumed by any pass already running; only an
       // invariant-bearing pass has a reason of its own to keep polling.
-      if (!until && activeReconcilesRef.current.size > 0) return;
+      if (!until && activeReconcilesRef.current.size > 0) return true;
 
       // Capture the identity of this reconciliation up front. The key contains
       // the owner, so even a read that lands after a wallet switch writes into
@@ -194,7 +196,7 @@ export function useOwnerResourceList<TItem>({
         // renders the result even if this reconciliation is cancelled a moment
         // later. Concurrent calls for the same key are deduped by React Query.
         return queryClient.fetchQuery<TItem[]>({
-          queryFn: read,
+          queryFn: () => read({ blockNumber }),
           queryKey: key,
           staleTime: force || until ? 0 : staleTime,
         });
@@ -202,9 +204,11 @@ export function useOwnerResourceList<TItem>({
 
       try {
         if (until) {
-          await retryOwnerRead(readOnce, { accept: until, signal: controller.signal });
+          const value = await retryOwnerRead(readOnce, { accept: until, signal: controller.signal });
+          return until(value);
         } else {
           await readOnce();
+          return true;
         }
       } catch (error) {
         // A cancelled reconciliation is routine (wallet switch, unmount). Any
@@ -213,6 +217,7 @@ export function useOwnerResourceList<TItem>({
         if (!isAbortError(error)) {
           console.error(`Failed to reconcile ${domain}:`, error);
         }
+        return false;
       } finally {
         activeReconcilesRef.current.delete(controller);
       }
@@ -240,20 +245,23 @@ export function useOwnerResourceList<TItem>({
 
   useEffect(() => {
     return onOwnerResourceInvalidation((detail) => {
-      if (!ownerInvalidationMatches(detail, ownerKeyRef.current, domain)) return;
+      if (!ownerInvalidationMatches(detail, ownerKeyRef.current, domain)) return true;
 
       if (detail.clear) {
         abortAllReconciles();
         queryClient.removeQueries({ exact: true, queryKey: queryKeyRef.current });
         onClearRef.current?.();
-        return;
+        return true;
       }
 
-      if (shouldHandleInvalidationRef.current?.(detail) === false) return;
+      if (shouldHandleInvalidationRef.current?.(detail) === false) return true;
 
       const until = buildInvariantRef.current?.(detail, itemsRef.current);
-      void reconcile({ force: detail.force, until });
-    });
+      const blockNumber = detail.receiptBlock === undefined
+        ? undefined
+        : BigInt(detail.receiptBlock);
+      return reconcile({ blockNumber, force: detail.force, until });
+    }, [domain]);
   }, [abortAllReconciles, domain, queryClient, reconcile]);
 
   return {

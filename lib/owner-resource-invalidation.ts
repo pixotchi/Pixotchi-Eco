@@ -3,13 +3,16 @@
 import { requestBalanceRefresh } from "@/lib/app-events";
 
 const OWNER_RESOURCE_INVALIDATION_EVENT = "pixotchi:owner-resources:invalidate";
+const OWNER_RESOURCE_RECONCILED_EVENT = "pixotchi:owner-resources:reconciled";
 
 export type OwnerResourceDomain =
+  | "allowances"
   | "arcade"
   | "balances"
   | "buildings"
   | "lands"
-  | "plants";
+  | "plants"
+  | "rewards";
 
 type OwnerStateDomain = Exclude<OwnerResourceDomain, "balances">;
 
@@ -52,6 +55,8 @@ type RetryOwnerReadOptions<T> = {
 
 const DEFAULT_RETRY_DELAYS_MS = [0, 350, 900, 1_800, 3_000, 5_000] as const;
 const resourceVersions = new Map<string, number>();
+const activeDomainListeners = new Map<OwnerStateDomain, number>();
+const reconciliationJobs = new Map<string, Promise<boolean>>();
 let invalidationSequence = 0;
 
 function normalizeAddress(address?: string | null): string | undefined {
@@ -128,28 +133,113 @@ export function clearOwnerResources(address?: string | null): string | null {
   return invalidateOwnerResources({
     address,
     clear: true,
-    domains: ["plants", "lands", "buildings", "arcade"],
+    domains: ["plants", "lands", "buildings", "arcade", "allowances", "rewards"],
     force: false,
     source: "wallet-disconnect",
   });
 }
 
 export function onOwnerResourceInvalidation(
-  listener: (detail: OwnerResourceInvalidationDetail) => void,
+  listener: (detail: OwnerResourceInvalidationDetail) => boolean | void | Promise<boolean | void>,
+  domains: readonly OwnerStateDomain[] = [],
 ): () => void {
   if (typeof window === "undefined") return () => {};
+
+  for (const domain of domains) {
+    activeDomainListeners.set(domain, (activeDomainListeners.get(domain) ?? 0) + 1);
+  }
 
   const handler = (event: Event) => {
     const detail = (event as CustomEvent<OwnerResourceInvalidationDetail>).detail;
     if (detail?.eventId && Array.isArray(detail.domains)) {
-      listener(detail);
+      void Promise.resolve(listener(detail)).then((result) => {
+        for (const domain of domains) {
+          if (!detail.domains.includes(domain)) continue;
+          window.dispatchEvent(new CustomEvent(OWNER_RESOURCE_RECONCILED_EVENT, {
+            detail: { domain, eventId: detail.eventId, succeeded: result !== false },
+          }));
+        }
+      }).catch(() => {
+        for (const domain of domains) {
+          if (!detail.domains.includes(domain)) continue;
+          window.dispatchEvent(new CustomEvent(OWNER_RESOURCE_RECONCILED_EVENT, {
+            detail: { domain, eventId: detail.eventId, succeeded: false },
+          }));
+        }
+      });
     }
   };
 
   window.addEventListener(OWNER_RESOURCE_INVALIDATION_EVENT, handler as EventListener);
   return () => {
     window.removeEventListener(OWNER_RESOURCE_INVALIDATION_EVENT, handler as EventListener);
+    for (const domain of domains) {
+      const next = Math.max(0, (activeDomainListeners.get(domain) ?? 1) - 1);
+      if (next === 0) activeDomainListeners.delete(domain);
+      else activeDomainListeners.set(domain, next);
+    }
   };
+}
+
+/**
+ * Dispatches the existing invalidation contract and waits only for owner-domain
+ * consumers that are currently mounted. This keeps confirmation coupled to the
+ * canonical query without introducing another cache or event bus.
+ */
+export function reconcileOwnerResources(
+  request: OwnerResourceInvalidationRequest,
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(true);
+
+  const proof = request.transactionHash?.toLowerCase()
+    ?? request.transactionId
+    ?? request.eventId
+    ?? createEventId();
+  const eventId = request.eventId ?? `reconcile:${proof}`;
+  const awaitedDomains = [...new Set(request.domains)].filter(
+    (domain): domain is OwnerStateDomain => (
+      domain !== "balances" && (activeDomainListeners.get(domain) ?? 0) > 0
+    ),
+  );
+  const owner = normalizeAddress(request.address) ?? "anonymous";
+  const jobKey = `${proof}:${owner}:${awaitedDomains.slice().sort().join(",")}`;
+  const existing = reconciliationJobs.get(jobKey);
+  if (existing) return existing;
+
+  const job = new Promise<boolean>((resolve) => {
+    if (awaitedDomains.length === 0) {
+      invalidateOwnerResources({ ...request, eventId });
+      resolve(true);
+      return;
+    }
+
+    const pending = new Set<OwnerStateDomain>(awaitedDomains);
+    let failed = false;
+    const finish = () => {
+      window.removeEventListener(OWNER_RESOURCE_RECONCILED_EVENT, onReconciled as EventListener);
+      window.clearTimeout(timeout);
+      resolve(!failed && pending.size === 0);
+    };
+    const onReconciled = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        domain: OwnerStateDomain;
+        eventId: string;
+        succeeded: boolean;
+      }>).detail;
+      if (detail?.eventId !== eventId || !pending.has(detail.domain)) return;
+      pending.delete(detail.domain);
+      failed = failed || !detail.succeeded;
+      if (pending.size === 0) finish();
+    };
+    const timeout = window.setTimeout(finish, 5_500);
+    window.addEventListener(OWNER_RESOURCE_RECONCILED_EVENT, onReconciled as EventListener);
+    invalidateOwnerResources({ ...request, eventId });
+  }).finally(() => {
+    reconciliationJobs.delete(jobKey);
+  });
+
+  reconciliationJobs.set(jobKey, job);
+  return job;
 }
 
 export function ownerInvalidationMatches(
@@ -200,17 +290,28 @@ export async function retryOwnerRead<T>(
     ? options.delaysMs
     : DEFAULT_RETRY_DELAYS_MS;
   let lastValue: T | undefined;
+  let lastError: unknown;
 
+  let previousBoundary = 0;
   for (let attempt = 0; attempt < delays.length; attempt += 1) {
-    await waitForRetry(Math.max(0, delays[attempt] ?? 0), options.signal);
+    const boundary = Math.max(previousBoundary, delays[attempt] ?? 0);
+    await waitForRetry(boundary - previousBoundary, options.signal);
+    previousBoundary = boundary;
     if (options.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
-    lastValue = await read(attempt);
-    if (options.accept(lastValue)) return lastValue;
+    try {
+      lastValue = await read(attempt);
+      lastError = undefined;
+      if (options.accept(lastValue)) return lastValue;
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      lastError = error;
+    }
   }
 
   if (lastValue === undefined) {
+    if (lastError) throw lastError;
     throw new Error("Owner reconciliation did not perform a read");
   }
   return lastValue;

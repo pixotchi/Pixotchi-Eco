@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import UniversalTransaction from "./universal-transaction";
+import GameTransaction from "./game-transaction";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
 import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 
@@ -72,8 +72,10 @@ export default function WarehouseApplyTransaction({
   ];
 
   return (
-    <UniversalTransaction
-      intentKey={`warehouse:apply:${mode}:${landId}:${plantId}:${parsedAmount ?? BigInt(0)}`}
+    <GameTransaction
+      effects={{ domains: ["buildings", "lands", "balances"] }}
+      trackStreak={false}
+      intentKey={`warehouse:apply:${landId}:${plantId}`}
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}

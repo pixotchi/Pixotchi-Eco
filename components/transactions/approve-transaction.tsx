@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import SponsoredTransaction from './sponsored-transaction';
+import GameTransaction from './game-transaction';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 
 const PIXOTCHI_TOKEN_ABI = [
@@ -53,7 +53,8 @@ export default function ApproveTransaction({
   }];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["allowances", "balances"] }}
       intentKey={`approve:${token.toLowerCase()}:${spenderAddress.toLowerCase()}:${maxApproval}`}
       calls={calls}
       onSuccess={onSuccess}

@@ -1,6 +1,6 @@
 "use client";
 
-import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
+import GameTransaction from "@/components/transactions/game-transaction";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -448,8 +448,6 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   };
 
   const createOrderAmount = (createOrderCall?.args?.[2] as bigint | undefined) ?? BigInt(0);
-  const createOrderSellToken = (createOrderCall?.args?.[1] as bigint | undefined) ?? BigInt(0);
-  const createOrderAmountAsk = (createOrderCall?.args?.[3] as bigint | undefined) ?? BigInt(0);
   const needsSeedApproval = balancesCurrent && sellSide === 'SEED' && seedAllowance < createOrderAmount;
   const needsLeafApproval = balancesCurrent && sellSide === 'LEAF' && leafAllowance < createOrderAmount;
   const needsCreateApproval = needsSeedApproval || needsLeafApproval;
@@ -698,7 +696,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 {needsCreateApproval && (
                   <div className="flex gap-2">
                     {needsSeedApproval && (
-                      <SponsoredTransaction
+                      <GameTransaction
+                        effects={{ domains: ["plants", "lands", "balances"] }}
                         intentKey="marketplace:approve-seed"
                         calls={[{
                           address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
@@ -720,7 +719,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                       />
                     )}
                     {needsLeafApproval && (
-                      <SponsoredTransaction
+                      <GameTransaction
+                        effects={{ domains: ["plants", "lands", "balances"] }}
                         intentKey="marketplace:approve-leaf"
                         calls={[{
                           address: LEAF_CONTRACT_ADDRESS as `0x${string}`,
@@ -744,8 +744,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   </div>
                 )}
 
-                <SponsoredTransaction
-                  intentKey={`marketplace:create-order:${transactionLandId ?? BigInt(0)}:${createOrderSellToken}:${createOrderAmount}:${createOrderAmountAsk}`}
+                <GameTransaction
+                  effects={{ domains: ["plants", "lands", "balances"] }}
+                  intentKey="marketplace:create-order"
                   calls={createOrderCall ? [createOrderCall] : []}
                   buttonText="Create Order"
                   buttonClassName="mx-auto h-10 min-h-10 w-auto px-5 py-0 text-sm"
@@ -818,7 +819,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <span className="text-muted-foreground">Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
                               </div>
                               {needsApproval && !isMyOrder ? (
-                                <SponsoredTransaction
+                                <GameTransaction
+                                  effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
@@ -836,7 +838,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                   }}
                                 />
                               ) : (
-                                <SponsoredTransaction
+                                <GameTransaction
+                                  effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText={disabledReason || "Take"}
@@ -955,7 +958,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             {!o.isActive && <span className="text-muted-foreground italic">(Inactive)</span>}
                           </div>
                           {showUserOrders && isMyOrder && o.isActive && (
-                            <SponsoredTransaction
+                            <GameTransaction
+                              effects={{ domains: ["plants", "lands", "balances"] }}
                               intentKey={`marketplace:cancel-order:${transactionLandId}:${o.id}`}
                               calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                               buttonText="Cancel"
@@ -969,7 +973,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                           {!showUserOrders && !isMyOrder && o.isActive && (
                             <>
                               {needsApproval ? (
-                                <SponsoredTransaction
+                                <GameTransaction
+                                  effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
@@ -988,7 +993,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                   }}
                                 />
                               ) : (
-                                <SponsoredTransaction
+                                <GameTransaction
+                                  effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
                                   calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
                                   buttonText={disabledReason || "Take"}

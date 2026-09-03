@@ -16,7 +16,10 @@ import { createConnector } from "wagmi";
 import { base } from "viem/chains";
 import { ensureLocalTestWallet } from "./local-test-wallet";
 import { isLocalTestAuthAllowed } from "./local-test-mode";
+import { getBaseReadClient } from "./base-rpc";
 import { createResilientTransport } from "./rpc-transport";
+import { isDefinitivePendingEvmPreSubmissionError } from "./pending-evm-transaction";
+import { broadcastSignedLocalTestTransaction } from "./local-test-transaction";
 
 function getTestAccount() {
   const wallet = ensureLocalTestWallet();
@@ -159,8 +162,23 @@ async function sendLocalTestTransaction(params: UntypedValue): Promise<Hex> {
   const nonce = parseOptionalNonce(transaction.nonce);
   const value = parseOptionalBigInt(transaction.value, "value");
 
+  // JSON-RPC wallets may supply a gas value produced by eth_fillTransaction.
+  // That value is only a hint for this local-account bridge: live testing found
+  // it can be below a fresh eth_estimateGas result for stateful game calls.
+  // Estimate the exact request without Viem's preparation/fill shortcut and add
+  // a deterministic 25% execution buffer before signing locally.
+  const estimatedGas = await getBaseReadClient().estimateGas({
+    account: from,
+    data: transaction.data,
+    prepare: false,
+    to: getAddress(transaction.to),
+    value,
+  });
+  const bufferedGas = estimatedGas + (estimatedGas / BigInt(4));
+  const signingGas = gas !== undefined && gas > bufferedGas ? gas : bufferedGas;
+
   if (transaction.data) transactionRequest.data = transaction.data;
-  if (gas !== undefined) transactionRequest.gas = gas;
+  transactionRequest.gas = signingGas;
   if (gasPrice !== undefined) transactionRequest.gasPrice = gasPrice;
   if (maxFeePerGas !== undefined) transactionRequest.maxFeePerGas = maxFeePerGas;
   if (maxPriorityFeePerGas !== undefined) {
@@ -169,7 +187,25 @@ async function sendLocalTestTransaction(params: UntypedValue): Promise<Hex> {
   if (nonce !== undefined) transactionRequest.nonce = nonce;
   if (value !== undefined) transactionRequest.value = value;
 
-  return walletClient.sendTransaction(transactionRequest as UntypedValue);
+  // Sign before broadcasting so the transaction hash exists even when an RPC
+  // accepts the raw bytes but loses its response. The outer transaction
+  // lifecycle can then replace its reservation with real proof and monitor the
+  // canonical receipt instead of locking the app behind a proofless warning.
+  const preparedRequest = await walletClient.prepareTransactionRequest(
+    transactionRequest as UntypedValue,
+  );
+  const serializedTransaction = await account.signTransaction(
+    preparedRequest as never,
+    { serializer: base.serializers?.transaction },
+  );
+
+  return broadcastSignedLocalTestTransaction({
+    broadcast: (serialized) => walletClient.sendRawTransaction({
+      serializedTransaction: serialized,
+    }),
+    isDefinitiveFailure: isDefinitivePendingEvmPreSubmissionError,
+    serializedTransaction,
+  });
 }
 
 export function localTestConnector() {

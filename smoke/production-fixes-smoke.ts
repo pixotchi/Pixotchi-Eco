@@ -13,7 +13,12 @@ import {
 } from 'viem';
 import { extractBestSpinRewardFromLogs } from '../lib/spin-game-events';
 import { onBalanceRefresh } from '../lib/app-events';
-import { waitForCanonicalBaseReceipt } from '../lib/base-rpc';
+import { broadcastSignedLocalTestTransaction } from '../lib/local-test-transaction';
+import {
+  executeSingleWaveWithInvoker,
+  isDeterministicBaseRpcError,
+  waitForCanonicalBaseReceipt,
+} from '../lib/base-rpc';
 import {
   BASE_RPC_MAX_BATCH_SIZE,
   BASE_RPC_MAX_BODY_BYTES,
@@ -49,6 +54,7 @@ import {
   isDefinitiveUnsupportedEvmBatchError,
   readPendingEvmRecord,
   removePendingEvmRecord,
+  replacePendingEvmProof,
   resumePendingEvmRecord,
   withPendingEvmSubmissionGuard,
   withPendingEvmSubmissionLease,
@@ -60,6 +66,9 @@ const projectFile = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const PREVIOUS_PENDING_EVM_AUTO_PRUNE_MS = 24 * 60 * 60 * 1_000;
+
+const locallySignedTransaction = '0x02f86a0180843b9aca0084773594008252089400000000000000000000000000000000000000018080c080a00100000000000000000000000000000000000000000000000000000000000000a00200000000000000000000000000000000000000000000000000000000000000' as Hex;
+const locallySignedTransactionHash = keccak256(locallySignedTransaction);
 
 class MemoryStorage implements PendingEvmStorage {
   private readonly values = new Map<string, string>();
@@ -507,6 +516,50 @@ assert.match(
   /const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;/,
   'multicall sizing must come from the shared envelope the body cap is derived from',
 );
+assert.match(rpcRouteSource, /const ALLOWED_READ_METHODS = new Set\(\[/);
+assert.doesNotMatch(rpcRouteSource, /startsWith\(['"]eth_/);
+for (const deniedMethod of [
+  'eth_sendTransaction',
+  'wallet_sendCalls',
+  'eth_accounts',
+  'eth_newFilter',
+  'debug_traceTransaction',
+  'admin_peers',
+]) {
+  assert.doesNotMatch(
+    rpcRouteSource.match(/const ALLOWED_READ_METHODS = new Set\(\[[\s\S]*?\]\);/)?.[0] ?? '',
+    new RegExp(`['"]${deniedMethod}['"]`),
+  );
+}
+assert.match(rpcRouteSource, /if \(!hasAllowedOrigin\(request\)\)/);
+assert.match(rpcRouteSource, /validationErrors\.some\(Boolean\)/);
+assert.match(rpcRouteSource, /isLoopbackHostname\(request\.nextUrl\.hostname\)/);
+assert.match(rpcRouteSource, /NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY/);
+assert.match(rpcRouteSource, /safeRpcMessage\(safe\.code\)/);
+assert.doesNotMatch(rpcRouteSource, /error instanceof Error \? error\.message/);
+
+const ownerInvalidationSource = projectFile('lib/owner-resource-invalidation.ts');
+assert.match(ownerInvalidationSource, /\[0, 350, 900, 1_800, 3_000, 5_000\]/);
+assert.match(ownerInvalidationSource, /boundary - previousBoundary/);
+assert.match(ownerInvalidationSource, /reconcileOwnerResources/);
+assert.match(ownerInvalidationSource, /5_500/);
+
+const ownerListSource = projectFile('hooks/useOwnerResourceList.ts');
+assert.match(ownerListSource, /queryFn: \(options\?: \{ blockNumber\?: bigint \}\)/);
+assert.match(ownerListSource, /read\(\{ blockNumber \}\)/);
+
+const gameTransactionSource = projectFile('components/transactions/game-transaction.tsx');
+assert.match(gameTransactionSource, /intentKey: string;/);
+assert.match(gameTransactionSource, /effects: GameTransactionEffects;/);
+assert.match(gameTransactionSource, /getHighestTransactionReceiptBlock/);
+assert.match(gameTransactionSource, /onConfirmed=\{handleConfirmed\}/);
+assert.match(gameTransactionSource, /intent\.atomicity === "single" && intent\.calls\.length > 1/);
+assert.match(gameTransactionSource, /disabled \|\| transformedCalls\.length === 0/);
+
+const localConnectorSource = projectFile('lib/local-test-connector.ts');
+assert.match(localConnectorSource, /estimateGas\(\{/);
+assert.match(localConnectorSource, /prepare: false/);
+assert.match(localConnectorSource, /estimatedGas \+ \(estimatedGas \/ BigInt\(4\)\)/);
 
 // A provider that refuses the method outright cannot have executed it, so the
 // reservation must be released rather than locking the wallet. transaction-kit
@@ -658,13 +711,18 @@ assert.match(transactionKit, /finalizePendingEvmRecord/);
 assert.match(transactionKit, /promotePendingEvmCoordinatorAttemptToMonitor/);
 assert.match(transactionKit, /setIsPeerBlocked\(true\)/);
 assert.match(transactionKit, /withPendingEvmMonitorLease/);
+assert.match(transactionKit, /stableCallsRef\.current\?\.digest !== nextPendingCallsDigest/);
+assert.match(transactionKit, /onConfirmedRef\.current\?\.\(status\)/);
 assert.match(transactionKit, /isDefinitivePendingEvmPreSubmissionError/);
 assert.match(transactionKit, /isDefinitiveUnsupportedEvmBatchError/);
 assert.doesNotMatch(transactionKit, /firstReceiptLogs/);
 assert.match(
   transactionKit,
-  /result\?\.status === "success"[\s\S]*if \(!nextTransactionHash\)[\s\S]*waitForCanonicalReceipt/,
+  /reportedSuccess && reportedHashes\.length === 0[\s\S]*reportedHashes\.map[\s\S]*waitForCanonicalReceipt/,
 );
+assert.match(transactionKit, /statusName: "confirmedSyncing"/);
+assert.match(transactionKit, /await completeConfirmedTransaction/);
+assert.match(transactionKit, /return "Retry sync"/);
 assert.match(transactionKit, /Wallet reported success without a transaction hash; waiting for canonical Base receipt evidence/);
 assert.match(transactionKit, /I checked my wallet — allow another transaction/);
 assert.match(transactionKit, /size="touchCompact"/);
@@ -868,6 +926,23 @@ const finalizedReservation = finalizePendingEvmRecord(
 assert.equal(finalizedReservation?.persisted, true);
 assert.ok((finalizedReservation?.record.submittedAt ?? 0) > reservation.submittedAt);
 assert.equal(readPendingEvmRecord(pendingStorage, reservationIdentity)?.proof.kind, 'hash');
+const replacementHash = `0x${'ab'.repeat(32)}` as Hex;
+const replacedReservation = replacePendingEvmProof(
+  pendingStorage,
+  finalizedReservation!.record,
+  { kind: 'hash', hash: replacementHash },
+);
+assert.equal(replacedReservation?.proof.kind, 'hash');
+assert.equal(
+  replacedReservation?.proof.kind === 'hash' ? replacedReservation.proof.hash : null,
+  replacementHash,
+);
+assert.equal(
+  readPendingEvmRecord(pendingStorage, reservationIdentity)?.proof.kind === 'hash'
+    ? (readPendingEvmRecord(pendingStorage, reservationIdentity)!.proof as { hash: Hex }).hash
+    : null,
+  replacementHash,
+);
 
 const finalizeFailStorage = new FinalizeFailStorage();
 const finalizeFailIdentity = { ...pendingIdentity, intentKey: 'smoke:reservation-finalize-fail' };
@@ -1237,7 +1312,7 @@ assert.doesNotMatch(mintTab, /checkLandMintApproval\(address\)\.then\(setLandMin
 
 const approvalActionTransaction = projectFile('components/transactions/approval-action-transaction.tsx');
 assert.match(approvalActionTransaction, /SmartWalletTransaction[\s\S]*calls=\{\[approvalCall, \.\.\.actionCalls\]\}/);
-assert.match(approvalActionTransaction, /SponsoredTransaction[\s\S]*calls=\{\[approvalCall\]\}/);
+assert.match(approvalActionTransaction, /GameTransaction[\s\S]*calls=\{\[approvalCall\]\}/);
 assert.match(approvalActionTransaction, /feedbackMode = 'toast'/);
 
 const itemDetailsPanel = projectFile('components/item-details-panel.tsx');
@@ -1283,30 +1358,57 @@ assert.doesNotMatch(casinoDialog, /<span className="font-bold">No win<\/span>/);
 assert.match(casinoDialog, /bg-\[linear-gradient\(180deg,rgb\(0,0,0\)_0%,rgb\(0,0,0\)_42%,rgb\(0,0,0\)_100%\)\]/);
 assert.doesNotMatch(casinoDialog, /<DialogFooter sticky className="[^"]*bg-black\/75/);
 
-for (const transactionWrapper of [
-  'components/transactions/sponsored-transaction.tsx',
-  'components/transactions/universal-transaction.tsx',
-]) {
-  const source = projectFile(transactionWrapper);
-  assert.match(source, /feedbackMode \?\? "toast"/);
-  assert.match(source, /const showGlobalToast = showToast/);
-  assert.doesNotMatch(source, /feedbackMode \?\? \(showToast \? "both"/);
-  assert.doesNotMatch(source, /feedbackMode \?\? \(showToast \? "toast" : "inline"\)/);
-}
+const gameTransaction = projectFile('components/transactions/game-transaction.tsx');
+assert.match(gameTransaction, /feedbackMode \?\? "toast"/);
+assert.match(gameTransaction, /const showGlobalToast = showToast/);
+assert.match(gameTransaction, /reconcileOwnerResources/);
+assert.match(gameTransaction, /effects: GameTransactionEffects/);
+assert.throws(() => projectFile('components/transactions/sponsored-transaction.tsx'));
+assert.throws(() => projectFile('components/transactions/universal-transaction.tsx'));
+
+const batchClaimCard = projectFile('components/transactions/batch-claim-card.tsx');
+assert.match(
+  batchClaimCard,
+  /Nothing ready[\s\S]{0,700}Smart Wallet Required[\s\S]{0,500}No accumulated village production/,
+  'Batch Claim should disclose its wallet prerequisite even when nothing is claimable',
+);
+
+const batchQuestCard = projectFile('components/transactions/batch-quest-start-card.tsx');
+assert.match(
+  batchQuestCard,
+  /!smartWalletLoading && !isSmartWallet[\s\S]{0,500}Smart Wallet Required[\s\S]{0,700}No idle farmers right now/,
+  'Batch Quests should show the wallet prerequisite independently of farmer availability',
+);
+
+assert.doesNotMatch(
+  landsView,
+  /const shouldObserveMutation = Boolean\([\s\S]{0,120}?detail\.transactionHash/,
+  'a proof hash alone must not require an unrelated land snapshot to change',
+);
+assert.doesNotMatch(
+  plantsViewSource,
+  /const shouldObserveMutation = Boolean\([\s\S]{0,120}?detail\.transactionHash/,
+  'a proof hash alone must not require an unrelated plant snapshot to change',
+);
+const farmerHousePanel = projectFile('components/building-details/FarmerHousePanel.tsx');
+assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:start:/);
+assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:commit:/);
+assert.match(farmerHousePanel, /onSuccess=\{async \(tx: UntypedValue\) => \{\s*await handleSuccess/);
+assert.match(farmerHousePanel, /onSuccess=\{async \(\) => \{\s*await handleSuccess/);
 
 const smartWalletTransaction = projectFile('components/transactions/smart-wallet-transaction.tsx');
-assert.match(smartWalletTransaction, /<UniversalTransaction \{\.\.\.props\} \/>/);
+assert.match(smartWalletTransaction, /<GameTransaction \{\.\.\.props\}/);
 
 const blackjackTransaction = projectFile('components/transactions/blackjack-transaction.tsx');
 assert.match(blackjackTransaction, /<GlobalTransactionToast \/>/);
 assert.doesNotMatch(blackjackTransaction, /<TransactionStatus \/>/);
 
 const claimRewardsTransaction = projectFile('components/transactions/claim-rewards-transaction.tsx');
-assert.match(claimRewardsTransaction, /<UniversalTransaction/);
-assert.match(claimRewardsTransaction, /forceUnsponsored/);
+assert.match(claimRewardsTransaction, /<GameTransaction/);
+assert.match(claimRewardsTransaction, /sponsorship="none"/);
 
 const plantNameTransaction = projectFile('components/transactions/plant-name-transaction.tsx');
-assert.match(plantNameTransaction, /<SponsoredTransaction/);
+assert.match(plantNameTransaction, /<GameTransaction/);
 
 const swapPanel = projectFile('components/tabs/pixotchi-swap-panel.tsx');
 assert.match(swapPanel, /hasInsufficientGas/);
@@ -1322,6 +1424,89 @@ assert.match(aiContext, /plant statusLabel/);
 assert.match(aiContext, /Do not paraphrase it into a different health word/);
 
 async function runAsyncPendingTransactionSmoke() {
+  assert.equal(
+    await broadcastSignedLocalTestTransaction({
+      broadcast: async () => locallySignedTransactionHash,
+      isDefinitiveFailure: () => false,
+      serializedTransaction: locallySignedTransaction,
+    }),
+    locallySignedTransactionHash,
+    'local signing should return the deterministic hash after a successful broadcast',
+  );
+
+  assert.equal(
+    await broadcastSignedLocalTestTransaction({
+      broadcast: async () => {
+        throw new Error('response lost after broadcast');
+      },
+      isDefinitiveFailure: () => false,
+      serializedTransaction: locallySignedTransaction,
+    }),
+    locallySignedTransactionHash,
+    'an ambiguous raw-broadcast failure must retain the precomputed transaction hash',
+  );
+
+  await assert.rejects(
+    broadcastSignedLocalTestTransaction({
+      broadcast: async () => {
+        throw new Error(PENDING_EVM_PROXY_NOT_FORWARDED_MARKER);
+      },
+      isDefinitiveFailure: isDefinitivePendingEvmPreSubmissionError,
+      serializedTransaction: locallySignedTransaction,
+    }),
+    /PIXOTCHI_PROXY_NOT_FORWARDED/,
+    'a provably unforwarded broadcast must still release through the normal error path',
+  );
+
+  const hedgeAttempts: string[] = [];
+  const hedgedReceipt = { transactionHash: `0x${'33'.repeat(32)}` };
+  const hedgeResult = await executeSingleWaveWithInvoker(
+    'receipt',
+    { hedgeDelayMs: 0, urls: ['fast-null', 'slow-valid'] },
+    'eth_getTransactionReceipt',
+    [],
+    hedgeAttempts,
+    {
+      invoke: async (_policy, url) => url === 'fast-null' ? null : hedgedReceipt,
+      wait: async () => {},
+    },
+  );
+  assert.equal(hedgeResult, hedgedReceipt);
+  assert.deepEqual(hedgeAttempts, ['fast-null', 'slow-valid']);
+
+  const allNullResult = await executeSingleWaveWithInvoker(
+    'receipt',
+    { hedgeDelayMs: 0, urls: ['null-a', 'null-b'] },
+    'eth_getTransactionReceipt',
+    [],
+    [],
+    { invoke: async () => null, wait: async () => {} },
+  );
+  assert.equal(allNullResult, null);
+
+  let deterministicFanoutCount = 0;
+  const deterministicError = Object.assign(new Error('execution reverted'), { code: 3 });
+  assert.equal(isDeterministicBaseRpcError(deterministicError), true);
+  await assert.rejects(
+    executeSingleWaveWithInvoker(
+      'read',
+      { hedgeDelayMs: 100, urls: ['deterministic', 'must-not-run'] },
+      'eth_call',
+      [],
+      [],
+      {
+        invoke: async (_policy, url) => {
+          deterministicFanoutCount += 1;
+          if (url === 'deterministic') throw deterministicError;
+          return 'unexpected';
+        },
+        wait: async () => new Promise<void>(() => {}),
+      },
+    ),
+    /execution reverted/,
+  );
+  assert.equal(deterministicFanoutCount, 1);
+
   const receiptHash = `0x${'44'.repeat(32)}` as Hex;
   const zeroBlockHash = `0x${'00'.repeat(32)}` as Hex;
   const canonicalBlockHash = `0x${'55'.repeat(32)}` as Hex;
@@ -1330,6 +1515,7 @@ async function runAsyncPendingTransactionSmoke() {
     status: TransactionReceipt['status'] = 'success',
   ) => ({
     blockHash,
+    blockNumber: BigInt(123),
     status,
     transactionHash: receiptHash,
   }) as TransactionReceipt;
@@ -1966,6 +2152,88 @@ async function runAsyncPendingTransactionSmoke() {
   removePendingEvmRecord(coordinatorStorage, coordinatorRecord);
   unregisterGeneric();
   unregisterSecondGeneric();
+
+  // If the original action no longer renders after reload, another transaction
+  // controller may monitor the immutable proof without executing its own calls.
+  const fallbackRegistry = {
+    accountAddress: '0x000000000000000000000000000000000000c002',
+    chainId: 8453,
+  };
+  const fallbackRecord = createPendingEvmRecord({
+    attemptId: 'attempt-coordinator-fallback',
+    callsDigest: pendingCallsDigest,
+    effects: {
+      domains: ['lands', 'balances'],
+      expected: { landIdsPresent: [BigInt(1)] },
+    },
+    identity: { ...fallbackRegistry, intentKey: 'smoke:disappeared-action' },
+    method: 'direct',
+    proof: { kind: 'hash', hash: directHash },
+  });
+  assert.deepEqual(
+    fallbackRecord.effects,
+    { domains: ['lands', 'balances'], expected: { landIdsPresent: ['1'] } },
+  );
+  let fallbackRecoveries = 0;
+  const unregisterFallback = registerPendingEvmController(fallbackRegistry, {
+    callsDigest: changedCallsDigest,
+    controllerId: 'fallback-controller',
+    intentDigest: getPendingEvmIntentDigest('smoke:unrelated-mounted-action'),
+    onSnapshot: () => {},
+    recover: async () => { throw new Error('unrelated action must not run exact recovery'); },
+    recoverFallback: async (record) => {
+      fallbackRecoveries += 1;
+      removePendingEvmRecord(coordinatorStorage, record);
+    },
+  });
+  writePendingEvmRecord(coordinatorStorage, fallbackRecord);
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(fallbackRecoveries, 1);
+  unregisterFallback();
+
+  // A same-component rerender can unregister a monitor while its aborted
+  // execution is still unwinding. The replacement controller may initially
+  // decline recovery as busy; retrying through the task queue must let that
+  // unwind complete instead of starving the page in an infinite microtask loop.
+  const rerenderRegistry = {
+    accountAddress: '0x000000000000000000000000000000000000c003',
+    chainId: 8453,
+  };
+  const rerenderIdentity = {
+    ...rerenderRegistry,
+    intentKey: 'smoke:rerender-recovery',
+  };
+  const rerenderRecord = createPendingEvmRecord({
+    attemptId: 'attempt-rerender-recovery',
+    callsDigest: pendingCallsDigest,
+    identity: rerenderIdentity,
+    method: 'direct',
+    proof: { kind: 'hash', hash: directHash },
+  });
+  let rerenderRecoveryBusy = true;
+  let rerenderRecoveries = 0;
+  const unregisterRerender = registerPendingEvmController(rerenderRegistry, {
+    callsDigest: pendingCallsDigest,
+    controllerId: 'rerender-controller',
+    intentDigest: rerenderRecord.intentDigest,
+    onSnapshot: () => {},
+    recover: async (record) => {
+      rerenderRecoveries += 1;
+      if (rerenderRecoveryBusy) return;
+      removePendingEvmRecord(coordinatorStorage, record);
+    },
+  });
+  writePendingEvmRecord(coordinatorStorage, rerenderRecord);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(rerenderRecoveries, 1);
+  rerenderRecoveryBusy = false;
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.equal(rerenderRecoveries, 2);
+  assert.equal(readPendingEvmRecord(coordinatorStorage, rerenderIdentity), null);
+  unregisterRerender();
 
   // First-mount reconciliation schedules a wake for an existing crashed-tab
   // submission lease even when no new storage event will arrive.

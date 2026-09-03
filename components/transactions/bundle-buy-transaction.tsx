@@ -81,7 +81,8 @@ export default function BundleBuyTransaction({
 
   return (
     <SmartWalletTransaction
-      intentKey={`purchase:${itemType}:${plant.id}:${item.id}:${quantity}`}
+      effects={{ domains: ["plants", "balances"] }}
+      intentKey={`purchase:${itemType}:${plant.id}`}
       calls={generateBundleCalls()}
       onSuccess={(tx: UntypedValue) => {
         try {

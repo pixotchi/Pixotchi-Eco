@@ -289,9 +289,9 @@ function LandsViewContent() {
   );
 
   const landsQueryKey = useMemo(() => queryKeys.landsByOwner(ownerKey), [ownerKey]);
-  const readLands = useCallback(async () => {
+  const readLands = useCallback(async (options?: { blockNumber?: bigint }) => {
     if (!address) return [];
-    return getLandsByOwner(address);
+    return getLandsByOwner(address, undefined, options?.blockNumber);
   }, [address]);
 
   const handleLandsCleared = useCallback(() => {
@@ -315,7 +315,6 @@ function LandsViewContent() {
         expected?.landIdsPresent?.length
       );
       const shouldObserveMutation = Boolean(
-        detail.transactionHash ||
         detail.source?.includes("claim") ||
         detail.source?.includes("transfer") ||
         detail.source?.includes("mint")

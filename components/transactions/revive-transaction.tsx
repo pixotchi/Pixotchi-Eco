@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
 
 const PIXOTCHI_NFT_ABI = [
@@ -45,7 +45,8 @@ export default function ReviveTransaction({
   ];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["plants", "balances"] }}
       intentKey={`plant:revive:${plantId}`}
       calls={calls}
       onSuccess={onSuccess}

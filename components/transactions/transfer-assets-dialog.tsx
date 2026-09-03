@@ -1166,6 +1166,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                   ) : (
                     <Transaction
                       calls={[plantApprovalCall]}
+                      effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${PIXOTCHI_NFT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
                       onStatus={(status) => onApprovalStatus("plants", ownerKey, operationChainId, status)}
                     >
@@ -1191,6 +1192,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                   ) : (
                     <Transaction
                       calls={[landApprovalCall]}
+                      effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
                       onStatus={(status) => onApprovalStatus("lands", ownerKey, operationChainId, status)}
                     >
@@ -1374,6 +1376,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       {!approvals.plants && plantApprovalCall && BATCH_ROUTER_ADDRESS && (
         <Transaction
           calls={[plantApprovalCall]}
+          effects={{ domains: ["allowances"] }}
           intentKey={`transfer-assets:v1:approval:${PIXOTCHI_NFT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
           onStatus={(status) => onApprovalStatus("plants", ownerKey, operationChainId, status)}
           resetAfter={0}
@@ -1384,6 +1387,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       {!approvals.lands && landApprovalCall && BATCH_ROUTER_ADDRESS && (
         <Transaction
           calls={[landApprovalCall]}
+          effects={{ domains: ["allowances"] }}
           intentKey={`transfer-assets:v1:approval:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
           onStatus={(status) => onApprovalStatus("lands", ownerKey, operationChainId, status)}
           resetAfter={0}
@@ -1407,6 +1411,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     <Transaction
       key={`${activePlan.planId}:${activePlan.nextStepIndex}`}
       calls={[activeStepCall]}
+      effects={{ domains: ["plants", "lands", "balances"] }}
       intentKey={activeStepIntentKey}
       onStatus={(status) => onTransferStatus(
         activePlan.planId,

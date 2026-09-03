@@ -85,8 +85,9 @@ export default function SwapPlantNameBundle({
 
     return (
         <SmartWalletTransaction
+          effects={{ domains: ["plants", "balances"] }}
             calls={calls}
-            intentKey={`swap:set-plant-name:${plantId}:${newName.trim()}`}
+            intentKey={`swap:set-plant-name:${plantId}`}
             onSuccess={onSuccess}
             onError={onError}
             buttonText={buttonText}

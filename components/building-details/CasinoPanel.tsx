@@ -31,7 +31,7 @@ import {
   type CasinoTokenConfig,
 } from "@/lib/contracts";
 import { formatTokenAmount, getCasinoTokenImage, formatAddress } from "@/lib/utils";
-import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
+import GameTransaction from "@/components/transactions/game-transaction";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import CasinoDialog from "@/components/transactions/CasinoDialog";
@@ -532,7 +532,8 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
                 buttonClassName="w-full"
               />
             ) : (
-              <SponsoredTransaction
+              <GameTransaction
+                effects={{ domains: ["arcade", "buildings", "lands", "balances"] }}
                 intentKey={`casino:build:${landId}`}
                 calls={[buildCasinoBuildCall(landId)]}
                 onSuccess={onBuildSuccess}

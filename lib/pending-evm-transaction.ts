@@ -1,4 +1,5 @@
 import { keccak256, stringToHex, type Hex } from "viem";
+import type { OwnerResourceInvalidationRequest } from "@/lib/owner-resource-invalidation";
 
 export type PendingEvmExecutionMethod = "batch" | "direct";
 export type PendingEvmPhase = "hard" | "stale";
@@ -37,6 +38,10 @@ export type PendingEvmRecord = {
   callsDigest: Hex;
   chainId: number;
   connectorId?: string;
+  effects?: "none" | {
+    domains: OwnerResourceInvalidationRequest["domains"];
+    expected?: OwnerResourceInvalidationRequest["expected"];
+  };
   intentDigest: Hex;
   method: PendingEvmExecutionMethod;
   proof: PendingEvmProof;
@@ -44,6 +49,66 @@ export type PendingEvmRecord = {
   submittedAt: number;
   version: 2;
 };
+
+const PENDING_EFFECT_DOMAINS = new Set([
+  "allowances",
+  "arcade",
+  "balances",
+  "buildings",
+  "lands",
+  "plants",
+  "rewards",
+]);
+
+function normalizePendingEffects(
+  effects: NonNullable<PendingEvmRecord["effects"]>,
+): NonNullable<PendingEvmRecord["effects"]> {
+  if (effects === "none") return effects;
+  const expected = effects.expected
+    ? Object.fromEntries(Object.entries(effects.expected).map(([key, value]) => [
+      key,
+      Array.isArray(value)
+        ? value.map((item) => typeof item === "bigint" ? item.toString() : item)
+        : value,
+    ])) as NonNullable<PendingEvmRecord["effects"]> extends infer T
+      ? T extends { expected?: infer E } ? E : never
+      : never
+    : undefined;
+  return {
+    domains: [...new Set(effects.domains)],
+    ...(expected ? { expected } : {}),
+  };
+}
+
+function hasValidPendingEffects(effects: PendingEvmRecord["effects"]): boolean {
+  if (effects === undefined || effects === "none") return true;
+  if (!effects || typeof effects !== "object" || !Array.isArray(effects.domains)) return false;
+  if (
+    effects.domains.length > PENDING_EFFECT_DOMAINS.size
+    || effects.domains.some((domain) => !PENDING_EFFECT_DOMAINS.has(domain))
+  ) return false;
+  if (effects.expected === undefined) return true;
+  if (!effects.expected || typeof effects.expected !== "object" || Array.isArray(effects.expected)) {
+    return false;
+  }
+  const allowedExpectedKeys = new Set([
+    "landCountAtLeast",
+    "landIdsAbsent",
+    "landIdsPresent",
+    "plantCountAtLeast",
+    "plantIdsAbsent",
+    "plantIdsPresent",
+  ]);
+  return Object.entries(effects.expected).every(([key, value]) => (
+    allowedExpectedKeys.has(key)
+    && (
+      typeof value === "number"
+      || (Array.isArray(value) && value.every((item) => (
+        typeof item === "number" || typeof item === "string"
+      )))
+    )
+  ));
+}
 
 export type PendingEvmChange = {
   attemptId?: string;
@@ -182,8 +247,18 @@ export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolea
   return nodes.some(({ code, message, name }) => (
       code === 4001
       || code === "4001"
+      || code === 4100
+      || code === "4100"
       || code === 3
       || code === -32602
+      || code === 5700
+      || code === "5700"
+      || code === 5710
+      || code === "5710"
+      || code === 5740
+      || code === "5740"
+      || code === 5760
+      || code === "5760"
       || code === "ACTION_REJECTED"
       // A refused method cannot have been executed: the provider rejected it
       // outright rather than acting on it. transaction-kit already recovers
@@ -695,6 +770,7 @@ export function createPendingEvmRecord({
   attemptId = createAttemptId(),
   callsDigest,
   connectorId,
+  effects = "none",
   identity,
   method,
   proof,
@@ -703,6 +779,7 @@ export function createPendingEvmRecord({
   attemptId?: string;
   callsDigest: Hex;
   connectorId?: string;
+  effects?: PendingEvmRecord["effects"];
   identity: PendingEvmIntentIdentity;
   method: PendingEvmExecutionMethod;
   proof: PendingEvmProof;
@@ -714,6 +791,7 @@ export function createPendingEvmRecord({
     callsDigest,
     chainId: identity.chainId,
     ...(connectorId ? { connectorId } : {}),
+    effects: normalizePendingEffects(effects),
     intentDigest: getPendingEvmIntentDigest(identity.intentKey),
     method,
     proof,
@@ -797,6 +875,7 @@ function isStructurallyValidRecord(
     && /^[A-Za-z0-9._-]+$/.test(record.attemptId)
     && isHex32(record.intentDigest)
     && isHex32(record.callsDigest)
+    && hasValidPendingEffects(record.effects)
     && (record.method === "batch" || record.method === "direct")
     && typeof record.submittedAt === "number"
     && Number.isFinite(record.submittedAt)
@@ -1118,6 +1197,43 @@ export function finalizePendingEvmRecord(
   pendingMemoryOnlyKeys.delete(key);
   dispatchPendingEvmChange({ attemptId: record.attemptId, key, operation: "write" });
   return { blocker: record, persisted: true as const, record };
+}
+
+/** Compare-and-swap a submitted proof when a wallet replaces its transaction. */
+export function replacePendingEvmProof(
+  storage: PendingEvmStorage | null,
+  current: PendingEvmRecord,
+  proof: Exclude<PendingEvmProof, { kind: "reservation" }>,
+): PendingEvmRecord | null {
+  if (
+    current.proof.kind === "reservation"
+    || (current.method === "direct" && proof.kind !== "hash")
+    || (current.method === "batch" && proof.kind !== "calls")
+  ) return null;
+
+  const key = getPendingEvmRecordStorageKey(current);
+  const currentRaw = JSON.stringify(current);
+  if (readStoredValue(storage, key) !== currentRaw) return null;
+
+  const replacement: PendingEvmRecord = { ...current, proof };
+  const replacementRaw = JSON.stringify(replacement);
+  if (replacementRaw.length > PENDING_EVM_MAX_RECORD_SIZE) return null;
+
+  if (storage) {
+    try {
+      storage.setItem(key, replacementRaw);
+      if (storage.getItem(key) !== replacementRaw) return null;
+      pendingMemoryOnlyKeys.delete(key);
+    } catch {
+      return null;
+    }
+  } else {
+    pendingMemoryOnlyKeys.add(key);
+  }
+
+  pendingMemoryRecords.set(key, replacementRaw);
+  dispatchPendingEvmChange({ attemptId: replacement.attemptId, key, operation: "write" });
+  return replacement;
 }
 
 function proofsMatch(left: PendingEvmProof, right: PendingEvmProof) {

@@ -542,9 +542,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         }
       }
 
-      // Disconnect wagmi connection after Privy logout
-      // This ensures wallet disconnection happens after session cleanup
-      disconnect();
+      // Privy owns its connector lifecycle on Privy surfaces. Calling Wagmi's
+      // disconnect there can desynchronize Privy's active wallet from Wagmi.
+      // Non-Privy surfaces (localhost demo / Mini App) remain Wagmi-owned.
+      if (!isPrivySurface) disconnect();
 
       // Clear auth state to reset any surface and wallet-binding metadata
       try {

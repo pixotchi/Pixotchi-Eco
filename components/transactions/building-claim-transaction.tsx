@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import SponsoredTransaction from "./sponsored-transaction";
+import GameTransaction from "./game-transaction";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
 import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 
@@ -34,7 +34,8 @@ export default function BuildingClaimTransaction({
   ];
 
   return (
-    <SponsoredTransaction
+    <GameTransaction
+      effects={{ domains: ["buildings", "lands", "balances", "rewards"] }}
       intentKey={`building:claim:${landId}:${buildingId}`}
       calls={calls}
       onSuccess={onSuccess}

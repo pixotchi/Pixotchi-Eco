@@ -7,7 +7,7 @@ import BundleBuyTransaction from '@/components/transactions/bundle-buy-transacti
 import { BuyGardenItemTransaction,BuyShopItemTransaction,getBuyGardenItemCall,getBuyShopItemCall } from '@/components/transactions/buy-item-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
-import SponsoredTransaction from '@/components/transactions/sponsored-transaction';
+import GameTransaction from '@/components/transactions/game-transaction';
 import SwapBuyItemBundle from '@/components/transactions/swap-buy-item-bundle';
 import SwapFencePurchaseBundle from '@/components/transactions/swap-fence-purchase-bundle';
 import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
@@ -722,8 +722,8 @@ export default function ItemDetailsPanel({
               </p>
               <ApprovalActionTransaction
                 intentKey={isFenceItem
-                  ? `fence:purchase:${selectedPlant.id}:${validFenceV2Days ?? 0}`
-                  : `purchase:${itemType}:${selectedPlant.id}:${selectedItem.id}:${itemType === 'garden' ? quantity : 1}`}
+                  ? `fence:purchase:${selectedPlant.id}`
+                  : `purchase:${itemType}:${selectedPlant.id}`}
                 actionCalls={purchaseActionCalls}
                 approvalSpender={PIXOTCHI_NFT_ADDRESS}
                 needsApproval={needsSeedApproval}
@@ -773,8 +773,9 @@ export default function ItemDetailsPanel({
             // Single Purchase for 1 item (both sponsored and regular)
             itemType === 'shop' ? (
               isFenceItem ? (
-                <SponsoredTransaction
-                  intentKey={`fence:purchase:${selectedPlant.id}:${validFenceV2Days ?? 0}`}
+                <GameTransaction
+                  effects={{ domains: ["plants", "balances"] }}
+                  intentKey={`fence:purchase:${selectedPlant.id}`}
                   calls={fenceV2Calls}
                   onSuccess={(tx: UntypedValue) => {
                     onPurchaseSuccess();

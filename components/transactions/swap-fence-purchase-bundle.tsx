@@ -117,8 +117,9 @@ export default function SwapFencePurchaseBundle({
 
     return (
         <SmartWalletTransaction
+          effects={{ domains: ["plants", "balances"] }}
             calls={calls}
-            intentKey={`swap:fence:${plantId}:${days}`}
+            intentKey={`swap:fence:${plantId}`}
             onSuccess={handleSuccess}
             onError={onError}
             buttonText={buttonText || defaultButtonText}

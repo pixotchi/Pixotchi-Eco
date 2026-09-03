@@ -1101,7 +1101,7 @@ export const getStakeAllowance = async (ownerAddress: string): Promise<bigint> =
 };
 
 
-// Build approve call for UniversalTransaction
+// Build approve call for GameTransaction
 export const buildApproveStakeCall = (): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   const maxApproval = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
   return {
@@ -1278,6 +1278,7 @@ export const getStakeComposite = async (
 export const getPlantsByOwner = async (
   address: string,
   readClient: PixotchiReadClient = getReadClient(),
+  blockNumber?: bigint,
 ): Promise<Plant[]> => {
   return retryWithBackoff(async () => {
     const plants = await readClient.readContract({
@@ -1285,6 +1286,7 @@ export const getPlantsByOwner = async (
       abi: PIXOTCHI_NFT_ABI,
       functionName: 'getPlantsByOwnerExtended',
       args: [address as `0x${string}`],
+      ...(blockNumber !== undefined ? { blockNumber } : {}),
     }) as UntypedValue[];
 
     // Fence V2 writes to the same extensions storage, so derive it from extensions
@@ -1398,6 +1400,7 @@ export const getLandMintStatus = async (address: `0x${string}`): Promise<{ canMi
 export const getLandsByOwner = async (
   address: string,
   readClient: PixotchiReadClient = getReadClient(),
+  blockNumber?: bigint,
 ): Promise<Land[]> => {
   try {
     // Use the existing Land contract functions from the ABI
@@ -1406,6 +1409,7 @@ export const getLandsByOwner = async (
       abi: landAbi,
       functionName: 'landGetByOwner',
       args: [address as `0x${string}`],
+      ...(blockNumber !== undefined ? { blockNumber } : {}),
     });
 
     return lands as Land[];

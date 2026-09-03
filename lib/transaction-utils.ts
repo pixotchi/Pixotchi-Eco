@@ -37,3 +37,20 @@ export function normalizeTransactionReceipt(receipt: UntypedValue): UntypedValue
   
   return receipt;
 }
+
+/** Highest sealed block represented by a direct or EIP-5792 proof. */
+export function getHighestTransactionReceiptBlock(receipts: readonly UntypedValue[]): bigint | undefined {
+  let highest: bigint | undefined;
+  for (const receipt of receipts) {
+    const candidate = receipt?.blockNumber;
+    if (candidate === undefined || candidate === null) continue;
+    try {
+      const blockNumber = BigInt(candidate);
+      if (highest === undefined || blockNumber > highest) highest = blockNumber;
+    } catch {
+      // Invalid receipt metadata is rejected by the canonical monitor. Ignore it
+      // here instead of allowing an untrusted wallet shape to break refresh.
+    }
+  }
+  return highest;
+}

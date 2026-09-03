@@ -6,6 +6,7 @@ import {
   TransactionReceiptNotFoundError,
   WaitForTransactionReceiptTimeoutError,
   type Hex,
+  type ReplacementReturnType,
   type TransactionReceipt,
   type Transport,
 } from 'viem';
@@ -226,6 +227,13 @@ const getDescriptorByUrl = (url: string): BaseRpcEndpointDescriptor => {
   );
 };
 
+const getEndpointAlias = (url: string): string => {
+  const descriptors = getConfiguredDescriptors();
+  const index = descriptors.findIndex((descriptor) => descriptor.url === url);
+  const descriptor = index >= 0 ? descriptors[index] : getDescriptorByUrl(url);
+  return `${descriptor.vendor}-${index >= 0 ? index + 1 : 'custom'}`;
+};
+
 const getPolicyMetricMap = (
   policy: BaseRpcPolicy,
 ): Map<string, MutableBaseRpcEndpointStatus> => {
@@ -438,6 +446,51 @@ const isExpectedApplicationError = (error?: Error) => {
   );
 };
 
+function collectRpcErrors(error: UntypedValue, depth = 0, visited = new Set<unknown>()): UntypedValue[] {
+  if (!error || depth > 8 || visited.has(error)) return [];
+  visited.add(error);
+  if (error instanceof AggregateError) {
+    return [error, ...error.errors.flatMap((nested) => collectRpcErrors(nested, depth + 1, visited))];
+  }
+  if (typeof error !== 'object') return [error];
+  const cause = (error as { cause?: UntypedValue }).cause;
+  return [error, ...collectRpcErrors(cause, depth + 1, visited)];
+}
+
+/** Errors whose outcome cannot improve by asking another RPC for the same call. */
+export const isDeterministicBaseRpcError = (error: UntypedValue): boolean => {
+  return collectRpcErrors(error).some((candidate) => {
+    const typed = candidate as { code?: unknown; message?: unknown; name?: unknown };
+    const code = typeof typed?.code === 'string' ? Number(typed.code) : typed?.code;
+    const name = typeof typed?.name === 'string' ? typed.name.toLowerCase() : '';
+    const message = typeof typed?.message === 'string' ? typed.message.toLowerCase() : '';
+    return (
+      code === 3
+      || code === -32700
+      || code === -32600
+      || code === -32601
+      || code === -32602
+      || code === 4001
+      || code === 4100
+      || code === 4200
+      || (typeof code === 'number' && code >= 5700 && code <= 5760)
+      || name.includes('contractfunctionreverted')
+      || name.includes('invalidparams')
+      || name.includes('userrejected')
+      || isExpectedApplicationError(new Error(message))
+    );
+  });
+};
+
+const getSafeRpcFailureLabel = (error?: Error): string => {
+  if (!error) return 'unknown';
+  if (isDeterministicBaseRpcError(error)) return 'deterministic';
+  if (isRateLimitError(error)) return 'rate_limited';
+  if (isConnectivityError(error)) return 'connectivity';
+  if (isServerSideRpcError(error)) return 'server_error';
+  return 'rpc_error';
+};
+
 const shouldAffectProviderHealth = (
   method: string,
   error?: Error,
@@ -455,7 +508,7 @@ const shouldAffectProviderHealth = (
     return false;
   }
 
-  if (isExpectedApplicationError(error)) {
+  if (isDeterministicBaseRpcError(error)) {
     return false;
   }
 
@@ -509,7 +562,7 @@ const recordPolicyResult = (
 
   metric.failureCount += 1;
   metric.lastFailureAt = now;
-  metric.lastFailureMessage = error?.message ?? 'Unknown Base RPC error';
+  metric.lastFailureMessage = getSafeRpcFailureLabel(error);
   metric.healthy = false;
   circuitState.consecutiveFailures += 1;
   if (
@@ -721,7 +774,7 @@ type BaseRpcInvokeFn = (
   params: UntypedValue[],
 ) => Promise<UntypedValue>;
 
-const executeSingleWaveWithInvoker = async (
+export const executeSingleWaveWithInvoker = async (
   policy: BaseRpcPolicy,
   wave: BaseRpcExecutionWave,
   method: string,
@@ -735,6 +788,32 @@ const executeSingleWaveWithInvoker = async (
     wait?: typeof sleep;
   } = {},
 ) => {
+  type Outcome =
+    | { kind: 'success'; value: UntypedValue }
+    | { error: UntypedValue; kind: 'error' };
+  const settle = (promise: Promise<UntypedValue>): Promise<Outcome> => promise
+    .then((value) => ({ kind: 'success' as const, value }))
+    .catch((error) => ({ error, kind: 'error' as const }));
+  const needsNonNull = policy === 'receipt'
+    && (method === 'eth_getTransactionReceipt' || method === 'eth_getTransactionByHash');
+  const isAccepted = (outcome: Outcome): boolean => outcome.kind === 'success'
+    && (!needsNonNull || outcome.value !== null);
+  const resolvePair = (first: Outcome, second: Outcome) => {
+    if (isAccepted(first) && first.kind === 'success') return first.value;
+    if (isAccepted(second) && second.kind === 'success') return second.value;
+    const deterministic = [first, second].find(
+      (outcome): outcome is Extract<Outcome, { kind: 'error' }> => (
+        outcome.kind === 'error' && isDeterministicBaseRpcError(outcome.error)
+      ),
+    );
+    if (deterministic) throw deterministic.error;
+    if (first.kind === 'success' || second.kind === 'success') return null;
+    throw new AggregateError(
+      [first.error, second.error],
+      'Both hedged Base RPC transports failed',
+    );
+  };
+
   if (wave.urls.length === 1) {
     attemptedUrls.push(wave.urls[0]);
     return invoke(policy, wave.urls[0], method, params);
@@ -745,41 +824,39 @@ const executeSingleWaveWithInvoker = async (
 
   attemptedUrls.push(primaryUrl);
   const primaryPromise = invoke(policy, primaryUrl, method, params);
+  const primarySettled = settle(primaryPromise);
 
   const primaryOutcome = await Promise.race([
-    primaryPromise
-      .then((value) => ({ kind: 'success' as const, value }))
-      .catch((error) => ({ error, kind: 'error' as const })),
+    primarySettled,
     wait(hedgeDelayMs).then(() => ({ kind: 'hedge' as const })),
   ]);
 
   if (primaryOutcome.kind === 'success') {
-    return primaryOutcome.value;
+    if (!needsNonNull || primaryOutcome.value !== null) return primaryOutcome.value;
+    attemptedUrls.push(secondaryUrl);
+    return resolvePair(primaryOutcome, await settle(invoke(policy, secondaryUrl, method, params)));
+  }
+
+  if (primaryOutcome.kind === 'error') {
+    if (isDeterministicBaseRpcError(primaryOutcome.error)) throw primaryOutcome.error;
+    attemptedUrls.push(secondaryUrl);
+    return resolvePair(primaryOutcome, await settle(invoke(policy, secondaryUrl, method, params)));
   }
 
   attemptedUrls.push(secondaryUrl);
-
-  if (primaryOutcome.kind === 'error') {
-    try {
-      return await invoke(policy, secondaryUrl, method, params);
-    } catch (secondaryError) {
-      throw new AggregateError(
-        [primaryOutcome.error, secondaryError],
-        'Both hedged Base RPC transports failed',
-      );
-    }
-  }
-
   const secondaryPromise = invoke(policy, secondaryUrl, method, params);
-
-  try {
-    return await Promise.any([primaryPromise, secondaryPromise]);
-  } catch (error) {
-    throw new AggregateError(
-      error instanceof AggregateError ? error.errors : [error],
-      'Both hedged Base RPC transports failed',
-    );
+  const first = await Promise.race([
+    primarySettled.then((outcome) => ({ outcome, source: 'primary' as const })),
+    settle(secondaryPromise).then((outcome) => ({ outcome, source: 'secondary' as const })),
+  ]);
+  if (isAccepted(first.outcome) && first.outcome.kind === 'success') return first.outcome.value;
+  if (first.outcome.kind === 'error' && isDeterministicBaseRpcError(first.outcome.error)) {
+    throw first.outcome.error;
   }
+  const other = first.source === 'primary'
+    ? await settle(secondaryPromise)
+    : await primarySettled;
+  return resolvePair(first.outcome, other);
 };
 
 const executeSingleWave = async (
@@ -811,12 +888,23 @@ const executePolicyRequest = async (
 
   let lastError: UntypedValue = new Error('Base RPC request failed before execution');
   let previousWaveSignature: string | null = null;
+  let sawNullReceipt = false;
 
   for (const wave of executionPlan) {
     try {
-      return await executeSingleWave(policy, wave, method, params, attemptedUrls);
+      const result = await executeSingleWave(policy, wave, method, params, attemptedUrls);
+      if (
+        policy === 'receipt'
+        && (method === 'eth_getTransactionReceipt' || method === 'eth_getTransactionByHash')
+        && result === null
+      ) {
+        sawNullReceipt = true;
+        continue;
+      }
+      return result;
     } catch (error) {
       lastError = error;
+      if (isDeterministicBaseRpcError(error)) throw error;
       const signature = wave.urls.join(',');
       if (
         previousWaveSignature &&
@@ -829,6 +917,8 @@ const executePolicyRequest = async (
       previousWaveSignature = signature;
     }
   }
+
+  if (sawNullReceipt) return null;
 
   throw new BaseRpcInvocationError(
     `Base RPC ${policy} request failed for method ${method}`,
@@ -909,6 +999,7 @@ let browserBaseLogClient: ReturnType<typeof createBaseClient> | null = null;
 let browserEthereumEnsClient: ReturnType<typeof createEthereumEnsClient> | null = null;
 
 const getRetryableFlag = (error: UntypedValue): boolean => {
+  if (isDeterministicBaseRpcError(error)) return false;
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
@@ -933,24 +1024,19 @@ export class BaseRpcError extends Error {
     const invocationError =
       error instanceof BaseRpcInvocationError ? error : null;
     const rootError = invocationError?.lastError ?? error;
-    const message =
-      rootError instanceof Error
-        ? rootError.message
-        : `Base RPC operation failed: ${String(rootError)}`;
-
-    super(message);
+    super(`Base RPC ${operation} request failed`);
     this.name = 'BaseRpcError';
     this.code = 'BASE_RPC_UNAVAILABLE';
     this.operation = operation;
     this.retryable = getRetryableFlag(rootError);
     this.endpointsTried =
       invocationError?.attemptedUrls.length
-        ? invocationError.attemptedUrls
-        : listBaseRpcEndpoints();
+        ? invocationError.attemptedUrls.map(getEndpointAlias)
+        : listBaseRpcEndpoints().map(getEndpointAlias);
 
-    if (rootError instanceof Error) {
-      (this as Error & { cause?: UntypedValue }).cause = rootError;
-    }
+    // Do not attach the upstream error as `cause`: Viem errors can embed the
+    // complete provider URL (including credentials). The stable operation,
+    // retryability flag, and endpoint aliases above are the public contract.
   }
 }
 
@@ -968,7 +1054,7 @@ const buildPolicyStatus = (
       : null;
 
   return {
-    url: descriptor.url,
+    url: getEndpointAlias(descriptor.url),
     vendor: descriptor.vendor,
     policy,
     healthy: metric?.healthy ?? probeMetric?.healthy ?? false,
@@ -1065,7 +1151,9 @@ type BaseReceiptWaitClient = {
     hash: Hex;
   }) => Promise<TransactionReceipt>;
   waitForTransactionReceipt: (parameters: {
+    confirmations?: number;
     hash: Hex;
+    onReplaced?: (replacement: ReplacementReturnType) => void;
     pollingInterval?: number;
     timeout?: number;
   }) => Promise<TransactionReceipt>;
@@ -1073,6 +1161,7 @@ type BaseReceiptWaitClient = {
 
 type CanonicalReceiptWaitOptions = {
   now?: () => number;
+  onReplaced?: (replacement: ReplacementReturnType) => void;
   pollingIntervalMs?: number;
   timeoutMs?: number;
   wait?: (ms: number) => Promise<void>;
@@ -1082,7 +1171,11 @@ const isCanonicalBaseReceipt = (receipt: TransactionReceipt): boolean => {
   return (
     typeof receipt.blockHash === 'string' &&
     /^0x[0-9a-f]{64}$/i.test(receipt.blockHash) &&
-    receipt.blockHash.toLowerCase() !== ZERO_BLOCK_HASH
+    receipt.blockHash.toLowerCase() !== ZERO_BLOCK_HASH &&
+    typeof receipt.blockNumber === 'bigint' &&
+    receipt.blockNumber >= BigInt(0) &&
+    typeof receipt.transactionHash === 'string' &&
+    /^0x[0-9a-f]{64}$/i.test(receipt.transactionHash)
   );
 };
 
@@ -1138,6 +1231,7 @@ export const waitForCanonicalBaseReceipt = async (
   hash: Hex,
   {
     now = Date.now,
+    onReplaced,
     pollingIntervalMs = RESOLVED_POLICY_CONFIG.receipt.pollingIntervalMs,
     timeoutMs = CANONICAL_RECEIPT_TIMEOUT_MS,
     wait = sleep,
@@ -1152,7 +1246,9 @@ export const waitForCanonicalBaseReceipt = async (
   if (remaining <= 0) throw timeoutError();
 
   let receipt = await client.waitForTransactionReceipt({
+    confirmations: 1,
     hash,
+    onReplaced,
     pollingInterval: intervalMs,
     timeout: remaining,
   });
@@ -1181,9 +1277,10 @@ export const waitForCanonicalBaseReceipt = async (
 
 export const waitForBaseReceipt = async (
   hash: Hex,
+  options: Pick<CanonicalReceiptWaitOptions, 'onReplaced'> = {},
 ): Promise<TransactionReceipt> => {
   try {
-    return await waitForCanonicalBaseReceipt(getBaseReceiptClient(), hash);
+    return await waitForCanonicalBaseReceipt(getBaseReceiptClient(), hash, options);
   } catch (error) {
     throw new BaseRpcError('waitForBaseReceipt', error);
   }
@@ -1200,9 +1297,9 @@ export const getBaseRpcStatusSnapshot = async ({
   }
 
   const descriptors = getConfiguredDescriptors();
-  const rankedUrls = getOrderedUrls('read');
+  const rankedEndpointUrls = getOrderedUrls('read');
   const rankMap = new Map(
-    rankedUrls.map((url, index) => [url, index + 1] as const),
+    rankedEndpointUrls.map((url, index) => [url, index + 1] as const),
   );
 
   const policies: Record<BaseRpcPolicy, BaseRpcEndpointStatus[]> = {
@@ -1221,7 +1318,7 @@ export const getBaseRpcStatusSnapshot = async ({
   };
 
   const endpoints = descriptors.map((descriptor, index) => ({
-    url: descriptor.url,
+    url: getEndpointAlias(descriptor.url),
     vendor: descriptor.vendor,
     rank: rankMap.get(descriptor.url) ?? index + 1,
     read: policies.read[index],
@@ -1246,7 +1343,7 @@ export const getBaseRpcStatusSnapshot = async ({
 
   return {
     generatedAt: Date.now(),
-    rankedUrls,
+    rankedUrls: rankedEndpointUrls.map(getEndpointAlias),
     endpoints,
     policies,
     summary: {

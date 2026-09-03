@@ -16,7 +16,7 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { InlineBalanceNotice } from "@/components/ui/premium";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
-import SponsoredTransaction from "@/components/transactions/sponsored-transaction";
+import GameTransaction from "@/components/transactions/game-transaction";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { useTokenSymbol } from "@/hooks/useTokenSymbol";
 import {
@@ -1051,7 +1051,8 @@ export default function BarracksPanelV2({
                 </InlineBalanceNotice>
               </>
             ) : (
-              <SponsoredTransaction
+              <GameTransaction
+                effects={{ domains: ["buildings", "lands", "balances"] }}
                 intentKey={`barracks:build:${landId}`}
                 calls={[buildBarracksBuildCall(landId)]}
                 buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
@@ -1206,8 +1207,9 @@ export default function BarracksPanelV2({
               </InlineBalanceNotice>
             </>
           ) : (
-            <SponsoredTransaction
-              intentKey={`barracks:train:${landId}:${troopNumericType(selectedTrainTroop)}:${parsedTrainAmount}`}
+            <GameTransaction
+              effects={{ domains: ["buildings", "lands", "balances"] }}
+              intentKey={`barracks:train:${landId}`}
               calls={[buildBarracksTrainCallV2(landId, troopNumericType(selectedTrainTroop), parsedTrainAmount)]}
               buttonText={`Train ${parsedTrainAmount.toString()} ${selectedTroopOption.name}`}
               buttonClassName="w-full"
@@ -1429,8 +1431,9 @@ export default function BarracksPanelV2({
           ) : null}
 
           {canAttack && selectedTargetLandId && attackInputsValid ? (
-            <SponsoredTransaction
-              intentKey={`barracks:raid:${landId}:${selectedTargetLandId}:${parsedAttackSwordsmen ?? ZERO_BIGINT}:${parsedAttackPhalanx ?? ZERO_BIGINT}`}
+            <GameTransaction
+              effects={{ domains: ["buildings", "lands", "balances"] }}
+              intentKey={`barracks:raid:${landId}`}
               calls={[
                 buildBarracksAttackCallV2(
                   landId,

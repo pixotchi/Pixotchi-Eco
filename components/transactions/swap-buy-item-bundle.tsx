@@ -145,8 +145,9 @@ export default function SwapBuyItemBundle({
 
     return (
         <SmartWalletTransaction
+          effects={{ domains: ["plants", "balances"] }}
             calls={calls}
-            intentKey={`swap:purchase:${itemType}:${plant.id}:${item.id}:${quantity}`}
+            intentKey={`swap:purchase:${itemType}:${plant.id}`}
             onSuccess={handleSuccess}
             onError={onError}
             buttonText={buttonText || defaultButtonText}

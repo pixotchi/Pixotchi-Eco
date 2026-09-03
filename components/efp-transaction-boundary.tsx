@@ -719,6 +719,7 @@ function SafeEfpTransactionModal() {
             key={`${workflow.workflowId}:${workflow.currentTxIndex}`}
             calls={preparedCall.calls}
             capabilities={capabilities}
+            effects="none"
             intentKey={intentKey}
             isSponsored={Boolean(paymasterService)}
             onStatus={persistStatus}

@@ -13,7 +13,7 @@ import {
   buildStakeCall,
   buildUnstakeCall,
 } from "@/lib/contracts";
-import UniversalTransaction from "@/components/transactions/universal-transaction";
+import GameTransaction from "@/components/transactions/game-transaction";
 import Image from "next/image";
 import { formatTokenAmount } from "@/lib/utils";
 import { formatUnits, parseUnits } from "viem";
@@ -590,7 +590,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           {mode === 'stake' ? (
             !approved ? (
                 <div className="space-y-2">
-                  <UniversalTransaction
+                  <GameTransaction
+                    effects={{ domains: ["balances", "rewards"] }}
+                    trackStreak={false}
                     intentKey="staking:approve-seed"
                     calls={[buildApproveStakeCall()]}
                     buttonText="Approve SEED for Staking"
@@ -604,8 +606,10 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               </div>
             ) : (
               <div className="space-y-2">
-                 <UniversalTransaction
-                   intentKey={`staking:stake:${parsed ?? BigInt(0)}`}
+                 <GameTransaction
+                   effects={{ domains: ["balances", "rewards"] }}
+                   trackStreak={false}
+                   intentKey="staking:stake"
                    calls={[buildStakeCall(amount)]}
                    buttonText="Stake"
                    disabled={disableStakeBtn}
@@ -627,8 +631,10 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             )
           ) : (
             <div className="space-y-2">
-               <UniversalTransaction
-                 intentKey={`staking:unstake:${parsed ?? BigInt(0)}`}
+               <GameTransaction
+                 effects={{ domains: ["allowances", "balances"] }}
+                 trackStreak={false}
+                 intentKey="staking:unstake"
                  calls={[buildUnstakeCall(amount)]}
                  buttonText="Unstake"
                  disabled={disableUnstakeBtn}
@@ -643,10 +649,12 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </div>
 
           <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>
-            <UniversalTransaction
+            <GameTransaction
+              effects={{ domains: ["balances", "rewards"] }}
+              trackStreak={false}
               intentKey="staking:claim-rewards"
               calls={[buildClaimRewardsCall()]}
-              buttonText="Claim Rewards"
+              buttonText={stakeInfo && stakeInfo.rewards <= BigInt(0) ? "No rewards to claim" : "Claim Rewards"}
               disabled={disableClaimRewardsBtn}
               buttonClassName={footerTransactionButtonClassName}
               onSuccess={(tx: UntypedValue) => {

@@ -71,6 +71,7 @@ export default function SwapLandMintBundle({
 
     return (
         <SmartWalletTransaction
+          effects={{ domains: ["lands", "balances"] }}
             calls={calls}
             intentKey="swap:mint-land"
             onSuccess={onSuccess}

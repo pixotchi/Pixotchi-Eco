@@ -21,8 +21,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('🔍 Fetching staking info for:', address);
-
     const stakingData = await getStakeComposite(address);
 
     // Convert bigint values to strings for JSON serialization
@@ -43,14 +41,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(responseData);
 
-  } catch (error) {
-    console.error('❌ Error fetching staking info:', error);
+  } catch {
+    console.error('❌ Error fetching staking info');
     
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Failed to fetch staking info',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to fetch staking info'
       },
       { status: 500 }
     );
