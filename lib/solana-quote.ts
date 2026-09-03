@@ -16,7 +16,6 @@ import {
 } from './solana-constants';
 
 const DEBUG_QUOTES = false;
-const MIN_WSOL_QUOTE = BigInt(100000); // 0.0001 SOL
 
 export interface SolanaQuoteResult {
   wsolAmount: bigint;       // Amount of wSOL needed (9 decimals)
@@ -28,9 +27,6 @@ export interface SolanaQuoteResult {
   error?: string;           // Error message if quote failed
   isEstimate?: boolean;     // False for adapter quotes
 }
-
-// Default slippage for Solana bridge quotes (7% to account for cross-chain delays)
-export const DEFAULT_SLIPPAGE_PERCENT = 7;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,7 +87,6 @@ async function getAdapterWsolForSeed(
 export async function getWsolToSeedQuote(
   seedAmountNeeded: bigint,
   twinAdapterAddress?: string,
-  slippagePercent: number = DEFAULT_SLIPPAGE_PERCENT,
 ): Promise<SolanaQuoteResult> {
   try {
     if (seedAmountNeeded <= BigInt(0)) {
@@ -137,23 +132,18 @@ export async function getWsolToSeedQuote(
       };
     }
 
-    const slippageMultiplier = BigInt(Math.floor((100 + slippagePercent) * 100));
-    let wsolWithSlippage =
-      (wsolAmount * slippageMultiplier) / BigInt(10_000);
-    if (wsolWithSlippage < MIN_WSOL_QUOTE) {
-      wsolWithSlippage = MIN_WSOL_QUOTE;
-    }
-
     if (DEBUG_QUOTES) {
-      console.log('[SolanaQuote] Final adapter quote:', {
+      console.log('[SolanaQuote] Adapter quote:', {
         seedAmount: formatUnits(seedAmountNeeded, 18),
-        wsolAmount: formatUnits(wsolWithSlippage, 9),
+        wsolAmount: formatUnits(wsolAmount, 9),
         adapter: normalizedAdapter,
       });
     }
 
+    // getWsolForSeed already includes the deployed adapter's slippage policy.
+    // Passing it through unchanged keeps that contract as the single quote authority.
     return {
-      wsolAmount: wsolWithSlippage,
+      wsolAmount,
       seedAmount: seedAmountNeeded,
       minSeedOut: seedAmountNeeded,
       route: 'TwinAdapter getWsolForSeed',

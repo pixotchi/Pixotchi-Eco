@@ -27,8 +27,9 @@ interface SolanaProviderProps {
  * Wraps your app with Solana wallet context, automatically detecting
  * Solana wallets from Privy and resolving Twin addresses.
  * 
- * Uses Privy's Solana wallet hook first, then falls back to linkedAccounts
- * only when the hook has settled without a connected Solana wallet object.
+ * Uses Privy's Solana wallet hook first, then falls back to linkedAccounts for
+ * the persisted identity used by profile/resource reads. A linked account is
+ * not transaction-ready until Privy's connected-wallet hook exposes a wallet.
  * 
  * @example
  * ```tsx
@@ -50,30 +51,25 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
   const { surface: authSurface } = useAuthSurface();
   const isPrivySolanaSurface = authSurface === 'privysolana';
   
-  // Wait until Privy has settled the connected wallet set before falling back to linked accounts.
-  const solanaWallet = useMemo(() => {
+  const connectedSolanaWallet = useMemo(() => {
     if (!isPrivySolanaSurface || !authenticated || !solanaWalletsReady) return null;
+    return solanaWallets[0] ?? null;
+  }, [authenticated, isPrivySolanaSurface, solanaWallets, solanaWalletsReady]);
 
-    if (solanaWallets.length > 0) {
-      return solanaWallets[0];
-    }
+  // Keep the linked identity available while Privy restores (or has not
+  // restored) the connected wallet object. This lets Twin/profile reads load
+  // without treating the linked account as a signer.
+  const linkedSolanaWallet = useMemo(() => {
+    if (!isPrivySolanaSurface || !authenticated || !user?.linkedAccounts) return null;
 
-    if (!user?.linkedAccounts) {
-      return null;
-    }
-    
-    for (const account of user.linkedAccounts) {
-      if (
-        account.type === 'wallet' &&
-        'chainType' in account &&
-        (account as UntypedValue).chainType === 'solana'
-      ) {
-        return account;
-      }
-    }
-    
-    return null;
-  }, [authenticated, isPrivySolanaSurface, solanaWallets, solanaWalletsReady, user]);
+    return user.linkedAccounts.find((account) =>
+      account.type === 'wallet' &&
+      'chainType' in account &&
+      (account as UntypedValue).chainType === 'solana'
+    ) ?? null;
+  }, [authenticated, isPrivySolanaSurface, user]);
+
+  const solanaWallet = connectedSolanaWallet ?? linkedSolanaWallet;
   
   // Get Solana address from the wallet
   const solanaAddress = useMemo(() => {
@@ -82,16 +78,18 @@ export function SolanaWalletProvider({ children }: SolanaProviderProps) {
     return (solanaWallet as UntypedValue).address || null;
   }, [solanaWallet]);
   
-  // Check if connected - requires authentication, address, and Solana to be enabled
+  // A linked account supplies identity only. Signatures require a wallet from
+  // Privy's connected-wallet hook as well.
   const isConnected = useMemo(() => {
     return (
       isPrivySolanaSurface &&
       authenticated &&
       solanaWalletsReady &&
+      !!connectedSolanaWallet &&
       !!solanaAddress &&
       isSolanaEnabled()
     );
-  }, [authenticated, isPrivySolanaSurface, solanaAddress, solanaWalletsReady]);
+  }, [authenticated, connectedSolanaWallet, isPrivySolanaSurface, solanaAddress, solanaWalletsReady]);
   
   return (
     <SolanaWalletContextProvider

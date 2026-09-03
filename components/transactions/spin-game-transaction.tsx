@@ -188,7 +188,12 @@ export default function SpinGameTransaction({
   if (mode === "reveal") defaultText = "Reveal Spin";
 
   const finalDisabled = disabled || calls.length === 0;
-  const intentKey = `spin:${plantId}`;
+  // Commit and reveal are distinct transaction intents. Scope recovery by the
+  // prepared commitment so a stale commit cannot collide with a new spin, but
+  // never include the reveal secret in the durable identity.
+  const intentKey = commitment
+    ? `spin:${mode}:${plantId}:${commitment.toLowerCase()}`
+    : `spin:${mode}:${plantId}`;
 
   return (
     <GameTransaction

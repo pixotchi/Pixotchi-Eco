@@ -18,18 +18,51 @@ const BASE_ENS_REGISTRAR_ABI = [
 ] as const;
 
 const getBaseClient = () => getBaseReadClient();
+const NAME_LOOKUP_CONCURRENCY = 8;
 
-async function readCache(key: string): Promise<string | null> {
-  if (!redis) return null;
+type NameCacheRead =
+  | { status: 'hit'; value: string | null }
+  | { status: 'miss' };
+
+function cacheHit(value: unknown): NameCacheRead {
+  const name = typeof value === 'string' ? value : String(value);
+  // An empty value is the persisted sentinel for a successful lookup with no
+  // Basename or ENS. It must remain different from an absent Redis key.
+  return { status: 'hit', value: name === '' ? null : name };
+}
+
+async function readCache(key: string): Promise<NameCacheRead> {
+  if (!redis) return { status: 'miss' };
   try {
     const cached = await redis.get(key);
-    if (cached === null || cached === undefined) return null;
-    const value = typeof cached === 'string' ? cached : String(cached);
-    return value === '' ? null : value;
+    if (cached === null || cached === undefined) return { status: 'miss' };
+    return cacheHit(cached);
   } catch (error) {
     console.warn('[Identity Resolver] Failed to read cache', { key, error });
-    return null;
+    return { status: 'miss' };
   }
+}
+
+async function readCaches(keys: string[]): Promise<Map<string, NameCacheRead>> {
+  const entries = new Map<string, NameCacheRead>();
+  if (!redis || keys.length === 0) return entries;
+
+  try {
+    const values = await redis.mget(...keys);
+    keys.forEach((key, index) => {
+      const value = values[index];
+      if (value !== null && value !== undefined) {
+        entries.set(key, cacheHit(value));
+      }
+    });
+  } catch (error) {
+    console.warn('[Identity Resolver] Failed to read name caches', {
+      count: keys.length,
+      error,
+    });
+  }
+
+  return entries;
 }
 
 async function writeCache(key: string, value: string | null) {
@@ -127,8 +160,8 @@ export async function resolvePrimaryName(
   const cacheKey = `${ENS_CONFIG.CACHE_PREFIX}${normalised}`;
   if (!refresh) {
     const cached = await readCache(cacheKey);
-    if (cached !== null) {
-      return cached;
+    if (cached.status === 'hit') {
+      return cached.value;
     }
   }
 
@@ -158,8 +191,7 @@ export async function resolvePrimaryNames(
   const unique = Array.from(new Set(addresses.map((addr) => addr.toLowerCase())));
   const resultMap = new Map<string, string | null>();
 
-  const cachedEntries: Array<{ address: string; name: string | null }> = [];
-  const addressesToFetch: `0x${string}`[] = [];
+  const normalisedAddresses: `0x${string}`[] = [];
 
   for (const addr of unique) {
     const normalised = normaliseAddress(addr);
@@ -167,42 +199,46 @@ export async function resolvePrimaryNames(
       resultMap.set(addr, null);
       continue;
     }
-
-    if (!options.refresh) {
-      const cached = await readCache(`${ENS_CONFIG.CACHE_PREFIX}${normalised}`);
-      if (cached !== null) {
-        cachedEntries.push({ address: normalised, name: cached });
-        continue;
-      }
-    }
-
-    addressesToFetch.push(normalised);
+    normalisedAddresses.push(normalised);
   }
 
-  cachedEntries.forEach(({ address, name }) => {
-    resultMap.set(address, name);
-  });
+  const cachedEntries = options.refresh
+    ? new Map<string, NameCacheRead>()
+    : await readCaches(normalisedAddresses.map((address) => `${ENS_CONFIG.CACHE_PREFIX}${address}`));
+  const addressesToFetch: `0x${string}`[] = [];
+
+  for (const address of normalisedAddresses) {
+    const cached = cachedEntries.get(`${ENS_CONFIG.CACHE_PREFIX}${address}`);
+    if (cached?.status === 'hit') {
+      resultMap.set(address, cached.value);
+      continue;
+    }
+
+    addressesToFetch.push(address);
+  }
 
   if (addressesToFetch.length > 0) {
-    // Resolve all addresses in parallel using our custom resolver
-    const results = await Promise.allSettled(
-      addressesToFetch.map(async (address) => {
-        const name = await resolvePrimaryName(address, options);
-        return { address, name };
-      })
-    );
-
-    results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        resultMap.set(result.value.address, result.value.name);
-      } else {
-        // Find the address that failed (by index)
-        const index = results.indexOf(result);
-        if (index >= 0 && addressesToFetch[index]) {
-          resultMap.set(addressesToFetch[index], null);
+    let nextIndex = 0;
+    const resolveNext = async () => {
+      while (nextIndex < addressesToFetch.length) {
+        const address = addressesToFetch[nextIndex++];
+        try {
+          // The batch cache was already checked above, so skip its second
+          // per-address read before performing the RPC lookup.
+          resultMap.set(address, await resolvePrimaryName(address, { refresh: true }));
+        } catch (error) {
+          console.warn('[Identity Resolver] Failed to resolve name in batch', { address, error });
+          resultMap.set(address, null);
         }
       }
-    });
+    };
+
+    await Promise.all(
+      Array.from(
+        { length: Math.min(NAME_LOOKUP_CONCURRENCY, addressesToFetch.length) },
+        resolveNext,
+      ),
+    );
   }
 
   return resultMap;

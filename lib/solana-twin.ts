@@ -5,11 +5,13 @@
  * MAINNET ONLY - No devnet support
  */
 
+import { getAddress } from 'viem';
 import { getBaseReadClient } from './base-rpc';
 import {
   BRIDGE_ABI,
   getBridgeConfig,
   getPixotchiSolanaConfig,
+  SOLANA_TWIN_ADAPTER_ABI,
 } from './solana-constants';
 
 // ============ Types ============
@@ -190,16 +192,15 @@ export async function getTwinAddressInfo(solanaPublicKey: string): Promise<TwinA
 }
 
 /**
- * Check if a Twin has approved the adapter for wSOL spending
+ * Check whether the adapter considers a Twin ready for wSOL actions.
  * @param twinAddress The Twin address on Base
  * @param adapterAddress The SolanaTwinAdapter address (optional, defaults to config)
- * @returns True if approved (has sufficient allowance)
+ * @returns The adapter's setup status
  */
 export async function isTwinSetup(
   twinAddress: string,
   adapterAddress?: string
 ): Promise<boolean> {
-  const config = getBridgeConfig();
   const pixotchiConfig = getPixotchiSolanaConfig();
   
   // Use provided adapter or fall back to config
@@ -211,44 +212,23 @@ export async function isTwinSetup(
   }
   
   try {
-    console.log('[isTwinSetup] Checking allowance:', {
+    console.log('[isTwinSetup] Checking adapter status:', {
       twin: twinAddress,
       adapter,
-      wsolContract: config.base.wrappedSOL,
     });
-    
-    const allowance = await getBaseClient().readContract({
-      address: config.base.wrappedSOL as `0x${string}`,
-      abi: [
-        {
-          name: 'allowance',
-          type: 'function',
-          stateMutability: 'view',
-          inputs: [
-            { name: 'owner', type: 'address' },
-            { name: 'spender', type: 'address' },
-          ],
-          outputs: [{ name: '', type: 'uint256' }],
-        },
-      ],
-      functionName: 'allowance',
-      args: [twinAddress as `0x${string}`, adapter as `0x${string}`],
+    const setup = await getBaseClient().readContract({
+      address: getAddress(adapter),
+      abi: SOLANA_TWIN_ADAPTER_ABI,
+      functionName: 'isTwinSetup',
+      args: [getAddress(twinAddress)],
     });
-    
-    const threshold = BigInt(10 ** 18); // 1 wSOL
-    const isSetup = allowance > threshold;
     console.log('[isTwinSetup] Result:', {
-      allowance: allowance.toString(),
-      threshold: threshold.toString(),
-      isSetup,
+      setup,
     });
-    
-    // Consider "setup" if allowance is greater than a reasonable threshold
-    return isSetup;
+
+    return setup;
   } catch (error) {
-    console.error('[isTwinSetup] Error checking allowance:', error);
+    console.error('[isTwinSetup] Error checking adapter status:', error);
     return false;
   }
 }
-
-

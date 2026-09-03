@@ -29,8 +29,18 @@ assert.match(
 const solanaWalletContext = projectFile('lib/solana-wallet-context.tsx');
 assert.match(
   solanaWalletContext,
-  /ownerKey\s*=\s*isEnabled\s*&&\s*isConnected\s*&&\s*solanaAddress/,
-  'Solana resources must clear when the wallet is no longer connected',
+  /ownerKey\s*=\s*isEnabled\s*&&\s*solanaAddress\s*\?\s*solanaAddress\s*:\s*null/,
+  'Solana resources must remain keyed by the linked identity while the signer restores',
+);
+assert.match(
+  solanaWalletContext,
+  /isConnected:\s*walletIsConnected/,
+  'Solana transaction readiness must remain separate from the linked identity',
+);
+assert.match(
+  solanaWalletContext,
+  /isTwinSetup:\s*walletIsConnected\s*&&\s*visibleSnapshot\.twinSetup/,
+  'Solana setup must not be presented as ready without a connected signer',
 );
 assert.match(
   solanaWalletContext,
@@ -53,6 +63,18 @@ assert.match(
   balanceCard,
   /profileOwnerAddress\s*=\s*isSolana\s*\?\s*effectiveAddress\s*:\s*\(address \?\? null\)/,
   'Solana profile resources must use the Base Twin owner rather than a stale EVM address',
+);
+
+const solanaWalletProvider = projectFile('components/solana/SolanaWalletProvider.tsx');
+assert.match(
+  solanaWalletProvider,
+  /connectedSolanaWallet[\s\S]*solanaWallets\[0\][\s\S]*linkedSolanaWallet/,
+  'Solana identity may fall back to linked accounts while preferring the connected wallet',
+);
+assert.match(
+  solanaWalletProvider,
+  /!!connectedSolanaWallet[\s\S]*!!solanaAddress/,
+  'Solana transaction readiness must require a Privy connected wallet object',
 );
 assert.match(
   balanceCard,
@@ -213,6 +235,23 @@ assert.match(
   transactionKit,
   /submissionLockMessage === "Retry wallet check"/,
   'a failed wallet classification must expose a safe retry instead of direct submission',
+);
+
+const solanaBridgeButton = projectFile('components/transactions/solana-bridge-button.tsx');
+assert.match(
+  solanaBridgeButton,
+  /useConnectWallet[\s\S]*connectWallet\(\{[\s\S]*walletChainType: 'solana-only'/,
+  'an authenticated Solana identity must be able to open Privy’s wallet connection modal',
+);
+assert.match(
+  solanaBridgeButton,
+  /walletChainType: 'solana-only'/,
+  'the bridge connection modal must stay on the Solana-only auth surface',
+);
+assert.match(
+  solanaBridgeButton,
+  /canConnectSolanaWallet[\s\S]*\(!disabled \|\| pendingRecord !== null\)[\s\S]*actionDisabled = canConnectSolanaWallet \? false : isDisabled/,
+  'wallet connection must remain available for pending recovery while preserving normal disabled guards',
 );
 
 console.log('Owner resource race smoke checks passed.');

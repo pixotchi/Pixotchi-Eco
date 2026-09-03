@@ -532,6 +532,11 @@ for (const deniedMethod of [
   );
 }
 assert.match(rpcRouteSource, /if \(!hasAllowedOrigin\(request\)\)/);
+assert.match(
+  rpcRouteSource,
+  /process\.env\.NODE_ENV !== 'production'[\s\S]*isLoopbackHostname\(candidate\.hostname\)[\s\S]*candidate\.port === request\.nextUrl\.port/,
+  'development RPC reads must treat same-port localhost loopback names consistently',
+);
 assert.match(rpcRouteSource, /validationErrors\.some\(Boolean\)/);
 assert.match(rpcRouteSource, /isLoopbackHostname\(request\.nextUrl\.hostname\)/);
 assert.match(rpcRouteSource, /NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY/);
@@ -701,6 +706,11 @@ assert.match(transactionKit, /statusName: "transactionUnresolved"/);
 assert.match(transactionKit, /hasSubmittedProof && !isDefinitivePostSubmissionError\(error\)/);
 assert.match(transactionKit, /pendingReceipt = requestCanonicalReceipt\(\)/);
 assert.match(transactionKit, /pendingStatus = requestCallsStatus\(\)/);
+assert.match(
+  transactionKit,
+  /currentPendingRecord\.proof\.kind === "calls"[\s\S]*id: currentPendingRecord\.proof\.id[\s\S]*kind: "calls"[\s\S]*kind: "hash"/,
+  'a replaced batch receipt must retain its calls id while persisting the replacement hash',
+);
 assert.match(transactionKit, /if \(isSuccessful \|\| isCheckOnly\)/);
 assert.match(transactionKit, /return "Check transaction"/);
 assert.equal((transactionKit.match(/\.sendCalls\(\{/g) || []).length, 1);
@@ -943,6 +953,39 @@ assert.equal(
     : null,
   replacementHash,
 );
+
+// A receipt replacement after ERC-5792 calls status resolves must remain a
+// calls proof: its id is required for reload recovery, and the new hash lets
+// the canonical receipt watcher continue with the replacement transaction.
+const batchReplacementIdentity = { ...pendingIdentity, intentKey: 'smoke:batch-replacement' };
+const batchReplacementRecord = createPendingEvmRecord({
+  attemptId: 'attempt-batch-replacement-1',
+  callsDigest: pendingCallsDigest,
+  connectorId: 'wallet-a',
+  identity: batchReplacementIdentity,
+  method: 'batch',
+  proof: { kind: 'calls', id: 'calls-status-replacement-id' },
+});
+assert.equal(writePendingEvmRecord(pendingStorage, batchReplacementRecord), true);
+const replacedBatchRecord = replacePendingEvmProof(
+  pendingStorage,
+  batchReplacementRecord,
+  {
+    hash: replacementHash,
+    id: batchReplacementRecord.proof.kind === 'calls' ? batchReplacementRecord.proof.id : '',
+    kind: 'calls',
+  },
+);
+assert.deepEqual(replacedBatchRecord?.proof, {
+  hash: replacementHash,
+  id: 'calls-status-replacement-id',
+  kind: 'calls',
+});
+assert.deepEqual(readPendingEvmRecord(pendingStorage, batchReplacementIdentity)?.proof, {
+  hash: replacementHash,
+  id: 'calls-status-replacement-id',
+  kind: 'calls',
+});
 
 const finalizeFailStorage = new FinalizeFailStorage();
 const finalizeFailIdentity = { ...pendingIdentity, intentKey: 'smoke:reservation-finalize-fail' };

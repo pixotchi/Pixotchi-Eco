@@ -250,6 +250,7 @@ export function localTestConnector() {
 
     async disconnect() {
       connected = false;
+      config.emitter.emit("disconnect");
     },
 
     async getAccounts() {

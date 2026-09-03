@@ -1,6 +1,7 @@
 "use client";
 
 import EditPlantName from "@/components/edit-plant-name";
+import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,10 +54,6 @@ import CountdownTimer from "../countdown-timer";
 import FenceTimer from "../fence-timer";
 
 const ArcadeDialog = dynamic(() => import("@/components/arcade/ArcadeDialog"), {
-  ssr: false,
-});
-const ClaimRewardsTransaction = dynamic(() => import("@/components/transactions/claim-rewards-transaction"), {
-  loading: () => <Button className="w-full" disabled>Loading...</Button>,
   ssr: false,
 });
 const ReviveTransaction = dynamic(() => import("@/components/transactions/revive-transaction"), {

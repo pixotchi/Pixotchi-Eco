@@ -85,17 +85,6 @@ export const BRIDGE_CONFIG = {
   // Bridge fee in SOL (estimate)
   bridgeFeeEstimate: 0.003, // 0.003 SOL
 
-  // Default slippage for app-side quotes (7% for cross-chain)
-  defaultSlippagePercent: 7,
-
-  // Contract-level extra slippage buffer (basis points)
-  // Applied on top of app slippage for safety
-  contractExtraSlippageBps: 200, // 2%
-
-  // Total effective slippage: ~9% (7% app + 2% contract buffer)
-
-  // Max slippage allowed (basis points)
-  maxSlippageBps: 1000, // 10%
 } as const;
 
 // ============ Bridge ABI (getPredictedTwinAddress) ============

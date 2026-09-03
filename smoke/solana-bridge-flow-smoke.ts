@@ -599,6 +599,11 @@ const buttonSource = readFileSync(
 );
 const executorSource = readFileSync(resolve(repoRoot, 'lib/solana-bridge-executor.ts'), 'utf8');
 const serviceSource = readFileSync(resolve(repoRoot, 'lib/solana-bridge-service.ts'), 'utf8');
+const quoteSource = readFileSync(resolve(repoRoot, 'lib/solana-quote.ts'), 'utf8');
+const twinSource = readFileSync(resolve(repoRoot, 'lib/solana-twin.ts'), 'utf8');
+const walletContextSource = readFileSync(resolve(repoRoot, 'lib/solana-wallet-context.tsx'), 'utf8');
+const bridgeHookSource = readFileSync(resolve(repoRoot, 'hooks/useSolanaBridge.ts'), 'utf8');
+const bridgeConstantsSource = readFileSync(resolve(repoRoot, 'lib/solana-constants.ts'), 'utf8');
 
 // UI callers cannot reconstruct a bridge transaction and accidentally drop gasLimit.
 assert.equal(mintSource.includes('createBridgeTransaction('), false);
@@ -606,6 +611,25 @@ assert.equal(buttonSource.includes('createBridgeTransaction('), false);
 assert.match(executorSource, /gasLimit:\s*params\.gasLimit/);
 assert.equal(BRIDGE_CONFIG.complexGasLimit, BigInt(3_000_000));
 assert.match(serviceSource, /gasLimit:\s*BRIDGE_CONFIG\.complexGasLimit/);
+
+// Adapter quotes already incorporate deployed slippage; the app must forward
+// that amount unchanged instead of adding a second client-side buffer.
+assert.match(quoteSource, /functionName: 'getWsolForSeed'/);
+assert.match(quoteSource, /wsolAmount,\n\s*seedAmount: seedAmountNeeded/);
+assert.equal(quoteSource.includes('slippagePercent'), false);
+assert.equal(quoteSource.includes('slippageMultiplier'), false);
+assert.equal(quoteSource.includes('wsolWithSlippage'), false);
+assert.equal(bridgeHookSource.includes('defaultSlippagePercent'), false);
+assert.equal(bridgeHookSource.includes('getWsolToSeedQuote(seedPrice, adapterAddress, slippage)'), false);
+assert.equal(bridgeConstantsSource.includes('defaultSlippagePercent'), false);
+
+// Setup status is defined by the adapter. A 1e18 allowance threshold is wrong
+// for 9-decimal wSOL and can disagree with the contract's actual rule.
+assert.match(twinSource, /abi: SOLANA_TWIN_ADAPTER_ABI/);
+assert.match(twinSource, /functionName: 'isTwinSetup'/);
+assert.equal(twinSource.includes("functionName: 'allowance'"), false);
+assert.equal(twinSource.includes('BigInt(10 ** 18)'), false);
+assert.match(walletContextSource, /setup = await isTwinSetup\(address, config\.twinAdapter\)/);
 
 // Breakpoints only change CSS visibility; they never select a different controller tree.
 assert.equal(mintSource.includes('window.matchMedia'), false);

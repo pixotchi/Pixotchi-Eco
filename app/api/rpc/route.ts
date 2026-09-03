@@ -302,7 +302,21 @@ function parseAllowedOrigins(request: NextRequest): Set<string> {
 function hasAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin || origin === 'null') return false;
-  return parseAllowedOrigins(request).has(origin);
+  if (parseAllowedOrigins(request).has(origin)) return true;
+
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const candidate = new URL(origin);
+      return isLoopbackHostname(candidate.hostname)
+        && isLoopbackHostname(request.nextUrl.hostname)
+        && candidate.protocol === request.nextUrl.protocol
+        && candidate.port === request.nextUrl.port;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 export async function POST(request: NextRequest) {

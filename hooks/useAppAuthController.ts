@@ -1536,7 +1536,7 @@ export function useAppAuthController() {
     const handleAutologin = async () => {
       try {
         const storedAuto = sessionStorageManager.getAutologin();
-        if (state.surface === "test" && isLocalTestAuthAllowed()) {
+        if (state.surface === "test" && storedAuto === "test" && isLocalTestAuthAllowed()) {
           const testConnector = (connectors || []).find(
             (connector: UntypedValue) => connector?.id === "localTest" || connector?.type === "localTest",
           );

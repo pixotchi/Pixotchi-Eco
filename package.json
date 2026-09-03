@@ -12,6 +12,7 @@
     "lint": "node ./scripts/run-eslint-chunked.mjs && npm run lint:base-rpc",
     "lint:base-rpc": "node ./scripts/check-base-rpc-hardening.mjs",
     "typecheck": "tsc --noEmit",
+    "app-fixes:smoke": "npm run production-fixes:smoke && npm run auth:smoke && npm run local-test-auth:smoke && npm run solana:smoke && npm run owner-races:smoke && npm run identity:smoke && npm run app-ui:smoke && npm run spin:smoke && npm run swap:smoke",
     "production-fixes:smoke": "tsx smoke/production-fixes-smoke.ts",
     "transaction-infra:smoke": "tsx smoke/transaction-package-compatibility.ts && tsx smoke/production-fixes-smoke.ts",
     "activity:smoke": "tsx smoke/activity-filters-smoke.ts",
@@ -31,7 +32,11 @@
     "swap:smoke": "tsx smoke/swap-bundle-equivalence-smoke.ts",
     "blackjack:smoke": "tsx smoke/blackjack-split-turn-smoke.ts",
     "cache:smoke": "tsx smoke/cache-utils-smoke.ts",
-    "owner-races:smoke": "tsx smoke/owner-resource-races-smoke.ts"
+    "owner-races:smoke": "tsx smoke/owner-resource-races-smoke.ts",
+    "identity:smoke": "tsx smoke/identity-resolver-batch-smoke.ts",
+    "local-test-auth:smoke": "tsx smoke/local-test-logout-smoke.ts",
+    "app-ui:smoke": "tsx smoke/app-ui-resilience-smoke.ts",
+    "spin:smoke": "tsx smoke/spin-pending-storage-smoke.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.49",

@@ -22,7 +22,7 @@ import {
   type TransactionReceipt,
 } from 'viem';
 import { base } from 'viem/chains';
-import { useAccount, useBalance, useWalletClient } from 'wagmi';
+import { useAccount, useBalance, useSwitchChain, useWalletClient } from 'wagmi';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -438,6 +438,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
 export default function PixotchiSwapPanel() {
   const { address, chainId, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
@@ -2049,6 +2050,12 @@ export default function PixotchiSwapPanel() {
     sellToken,
     walletClient?.account,
   ]);
+  const handleSwitchToBase = useCallback(() => {
+    if (chainId === BASE_CHAIN_ID || isSwitchingChain) return;
+    void switchChainAsync({ chainId: BASE_CHAIN_ID }).catch(() => {
+      toast.error('Could not switch your wallet to Base.');
+    });
+  }, [chainId, isSwitchingChain, switchChainAsync]);
 
   return (
     <div>
@@ -2209,17 +2216,32 @@ export default function PixotchiSwapPanel() {
             </div>
           )}
 
-          <Button
-            type="submit"
-            variant="default"
-            fullWidth
-            className={SWAP_PRIMARY_ACTION_CLASS}
-            disabled={actionDisabled}
-            loading={isExecuting}
-            loadingText={S.buttons.swapping}
-          >
-            {actionButtonLabel}
-          </Button>
+          {chainId !== BASE_CHAIN_ID ? (
+            <Button
+              type="button"
+              variant="default"
+              fullWidth
+              className={SWAP_PRIMARY_ACTION_CLASS}
+              disabled={isSwitchingChain}
+              loading={isSwitchingChain}
+              loadingText="Switching to Base..."
+              onClick={handleSwitchToBase}
+            >
+              Switch to Base
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="default"
+              fullWidth
+              className={SWAP_PRIMARY_ACTION_CLASS}
+              disabled={actionDisabled}
+              loading={isExecuting}
+              loadingText={S.buttons.swapping}
+            >
+              {actionButtonLabel}
+            </Button>
+          )}
           {actionDisabled && disabledReason ? (
             <DisabledReason className="mt-2">
               {disabledReason}

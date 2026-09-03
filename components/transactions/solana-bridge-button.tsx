@@ -40,6 +40,7 @@ import {
 import { BRIDGE_CONFIG } from '@/lib/solana-constants';
 import { createSolanaBridgeTransaction } from '@/lib/solana-bridge-executor';
 import { invalidateOwnerResources, type OwnerResourceDomain } from '@/lib/owner-resource-invalidation';
+import { useConnectWallet } from '@privy-io/react-auth';
 import { useSignAndSendTransaction, useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import bs58 from 'bs58';
 import { Loader2 } from 'lucide-react';
@@ -127,6 +128,7 @@ export default function SolanaBridgeButton({
   const { solanaAddress, isTwinSetup, isConnected, refresh } = useSolanaWallet();
   const { ready: solanaWalletsReady, wallets: solanaWallets } = useSolanaWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { connectWallet } = useConnectWallet();
 
   const [isLoading, setIsLoading] = useState(false);
   const [phase, setPhase] = useState<SolanaBridgeLifecyclePhase | null>(null);
@@ -691,13 +693,39 @@ export default function SolanaBridgeButton({
     !solanaWallet ||
     isLoading ||
     quoteBlocksAction;
+  const canConnectSolanaWallet = Boolean(
+    solanaAddress &&
+    solanaWalletsReady &&
+    !solanaWallet &&
+    !isLoading &&
+    (!disabled || pendingRecord !== null),
+  );
+  const handleConnectWallet = useCallback(() => {
+    if (!canConnectSolanaWallet) return;
+
+    try {
+      // Keep this recovery action on the same chain family as the active
+      // Solana identity instead of offering an EVM signer.
+      connectWallet({
+        description: 'Connect a Solana wallet to sign this bridge action.',
+        walletChainType: 'solana-only',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not open the Solana wallet connection.';
+      toast.error(message);
+      onError?.(error);
+    }
+  }, [canConnectSolanaWallet, connectWallet, onError]);
+  const actionDisabled = canConnectSolanaWallet ? false : isDisabled;
   const pendingDisplayText = pendingRecord?.kind === 'reservation'
     ? pendingRecord.phase === 'wallet-pending'
       ? 'Recover Solana transaction'
       : 'Solana action in progress'
     : null;
   const displayText =
-    !solanaWallet && isConnected
+    canConnectSolanaWallet
+      ? 'Connect Solana Wallet'
+      : !solanaWallet && isConnected
       ? 'Wallet not ready'
       : pendingDisplayText ?? getSolanaActionButtonLabel({
           connected: isConnected,
@@ -711,8 +739,8 @@ export default function SolanaBridgeButton({
 
   return (
     <Button
-      onClick={handleClick}
-      disabled={isDisabled}
+      onClick={canConnectSolanaWallet ? handleConnectWallet : handleClick}
+      disabled={actionDisabled}
       aria-busy={isLoading}
       className={`w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55 ${buttonClassName}`}
     >

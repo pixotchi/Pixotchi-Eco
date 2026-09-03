@@ -1365,7 +1365,13 @@ export function Transaction({
           const replacementRecord = replacePendingEvmProof(
             getBrowserPendingEvmStorage(),
             currentPendingRecord,
-            { hash: replacementHash, kind: "hash" },
+            currentPendingRecord.proof.kind === "calls"
+              ? {
+                hash: replacementHash,
+                id: currentPendingRecord.proof.id,
+                kind: "calls",
+              }
+              : { hash: replacementHash, kind: "hash" },
           );
           if (replacementRecord) {
             currentPendingRecord = replacementRecord;

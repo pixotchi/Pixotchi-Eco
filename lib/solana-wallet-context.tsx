@@ -29,7 +29,7 @@ export interface SolanaWalletState {
   solanaAddress: string | null;
   /** The Twin address on Base */
   twinAddress: string | null;
-  /** Whether the Twin is set up (has wSOL approval) */
+  /** Whether the adapter reports the Twin is ready for wSOL actions */
   isTwinSetup: boolean;
   /** Full Twin info with balances */
   twinInfo: TwinAddressInfo | null;
@@ -91,7 +91,10 @@ export function SolanaWalletProvider({
   isConnected = false,
 }: SolanaWalletProviderProps) {
   const isEnabled = isSolanaEnabled();
-  const ownerKey = isEnabled && isConnected && solanaAddress ? solanaAddress : null;
+  // The linked Solana address is still the identity for read-only Twin/profile
+  // resources. `isConnected` remains a separate signer-readiness signal.
+  const ownerKey = isEnabled && solanaAddress ? solanaAddress : null;
+  const walletIsConnected = isConnected && Boolean(ownerKey);
   const ownerKeyRef = useRef(ownerKey);
   const requestGenerationRef = useRef(0);
   const mountedRef = useRef(true);
@@ -181,7 +184,7 @@ export function SolanaWalletProvider({
         });
       }
       
-      // Check if Twin is set up (has wSOL approval)
+      // Use the adapter's readiness view so every frontend surface shares its exact setup rule.
       let setup = false;
       if (config.twinAdapter) {
         setup = await isTwinSetup(address, config.twinAdapter);
@@ -223,10 +226,12 @@ export function SolanaWalletProvider({
   // Memoized state value
   const state = useMemo<SolanaWalletState>(() => ({
     isEnabled,
-    isConnected: Boolean(ownerKey),
+    isConnected: walletIsConnected,
     solanaAddress,
     twinAddress: visibleSnapshot.twinAddress,
-    isTwinSetup: visibleSnapshot.twinSetup,
+    // Setup status is only actionable when a connected wallet can sign. Keep
+    // twinInfo available independently for read-only profile/resource views.
+    isTwinSetup: walletIsConnected && visibleSnapshot.twinSetup,
     twinInfo: visibleSnapshot.twinInfo,
     solBalance: visibleSnapshot.solBalance,
     isLoading: visibleSnapshot.isLoading,
@@ -234,7 +239,7 @@ export function SolanaWalletProvider({
     refreshTwinInfo: fetchTwinInfo,
   }), [
     isEnabled,
-    ownerKey,
+    walletIsConnected,
     solanaAddress,
     visibleSnapshot,
     fetchTwinInfo,
@@ -269,7 +274,9 @@ export function useSolanaWalletContext(): SolanaWalletState {
  */
 export function useIsSolanaWallet(): boolean {
   const context = useContext(SolanaWalletContext);
-  return context?.isConnected ?? false;
+  // Solana mode is an identity/read-resource concern; signing readiness is
+  // exposed separately as context.isConnected.
+  return Boolean(context?.isEnabled && context.solanaAddress);
 }
 
 /**

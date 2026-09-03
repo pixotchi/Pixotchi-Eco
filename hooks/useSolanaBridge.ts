@@ -206,9 +206,6 @@ async function getNameChangePriceInSeed(): Promise<bigint> {
 
 // ============ Quote Helpers ============
 
-// Default slippage from config (7% for cross-chain transactions)
-const DEFAULT_SLIPPAGE = BRIDGE_CONFIG.defaultSlippagePercent;
-
 // Get the twin adapter address for quote reads
 function getTwinAdapterAddress(): string | undefined {
   try {
@@ -219,7 +216,7 @@ function getTwinAdapterAddress(): string | undefined {
   }
 }
 
-async function quoteMintCost(strain: number, slippage: number = DEFAULT_SLIPPAGE): Promise<SolanaQuoteResult> {
+async function quoteMintCost(strain: number): Promise<SolanaQuoteResult> {
   const seedPrice = await getMintPriceInSeed(strain);
   const adapterAddress = getTwinAdapterAddress();
 
@@ -243,22 +240,22 @@ async function quoteMintCost(strain: number, slippage: number = DEFAULT_SLIPPAGE
     };
   }
 
-  return getWsolToSeedQuote(seedPrice, adapterAddress, slippage);
+  return getWsolToSeedQuote(seedPrice, adapterAddress);
 }
 
-async function quoteShopItemCost(itemId: number, slippage: number = DEFAULT_SLIPPAGE): Promise<SolanaQuoteResult> {
+async function quoteShopItemCost(itemId: number): Promise<SolanaQuoteResult> {
   const seedPrice = await getShopItemPriceInSeed(itemId);
   const adapterAddress = getTwinAdapterAddress();
-  return getWsolToSeedQuote(seedPrice, adapterAddress, slippage);
+  return getWsolToSeedQuote(seedPrice, adapterAddress);
 }
 
-async function quoteGardenItemCost(itemId: number, slippage: number = DEFAULT_SLIPPAGE): Promise<SolanaQuoteResult> {
+async function quoteGardenItemCost(itemId: number): Promise<SolanaQuoteResult> {
   const seedPrice = await getGardenItemPriceInSeed(itemId);
   const adapterAddress = getTwinAdapterAddress();
-  return getWsolToSeedQuote(seedPrice, adapterAddress, slippage);
+  return getWsolToSeedQuote(seedPrice, adapterAddress);
 }
 
-async function quoteNameChangeCost(slippage: number = DEFAULT_SLIPPAGE): Promise<SolanaQuoteResult> {
+async function quoteNameChangeCost(): Promise<SolanaQuoteResult> {
   const seedPrice = await getNameChangePriceInSeed();
   if (seedPrice === BigInt(0)) {
     // Free name change
@@ -272,7 +269,7 @@ async function quoteNameChangeCost(slippage: number = DEFAULT_SLIPPAGE): Promise
     };
   }
   const adapterAddress = getTwinAdapterAddress();
-  return getWsolToSeedQuote(seedPrice, adapterAddress, slippage);
+  return getWsolToSeedQuote(seedPrice, adapterAddress);
 }
 
 // ============ Hook ============

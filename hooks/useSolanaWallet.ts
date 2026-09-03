@@ -60,11 +60,13 @@ export function useSolanaWallet(): SolanaWalletHook {
   // or the regular wallet address for EVM users
   // This is used for querying assets (plants, balances, etc.)
   const effectiveAddress = useMemo(() => {
-    if (context.isConnected && context.twinAddress) {
+    // Twin/profile reads are keyed by the linked identity, even while Privy
+    // restores the connected wallet object needed for signing.
+    if (context.twinAddress) {
       return context.twinAddress;
     }
     return null;
-  }, [context.isConnected, context.twinAddress]);
+  }, [context.twinAddress]);
   
   return {
     isEnabled: context.isEnabled,

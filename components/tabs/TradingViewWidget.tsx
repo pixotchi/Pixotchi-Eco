@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
+import { usePerformanceMode } from '@/components/ui/performance-mode';
 
 interface TradingViewWidgetProps {
   symbol?: string;
@@ -11,6 +12,7 @@ interface TradingViewWidgetProps {
 function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingViewWidgetProps) {
   const container = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const { enabled: performanceModeEnabled } = usePerformanceMode();
   const [mounted, setMounted] = React.useState(false);
   const [loadState, setLoadState] = React.useState<'loading' | 'ready' | 'error'>('loading');
   const [retryKey, setRetryKey] = React.useState(0);
@@ -25,7 +27,9 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
 
   useEffect(() => {
     const node = container.current;
-    if (!mounted || !node) return;
+    // Performance Mode must not even create the third-party widget host. This
+    // keeps the iframe and its network/script work out of the page entirely.
+    if (!mounted || performanceModeEnabled || !node) return;
     setLoadState('loading');
 
     /*
@@ -109,7 +113,18 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
         widgetHost.replaceChildren();
       }
     };
-  }, [mounted, isDarkTheme, retryKey, symbol]);
+  }, [mounted, isDarkTheme, performanceModeEnabled, retryKey, symbol]);
+
+  if (performanceModeEnabled) {
+    return (
+      <div className="flex h-full w-full items-center justify-center rounded-[var(--radius-panel)] border border-border bg-card p-5 text-center">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Chart paused</p>
+          <p className="mt-1 text-xs text-muted-foreground">Disable Performance Mode to load the live chart.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!mounted) {
     return (
