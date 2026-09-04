@@ -9,11 +9,32 @@ import { parseWebhookEvent, verifyAppKeyWithNeynar } from '@farcaster/miniapp-no
 
 async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolean; body: UntypedValue }> {
   const bodyText = await request.text();
+  let parsedBody: UntypedValue = null;
+
+  try {
+    parsedBody = JSON.parse(bodyText);
+  } catch {
+    // Keep the raw body for the legacy HMAC fallback below. The official JFS
+    // verifier receives the parsed object because its schema is object-based.
+  }
 
   // Attempt official JSON Farcaster Signature verification first
   try {
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      throw new Error('Webhook body must be a JSON object');
+    }
+
     // parseWebhookEvent validates header/payload/signature using the provided verifier
-    const parsed: UntypedValue = await (parseWebhookEvent as UntypedValue)(bodyText, verifyAppKeyWithNeynar);
+    const parsed: UntypedValue = await (parseWebhookEvent as UntypedValue)(parsedBody, verifyAppKeyWithNeynar);
+
+    const configuredAppFid = process.env.FARCASTER_APP_FID?.trim();
+    if (configuredAppFid) {
+      const expectedAppFid = Number(configuredAppFid);
+      if (!Number.isSafeInteger(expectedAppFid) || expectedAppFid <= 0 || parsed.appFid !== expectedAppFid) {
+        throw new Error('Webhook app FID does not match the configured Farcaster app FID');
+      }
+    }
+
     return { valid: true, body: parsed };
   } catch {
     // Fall back to legacy HMAC verification for backward compatibility
@@ -29,7 +50,10 @@ async function verifyWebhookEvent(request: NextRequest): Promise<{ valid: boolea
       const now = Date.now();
       if (Math.abs(now - timestampMs) > 5 * 60 * 1000) return { valid: false, body: null };
 
-      const body = JSON.parse(bodyText);
+      const body = parsedBody;
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return { valid: false, body: null };
+      }
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(`${timestamp}.${bodyText}`)

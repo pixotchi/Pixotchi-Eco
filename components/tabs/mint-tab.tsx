@@ -55,6 +55,9 @@ const MINT_DETAIL_TILE_CLASS = 'chromatic-white-surface rounded-[var(--radius-co
 type PaymentTokenSnapshot = {
   allowance: bigint;
   balance: bigint;
+  allowanceStatus: 'loading' | 'ready' | 'error';
+  balanceStatus: 'loading' | 'ready' | 'error';
+  error: unknown;
   identity: string | null;
   symbol: string;
 };
@@ -104,7 +107,11 @@ export default function MintTab() {
   const { address: evmAddress, chainId } = useAccount();
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  const { seedBalance: seedBalanceRaw } = useBalances();
+  const {
+    seedBalance: seedBalanceRaw,
+    seedBalanceStatus,
+    refreshBalances,
+  } = useBalances();
   const frameContext = useFrameContext();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('mint');
@@ -119,10 +126,34 @@ export default function MintTab() {
   const [landEthQuoteLoading, setLandEthQuoteLoading] = useState(false);
 
   // ETH balance for ETH mode insufficent balance check
-  const { data: ethBalanceData } = useBalance({
+  const {
+    data: ethBalanceData,
+    isLoading: isEthBalanceLoading,
+    error: ethBalanceError,
+    refetch: refetchEthBalance,
+  } = useBalance({
     address: evmAddress,
   });
-  const ethBalance = ethBalanceData?.value ?? BigInt(0);
+  const ethBalanceIdentity = evmAddress && chainId
+    ? `${evmAddress.toLowerCase()}:${chainId}`
+    : null;
+  const ethBalanceSnapshotsRef = useRef(new Map<string, bigint>());
+  const lastKnownEthBalance = ethBalanceIdentity
+    ? ethBalanceSnapshotsRef.current.get(ethBalanceIdentity)
+    : undefined;
+  const ethBalance = ethBalanceData?.value ?? lastKnownEthBalance ?? BigInt(0);
+  const ethBalanceStatus: 'loading' | 'ready' | 'error' = ethBalanceData?.value !== undefined
+    ? 'ready'
+    : isEthBalanceLoading
+      ? 'loading'
+      : 'error';
+  const ethBalanceReadError = ethBalanceError ?? (!isEthBalanceLoading && ethBalanceData?.value === undefined ? new Error('ETH balance is unavailable') : null);
+
+  useEffect(() => {
+    if (ethBalanceIdentity && ethBalanceData?.value !== undefined) {
+      ethBalanceSnapshotsRef.current.set(ethBalanceIdentity, ethBalanceData.value);
+    }
+  }, [ethBalanceData?.value, ethBalanceIdentity]);
 
   // Solana wallet support
   const isSolana = useIsSolanaWallet();
@@ -150,15 +181,19 @@ export default function MintTab() {
   const [paymentTokenSnapshot, setPaymentTokenSnapshot] = useState<PaymentTokenSnapshot>(() => ({
     allowance: BigInt(0),
     balance: BigInt(0),
+    allowanceStatus: 'loading',
+    balanceStatus: 'loading',
+    error: null,
     identity: null,
     symbol: 'SEED',
   }));
+  const paymentTokenSnapshotsRef = useRef(new Map<string, PaymentTokenSnapshot>());
   const [paymentTokenRefreshGeneration, setPaymentTokenRefreshGeneration] = useState(0);
   const paymentTokenRequestGenerationRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const selectedPaymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-  const paymentTokenIdentity = address && selectedStrain
-    ? `${address.toLowerCase()}:${selectedStrain.id}:${selectedPaymentToken.toLowerCase()}`
+  const paymentTokenIdentity = mintFetchKey && selectedStrain
+    ? `${mintFetchKey}:${selectedStrain.id}:${selectedPaymentToken.toLowerCase()}`
     : null;
   const paymentTokenSnapshotCurrent = paymentTokenSnapshot.identity === paymentTokenIdentity;
   const paymentTokenAllowance = paymentTokenSnapshotCurrent
@@ -172,6 +207,15 @@ export default function MintTab() {
     : selectedPaymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()
       ? '$JESSE'
       : 'SEED';
+  const paymentTokenAllowanceStatus = paymentTokenSnapshotCurrent
+    ? paymentTokenSnapshot.allowanceStatus
+    : 'loading';
+  const paymentTokenBalanceStatus = paymentTokenSnapshotCurrent
+    ? paymentTokenSnapshot.balanceStatus
+    : 'loading';
+  const paymentTokenReadError = paymentTokenSnapshotCurrent
+    ? paymentTokenSnapshot.error
+    : null;
   // Read-only here: SharedFarmMintMobileToggle in app/(game)/page.tsx is the sole
   // writer now that the unreachable duplicate toggle in this file is gone. Do not
   // re-declare a local useWebQueryState — in the Mini App the two cannot sync.
@@ -182,6 +226,8 @@ export default function MintTab() {
   const [landMintAllowanceState, setLandMintAllowance] = useState<bigint>(BigInt(0));
   const [landMintPriceState, setLandMintPrice] = useState<bigint>(BigInt(0));
   const [landMintDataIdentity, setLandMintDataIdentity] = useState<string | null>(null);
+  const [landMintError, setLandMintError] = useState<string | null>(null);
+  const [strainsError, setStrainsError] = useState<string | null>(null);
   const landMintDataCurrent = landMintIdentity !== null && landMintDataIdentity === landMintIdentity;
   const landSupply = landMintDataCurrent ? landSupplyState : null;
   const landMintStatus = landMintDataCurrent ? landMintStatusState : null;
@@ -285,6 +331,8 @@ export default function MintTab() {
     setLandMintAllowance(BigInt(0));
     setLandMintPrice(BigInt(0));
     setLandMintDataIdentity(null);
+    setLandMintError(null);
+    setStrainsError(null);
     setLoading(Boolean(address));
   }, [address, mintFetchKey]);
 
@@ -321,12 +369,15 @@ export default function MintTab() {
         if (!isCurrentRequest()) return;
         if (balance.status === 'fulfilled') setTokenBalance(balance.value);
         if (strainsData.status === 'fulfilled') {
+          setStrainsError(null);
           const availableStrains = strainsData.value.filter(s => s.maxSupply - s.totalMinted > 0);
           setStrains(strainsData.value);
           // Initialize once without overwriting a strain the user already picked.
           if (availableStrains.length > 0) {
             setSelectedStrain(prev => prev ?? availableStrains[0]);
           }
+        } else {
+          setStrainsError('Strain data is unavailable. Retry to load the catalog.');
         }
         plantMintDataLoadedKeyRef.current = fetchKey;
       }
@@ -346,12 +397,14 @@ export default function MintTab() {
         setLandMintAllowance(landAllowance);
         setLandMintPrice(price);
         setLandMintDataIdentity(fetchKey);
+        setLandMintError(null);
         landMintDataLoadedKeyRef.current = fetchKey;
       }
 
     } catch (error) {
       if (!isCurrentRequest()) return;
       console.error('Unexpected error in fetchData:', error);
+      setLandMintError('Land mint data is unavailable. Retry to refresh it.');
       toast.error(getFriendlyErrorMessage(error));
     } finally {
       if (isCurrentRequest()) setLoading(false);
@@ -363,9 +416,15 @@ export default function MintTab() {
     const requestGeneration = ++paymentTokenRequestGenerationRef.current;
     // Identity mismatch already gates the current render; clearing the stored
     // snapshot also keeps subsequent renders fail-closed while reads settle.
+    const previousSnapshot = paymentTokenIdentity
+      ? paymentTokenSnapshotsRef.current.get(paymentTokenIdentity)
+      : undefined;
     setPaymentTokenSnapshot({
-      allowance: BigInt(0),
-      balance: BigInt(0),
+      allowance: previousSnapshot?.allowance ?? BigInt(0),
+      balance: previousSnapshot?.balance ?? BigInt(0),
+      allowanceStatus: 'loading',
+      balanceStatus: 'loading',
+      error: null,
       identity: null,
       symbol: selectedPaymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()
         ? '$JESSE'
@@ -388,16 +447,26 @@ export default function MintTab() {
         });
       }
 
-      setPaymentTokenSnapshot({
-        allowance: allowance.status === 'fulfilled' ? allowance.value : BigInt(0),
-        balance: rawBalance.status === 'fulfilled' ? rawBalance.value : BigInt(0),
+      const previous = paymentTokenSnapshotsRef.current.get(paymentTokenIdentity);
+      const nextSnapshot: PaymentTokenSnapshot = {
+        allowance: allowance.status === 'fulfilled' ? allowance.value : previous?.allowance ?? BigInt(0),
+        balance: rawBalance.status === 'fulfilled' ? rawBalance.value : previous?.balance ?? BigInt(0),
+        allowanceStatus: allowance.status === 'fulfilled' ? 'ready' : 'error',
+        balanceStatus: rawBalance.status === 'fulfilled' ? 'ready' : 'error',
+        error: rawBalance.status === 'rejected'
+          ? rawBalance.reason
+          : allowance.status === 'rejected'
+            ? allowance.reason
+            : null,
         identity: paymentTokenIdentity,
         symbol: symbol.status === 'fulfilled'
           ? formatTokenSymbol(symbol.value, selectedPaymentToken)
           : selectedPaymentToken.toLowerCase() === JESSE_TOKEN_ADDRESS.toLowerCase()
             ? '$JESSE'
             : 'SEED',
-      });
+      };
+      paymentTokenSnapshotsRef.current.set(paymentTokenIdentity, nextSnapshot);
+      setPaymentTokenSnapshot(nextSnapshot);
     };
 
     void fetchPaymentTokenInfo();
@@ -411,6 +480,26 @@ export default function MintTab() {
   const refreshPaymentTokenSnapshot = useCallback(() => {
     setPaymentTokenRefreshGeneration((generation) => generation + 1);
   }, []);
+
+  const retryMintReads = useCallback(() => {
+    refreshPaymentTokenSnapshot();
+    void refetchEthBalance().catch((error) => {
+      console.warn('[MintTab] ETH balance refresh failed:', error);
+    });
+    void refreshBalances().catch((error) => {
+      console.warn('[MintTab] Balance refresh failed:', error);
+    });
+    void fetchData();
+  }, [fetchData, refetchEthBalance, refreshBalances, refreshPaymentTokenSnapshot]);
+
+  const renderStrainError = () => strainsError ? (
+    <div role="alert" className="space-y-2 rounded-[var(--radius-control)] border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-foreground">
+      <p>{strainsError}</p>
+      <Button type="button" variant="outline" size="touchCompact" onClick={retryMintReads}>
+        Retry strain catalog
+      </Button>
+    </div>
+  ) : null;
 
   // Fetch ETH quote when strain changes and ETH mode is active
   useEffect(() => {
@@ -576,6 +665,7 @@ export default function MintTab() {
               <p className="text-xs text-violet-700 dark:text-violet-200">Connected via Solana Bridge</p>
             </CardHeader>
             <CardContent className="space-y-3">
+              {renderStrainError()}
               <label className="text-sm font-medium">Choose a strain</label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -754,13 +844,18 @@ export default function MintTab() {
       ? (selectedStrain.paymentPrice ?? selectedStrain.mintPriceRaw)
       : BigInt(0);
     const needsPlantApproval = paymentTokenAllowance < requiredPayment;
-    const hasInsufficientPlantBalance = selectedStrain
+    const plantPaymentBalanceStatus = selectedStrain?.paymentPrice !== undefined
+      ? paymentTokenBalanceStatus
+      : seedBalanceStatus;
+    const plantPaymentDataUnknown = Boolean(selectedStrain)
+      && (strainsError !== null || plantPaymentBalanceStatus !== 'ready' || paymentTokenAllowanceStatus !== 'ready');
+    const hasInsufficientPlantBalance = selectedStrain && !plantPaymentDataUnknown
       ? selectedStrain.paymentPrice !== undefined
         ? paymentTokenBalance < selectedStrain.paymentPrice
         : seedBalanceRaw < selectedStrain.mintPriceRaw
       : false;
-    const showEthPlantMint = isSmartWallet && isEthMode && selectedStrain && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain);
-    const showEthPlantLoading = isSmartWallet && isEthMode && selectedStrain && ethQuoteLoading;
+    const showEthPlantMint = isSmartWallet && isEthMode && selectedStrain && !strainsError && ethQuote && !ethQuoteLoading && isSeedPaymentStrain(selectedStrain);
+    const showEthPlantLoading = isSmartWallet && isEthMode && selectedStrain && !strainsError && ethQuoteLoading;
     const paymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
     const plantBalanceLabel = selectedStrain?.paymentPrice
       ? formatTokenAmount(paymentTokenBalance)
@@ -805,6 +900,7 @@ export default function MintTab() {
           </div>
 
           <div className="space-y-4">
+            {renderStrainError()}
             <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Strain</h3>
@@ -906,11 +1002,26 @@ export default function MintTab() {
                       openMintShareModal(selectedStrain.id, selectedStrain.name, tx?.transactionHash);
                     }}
                     onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                    buttonText={ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint with ETH"}
+                    buttonText={ethBalanceStatus !== 'ready'
+                      ? (ethBalanceReadError ? "ETH balance unavailable" : "Checking ETH balance...")
+                      : ethBalance < ethQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint with ETH"}
                     buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                    disabled={ethBalance < ethQuote.ethAmountWithBuffer}
+                    disabled={ethBalanceStatus !== 'ready' || ethBalance < ethQuote.ethAmountWithBuffer}
                   />
-                  {ethBalance < ethQuote.ethAmountWithBuffer && (
+                  {ethBalanceStatus !== 'ready' ? (
+                    <>
+                      <InlineBalanceNotice>
+                        {ethBalanceReadError
+                          ? 'Your ETH balance could not be verified. Retry before minting.'
+                          : 'Checking your ETH balance before enabling minting...'}
+                      </InlineBalanceNotice>
+                      {ethBalanceReadError && (
+                        <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
+                          Retry balance check
+                        </Button>
+                      )}
+                    </>
+                  ) : ethBalance < ethQuote.ethAmountWithBuffer && (
                     <InlineBalanceNotice>
                       Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
                     </InlineBalanceNotice>
@@ -920,6 +1031,29 @@ export default function MintTab() {
 
               {showEthPlantLoading && (
                 <Button disabled className="w-full">Fetching ETH quote...</Button>
+              )}
+
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && plantPaymentDataUnknown && (
+                <div className="space-y-2">
+                  <DisabledTransaction
+                    buttonText={strainsError
+                      ? "Strain data unavailable"
+                      : paymentTokenReadError ? "Balance unavailable" : "Checking balance..."}
+                    buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
+                  />
+                  <InlineBalanceNotice>
+                    {strainsError
+                      ? 'The strain catalog could not be verified. Retry before minting.'
+                      : paymentTokenReadError
+                      ? 'Your payment balance could not be verified. Retry before minting.'
+                      : 'Checking your payment balance and allowance...'}
+                  </InlineBalanceNotice>
+                  {(Boolean(strainsError) || Boolean(paymentTokenReadError)) && (
+                    <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
+                      Retry balance check
+                    </Button>
+                  )}
+                </div>
               )}
 
               {!showEthPlantMint && !showEthPlantLoading && selectedStrain && hasInsufficientPlantBalance && (
@@ -934,7 +1068,7 @@ export default function MintTab() {
                 </div>
               )}
 
-              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !hasInsufficientPlantBalance && (
+              {!showEthPlantMint && !showEthPlantLoading && selectedStrain && !plantPaymentDataUnknown && !hasInsufficientPlantBalance && (
                 <div className="space-y-2">
                   <ApprovalActionTransaction
                     intentKey="mint:plant"
@@ -987,7 +1121,8 @@ export default function MintTab() {
       ? Math.min(100, Math.max(0, (landSupply.totalSupply / landSupply.maxSupply) * 100))
       : 0;
     const needsLandApproval = landMintAllowance < landMintPrice;
-    const hasInsufficientLandBalance = seedBalanceRaw < landMintPrice;
+    const landMintDataUnknown = !landMintDataCurrent || (!isEthMode && seedBalanceStatus !== 'ready');
+    const hasInsufficientLandBalance = !landMintDataUnknown && seedBalanceRaw < landMintPrice;
     const showEthLandMint = Boolean(isSmartWallet && isEthMode && landEthQuote && !landEthQuoteLoading && landMintStatus?.canMint);
     const showEthLandLoading = Boolean(isSmartWallet && isEthMode && landEthQuoteLoading && landMintStatus?.canMint);
 
@@ -1055,7 +1190,28 @@ export default function MintTab() {
               <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || needsLandApproval || isSponsored))} />
             </div>
 
-            {showEthLandMint && landEthQuote && (
+            {landMintError && (
+              <div role="alert" className="space-y-2 rounded-[var(--radius-control)] border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-foreground">
+                <p>{landMintError}</p>
+                <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
+                  Retry land mint data
+                </Button>
+              </div>
+            )}
+
+            {!landMintError && landMintDataUnknown && (
+              <div className="space-y-2">
+                <DisabledTransaction
+                  buttonText="Checking land mint data..."
+                  buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
+                />
+                <InlineBalanceNotice>
+                  Checking land price, supply, and wallet balance before enabling minting.
+                </InlineBalanceNotice>
+              </div>
+            )}
+
+            {!landMintError && !landMintDataUnknown && showEthLandMint && landEthQuote && (
               <div className="space-y-2">
                 <SwapLandMintBundle
                   ethAmount={landEthQuote.ethAmountWithBuffer}
@@ -1065,11 +1221,26 @@ export default function MintTab() {
                     incrementForcedFetch();
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-                  buttonText={ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
+                  buttonText={ethBalanceStatus !== 'ready'
+                    ? (ethBalanceReadError ? "ETH balance unavailable" : "Checking ETH balance...")
+                    : ethBalance < landEthQuote.ethAmountWithBuffer ? "Insufficient ETH Balance" : "Mint Land"}
                   buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                  disabled={ethBalance < landEthQuote.ethAmountWithBuffer}
+                  disabled={ethBalanceStatus !== 'ready' || ethBalance < landEthQuote.ethAmountWithBuffer}
                 />
-                {ethBalance < landEthQuote.ethAmountWithBuffer && (
+                {ethBalanceStatus !== 'ready' ? (
+                  <>
+                    <InlineBalanceNotice>
+                      {ethBalanceReadError
+                        ? 'Your ETH balance could not be verified. Retry before minting.'
+                        : 'Checking your ETH balance before enabling land minting...'}
+                    </InlineBalanceNotice>
+                    {ethBalanceReadError && (
+                      <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
+                        Retry balance check
+                      </Button>
+                    )}
+                  </>
+                ) : ethBalance < landEthQuote.ethAmountWithBuffer && (
                   <InlineBalanceNotice>
                     Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(landEthQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
                   </InlineBalanceNotice>
@@ -1077,11 +1248,11 @@ export default function MintTab() {
               </div>
             )}
 
-            {showEthLandLoading && (
+            {!landMintError && !landMintDataUnknown && showEthLandLoading && (
               <Button disabled className="w-full">Fetching ETH quote...</Button>
             )}
 
-            {!showEthLandMint && !showEthLandLoading && (
+            {!landMintError && !landMintDataUnknown && !showEthLandMint && !showEthLandLoading && (
               <div className="space-y-3">
                 {landMintStatus && !landMintStatus.canMint ? (
                   <DisabledTransaction

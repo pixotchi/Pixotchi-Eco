@@ -155,6 +155,17 @@ export type PendingBridgeWalletRecoveryResult =
       reason: 'ambiguous' | 'landed-without-signature' | 'unexpired';
     };
 
+/**
+ * A read-only classification for an active bridge record. Callers must use
+ * this before offering another wallet action: only `cleared` is proof that a
+ * wallet-pending request never landed. `ambiguous` remains a hard stop.
+ */
+export type PendingBridgeRecordReconciliationResult =
+  | { status: 'submitted'; action: PendingBridgeAction }
+  | { status: 'cleared'; reason: 'expired-absent' }
+  | { status: 'pending'; reason: 'preparing' | 'unexpired' }
+  | { status: 'ambiguous'; reason: 'ambiguous' | 'landed-without-signature' };
+
 export class PendingBridgeStorageUnavailableError extends Error {
   constructor() {
     super('Safe Solana transaction tracking requires browser storage. Enable site storage, then try again.');
@@ -1395,6 +1406,39 @@ export async function recoverPendingBridgeWalletRequest(
     return { status: 'pending', reason: 'unexpired' };
   }
   return { status: 'pending', reason: 'ambiguous' };
+}
+
+/**
+ * Re-check a persisted bridge record without preparing, signing, sending, or
+ * minting. A submitted record is returned for its signature/Base status check;
+ * a wallet-pending reservation is promoted or cleared only from authoritative
+ * Solana evidence.
+ */
+export async function reconcilePendingBridgeRecord(
+  record: PendingBridgeRecord,
+  connection: Pick<
+    Connection,
+    'getAccountInfo' | 'getBlockHeight' | 'getSignaturesForAddress'
+  >,
+  storage = getBrowserPendingBridgeStorage(),
+): Promise<PendingBridgeRecordReconciliationResult> {
+  if (record.kind === 'submitted') {
+    return { status: 'submitted', action: record };
+  }
+  if (record.phase === 'preparing') {
+    return { status: 'pending', reason: 'preparing' };
+  }
+
+  const recovery = await recoverPendingBridgeWalletRequest(record, connection, storage);
+  if (recovery.status === 'submitted') return recovery;
+  if (recovery.status === 'cleared') return recovery;
+  if (recovery.reason === 'unexpired') {
+    return { status: 'pending', reason: 'unexpired' };
+  }
+  return {
+    status: 'ambiguous',
+    reason: recovery.reason,
+  };
 }
 
 export async function replacePendingBridgeAction(

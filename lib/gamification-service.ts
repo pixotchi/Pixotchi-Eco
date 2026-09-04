@@ -1,4 +1,13 @@
-import { redis,redisCompareAndSetJSON,redisGetJSON,redisScanKeys,redisSetJSON,withPrefix } from '@/lib/redis';
+import {
+  redis,
+  redisCompareAndSetJSON,
+  redisGetJSON,
+  redisGetJSONResult,
+  redisScanKeys,
+  redisSetJSON,
+  withPrefix,
+  type RedisJSONReadResult,
+} from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
 import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
 
@@ -14,10 +23,97 @@ const keys = {
   missions: (address: string, day: GmDay) => `${PX}missions:${address.toLowerCase()}:${day}`,
   missionsLeaderboard: (yyyymm: string) => `${PX}missions:leaderboard:${yyyymm}`,
   proof: (address: string, day: GmDay, taskId: string) => `${PX}missions:proof:${address.toLowerCase()}:${day}:${taskId}`,
+  proofUsed: (txHash: string) => `${PX}missions:proof-used:${txHash.toLowerCase()}`,
   todayActiveSet: (day: GmDay) => `${PX}streak:activity:${day}`,
   idemp: (address: string, rewardId: string) => `${PX}idemp:${address.toLowerCase()}:${rewardId}`,
   adminLastReset: `${PX}admin:lastResetAt`,
 };
+
+export class MissionProofAlreadyUsedError extends Error {
+  readonly code = 'MISSION_PROOF_ALREADY_USED';
+
+  constructor() {
+    super('Transaction proof has already been used');
+    this.name = 'MissionProofAlreadyUsedError';
+  }
+}
+
+export class MissionProofPersistenceError extends Error {
+  readonly code = 'MISSION_PROOF_PERSISTENCE_UNAVAILABLE';
+
+  constructor(message = 'Mission proof persistence is unavailable') {
+    super(message);
+    this.name = 'MissionProofPersistenceError';
+  }
+}
+
+/**
+ * Reject an already-consumed proof before doing chain RPC work. The atomic Lua
+ * update below is still the final replay fence for concurrent requests.
+ */
+export async function assertMissionProofUnused(txHash: string): Promise<void> {
+  const result = await redisGetJSONResult<unknown>(keys.proofUsed(txHash));
+  if (result.status === 'unavailable') throw new MissionProofPersistenceError();
+  if (result.status === 'ok') throw new MissionProofAlreadyUsedError();
+}
+
+const MISSION_PROOF_CAS_SCRIPT = `
+local missionKey = KEYS[1]
+local proofUsedKey = KEYS[2]
+local taskProofKey = KEYS[3]
+local expected = ARGV[1]
+local nextMission = ARGV[2]
+local proofRecord = ARGV[3]
+
+if redis.call("EXISTS", proofUsedKey) == 1 then
+  return -1
+end
+
+if expected == "__nil__" then
+  if redis.call("EXISTS", missionKey) == 1 then
+    return 0
+  end
+elseif redis.call("GET", missionKey) ~= expected then
+  return 0
+end
+
+redis.call("SET", missionKey, nextMission)
+redis.call("SET", proofUsedKey, proofRecord)
+redis.call("SET", taskProofKey, proofRecord)
+return 1
+`;
+
+async function compareAndSetMissionWithProof(
+  missionKey: string,
+  expected: string | null,
+  nextMission: string,
+  proofUsedKey: string,
+  taskProofKey: string,
+  proofRecord: string,
+): Promise<'updated' | 'conflict' | 'duplicate'> {
+  if (!redis) throw new MissionProofPersistenceError();
+  const evalFn = (redis as UntypedValue)?.eval;
+  if (typeof evalFn !== 'function') {
+    throw new MissionProofPersistenceError('Atomic mission proof persistence is unavailable');
+  }
+
+  let result: unknown;
+  try {
+    result = await evalFn.call(
+      redis,
+      MISSION_PROOF_CAS_SCRIPT,
+      [withPrefix(missionKey), withPrefix(proofUsedKey), withPrefix(taskProofKey)],
+      [expected ?? '__nil__', nextMission, proofRecord],
+    );
+  } catch (error) {
+    console.warn('Atomic mission proof persistence failed:', error);
+    throw new MissionProofPersistenceError();
+  }
+
+  if (Number(result) === 1) return 'updated';
+  if (Number(result) === -1) return 'duplicate';
+  return 'conflict';
+}
 
 function toMonth(day: GmDay): string {
   return day.replace(/\-/g, '').slice(0, 6); // YYYYMM
@@ -204,11 +300,22 @@ export async function trackDailyActivity(address: string): Promise<GmStreak> {
 export async function getMissionDay(address: string, day?: GmDay): Promise<GmMissionDay> {
   const d = day || getTodayDateString();
   const k = keys.missions(address, d);
-  const data = await redisGetJSON<GmMissionDay>(k);
-  if (data) return hydrateMissionDay(data, d);
-  const init = createInitialMissionDay(d);
-  await redisSetJSON(k, init);
-  return init;
+  const result = await redisGetJSONResult<unknown>(k);
+  return resolveMissionDayRead(result, d);
+}
+
+export function resolveMissionDayRead(
+  result: RedisJSONReadResult<unknown>,
+  day: GmDay,
+): GmMissionDay {
+  if (result.status === 'unavailable') {
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
+  }
+  if (result.status === 'missing') return createInitialMissionDay(day);
+  if (!result.value || typeof result.value !== 'object' || Array.isArray(result.value)) {
+    throw new MissionProofPersistenceError('Stored mission summary is invalid');
+  }
+  return hydrateMissionDay(result.value, day);
 }
 
 function sectionCompleteS1(s1: GmMissionDay['s1']): boolean {
@@ -244,28 +351,13 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
   }
 
   const k = keys.missions(address, d);
-  const safeCount = Number.isFinite(count) && count > 0 ? Math.min(1000, Math.floor(count)) : 1;
+  const safeCount = Number.isFinite(count) && count > 0 ? Math.min(120, Math.floor(count)) : 1;
   const redisClient = redis;
+  const proofTxHash = typeof proof?.txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(proof.txHash)
+    ? proof.txHash.toLowerCase()
+    : null;
 
-  if (!redisClient) {
-    const fallback = await getMissionDay(address, d);
-    applyMissionTaskProgress(fallback, taskId, safeCount);
-    const awarded = awardPoints(fallback);
-    await redisSetJSON(k, fallback);
-    if (proof && (proof.txHash || proof.meta)) {
-      await redisSetJSON(keys.proof(address, d, taskId), proof);
-    }
-    if (awarded > 0) {
-      Promise.resolve().then(async () => {
-        try {
-          await (redis as UntypedValue)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), awarded, address.toLowerCase());
-        } catch (error) {
-          console.warn('Failed to update missions leaderboard:', error);
-        }
-      });
-    }
-    return fallback;
-  }
+  if (!redisClient) throw new MissionProofPersistenceError('Mission progress persistence is unavailable');
 
   const prefixedKey = withPrefix(k);
   const maxAttempts = 5;
@@ -287,8 +379,11 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
         try {
           parsed = JSON.parse(raw);
         } catch {
-          parsed = null;
+          throw new MissionProofPersistenceError('Stored mission progress is invalid');
         }
+      }
+      if (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed))) {
+        throw new MissionProofPersistenceError('Stored mission progress is invalid');
       }
 
       const mission = hydrateMissionDay(parsed, d);
@@ -296,13 +391,26 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
       const gained = awardPoints(mission);
       const nextRaw = JSON.stringify(mission);
 
-      const setSuccess = await redisCompareAndSetJSON(k, typeof raw === 'string' ? raw : null, nextRaw);
-      if (!setSuccess) {
-        continue;
-      }
-
-      if (proof && (proof.txHash || proof.meta)) {
-        await redisSetJSON(keys.proof(address, d, taskId), proof);
+      if (proofTxHash) {
+        const proofRecord = JSON.stringify({
+          address: address.toLowerCase(),
+          day: d,
+          taskId,
+          txHash: proofTxHash,
+        });
+        const result = await compareAndSetMissionWithProof(
+          k,
+          typeof raw === 'string' ? raw : null,
+          nextRaw,
+          keys.proofUsed(proofTxHash),
+          keys.proof(address, d, taskId),
+          proofRecord,
+        );
+        if (result === 'duplicate') throw new MissionProofAlreadyUsedError();
+        if (result === 'conflict') continue;
+      } else {
+        const setSuccess = await redisCompareAndSetJSON(k, typeof raw === 'string' ? raw : null, nextRaw);
+        if (!setSuccess) continue;
       }
 
       if (gained > 0) {
@@ -317,6 +425,9 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 
       return mission;
     } catch (error) {
+      if (error instanceof MissionProofAlreadyUsedError || error instanceof MissionProofPersistenceError) {
+        throw error;
+      }
       lastError = error;
     }
   }
@@ -406,26 +517,80 @@ async function getMonthlyMissionLeaderboard(yyyymm: string): Promise<GmLeaderEnt
   return convertZRangeResponse(raw as UntypedValue);
 }
 
+async function getMissionScoreKeys(): Promise<string[]> {
+  if (!redis) {
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
+  }
+
+  const scan = (redis as UntypedValue).scan;
+  if (typeof scan !== 'function') {
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
+  }
+
+  const pattern = withPrefix(`${PX}missions:leaderboard:*`);
+  const results: string[] = [];
+  let cursor = '0';
+  try {
+    do {
+      const response: UntypedValue = await scan.call(redis, cursor, { match: pattern, count: 1000 });
+      let batch: unknown;
+      if (Array.isArray(response) && response.length >= 2) {
+        cursor = String(response[0]);
+        batch = response[1];
+      } else if (response && typeof response === 'object' && 'cursor' in response) {
+        cursor = String(response.cursor);
+        batch = response.keys;
+      } else {
+        throw new Error('Unexpected Redis SCAN response');
+      }
+      if (!Array.isArray(batch) || batch.some((key) => typeof key !== 'string')) {
+        throw new Error('Invalid Redis SCAN key list');
+      }
+      results.push(...batch);
+    } while (cursor !== '0');
+  } catch (error) {
+    console.warn('Failed to scan mission score keys:', error);
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
+  }
+
+  return results;
+}
+
+export function resolveMissionScoreRead(raw: unknown): number {
+  if (raw == null) return 0;
+  if (typeof raw !== 'number' && typeof raw !== 'string') {
+    throw new MissionProofPersistenceError('Stored mission score is invalid');
+  }
+  if (typeof raw === 'string' && raw.trim() === '') {
+    throw new MissionProofPersistenceError('Stored mission score is invalid');
+  }
+  const score = Number(raw);
+  if (!Number.isFinite(score)) {
+    throw new MissionProofPersistenceError('Stored mission score is invalid');
+  }
+  return score;
+}
+
 async function getCombinedMissionScore(address: string): Promise<number> {
-  if (!redis || !address) return 0;
+  if (!address) return 0;
   const normalized = address.toLowerCase();
-  const missionKeys = await redisScanKeys(`${PX}missions:leaderboard:*`);
+  const missionKeys = await getMissionScoreKeys();
   if (!missionKeys.length) return 0;
 
-  let total = 0;
-  await Promise.all(
+  const scores = await Promise.all(
     missionKeys.map(async (rawKey) => {
       const prefixedKey = rawKey.startsWith(PX) ? rawKey : withPrefix(rawKey);
       try {
         const rawScore = await (redis as UntypedValue)?.zscore?.(prefixedKey, normalized);
-        const score = Number(rawScore);
-        if (Number.isFinite(score)) total += score;
+        return resolveMissionScoreRead(rawScore);
       } catch (error) {
+        if (error instanceof MissionProofPersistenceError) throw error;
         console.warn('Failed to read mission score for key:', prefixedKey, error);
+        throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
       }
     }),
   );
-  return total;
+  return scores.reduce((total, score) => total + score, 0);
 }
 
 export async function getLeaderboards(month?: string): Promise<{ streakTop: GmLeaderEntry[]; missionTop: GmLeaderEntry[] }> {
@@ -493,16 +658,18 @@ export async function getMissionScore(address: string, month?: string): Promise<
   if (isCombinedMonth(month)) {
     return getCombinedMissionScore(address);
   }
+  if (!redis) {
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
+  }
   const d = getTodayDateString();
   const yyyymm = month || toMonth(d);
   const key = withPrefix(keys.missionsLeaderboard(yyyymm));
   try {
     const raw = await (redis as UntypedValue)?.zscore?.(key, address.toLowerCase());
-    if (raw == null) return 0;
-    const num = Number(raw);
-    return Number.isFinite(num) ? num : 0;
+    return resolveMissionScoreRead(raw);
   } catch (error) {
+    if (error instanceof MissionProofPersistenceError) throw error;
     console.warn('getMissionScore failed', error);
-    return 0;
+    throw new MissionProofPersistenceError('Mission summary persistence is unavailable');
   }
 }

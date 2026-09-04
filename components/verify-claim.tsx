@@ -32,6 +32,23 @@ interface VerifyClaimProps {
   strainId?: number; // Optional: Force specific strain or default to Zest(4)
 }
 
+type ClaimState = 'unclaimed' | 'retryable' | 'processing' | 'complete' | 'manual_review' | 'unavailable';
+
+type ClaimRecoveryDetails = {
+  reservationId?: string;
+  stage?: string;
+};
+
+function parseClaimState(value: unknown): ClaimState | null {
+  return value === 'unclaimed'
+    || value === 'retryable'
+    || value === 'processing'
+    || value === 'complete'
+    || value === 'manual_review'
+    ? value
+    : null;
+}
+
 export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -42,8 +59,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   const [error, setError] = useState<string | null>(null);
   
   // Claim status from Redis (source of truth)
-  const [alreadyClaimed, setAlreadyClaimed] = useState<boolean | null>(null); // null = loading
+  const [claimState, setClaimState] = useState<ClaimState | null>(null);
+  const [claimRecovery, setClaimRecovery] = useState<ClaimRecoveryDetails | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
+  const [statusRefreshKey, setStatusRefreshKey] = useState(0);
 
   // Bonus availability from status endpoint
   const [bonuses, setBonuses] = useState<{ leaf: boolean; seed: boolean }>({ leaf: false, seed: false });
@@ -53,7 +72,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     async function checkClaimStatus() {
       if (!address) {
         setStatusLoading(false);
-        setAlreadyClaimed(null);
+        setClaimState('unclaimed');
+        setClaimRecovery(null);
         return;
       }
 
@@ -68,23 +88,33 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         // Hide only on an EXPLICIT disable: a structured error body without
         // `enabled` used to hide the free-claim CTA for the session.
         if (data.enabled === false) {
-          setAlreadyClaimed(true); // Treat as claimed to hide the card
+          setClaimState('complete'); // Hide the card on an explicit disable.
         } else {
-          setAlreadyClaimed(data.claimed);
-          if (!data.claimed && data.bonuses) {
+          const nextClaimState = parseClaimState(data.claimState);
+          if (!nextClaimState) {
+            throw new Error('Verify status returned an invalid claim state');
+          }
+          setClaimState(nextClaimState);
+          setClaimRecovery(data.claimData ? {
+            reservationId: data.claimData.reservationId,
+            stage: data.claimData.stage,
+          } : null);
+          if ((nextClaimState === 'unclaimed' || nextClaimState === 'retryable') && data.bonuses) {
             setBonuses(data.bonuses);
           }
         }
       } catch (err) {
         console.error('[VERIFY] Failed to check claim status:', err);
-        setAlreadyClaimed(false); // Default to showing card on error
+        // An outage cannot prove there is no post-submission reservation.
+        setClaimState('unavailable');
+        setClaimRecovery(null);
       } finally {
         setStatusLoading(false);
       }
     }
 
     checkClaimStatus();
-  }, [address]);
+  }, [address, statusRefreshKey]);
 
   const handleVerify = async () => {
     if (!address) {
@@ -143,9 +173,18 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
       if (response.ok && data.verified) {
         if (data.alreadyClaimed) {
-          setError('This account has already claimed a free plant.');
+          const serverClaimState = parseClaimState(data.claimState) ?? 'manual_review';
+          setClaimState(serverClaimState);
+          setClaimRecovery({
+            reservationId: data.reservationId,
+            stage: data.recoveryStage,
+          });
+          setError(serverClaimState === 'complete'
+            ? 'This account has already claimed a free plant.'
+            : null);
           setStep('idle');
         } else {
+          setClaimState(data.retryable === true ? 'retryable' : 'unclaimed');
           claimHandoffRef.current = true;
           setStep('claiming'); // Auto-proceed to claim for smoother UX
           await handleClaim(data.token);
@@ -189,27 +228,47 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setStep('success');
-        
-        // Handle different success statuses
         if (data.status === 'complete') {
+          setClaimState('complete');
+          setStep('success');
           toast.success(data.message || 'Free plant claimed and transferred successfully!');
-        } else if (data.status === 'partial') {
-          // Partial success - mint worked but transfer may have failed
-          toast.success(data.message || 'Plant minted! Check your wallet shortly.');
+          onClaimSuccess({
+            strainId,
+            mintTxHash: data.mintTxHash ?? data.txHash,
+          });
+        } else {
+          // A partial response represents a durable, non-retryable recovery
+          // state, not proof that the whole claim completed.
+          setClaimState('manual_review');
+          setClaimRecovery({
+            reservationId: data.reservationId,
+            stage: data.recoveryStage,
+          });
+          setStep('idle');
+          toast.error(data.message || 'Your claim needs reconciliation before it can continue.');
+          if (data.mintTxHash) {
+            onClaimSuccess({ strainId, mintTxHash: data.mintTxHash });
+          }
         }
-        
-        onClaimSuccess({
-          strainId,
-          mintTxHash: data.mintTxHash ?? data.txHash,
-        });
       } else {
+        const serverClaimState = parseClaimState(data.claimState);
+        if (serverClaimState) {
+          setClaimState(serverClaimState);
+        } else if (data.recoveryStage === 'failed_before_submission') {
+          setClaimState('retryable');
+        } else if (data.recoveryStage) {
+          setClaimState(data.recoveryStage === 'reserved' ? 'processing' : 'manual_review');
+        }
+        setClaimRecovery({
+          reservationId: data.reservationId,
+          stage: data.recoveryStage,
+        });
         throw new Error(data.error || 'Claim failed');
       }
     } catch (err: UntypedValue) {
       console.error('Claim error:', err);
       setError(err.message || 'Failed to claim');
-      setStep('verifying'); // Go back to verified state so they can retry claim
+      setStep('idle');
     } finally {
       setLoading(false);
     }
@@ -235,8 +294,61 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
     return null;
   }
 
-  if (alreadyClaimed) {
+  if (claimState === 'complete') {
     return null;
+  }
+
+  if (claimState === 'unavailable') {
+    return (
+      <Card className="border-amber-400/30 bg-amber-950/20 font-sans">
+        <CardContent className="space-y-3 py-5 text-center">
+          <AlertCircle className="mx-auto h-8 w-8 text-amber-300" />
+          <p className="text-sm text-foreground">Claim status is temporarily unavailable.</p>
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={() => setStatusRefreshKey((value) => value + 1)}
+          >
+            Check Again
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (claimState === 'processing' || claimState === 'manual_review') {
+    const needsReview = claimState === 'manual_review';
+    return (
+      <Card className="border-amber-400/30 bg-amber-950/20 font-sans">
+        <CardContent className="space-y-3 py-5 text-center">
+          {needsReview
+            ? <AlertCircle className="mx-auto h-8 w-8 text-amber-300" />
+            : <Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-300" />}
+          <h3 className="font-bold text-foreground">
+            {needsReview ? 'Claim needs review' : 'Claim is being prepared'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {needsReview
+              ? 'This claim may already have reached the network, so it cannot be submitted again automatically. Contact support with the reservation ID.'
+              : 'Another claim attempt currently owns this reservation. You can check again shortly.'}
+          </p>
+          {claimRecovery?.reservationId && (
+            <p className="break-all text-xs text-muted-foreground">
+              Reservation: {claimRecovery.reservationId}
+            </p>
+          )}
+          {!needsReview && (
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => setStatusRefreshKey((value) => value + 1)}
+            >
+              Check Status
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
   if (step === 'success') {
@@ -318,10 +430,12 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
               <Image src="/icons/verified.svg" alt="" aria-hidden="true" width={24} height={24} />
             </div>
-            Claim your free plant
+            {claimState === 'retryable' ? 'Retry your free plant claim' : 'Claim your free plant'}
           </CardTitle>
           <CardDescription className="text-white/90">
-            Verify your X account to claim {rewardDescription}!
+            {claimState === 'retryable'
+              ? 'Your earlier attempt stopped before submission. Verify again to retry safely.'
+              : <>Verify your X account to claim {rewardDescription}!</>}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -345,7 +459,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
                 {step === 'verifying' ? 'Verifying...' : 'Claiming...'}
               </>
             ) : (
-              'Verify & Claim'
+              claimState === 'retryable' ? 'Verify & Retry Claim' : 'Verify & Claim'
             )}
           </Button>
           <p className="text-xs text-white/80 text-center font-sans">

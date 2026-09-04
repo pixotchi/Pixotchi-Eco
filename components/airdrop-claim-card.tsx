@@ -8,6 +8,10 @@ import { Gift, Loader2, CheckCircle, PenTool } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { StandardContainer } from '@/components/ui/pixel-container';
+import {
+    AIRDROP_PENDING_POLL_MAX_ATTEMPTS,
+    getAirdropPendingPollDelay,
+} from '@/lib/airdrop-claim-polling';
 import { invalidateOwnerResources } from '@/lib/owner-resource-invalidation';
 
 interface AirdropStatus {
@@ -17,6 +21,9 @@ interface AirdropStatus {
     pixotchi: string;
     claimed: boolean;
     txHash?: string;
+    status?: 'eligible' | 'pending' | 'claimed' | 'failed';
+    attemptId?: string | null;
+    operationId?: string | null;
 }
 
 export function AirdropClaimCard() {
@@ -28,6 +35,7 @@ export function AirdropClaimCard() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [retryRevision, setRetryRevision] = useState(0);
+    const [pendingPollAttempt, setPendingPollAttempt] = useState(0);
     const [claiming, setClaiming] = useState(false);
     const [signingStep, setSigningStep] = useState<'idle' | 'signing' | 'claiming'>('idle');
 
@@ -37,6 +45,7 @@ export function AirdropClaimCard() {
         setStatus(null);
         setLoadError(null);
         setLoading(Boolean(ownerKey));
+        setPendingPollAttempt(0);
         setClaiming(false);
         setSigningStep('idle');
     }, [ownerKey]);
@@ -59,7 +68,6 @@ export function AirdropClaimCard() {
 
             try {
                 setLoading(true);
-                setStatus(null);
                 setLoadError(null);
                 const res = await fetch(`/api/airdrop/status?address=${address}`);
                 if (!res.ok) {
@@ -81,6 +89,48 @@ export function AirdropClaimCard() {
         fetchStatus();
         return () => { cancelled = true; };
     }, [address, retryRevision]);
+
+    // A submitted user operation is reconciled by the server. Polling is
+    // intentionally bounded: an ambiguous reservation cannot be resolved by
+    // another GET, and a hidden tab should not keep asking CDP/RPC for status.
+    useEffect(() => {
+        if (status?.status !== 'pending') {
+            setPendingPollAttempt(0);
+            return;
+        }
+        if (pendingPollAttempt >= AIRDROP_PENDING_POLL_MAX_ATTEMPTS) return;
+
+        let timeoutId: number | null = null;
+        const clearPoll = () => {
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+        const schedulePoll = () => {
+            if (document.visibilityState !== 'visible' || timeoutId !== null) return;
+            timeoutId = window.setTimeout(() => {
+                timeoutId = null;
+                setPendingPollAttempt((attempt) => attempt + 1);
+                setRetryRevision((revision) => revision + 1);
+            }, getAirdropPendingPollDelay(pendingPollAttempt));
+        };
+        const handleVisibilityChange = () => {
+            clearPoll();
+            schedulePoll();
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        schedulePoll();
+        return () => {
+            clearPoll();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [pendingPollAttempt, status?.status]);
+
+    const checkPendingClaimStatus = () => {
+        setRetryRevision((revision) => revision + 1);
+    };
 
     const handleClaim = async () => {
         if (!address || !status?.eligible || status.claimed) return;
@@ -139,7 +189,22 @@ export function AirdropClaimCard() {
                 });
                 if (ownerKeyRef.current === operationOwner) {
                     toast.success('Airdrop claimed successfully!');
-                    setStatus(prev => prev ? { ...prev, claimed: true, txHash: data.txHash } : null);
+                    setStatus(prev => prev ? {
+                        ...prev,
+                        claimed: true,
+                        status: 'claimed',
+                        txHash: data.txHash,
+                    } : null);
+                }
+            } else if (data.status === 'pending') {
+                if (ownerKeyRef.current === operationOwner) {
+                    setStatus(prev => prev ? {
+                        ...prev,
+                        attemptId: data.attemptId ?? prev.attemptId,
+                        operationId: data.operationId ?? prev.operationId,
+                        status: 'pending',
+                    } : null);
+                    toast('Claim submitted. Waiting for onchain confirmation.');
                 }
             } else {
                 if (ownerKeyRef.current === operationOwner) toast.error(data.error || 'Claim failed');
@@ -180,7 +245,7 @@ export function AirdropClaimCard() {
         return null;
     }
 
-    if (loading) {
+    if (loading && !status) {
         return (
             <div className="space-y-3" aria-busy="true">
                 <h3 className="text-sm font-semibold text-foreground">Airdrop</h3>
@@ -268,6 +333,14 @@ export function AirdropClaimCard() {
     }
 
     const getButtonContent = () => {
+        if (status.status === 'pending') {
+            return (
+                <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Confirming onchain...
+                </>
+            );
+        }
         if (signingStep === 'signing') {
             return (
                 <>
@@ -301,7 +374,7 @@ export function AirdropClaimCard() {
             </div>
             <StandardContainer padding="none" className={panelClassName}>
                 <div className={contentClassName}>
-                    {status.claimed ? (
+                    {status.claimed || status.status === 'claimed' ? (
                         // Already claimed state
                         <div className={featureCardClassName}>
                             <CheckCircle className={claimedIconClassName} />
@@ -311,6 +384,16 @@ export function AirdropClaimCard() {
                                 </p>
                                 <p className="text-xs leading-relaxed text-muted-foreground">
                                     Thanks for playing and helping Pixotchi grow.
+                                </p>
+                            </div>
+                        </div>
+                    ) : status.status === 'failed' ? (
+                        <div className={featureCardClassName} role="alert">
+                            <Gift className={airdropGiftIconClassName} />
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-destructive">Claim needs review</p>
+                                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                                    The payout was not confirmed. It has been stopped from retrying automatically to protect your allocation.
                                 </p>
                             </div>
                         </div>
@@ -351,12 +434,30 @@ export function AirdropClaimCard() {
                             </div>
                             <Button
                                 onClick={handleClaim}
-                                disabled={claiming}
+                                disabled={claiming || status.status === 'pending'}
                                 className={baseActionClassName}
                                 size="sm"
                             >
                                 {getButtonContent()}
                             </Button>
+                            {status.status === 'pending'
+                                && pendingPollAttempt >= AIRDROP_PENDING_POLL_MAX_ATTEMPTS && (
+                                <div
+                                    role="status"
+                                    className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground"
+                                >
+                                    <span>Still confirming onchain.</span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="touchCompact"
+                                        disabled={loading}
+                                        onClick={checkPendingClaimStatus}
+                                    >
+                                        Check status
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

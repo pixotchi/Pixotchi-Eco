@@ -39,6 +39,11 @@ const clampFenceDays = (value: number, min: number, max: number) => (
   Math.min(Math.max(value, min), max)
 );
 
+type FenceV2QuoteState =
+  | { status: 'loading'; days: number }
+  | { status: 'known'; days: number; value: bigint }
+  | { status: 'error'; days: number };
+
 interface ItemDetailsPanelProps {
   selectedItem: ShopItem | GardenItem | null;
   selectedPlant: Plant | null;
@@ -64,8 +69,7 @@ export default function ItemDetailsPanel({
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2DaysInput, setFenceV2DaysInput] = useState("1");
-  const [fenceV2Quote, setFenceV2Quote] = useState<bigint>(BigInt(0));
-  const [fenceV2QuoteLoading, setFenceV2QuoteLoading] = useState(false);
+  const [fenceV2QuoteState, setFenceV2QuoteState] = useState<FenceV2QuoteState>({ status: 'loading', days: 1 });
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
   // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
@@ -106,7 +110,7 @@ export default function ItemDetailsPanel({
     : isSmartWallet && isEthMode && ethQuote
       ? ethBalance < ethQuote.ethAmountWithBuffer
       : isFenceItem
-        ? fenceV2Quote > userSeedBalance
+        ? fenceV2QuoteState.status === 'known' && fenceV2QuoteState.value > userSeedBalance
         : totalCost > userSeedBalance;
 
   // Bundle transactions are only available for garden items and Smart Wallets
@@ -217,6 +221,11 @@ export default function ItemDetailsPanel({
 
   const fenceV2InputInvalid = isFenceItem && !fenceV2Bounds.todCapBreached && validFenceV2Days === null;
   const activeFenceV2Days = validFenceV2Days ?? fenceV2Days;
+  const fenceV2Quote = fenceV2QuoteState.status === 'known' && fenceV2QuoteState.days === activeFenceV2Days
+    ? fenceV2QuoteState.value
+    : null;
+  const fenceV2QuoteLoading = fenceV2QuoteState.status === 'loading' && fenceV2QuoteState.days === activeFenceV2Days;
+  const fenceV2QuoteReady = !isFenceItem || fenceV2Quote !== null;
 
   const fenceV2Calls = useMemo(() => {
     if (!selectedPlant || validFenceV2Days === null) return [];
@@ -258,27 +267,26 @@ export default function ItemDetailsPanel({
 
   useEffect(() => {
     if (!isFenceItem || fenceV2Bounds.todCapBreached || validFenceV2Days === null) {
-      setFenceV2Quote(BigInt(0));
-      setFenceV2QuoteLoading(false);
+      setFenceV2QuoteState({ status: 'error', days: activeFenceV2Days });
       return;
     }
 
     let cancelled = false;
     const fetchQuote = async () => {
-      setFenceV2QuoteLoading(true);
+      setFenceV2QuoteState({ status: 'loading', days: validFenceV2Days });
       try {
         const quote = await quoteFenceV2(validFenceV2Days);
         if (!cancelled) {
-          setFenceV2Quote(quote);
+          setFenceV2QuoteState(
+            quote > BigInt(0)
+              ? { status: 'known', days: validFenceV2Days, value: quote }
+              : { status: 'error', days: validFenceV2Days },
+          );
         }
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to quote Fence:', error);
-          setFenceV2Quote(BigInt(0));
-        }
-      } finally {
-        if (!cancelled) {
-          setFenceV2QuoteLoading(false);
+          setFenceV2QuoteState({ status: 'error', days: validFenceV2Days });
         }
       }
     };
@@ -288,7 +296,7 @@ export default function ItemDetailsPanel({
     return () => {
       cancelled = true;
     };
-  }, [isFenceItem, fenceV2Bounds.todCapBreached, validFenceV2Days]);
+  }, [activeFenceV2Days, isFenceItem, fenceV2Bounds.todCapBreached, validFenceV2Days]);
 
   // Fetch ETH quote when ETH mode is active - only for per-unit price (fence uses its own quote)
   useEffect(() => {
@@ -299,7 +307,7 @@ export default function ItemDetailsPanel({
     }
 
     // For fence items, use fenceV2Quote; for regular items, use basePrice (per-unit)
-    const seedCost = isFenceItem ? fenceV2Quote : basePrice;
+    const seedCost = isFenceItem ? (fenceV2Quote ?? BigInt(0)) : basePrice;
     if (seedCost <= BigInt(0)) {
       setEthQuotePerUnit(null);
       return;
@@ -376,6 +384,8 @@ export default function ItemDetailsPanel({
       if (fenceV2Bounds.min === fenceV2Bounds.max) return `Use ${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'}`;
       return `Use ${fenceV2Bounds.min}-${fenceV2Bounds.max} days`;
     }
+    if (isFenceItem && fenceV2QuoteLoading) return 'Loading Fence quote…';
+    if (isFenceItem && !fenceV2QuoteReady) return 'Fence quote unavailable. Retry to continue.';
     if (isFenceItem && fenceV2BlockedByV1) return 'Existing fence active. Wait for expiry.';
     if (hasInsufficientFunds) return 'Insufficient SEED Balance';
     if (canBundle && itemType === 'garden' && !isSmartWallet) {
@@ -432,7 +442,7 @@ export default function ItemDetailsPanel({
     }
   };
 
-  const requiredSeedAllowance = isFenceItem ? (fenceV2Quote || BigInt(0)) : totalCost;
+  const requiredSeedAllowance = isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost;
   const needsSeedApproval =
     !isSolana
     && seedAllowance < requiredSeedAllowance
@@ -528,6 +538,8 @@ export default function ItemDetailsPanel({
               ) : isFenceItem ? (
                 fenceV2QuoteLoading ? (
                   <Skeleton className="h-4 w-20" />
+                ) : fenceV2Quote === null ? (
+                  <span className="text-muted-foreground" title="Fence quote unavailable">—</span>
                 ) : (
                   `${formatTokenAmount(fenceV2Quote)} SEED`
                 )
@@ -656,7 +668,7 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && selectedPlant && selectedItem ? (
+          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && fenceV2QuoteReady && selectedPlant && selectedItem ? (
             // ETH Mode purchase - atomic swap + buy transaction
             <div className="flex flex-col space-y-2">
               {isFenceItem ? (
@@ -665,7 +677,7 @@ export default function ItemDetailsPanel({
                   plantId={selectedPlant.id}
                   days={activeFenceV2Days}
                   ethAmount={ethQuote.ethAmountWithBuffer}
-                  minSeedOut={fenceV2Quote}
+                  minSeedOut={fenceV2Quote ?? BigInt(0)}
                   onSuccess={() => {
                     onPurchaseSuccess();
                     toast.success('Fence purchased with ETH!');
@@ -748,6 +760,7 @@ export default function ItemDetailsPanel({
                 disabled={
                   selectedPlant.status === 4
                   || fenceV2QuoteLoading
+                  || !fenceV2QuoteReady
                   || fenceV2BlockedByV1
                   || fenceV2Bounds.todCapBreached
                   || fenceV2InputInvalid
@@ -791,7 +804,7 @@ export default function ItemDetailsPanel({
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={fenceButtonText}
                   buttonClassName="w-full"
-                  disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached || fenceV2InputInvalid}
+                  disabled={selectedPlant.status === 4 || fenceV2QuoteLoading || !fenceV2QuoteReady || fenceV2BlockedByV1 || hasInsufficientFunds || fenceV2Bounds.todCapBreached || fenceV2InputInvalid}
                 />
               ) : (
                 <BuyShopItemTransaction
@@ -861,7 +874,7 @@ export default function ItemDetailsPanel({
 
           {hasInsufficientFunds && !isEthMode && (
             <InlineBalanceNotice>
-              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? fenceV2Quote : totalCost)}
+              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
             </InlineBalanceNotice>
           )}
 

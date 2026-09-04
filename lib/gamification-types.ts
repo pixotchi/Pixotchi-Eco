@@ -1,21 +1,30 @@
 export type GmDay = string; // YYYY-MM-DD UTC
 
-export type GmTaskId =
-  | 's1_make_swap'
-  | 's1_stake_seed'
-  | 's1_claim_stake'
-  | 's1_place_order'
-  | 's2_follow_player'
-  | 's2_chat_message'
-  | 's2_visit_profile'
-  | 's3_apply_resources'
-  | 's3_send_quest'
-  | 's3_claim_production'
-  | 's3_play_casino_game'
-  | 's4_buy10_elements'
-  | 's4_buy_shield'
-  | 's4_collect_star'
-  | 's4_play_arcade';
+export const GM_TASK_IDS = [
+  's1_make_swap',
+  's1_stake_seed',
+  's1_claim_stake',
+  's1_place_order',
+  's2_follow_player',
+  's2_chat_message',
+  's2_visit_profile',
+  's3_apply_resources',
+  's3_send_quest',
+  's3_claim_production',
+  's3_play_casino_game',
+  's4_buy10_elements',
+  's4_buy_shield',
+  's4_collect_star',
+  's4_play_arcade',
+] as const;
+
+export type GmTaskId = (typeof GM_TASK_IDS)[number];
+
+const GM_TASK_ID_SET: ReadonlySet<string> = new Set(GM_TASK_IDS);
+
+export function isGmTaskId(value: unknown): value is GmTaskId {
+  return typeof value === 'string' && GM_TASK_ID_SET.has(value);
+}
 
 export type GmSectionKey = 's1' | 's2' | 's3' | 's4';
 
@@ -61,7 +70,6 @@ export type GmStreak = {
 
 export type GmProgressProof = {
   txHash?: string;
-  meta?: Record<string, UntypedValue>;
 };
 
 export type GmLeaderEntry = { address: string; value: number };

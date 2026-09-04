@@ -1,6 +1,7 @@
 "use client";
 
 import EditPlantName from "@/components/edit-plant-name";
+import ApprovalActionTransaction from "@/components/transactions/approval-action-transaction";
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -28,8 +29,10 @@ import { useOwnerResourceList } from "@/hooks/useOwnerResourceList";
 import { ITEM_ICONS } from "@/lib/constants";
 import {
 getPlantsByOwner,
+checkTokenApproval,
 getRevivePrice,
 getTokenBalance,
+PIXOTCHI_NFT_ADDRESS,
 } from "@/lib/contracts";
 import { usePaymaster } from "@/lib/paymaster-context";
 import {
@@ -38,7 +41,7 @@ type OwnerResourceInvalidationDetail,
 } from "@/lib/owner-resource-invalidation";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
-import { GardenItem,Plant,ShopItem } from "@/lib/types";
+import { GardenItem,Plant,ShopItem,TransactionCall } from "@/lib/types";
 import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
@@ -56,10 +59,6 @@ import FenceTimer from "../fence-timer";
 const ArcadeDialog = dynamic(() => import("@/components/arcade/ArcadeDialog"), {
   ssr: false,
 });
-const ReviveTransaction = dynamic(() => import("@/components/transactions/revive-transaction"), {
-  loading: () => <Button className="w-full" disabled>Loading...</Button>,
-  ssr: false,
-});
 const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solana-bridge-button"), {
   loading: () => <Button className="w-full" disabled>Loading...</Button>,
   ssr: false,
@@ -74,6 +73,21 @@ const ItemDetailsPanel = dynamic(() => import("@/components/item-details-panel")
 });
 
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
+const REVIVE_ABI = [
+  {
+    inputs: [{ name: "_Id", type: "uint256" }],
+    name: "Revive",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+type AllowanceState = {
+  status: "loading" | "known" | "error";
+  value: bigint | null;
+  owner: string | null;
+};
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 const REWARD_VALUE_MAX_FONT_SIZE = 13;
@@ -183,6 +197,7 @@ export default function PlantsView() {
   const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [reviveDataLoading, setReviveDataLoading] = useState(false);
+  const [reviveAllowance, setReviveAllowance] = useState<AllowanceState>({ status: "loading", value: null, owner: null });
   const claimConfirmationId = useId();
   const claimConfirmationDescriptionId = `${claimConfirmationId}-description`;
 
@@ -320,22 +335,29 @@ export default function PlantsView() {
 
     const fetchReviveData = async () => {
       setReviveDataLoading(true);
+      setReviveAllowance((previous) => ({ status: "loading", value: previous.value, owner: previous.owner }));
 
-      try {
-        const [price, balance] = await Promise.all([
-          getRevivePrice().catch(() => DEFAULT_REVIVE_PRICE),
-          address ? getTokenBalance(address).catch(() => BigInt(0)) : Promise.resolve(BigInt(0)),
-        ]);
+      const [priceResult, balanceResult, allowanceResult] = await Promise.allSettled([
+        getRevivePrice(),
+        address ? getTokenBalance(address) : Promise.reject(new Error("Wallet address unavailable")),
+        address ? checkTokenApproval(address) : Promise.reject(new Error("Wallet address unavailable")),
+      ]);
 
-        if (!cancelled) {
-          setRevivePrice(price || DEFAULT_REVIVE_PRICE);
-          setSeedBalance(balance || BigInt(0));
-        }
-      } finally {
-        if (!cancelled) {
-          setReviveDataLoading(false);
-        }
+      if (cancelled) return;
+
+      if (priceResult.status === "fulfilled" && priceResult.value > BigInt(0)) {
+        setRevivePrice(priceResult.value);
       }
+      if (balanceResult.status === "fulfilled") {
+        setSeedBalance(balanceResult.value);
+      }
+      if (allowanceResult.status === "fulfilled") {
+        setReviveAllowance({ status: "known", value: allowanceResult.value, owner: address?.toLowerCase() ?? null });
+      } else {
+        console.error("Failed to fetch SEED allowance for revive:", allowanceResult.reason);
+        setReviveAllowance((previous) => ({ status: "error", value: previous.value, owner: previous.owner }));
+      }
+      setReviveDataLoading(false);
     };
 
     void fetchReviveData();
@@ -414,6 +436,22 @@ export default function PlantsView() {
           ),
     });
   }, [ownerKey, reconcilePlants, selectedPlant?.id]);
+
+  const reviveCalls = useMemo<TransactionCall[]>(() => {
+    if (!selectedPlant) return [];
+    return [{
+      address: PIXOTCHI_NFT_ADDRESS,
+      abi: REVIVE_ABI,
+      functionName: "Revive",
+      args: [BigInt(selectedPlant.id)],
+    }];
+  }, [selectedPlant]);
+  const reviveAllowanceKnown = reviveAllowance.status === "known"
+    && reviveAllowance.value !== null
+    && reviveAllowance.owner === address?.toLowerCase();
+  const reviveNeedsApproval = reviveAllowanceKnown
+    && reviveAllowance.value !== null
+    && reviveAllowance.value < revivePrice;
 
   const renderNoPlantsView = () => (
     <EmptyState
@@ -817,6 +855,16 @@ export default function PlantsView() {
                         {reviveDataLoading ? "Loading..." : `${formatTokenAmount(seedBalance)} SEED`}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">SEED allowance</span>
+                      <span className="font-semibold text-foreground">
+                        {reviveAllowanceKnown && reviveAllowance.value !== null
+                          ? `${formatTokenAmount(reviveAllowance.value)} SEED`
+                          : reviveAllowance.status === "loading"
+                            ? "Checking..."
+                            : "Unavailable"}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Confirm Revive</span>
                       <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
@@ -825,24 +873,39 @@ export default function PlantsView() {
                       <SolanaNotSupported feature="Revive action" />
                     ) : (
                       <>
-                        <ReviveTransaction
-                          plantId={selectedPlant.id}
-                          buttonText={
-                            reviveDataLoading
-                              ? "Checking Revive Cost"
-                              : seedBalance < revivePrice
-                                ? "Insufficient SEED"
-                                : "Revive Plant"
-                          }
-                          buttonClassName="w-full"
-                          disabled={reviveDataLoading || seedBalance < revivePrice}
-                          onSuccess={() => {
-                            reconcileReviveSuccess();
-                          }}
-                          onError={() => {
-                            toast.error('Revive failed');
-                          }}
-                        />
+                        {!reviveAllowanceKnown ? (
+                          <Button className="w-full" disabled>
+                            {reviveAllowance.status === "loading"
+                              ? "Checking SEED allowance"
+                              : "SEED allowance unavailable"}
+                          </Button>
+                        ) : (
+                          <ApprovalActionTransaction
+                            intentKey={`plant:revive:${selectedPlant.id}`}
+                            actionCalls={reviveCalls}
+                            approvalSpender={PIXOTCHI_NFT_ADDRESS}
+                            needsApproval={reviveNeedsApproval}
+                            batchButtonText="Approve + Revive Plant"
+                            approvalButtonText="Approve SEED"
+                            actionButtonText="Revive Plant"
+                            buttonClassName="w-full"
+                            disabled={reviveDataLoading || seedBalance < revivePrice}
+                            onApprovalSuccess={() => {
+                              setReviveAllowance((previous) => ({ status: "loading", value: previous.value, owner: previous.owner }));
+                              if (!address) return;
+                              void checkTokenApproval(address).then((value) => {
+                                setReviveAllowance({ status: "known", value, owner: address.toLowerCase() });
+                              }).catch((error) => {
+                                console.error("Failed to refresh SEED allowance after approval:", error);
+                                setReviveAllowance((previous) => ({ status: "error", value: previous.value, owner: previous.owner }));
+                              });
+                            }}
+                            onSuccess={reconcileReviveSuccess}
+                            onError={() => {
+                              toast.error('Revive failed');
+                            }}
+                          />
+                        )}
                         {seedBalance < revivePrice && !reviveDataLoading && (
                           <InlineBalanceNotice>
                             Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}

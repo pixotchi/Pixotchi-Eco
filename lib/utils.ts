@@ -448,6 +448,9 @@ export function calculateUpgradeProgress(building: UntypedValue, currentBlock: b
   if (!building.isUpgrading) return 0;
 
   const totalBlocks = building.blockHeightUntilUpgradeDone - building.blockHeightUpgradeInitiated;
+  if (totalBlocks <= BigInt(0)) {
+    return currentBlock >= building.blockHeightUntilUpgradeDone ? 100 : 0;
+  }
   const blocksLeft = building.blockHeightUntilUpgradeDone - currentBlock;
   const progress = 100 - (Number(blocksLeft) / Number(totalBlocks)) * 100;
 
@@ -462,9 +465,13 @@ export function calculateTimeLeft(building: UntypedValue, currentBlock: bigint):
   if (secondsLeft <= 0) return "Complete";
 
   const duration = intervalToDuration({ start: 0, end: secondsLeft * 1000 });
+  const d = duration.days || 0;
   const h = duration.hours || 0;
   const m = duration.minutes || 0;
 
+  if (d > 0) {
+    return `${d}d ${h}h ${m}m`;
+  }
   if (h > 0) {
     return `${h}h ${m}m`;
   } else {

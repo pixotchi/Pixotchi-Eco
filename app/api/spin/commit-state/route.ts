@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getBaseReadClient } from "@/lib/base-rpc";
 import { redis, redisCompareAndSetJSONRaw } from "@/lib/redis";
-import { isAddress, verifyMessage } from "viem";
+import { isAddress } from "viem";
 
 const KEY_PREFIX = "spin:commit";
 const EXPIRY_SECONDS = 60 * 60 * 48; // 48 hours
 const MAX_PLANT_ID = 1_000_000_000;
+const publicClient = getBaseReadClient();
 
 function buildKey(address: string, plantId: number) {
   return `${KEY_PREFIX}:${address.toLowerCase()}:plant:${plantId}`;
@@ -74,7 +76,9 @@ export async function POST(req: NextRequest) {
 
   let signatureValid = false;
   try {
-    signatureValid = await verifyMessage({
+    // Public-client verification supports EOAs, deployed ERC-1271 wallets,
+    // and counterfactual ERC-6492 signatures used by undeployed smart wallets.
+    signatureValid = await publicClient.verifyMessage({
       address: normalizedAddress as `0x${string}`,
       message,
       signature: signature as `0x${string}`,

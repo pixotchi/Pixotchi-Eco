@@ -16,6 +16,7 @@ import {
     buildBlackjackActionWithRandomCall,
     BlackjackAction,
 } from "@/lib/contracts";
+import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { blackjackAbi, BlackjackResult, getResultText } from "@/public/abi/blackjack-abi";
 import { toast } from "react-hot-toast";
 import { decodeEventLog, formatUnits } from "viem";
@@ -232,13 +233,15 @@ export default function BlackjackTransaction({
                             action === BlackjackAction.SPLIT ? "split" :
                                 action === BlackjackAction.SURRENDER ? "surrender" : "action";
 
+            const authHeaders = await getMiniAppQuickAuthHeaders({ expectedAddress: address });
             const result = await blackjackFetchRandomness(
                 landId,
                 actionName,
                 address,
                 resolvedHandIndex,
                 mode === "deal" ? bettingToken ?? undefined : undefined,
-                mode === "deal" ? betAmount?.toString() : undefined
+                mode === "deal" ? betAmount?.toString() : undefined,
+                authHeaders,
             );
 
 

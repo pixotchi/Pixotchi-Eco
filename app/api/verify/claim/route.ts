@@ -1,23 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { redis, redisCompareAndSetJSONRaw, redisDelRaw, redisGetJSONRaw, redisSetJSONRaw } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { PIXOTCHI_NFT_ADDRESS, PIXOTCHI_TOKEN_ADDRESS, LEAF_CONTRACT_ADDRESS, ERC20_BALANCE_ABI, EVM_EVENT_SIGNATURES, EVM_TOPICS } from '@/lib/contracts';
+import { NextRequest, NextResponse } from 'next/server';
 import { encodeFunctionData, maxUint256, parseUnits } from 'viem';
 import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import {
+  ERC20_BALANCE_ABI,
+  EVM_EVENT_SIGNATURES,
+  EVM_TOPICS,
+  LEAF_CONTRACT_ADDRESS,
+  PIXOTCHI_NFT_ADDRESS,
+  PIXOTCHI_TOKEN_ADDRESS,
+} from '@/lib/contracts';
 import {
   VERIFY_CLAIM_LEAF_BONUS_AMOUNT,
   VERIFY_CLAIM_SEED_BONUS_AMOUNT,
 } from '@/lib/verify-claim-config';
 import {
+  advanceVerifyClaimRecord,
+  createVerifyClaimReservation,
+  createVerifyClaimRetryAttempt,
+  getVerifyClaimPairState,
   getVerifyClaimKey,
-  getVerifyClaimLockKey,
   getVerifyPendingKey,
   getVerifyWalletClaimKey,
-  getVerifyWalletLockKey,
   normalizeVerifyWalletAddress,
-  VERIFY_CLAIM_LOCK_TTL_SECONDS,
-  VERIFY_CLAIM_RESERVATION_TTL_SECONDS,
-  VERIFY_RETRYABLE_FAILURE_TTL_SECONDS,
+  readVerifyClaimJSON,
+  resumeVerifyClaimPairBeforeSubmission,
+  reserveVerifyClaimPair,
+  writeVerifyClaimPair,
   type VerifyClaimReservationRecord,
   type VerifyPendingRecord,
 } from '@/lib/verify-claim-records';
@@ -28,63 +37,117 @@ import {
  */
 const VERIFY_CLAIM_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true';
 
-// We reuse the CdpClient from agent mint logic if possible, or new instance
 let cdp: CdpClient | null = null;
 function getClient() {
-  if (!cdp) {
-    cdp = new CdpClient();
-  }
+  if (!cdp) cdp = new CdpClient();
   return cdp;
 }
 
-// Cache for agent smart account
 let agentSmartAccount: UntypedValue = null;
 
-/**
- * Strain IDs eligible for free claim:
- * - Flora (1) - Sold out
- * - Taki (2) - Available
- * - Rosa (3) - Available
- * - Zest (4) - Available (Default)
- * - TYJ (5) - NOT eligible (requires JESSE token)
- */
 const ELIGIBLE_STRAINS = [1, 2, 3, 4];
-
-/**
- * LEAF token bonus - when enabled, each free claim also sends LEAF tokens.
- * Set NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED=true to enable.
- * Ensure the agent smart account has sufficient LEAF balance.
- */
 const LEAF_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_LEAF_BONUS_ENABLED === 'true';
-const LEAF_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_LEAF_BONUS_AMOUNT, 18); // 7,000,000 LEAF tokens
-
-/**
- * SEED token bonus — first-come-first-served.
- * Sends 100 SEED per claim while the agent wallet has sufficient balance.
- * When balance < 100 SEED, this bonus is silently skipped.
- */
+const LEAF_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_LEAF_BONUS_AMOUNT, 18);
 const SEED_BONUS_ENABLED = process.env.NEXT_PUBLIC_VERIFY_CLAIM_SEED_BONUS_ENABLED === 'true';
-const SEED_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18); // 100 SEED tokens
+const SEED_BONUS_AMOUNT = parseUnits(VERIFY_CLAIM_SEED_BONUS_AMOUNT, 18);
+
+const ERC20_APPROVE_ABI = [{
+  type: 'function',
+  name: 'approve',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'spender', type: 'address' },
+    { name: 'amount', type: 'uint256' },
+  ],
+  outputs: [{ name: '', type: 'bool' }],
+}] as const;
+
+const ERC20_TRANSFER_ABI = [{
+  type: 'function',
+  name: 'transfer',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'to', type: 'address' },
+    { name: 'amount', type: 'uint256' },
+  ],
+  outputs: [{ name: '', type: 'bool' }],
+}] as const;
+
+const NFT_MINT_ABI = [{
+  type: 'function',
+  name: 'mint',
+  stateMutability: 'nonpayable',
+  inputs: [{ name: 'strain', type: 'uint256' }],
+  outputs: [],
+}] as const;
+
+const NFT_TRANSFER_ABI = [{
+  type: 'function',
+  name: 'transferFrom',
+  stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'from', type: 'address' },
+    { name: 'to', type: 'address' },
+    { name: 'tokenId', type: 'uint256' },
+  ],
+  outputs: [],
+}] as const;
+
+class ClaimStateUnavailableError extends Error {
+  constructor() {
+    super('Claim recovery state could not be persisted');
+    this.name = 'ClaimStateUnavailableError';
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Claim failed';
+}
+
+function operationHash(operation: UntypedValue): string | undefined {
+  return typeof operation?.userOpHash === 'string'
+    ? operation.userOpHash
+    : typeof operation?.id === 'string'
+      ? operation.id
+      : typeof operation === 'string'
+        ? operation
+        : undefined;
+}
+
+function recoveryResponse(record: VerifyClaimReservationRecord, message: string) {
+  return NextResponse.json({
+    success: true,
+    status: 'partial',
+    reservationId: record.reservationId,
+    recoveryStage: record.stage,
+    mintTxHash: record.mintTxHash,
+    transferTxHash: record.transferTxHash,
+    tokenId: record.tokenId,
+    message,
+  }, {
+    status: 202,
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
+}
 
 export async function POST(req: NextRequest) {
-  // Check if feature is enabled
   if (!VERIFY_CLAIM_ENABLED) {
-    return NextResponse.json({ 
-      error: 'Verification claims are currently disabled' 
-    }, { status: 503 });
+    return NextResponse.json({ error: 'Verification claims are currently disabled' }, { status: 503 });
   }
 
   try {
     const body = await req.json();
     const { userAddress, verificationToken, provider, strainId } = body;
 
-    if (!userAddress || !verificationToken || !provider) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
-    }
-
-    // Validate user address format
-    if (typeof userAddress !== 'string' || typeof verificationToken !== 'string' || typeof provider !== 'string') {
-      return NextResponse.json({ error: 'Invalid request parameters' }, { status: 400 });
+    if (
+      typeof userAddress !== 'string' ||
+      typeof verificationToken !== 'string' ||
+      typeof provider !== 'string' ||
+      !userAddress ||
+      !verificationToken ||
+      !provider
+    ) {
+      return NextResponse.json({ error: 'Missing or invalid required parameters' }, { status: 400 });
     }
 
     const normalizedUserAddress = normalizeVerifyWalletAddress(userAddress);
@@ -92,328 +155,364 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
     }
 
-    if (!redis) {
-      return NextResponse.json({ error: 'Claim service unavailable' }, { status: 503 });
-    }
-
     const normalizedProvider = provider.trim();
-    const targetStrainId = strainId ? Number(strainId) : 4; // Default Zest
-    if (!ELIGIBLE_STRAINS.includes(targetStrainId)) {
+    const targetStrainId = strainId === undefined ? 4 : Number(strainId);
+    if (!Number.isInteger(targetStrainId) || !ELIGIBLE_STRAINS.includes(targetStrainId)) {
       return NextResponse.json({
-        error: `Strain ${targetStrainId} is not eligible for free claim. Eligible strains: ${ELIGIBLE_STRAINS.join(', ')}`
+        error: `Strain ${targetStrainId} is not eligible for free claim. Eligible strains: ${ELIGIBLE_STRAINS.join(', ')}`,
       }, { status: 400 });
     }
 
-    const pendingRecord = await redisGetJSONRaw<VerifyPendingRecord>(getVerifyPendingKey(verificationToken));
+    const pendingResult = await readVerifyClaimJSON<VerifyPendingRecord>(
+      getVerifyPendingKey(verificationToken),
+    );
+    if (pendingResult.status === 'unavailable') {
+      console.error('[CLAIM] Pending verification state unavailable:', pendingResult.error);
+      return NextResponse.json(
+        { error: 'Claim service is temporarily unavailable. No claim was submitted.' },
+        { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+      );
+    }
+
+    const pendingRecord = pendingResult.status === 'ok' ? pendingResult.value : null;
     if (
       !pendingRecord ||
       pendingRecord.status !== 'verified_pending' ||
       pendingRecord.token !== verificationToken ||
       pendingRecord.expiresAt < Date.now()
     ) {
-      return NextResponse.json({ error: 'Verification token is not pending or has expired. Please verify again.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Verification token is not pending or has expired. Please verify again.' },
+        { status: 400 },
+      );
     }
 
     if (
       pendingRecord.address !== normalizedUserAddress ||
       pendingRecord.provider !== normalizedProvider
     ) {
-      return NextResponse.json({ error: 'Verification token does not match this wallet or provider.' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Verification token does not match this wallet or provider.' },
+        { status: 403 },
+      );
     }
 
-    // 1. Check if token or wallet already claimed
-    const claimKey = getVerifyClaimKey(verificationToken);
+    let claimKey = getVerifyClaimKey(verificationToken);
     const walletClaimKey = getVerifyWalletClaimKey(normalizedUserAddress);
-    const [existingClaim, existingWalletClaim] = await Promise.all([
-      redisGetJSONRaw<UntypedValue>(claimKey),
-      redisGetJSONRaw<UntypedValue>(walletClaimKey),
+    const [claimRead, walletClaimRead] = await Promise.all([
+      readVerifyClaimJSON<VerifyClaimReservationRecord>(claimKey),
+      readVerifyClaimJSON<VerifyClaimReservationRecord>(walletClaimKey),
     ]);
 
-    if (existingClaim) {
-      return NextResponse.json({ error: 'This verification has already claimed a plant.' }, { status: 400 });
+    if (claimRead.status === 'unavailable' || walletClaimRead.status === 'unavailable') {
+      console.error('[CLAIM] Existing claim state unavailable', {
+        claimRead: claimRead.status,
+        walletClaimRead: walletClaimRead.status,
+      });
+      return NextResponse.json(
+        { error: 'Claim service is temporarily unavailable. No claim was submitted.' },
+        { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+      );
     }
 
-    if (existingWalletClaim) {
-      return NextResponse.json({ error: 'This wallet has already claimed a free plant.' }, { status: 400 });
+    const existingRecord = claimRead.status === 'ok'
+      ? claimRead.value
+      : walletClaimRead.status === 'ok'
+        ? walletClaimRead.value
+        : null;
+    let record: VerifyClaimReservationRecord;
+    if (existingRecord) {
+      const matchesCurrentRequest = (candidate: VerifyClaimReservationRecord) => (
+        normalizeVerifyWalletAddress(candidate.userAddress) === normalizedUserAddress
+        && candidate.provider === normalizedProvider
+        && candidate.strainId === targetStrainId
+      );
+      const retryClaimKey = getVerifyClaimKey(existingRecord.verificationToken);
+      const retryClaimRead = retryClaimKey === claimKey
+        ? claimRead
+        : await readVerifyClaimJSON<VerifyClaimReservationRecord>(retryClaimKey);
+
+      if (retryClaimRead.status === 'unavailable') {
+        console.error('[CLAIM] Retry reservation state unavailable:', retryClaimRead.error);
+        return NextResponse.json(
+          { error: 'Claim service is temporarily unavailable. No claim was submitted.' },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+
+      const retryClaimRecord = retryClaimRead.status === 'ok' ? retryClaimRead.value : null;
+      const retryWalletRecord = walletClaimRead.status === 'ok' ? walletClaimRead.value : null;
+      const retryPairMatchesRequest = (
+        retryClaimRecord !== null
+        && retryWalletRecord !== null
+        && retryClaimRecord.reservationId === existingRecord.reservationId
+        && retryWalletRecord.reservationId === existingRecord.reservationId
+        && retryClaimRecord.verificationToken === existingRecord.verificationToken
+        && retryWalletRecord.verificationToken === existingRecord.verificationToken
+        && JSON.stringify(retryClaimRecord.idempotencyKeys) === JSON.stringify(retryWalletRecord.idempotencyKeys)
+        && matchesCurrentRequest(retryClaimRecord)
+        && matchesCurrentRequest(retryWalletRecord)
+      );
+      const retryStartedAt = Date.now();
+      const retryPairState = retryPairMatchesRequest
+        ? getVerifyClaimPairState(retryClaimRecord, retryWalletRecord, retryStartedAt)
+        : 'manual_review';
+      const retryPairIsSafe = retryPairState === 'retryable';
+
+      if (!retryPairIsSafe || !retryClaimRecord || !retryWalletRecord) {
+        return NextResponse.json({
+          error: existingRecord.status === 'complete'
+            ? 'This verification or wallet has already claimed a plant.'
+            : 'This claim is already reserved and may require reconciliation. It will not be submitted again.',
+          status: existingRecord.status,
+          claimState: retryPairState,
+          recoveryStage: existingRecord.stage,
+          reservationId: existingRecord.reservationId,
+        }, {
+          status: 409,
+          headers: { 'Cache-Control': 'private, no-store' },
+        });
+      }
+
+      claimKey = retryClaimKey;
+      record = createVerifyClaimRetryAttempt(retryClaimRecord, retryStartedAt);
+      const resumeResult = await resumeVerifyClaimPairBeforeSubmission(
+        claimKey,
+        walletClaimKey,
+        retryClaimRecord,
+        record,
+        retryStartedAt,
+      );
+      if (resumeResult.status === 'unavailable') {
+        console.error('[CLAIM] Claim retry reservation unavailable:', resumeResult.error);
+        return NextResponse.json(
+          { error: 'Claim retry could not be reserved. No blockchain claim was submitted.' },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+      if (resumeResult.status === 'conflict') {
+        return NextResponse.json(
+          { error: 'This claim changed while retrying. Check its status before trying again.' },
+          { status: 409, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+    } else {
+      record = createVerifyClaimReservation({
+        userAddress: normalizedUserAddress,
+        verificationToken,
+        provider: normalizedProvider,
+        strainId: targetStrainId,
+      });
+      const reserveResult = await reserveVerifyClaimPair(claimKey, walletClaimKey, record);
+      if (reserveResult.status === 'unavailable') {
+        console.error('[CLAIM] Claim reservation unavailable:', reserveResult.error);
+        return NextResponse.json(
+          {
+            error: 'Claim reservation status could not be confirmed. No blockchain claim was submitted.',
+            reservationId: record.reservationId,
+          },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+      if (reserveResult.status === 'conflict') {
+        return NextResponse.json(
+          { error: 'This verification or wallet already has a claim reservation.' },
+          { status: 409, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
     }
 
-    // 2. Lock by verification token and wallet to prevent race conditions.
-    const lockKey = getVerifyClaimLockKey(verificationToken);
-    const walletLockKey = getVerifyWalletLockKey(normalizedUserAddress);
-    const lockPayload = JSON.stringify({ status: 'locked', createdAt: Date.now() });
-    const [tokenLockAcquired, walletLockAcquired] = await Promise.all([
-      redisCompareAndSetJSONRaw(lockKey, null, lockPayload, VERIFY_CLAIM_LOCK_TTL_SECONDS),
-      redisCompareAndSetJSONRaw(walletLockKey, null, lockPayload, VERIFY_CLAIM_LOCK_TTL_SECONDS),
-    ]);
-
-    if (!tokenLockAcquired || !walletLockAcquired) {
-      if (tokenLockAcquired) await redisDelRaw(lockKey);
-      if (walletLockAcquired) await redisDelRaw(walletLockKey);
-       return NextResponse.json({ error: 'Claim in progress. Please wait.' }, { status: 429 });
-    }
-
-    const now = Date.now();
-    const reservationRecord: VerifyClaimReservationRecord = {
-      status: 'pending',
-      userAddress: normalizedUserAddress,
-      verificationToken,
-      provider: normalizedProvider,
-      strainId: targetStrainId,
-      createdAt: now,
-      expiresAt: now + VERIFY_CLAIM_RESERVATION_TTL_SECONDS * 1000,
+    let externalSubmissionAttempted = false;
+    const persist = async (update: Partial<VerifyClaimReservationRecord>) => {
+      record = advanceVerifyClaimRecord(record, update);
+      if (!await writeVerifyClaimPair(claimKey, walletClaimKey, record)) {
+        throw new ClaimStateUnavailableError();
+      }
+      return record;
     };
-    const reservationJson = JSON.stringify(reservationRecord);
-    const reservedClaim = await redisCompareAndSetJSONRaw(
-      claimKey,
-      null,
-      reservationJson,
-      VERIFY_CLAIM_RESERVATION_TTL_SECONDS,
-    );
-    const reservedWallet = await redisCompareAndSetJSONRaw(
-      walletClaimKey,
-      null,
-      reservationJson,
-      VERIFY_CLAIM_RESERVATION_TTL_SECONDS,
-    );
-
-    if (!reservedClaim || !reservedWallet) {
-      if (reservedClaim) await redisDelRaw(claimKey);
-      if (reservedWallet) await redisDelRaw(walletClaimKey);
-      await Promise.all([redisDelRaw(lockKey), redisDelRaw(walletLockKey)]);
-      return NextResponse.json({ error: 'Claim was already reserved. Please wait.' }, { status: 409 });
-    }
-
-    let mintCompleted = false;
-    let mintTxHash: string | null = null;
 
     try {
       const client = getClient();
-
-      // Get or create agent smart account
       if (!agentSmartAccount) {
         const owner = await client.evm.getOrCreateAccount({ name: 'pixotchi-agent' });
         agentSmartAccount = await client.evm.getOrCreateSmartAccount({
           name: 'pixotchi-agent-sa-sp',
           owner,
-          enableSpendPermissions: true, // Reuse the same account
+          enableSpendPermissions: true,
         });
       }
 
-      // 4. Prepare Mint Transaction
-      // Agent pays SEED + Gas
+      await persist({
+        stage: 'mint_submitting',
+        agentAddress: agentSmartAccount.address,
+        leafBonusStage: LEAF_BONUS_ENABLED ? 'pending' : 'disabled',
+        leafBonusSent: false,
+        leafBonusAmount: LEAF_BONUS_ENABLED ? VERIFY_CLAIM_LEAF_BONUS_AMOUNT : null,
+        seedBonusStage: SEED_BONUS_ENABLED ? 'pending' : 'disabled',
+        seedBonusSent: false,
+        seedBonusAmount: SEED_BONUS_ENABLED ? VERIFY_CLAIM_SEED_BONUS_AMOUNT : null,
+      });
 
       const approveData = encodeFunctionData({
-        abi: [{
-          type: 'function',
-          name: 'approve',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' },
-          ],
-          outputs: [{ name: '', type: 'bool' }],
-        }],
+        abi: ERC20_APPROVE_ABI,
         functionName: 'approve',
         args: [PIXOTCHI_NFT_ADDRESS, maxUint256],
       });
-
       const mintData = encodeFunctionData({
-        abi: [{
-          type: 'function',
-          name: 'mint',
-          stateMutability: 'nonpayable',
-          inputs: [{ name: 'strain', type: 'uint256' }],
-          outputs: [],
-        }],
+        abi: NFT_MINT_ABI,
         functionName: 'mint',
         args: [BigInt(targetStrainId)],
       });
 
       console.log(`[CLAIM] Minting strain ${targetStrainId} for ${normalizedUserAddress} via Agent...`);
-
+      externalSubmissionAttempted = true;
       const mintOp = await client.evm.sendUserOperation({
         smartAccount: agentSmartAccount,
         network: 'base',
         calls: [
           { to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: approveData },
-          { to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData }
-        ]
+          { to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: mintData },
+        ],
+        idempotencyKey: record.idempotencyKeys.mint,
+      });
+      await persist({
+        stage: 'mint_submitted',
+        mintUserOpHash: operationHash(mintOp),
       });
 
       const mintReceipt = await agentSmartAccount.waitForUserOperation(mintOp);
-      if (mintReceipt.status !== 'complete') {
-        throw new Error('Mint transaction failed');
-      }
-      mintCompleted = true;
-      mintTxHash = mintReceipt.transactionHash;
+      if (mintReceipt.status !== 'complete') throw new Error('Mint transaction failed');
+      await persist({
+        stage: 'mint_confirmed',
+        mintTxHash: mintReceipt.transactionHash,
+      });
 
       console.log(`[CLAIM] Mint complete, tx: ${mintReceipt.transactionHash}`);
-
-      // 5. Parse minted tokenId from Transfer event logs
       let mintedTokenId: bigint | null = null;
-      
       try {
         const txReceipt = await waitForBaseReceipt(mintReceipt.transactionHash as `0x${string}`);
-        
-        const TRANSFER_SIG = EVM_EVENT_SIGNATURES.ERC20_TRANSFER;
-        const zeroAddressTopic = EVM_TOPICS.ZERO_ADDRESS_TOPIC;
         const agentTopic = `0x000000000000000000000000${agentSmartAccount.address.slice(2).toLowerCase()}`;
-        
         for (const log of txReceipt.logs || []) {
           if (`${log.address}`.toLowerCase() !== PIXOTCHI_NFT_ADDRESS.toLowerCase()) continue;
           const topics = log.topics as string[];
           if (!topics || topics.length < 4) continue;
-          if (topics[0].toLowerCase() !== TRANSFER_SIG) continue;
-          
-          // ERC721 Transfer: topics[1]=from, topics[2]=to, topics[3]=tokenId
-          // Mint = Transfer from 0x0 to agent
-          if (topics[1].toLowerCase() === zeroAddressTopic && topics[2].toLowerCase() === agentTopic) {
+          if (topics[0].toLowerCase() !== EVM_EVENT_SIGNATURES.ERC20_TRANSFER) continue;
+          if (
+            topics[1].toLowerCase() === EVM_TOPICS.ZERO_ADDRESS_TOPIC &&
+            topics[2].toLowerCase() === agentTopic
+          ) {
             try {
               mintedTokenId = BigInt(topics[3]);
-              console.log(`[CLAIM] Parsed minted token ID: ${mintedTokenId}`);
               break;
-            } catch {}
+            } catch {
+              // Continue scanning in case another matching log is well formed.
+            }
           }
         }
       } catch (parseError) {
         console.error('[CLAIM] Error parsing mint logs:', parseError);
       }
 
-      if (!mintedTokenId) {
-        // Mint succeeded but couldn't parse token ID - still mark as claimed to prevent double mint
-        console.error('[CLAIM] Could not parse token ID from mint transaction');
-        
-        const partialClaimRecord = {
-          userAddress: normalizedUserAddress,
-          verificationToken,
-          provider: normalizedProvider,
-          txHash: mintReceipt.transactionHash,
-          timestamp: Date.now(),
-          strainId: targetStrainId,
+      if (mintedTokenId === null) {
+        await persist({
           status: 'mint_complete_transfer_pending',
-          error: 'Could not parse token ID'
-        };
-        await Promise.all([
-          redisSetJSONRaw(claimKey, partialClaimRecord),
-          redisSetJSONRaw(walletClaimKey, partialClaimRecord),
-        ]);
-
-        return NextResponse.json({ 
-          success: true, 
-          status: 'partial',
-          txHash: mintReceipt.transactionHash,
-          message: 'Plant minted but transfer pending. Contact support if plant does not appear in your wallet.' 
+          stage: 'manual_review',
+          failedAt: Date.now(),
+          error: 'Mint confirmed but token ID could not be parsed',
         });
+        return recoveryResponse(
+          record,
+          'Plant mint confirmed, but its token ID needs reconciliation before transfer. Contact support with the reservation ID.',
+        );
       }
 
-      // 6. Transfer the minted NFT to the user
-      console.log(`[CLAIM] Transferring token ${mintedTokenId} to ${normalizedUserAddress}...`);
+      await persist({
+        stage: 'transfer_ready',
+        tokenId: mintedTokenId.toString(),
+      });
 
       const transferData = encodeFunctionData({
-        abi: [{
-          type: 'function',
-          name: 'transferFrom',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'from', type: 'address' },
-            { name: 'to', type: 'address' },
-            { name: 'tokenId', type: 'uint256' },
-          ],
-          outputs: [],
-        }],
+        abi: NFT_TRANSFER_ABI,
         functionName: 'transferFrom',
         args: [
-          agentSmartAccount.address as `0x${string}`, 
-          normalizedUserAddress as `0x${string}`, 
-          mintedTokenId
+          agentSmartAccount.address as `0x${string}`,
+          normalizedUserAddress as `0x${string}`,
+          mintedTokenId,
         ],
       });
 
-      // Wait a bit for indexers/nodes to catch up with the Mint
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await persist({ stage: 'transfer_submitting' });
+      console.log(`[CLAIM] Transferring token ${mintedTokenId} to ${normalizedUserAddress}...`);
+      const transferOp = await client.evm.sendUserOperation({
+        smartAccount: agentSmartAccount,
+        network: 'base',
+        calls: [{ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: transferData }],
+        idempotencyKey: record.idempotencyKeys.transfer,
+      });
+      await persist({
+        stage: 'transfer_submitted',
+        transferUserOpHash: operationHash(transferOp),
+      });
 
-      // Retry logic for transfer to handle propagation delays
-      let transferSuccess = false;
-      let transferTxHash: string | null = null;
-      let transferError: Error | null = null;
+      const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
+      if (transferReceipt.status !== 'complete') throw new Error('NFT transfer transaction failed');
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      await persist({
+        status: 'complete',
+        stage: 'complete',
+        transferTxHash: transferReceipt.transactionHash,
+        transferError: null,
+      });
+      console.log(`[CLAIM] Transfer successful, tx: ${transferReceipt.transactionHash}`);
+
+      let leafBonus: { txHash: string; amount: string } | null = null;
+      let bonusStateIsSafe = true;
+      if (LEAF_BONUS_ENABLED) {
+        let leafSubmissionAttempted = false;
         try {
-          console.log(`[CLAIM] Transfer attempt ${attempt}/3...`);
-          
-          const transferOp = await client.evm.sendUserOperation({
-            smartAccount: agentSmartAccount,
-            network: 'base',
-            calls: [{ to: PIXOTCHI_NFT_ADDRESS, value: BigInt(0), data: transferData }],
-          });
-          
-          const transferReceipt = await agentSmartAccount.waitForUserOperation(transferOp);
-          
-          if (transferReceipt.status === 'complete') {
-            transferSuccess = true;
-            transferTxHash = transferReceipt.transactionHash;
-            console.log(`[CLAIM] Transfer successful, tx: ${transferTxHash}`);
-            break;
-          } else {
-            throw new Error('Transfer UserOp status not complete');
-          }
-        } catch (e: UntypedValue) {
-          console.warn(`[CLAIM] Transfer attempt ${attempt} failed:`, e?.message || e);
-          transferError = e;
-          if (attempt < 3) {
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
-          }
-        }
-      }
-
-      // 7. LEAF token bonus (non-blocking — plant claim succeeds even if this fails)
-      let leafTransferSuccess = false;
-      let leafTransferTxHash: string | null = null;
-
-      if (LEAF_BONUS_ENABLED && transferSuccess) {
-        try {
-          console.log(`[CLAIM] Sending LEAF bonus (${VERIFY_CLAIM_LEAF_BONUS_AMOUNT}) to ${normalizedUserAddress}...`);
-
+          await persist({ leafBonusStage: 'submitting' });
           const leafTransferData = encodeFunctionData({
-            abi: [{
-              type: 'function',
-              name: 'transfer',
-              stateMutability: 'nonpayable',
-              inputs: [
-                { name: 'to', type: 'address' },
-                { name: 'amount', type: 'uint256' },
-              ],
-              outputs: [{ name: '', type: 'bool' }],
-            }],
+            abi: ERC20_TRANSFER_ABI,
             functionName: 'transfer',
             args: [normalizedUserAddress as `0x${string}`, LEAF_BONUS_AMOUNT],
           });
-
+          leafSubmissionAttempted = true;
           const leafOp = await client.evm.sendUserOperation({
             smartAccount: agentSmartAccount,
             network: 'base',
             calls: [{ to: LEAF_CONTRACT_ADDRESS, value: BigInt(0), data: leafTransferData }],
+            idempotencyKey: record.idempotencyKeys.leafBonus,
           });
-
+          await persist({
+            leafBonusStage: 'submitted',
+            leafBonusUserOpHash: operationHash(leafOp),
+          });
           const leafReceipt = await agentSmartAccount.waitForUserOperation(leafOp);
-          if (leafReceipt.status === 'complete') {
-            leafTransferSuccess = true;
-            leafTransferTxHash = leafReceipt.transactionHash;
-            console.log(`[CLAIM] LEAF bonus sent, tx: ${leafTransferTxHash}`);
-          }
-        } catch (e: UntypedValue) {
-          console.error('[CLAIM] LEAF bonus transfer failed:', e?.message || e);
-          // Non-blocking: plant claim is still successful
+          if (leafReceipt.status !== 'complete') throw new Error('LEAF bonus transaction failed');
+          leafBonus = { txHash: leafReceipt.transactionHash, amount: VERIFY_CLAIM_LEAF_BONUS_AMOUNT };
+          await persist({
+            leafBonusStage: 'complete',
+            leafBonusSent: true,
+            leafBonusTxHash: leafReceipt.transactionHash,
+          });
+        } catch (error) {
+          console.error('[CLAIM] LEAF bonus transfer failed:', errorMessage(error));
+          const failedRecord = advanceVerifyClaimRecord(record, {
+            leafBonusStage: leafSubmissionAttempted ? 'manual_review' : 'failed',
+            leafBonusError: errorMessage(error),
+          });
+          const failureStored = await writeVerifyClaimPair(claimKey, walletClaimKey, failedRecord);
+          if (failureStored) record = failedRecord;
+          // Do not initiate another payout while one is ambiguous or while its
+          // recovery state cannot be stored.
+          bonusStateIsSafe = !leafSubmissionAttempted && failureStored;
         }
       }
 
-      // 7b. SEED token bonus — first-come-first-served (non-blocking)
-      let seedTransferSuccess = false;
-      let seedTransferTxHash: string | null = null;
-
-      if (SEED_BONUS_ENABLED && transferSuccess) {
+      let seedBonus: { txHash: string; amount: string } | null = null;
+      if (SEED_BONUS_ENABLED && bonusStateIsSafe) {
+        let seedSubmissionAttempted = false;
         try {
-          // Check agent wallet SEED balance before attempting transfer
           const balanceClient = getBaseReadClient();
           const seedBalance = await balanceClient.readContract({
             address: PIXOTCHI_TOKEN_ADDRESS,
@@ -421,132 +520,87 @@ export async function POST(req: NextRequest) {
             functionName: 'balanceOf',
             args: [agentSmartAccount.address as `0x${string}`],
           });
-
-          if ((seedBalance as bigint) >= SEED_BONUS_AMOUNT) {
-            console.log(`[CLAIM] Sending SEED bonus (${VERIFY_CLAIM_SEED_BONUS_AMOUNT}) to ${normalizedUserAddress}...`);
-
+          if ((seedBalance as bigint) < SEED_BONUS_AMOUNT) {
+            await persist({ seedBonusStage: 'skipped' });
+          } else {
+            await persist({ seedBonusStage: 'submitting' });
             const seedTransferData = encodeFunctionData({
-              abi: [{
-                type: 'function',
-                name: 'transfer',
-                stateMutability: 'nonpayable',
-                inputs: [
-                  { name: 'to', type: 'address' },
-                  { name: 'amount', type: 'uint256' },
-                ],
-                outputs: [{ name: '', type: 'bool' }],
-              }],
+              abi: ERC20_TRANSFER_ABI,
               functionName: 'transfer',
               args: [normalizedUserAddress as `0x${string}`, SEED_BONUS_AMOUNT],
             });
-
+            seedSubmissionAttempted = true;
             const seedOp = await client.evm.sendUserOperation({
               smartAccount: agentSmartAccount,
               network: 'base',
               calls: [{ to: PIXOTCHI_TOKEN_ADDRESS, value: BigInt(0), data: seedTransferData }],
+              idempotencyKey: record.idempotencyKeys.seedBonus,
             });
-
+            await persist({
+              seedBonusStage: 'submitted',
+              seedBonusUserOpHash: operationHash(seedOp),
+            });
             const seedReceipt = await agentSmartAccount.waitForUserOperation(seedOp);
-            if (seedReceipt.status === 'complete') {
-              seedTransferSuccess = true;
-              seedTransferTxHash = seedReceipt.transactionHash;
-              console.log(`[CLAIM] SEED bonus sent, tx: ${seedTransferTxHash}`);
-            }
-          } else {
-            console.log(`[CLAIM] SEED bonus skipped — insufficient balance (${seedBalance})`);
+            if (seedReceipt.status !== 'complete') throw new Error('SEED bonus transaction failed');
+            seedBonus = { txHash: seedReceipt.transactionHash, amount: VERIFY_CLAIM_SEED_BONUS_AMOUNT };
+            await persist({
+              seedBonusStage: 'complete',
+              seedBonusSent: true,
+              seedBonusTxHash: seedReceipt.transactionHash,
+            });
           }
-        } catch (e: UntypedValue) {
-          console.error('[CLAIM] SEED bonus transfer failed:', e?.message || e);
-          // Non-blocking: plant claim is still successful
+        } catch (error) {
+          console.error('[CLAIM] SEED bonus transfer failed:', errorMessage(error));
+          const failedRecord = advanceVerifyClaimRecord(record, {
+            seedBonusStage: seedSubmissionAttempted ? 'manual_review' : 'failed',
+            seedBonusError: errorMessage(error),
+          });
+          if (await writeVerifyClaimPair(claimKey, walletClaimKey, failedRecord)) record = failedRecord;
         }
       }
 
-      // 8. Mark as claimed in Redis
-      const claimRecord = {
-        userAddress: normalizedUserAddress,
-        verificationToken,
-        provider: normalizedProvider,
-        mintTxHash: mintReceipt.transactionHash,
-        transferTxHash: transferTxHash,
-        tokenId: mintedTokenId.toString(),
-        timestamp: Date.now(),
-        strainId: targetStrainId,
-        status: transferSuccess ? 'complete' : 'transfer_failed',
-        transferError: transferSuccess ? null : (transferError?.message || 'Unknown error'),
-        leafBonusSent: leafTransferSuccess,
-        leafBonusTxHash: leafTransferTxHash,
-        leafBonusAmount: LEAF_BONUS_ENABLED ? VERIFY_CLAIM_LEAF_BONUS_AMOUNT : null,
-        seedBonusSent: seedTransferSuccess,
-        seedBonusTxHash: seedTransferTxHash,
-        seedBonusAmount: SEED_BONUS_ENABLED ? VERIFY_CLAIM_SEED_BONUS_AMOUNT : null,
-      };
-
-      // Store by verification token (primary - prevents same X account claiming twice)
-      await Promise.all([
-        redisSetJSONRaw(claimKey, claimRecord),
-        redisSetJSONRaw(walletClaimKey, claimRecord),
-      ]);
-
-      const leafBonus = leafTransferSuccess ? { txHash: leafTransferTxHash, amount: VERIFY_CLAIM_LEAF_BONUS_AMOUNT } : null;
-      const seedBonus = seedTransferSuccess ? { txHash: seedTransferTxHash, amount: VERIFY_CLAIM_SEED_BONUS_AMOUNT } : null;
-
-      if (transferSuccess) {
-        const messageParts = ['Plant claimed and transferred successfully!'];
-        if (leafTransferSuccess) messageParts.push('LEAF bonus sent.');
-        if (seedTransferSuccess) messageParts.push('SEED bonus sent.');
-
-        return NextResponse.json({
-          success: true,
-          status: 'complete',
-          mintTxHash: mintReceipt.transactionHash,
-          transferTxHash: transferTxHash,
-          tokenId: mintedTokenId.toString(),
-          leafBonus,
-          seedBonus,
-          message: messageParts.join(' '),
-        });
-      } else {
-        // Mint succeeded but transfer failed after retries
-        console.error('[CLAIM] Failed to transfer token after retries:', transferError);
-
-        return NextResponse.json({
-          success: true,
-          status: 'partial',
-          mintTxHash: mintReceipt.transactionHash,
-          tokenId: mintedTokenId.toString(),
-          leafBonus,
-          seedBonus,
-          message: `Plant minted (ID: ${mintedTokenId}) but transfer failed. Contact support to retrieve your plant.`,
-          error: transferError?.message || 'Transfer failed after retries'
-        });
-      }
-
-    } catch (err: UntypedValue) {
-      console.error('[CLAIM] Claim error:', err);
-      const failureRecord = {
-        ...reservationRecord,
-        status: mintCompleted ? 'claim_failed_manual_review' : 'claim_failed_retryable',
+      const messageParts = ['Plant claimed and transferred successfully!'];
+      if (leafBonus) messageParts.push('LEAF bonus sent.');
+      if (seedBonus) messageParts.push('SEED bonus sent.');
+      return NextResponse.json({
+        success: true,
+        status: 'complete',
+        reservationId: record.reservationId,
+        mintTxHash: record.mintTxHash,
+        transferTxHash: record.transferTxHash,
+        tokenId: record.tokenId,
+        leafBonus,
+        seedBonus,
+        message: messageParts.join(' '),
+      }, { headers: { 'Cache-Control': 'private, no-store' } });
+    } catch (error) {
+      console.error('[CLAIM] Claim error:', error);
+      const manualReview = externalSubmissionAttempted;
+      const failureRecord = advanceVerifyClaimRecord(record, {
+        status: manualReview ? 'claim_failed_manual_review' : 'claim_failed_before_submission',
+        stage: manualReview ? 'manual_review' : 'failed_before_submission',
         failedAt: Date.now(),
-        mintTxHash,
-        error: err?.message || 'Claim failed',
-      };
-      if (mintCompleted) {
-        await Promise.all([
-          redisSetJSONRaw(claimKey, failureRecord),
-          redisSetJSONRaw(walletClaimKey, failureRecord),
-        ]);
-      } else {
-        await Promise.all([
-          redisSetJSONRaw(claimKey, failureRecord, VERIFY_RETRYABLE_FAILURE_TTL_SECONDS),
-          redisSetJSONRaw(walletClaimKey, failureRecord, VERIFY_RETRYABLE_FAILURE_TTL_SECONDS),
-        ]);
-      }
-      return NextResponse.json({ error: err.message || 'Claim failed' }, { status: 500 });
-    } finally {
-      await Promise.all([redisDelRaw(lockKey), redisDelRaw(walletLockKey)]);
-    }
+        error: errorMessage(error),
+      });
+      if (await writeVerifyClaimPair(claimKey, walletClaimKey, failureRecord)) record = failureRecord;
 
-  } catch (error: UntypedValue) {
+      if (manualReview) {
+        return recoveryResponse(
+          record,
+          'The claim submission has an uncertain or incomplete result and will not be sent again automatically. Contact support with the reservation ID.',
+        );
+      }
+
+      return NextResponse.json({
+        error: 'The claim could not be started and its reservation was retained for safe reconciliation.',
+        reservationId: record.reservationId,
+        recoveryStage: record.stage,
+      }, {
+        status: error instanceof ClaimStateUnavailableError ? 503 : 500,
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    }
+  } catch (error) {
     console.error('[CLAIM] Outer error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

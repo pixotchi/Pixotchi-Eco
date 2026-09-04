@@ -1,7 +1,7 @@
 "use client";
 
 import { useIsSolanaWallet } from '@/components/solana';
-import { PlantNameTransaction } from '@/components/transactions/plant-name-transaction';
+import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import SwapPlantNameBundle from '@/components/transactions/swap-plant-name-bundle';
 import { Button } from '@/components/ui/button';
@@ -17,15 +17,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { InlineBalanceNotice } from '@/components/ui/premium';
-import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameInvalidReason, getAssetNameValidation, truncateUtf8ToMaxBytes } from '@/lib/asset-name-rules';
+import { ASSET_NAME_RULES, DEFAULT_PLANT_NAME_CHANGE_COST_SEED, getAssetNameValidation, truncateUtf8ToMaxBytes } from '@/lib/asset-name-rules';
 import { useBalances } from '@/lib/balance-context';
-import { getEthQuoteForSeedAmount, getPlantNameChangePrice } from '@/lib/contracts';
+import { checkTokenApproval, getEthQuoteForSeedAmount, getPlantNameChangePrice, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { Plant } from '@/lib/types';
+import { Plant, TransactionCall } from '@/lib/types';
 import { formatTokenAmount } from '@/lib/utils';
 import Image from 'next/image';
-import { useEffect,useRef,useState } from 'react';
+import { useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
 
@@ -42,6 +42,24 @@ const SUCCESS_AUTO_CLOSE_MS = 1000;
 const FALLBACK_NAME_CHANGE_COST_WEI = BigInt(DEFAULT_PLANT_NAME_CHANGE_COST_SEED) * WEI_PER_TOKEN;
 const renamePanelClassName =
   "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
+const PLANT_NAME_ABI = [
+  {
+    inputs: [
+      { name: '_id', type: 'uint256' },
+      { name: '_name', type: 'string' },
+    ],
+    name: 'setPlantName',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+
+type AllowanceState = {
+  status: 'loading' | 'known' | 'error';
+  value: bigint | null;
+  owner: string | null;
+};
 
 function EditPlantName({
   plant,
@@ -50,7 +68,12 @@ function EditPlantName({
   iconSize = 16
 }: EditPlantNameProps) {
   const { address } = useAccount();
-  const { seedBalance, loading: isLoadingBalance } = useBalances();
+  const {
+    seedBalance,
+    seedBalanceStatus,
+    balanceError,
+    refreshBalances,
+  } = useBalances();
   const isSolana = useIsSolanaWallet();
   const { isSmartWallet } = useSmartWallet();
   const { isEthMode } = useEthModeSafe();
@@ -60,19 +83,30 @@ function EditPlantName({
   const [isTransactionPending, setIsTransactionPending] = useState(false);
   const autoCloseTimerRef = useRef<number | null>(null);
   const [nameChangeCostWei, setNameChangeCostWei] = useState<bigint>(FALLBACK_NAME_CHANGE_COST_WEI);
+  const [seedAllowance, setSeedAllowance] = useState<AllowanceState>({ status: 'loading', value: null, owner: null });
 
   // ETH Mode state
   const [ethQuote, setEthQuote] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
   const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
-  const { data: ethBalanceData } = useBalance({ address });
+  const {
+    data: ethBalanceData,
+    isLoading: ethBalanceLoading,
+    isError: ethBalanceError,
+    refetch: refetchEthBalance,
+  } = useBalance({ address });
   const ethBalance = ethBalanceData?.value ?? BigInt(0);
+  const ethBalanceKnown = ethBalanceData !== undefined && !ethBalanceError;
+  const ethBalanceUnavailable = !ethBalanceKnown && !ethBalanceLoading;
+  const retryEthBalance = () => {
+    void Promise.allSettled([refetchEthBalance(), refreshBalances()]);
+  };
 
   // Check if this plant belongs to the current user
   const isOwnedByUser = address && plant.owner.toLowerCase() === address.toLowerCase();
 
-  // Reset form when dialog opens. The pending flag MUST reset too: it was only
-  // cleared in the success/error handlers, so closing mid-transaction left
-  // canSubmit false forever and the dialog dead-ended on reopen.
+  // Reset form when dialog opens. The pending flag MUST reset too: it is only
+  // cleared in the success/error handlers, so closing mid-transaction must not
+  // dead-end the dialog on reopen.
   useEffect(() => {
     if (isOpen) {
       setNewName(plant.name || '');
@@ -120,19 +154,57 @@ function EditPlantName({
     return () => { cancelled = true; };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    setSeedAllowance((previous) => ({ status: 'loading', value: previous.value, owner: previous.owner }));
+
+    if (!address) {
+      setSeedAllowance((previous) => ({ status: 'error', value: previous.value, owner: previous.owner }));
+      return () => { cancelled = true; };
+    }
+
+    checkTokenApproval(address)
+      .then((allowance) => {
+        if (!cancelled) setSeedAllowance({ status: 'known', value: allowance, owner: address.toLowerCase() });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to fetch SEED allowance for plant rename:', error);
+          setSeedAllowance((previous) => ({ status: 'error', value: previous.value, owner: previous.owner }));
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [address, isOpen]);
+
   const handleNameChange = (value: string) => {
     setNewName(truncateUtf8ToMaxBytes(value, PLANT_NAME_RULE.maxBytes));
   };
 
   const canAffordNameChange = isSmartWallet && isEthMode && ethQuote
-    ? ethBalance >= ethQuote.ethAmountWithBuffer
-    : seedBalance >= nameChangeCostWei;
+    ? ethBalanceKnown && ethBalance >= ethQuote.ethAmountWithBuffer
+    : seedBalanceStatus === 'ready' && seedBalance >= nameChangeCostWei;
   const trimmedName = newName.trim();
   const nameValidation = getAssetNameValidation('plant', newName);
-  const nameInvalidReason = getAssetNameInvalidReason('plant', newName);
   const isNameValid = nameValidation.validFormat &&
     trimmedName !== (plant.name || '').trim();
-  const canSubmit = canAffordNameChange && isNameValid && !isTransactionPending;
+  const seedAllowanceKnown = seedAllowance.status === 'known'
+    && seedAllowance.value !== null
+    && seedAllowance.owner === address?.toLowerCase();
+  const seedNeedsApproval = seedAllowanceKnown
+    && seedAllowance.value !== null
+    && seedAllowance.value < nameChangeCostWei;
+  const seedBalanceKnown = seedBalanceStatus === 'ready';
+  const seedActionReady = seedAllowanceKnown && seedBalanceKnown;
+
+  const plantNameCalls = useMemo<TransactionCall[]>(() => [{
+    address: PIXOTCHI_NFT_ADDRESS,
+    abi: PLANT_NAME_ABI,
+    functionName: 'setPlantName',
+    args: [BigInt(plant.id), trimmedName],
+  }], [plant.id, trimmedName]);
 
   // Fetch ETH quote when dialog opens and ETH mode is active
   useEffect(() => {
@@ -278,7 +350,7 @@ function EditPlantName({
                 setIsTransactionPending(false);
               }}
             />
-          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading ? (
+          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && ethBalanceKnown ? (
             // ETH Mode: SwapPlantNameBundle
             <SwapPlantNameBundle
               plantId={plant.id}
@@ -297,35 +369,69 @@ function EditPlantName({
               buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
               disabled={!isNameValid || isTransactionPending || !canAffordNameChange}
             />
-          ) : canSubmit ? (
-            <PlantNameTransaction
-              plantId={plant.id}
-              newName={newName.trim()}
+          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && !ethBalanceKnown ? (
+            <div className="space-y-2">
+              <Button disabled className="w-full">
+                {ethBalanceLoading ? 'Checking ETH balance' : 'ETH balance unavailable'}
+              </Button>
+              {ethBalanceUnavailable && (
+                <Button type="button" variant="outline" className="w-full" onClick={retryEthBalance}>
+                  Retry balance check
+                </Button>
+              )}
+            </div>
+          ) : !seedAllowanceKnown || !seedBalanceKnown ? (
+            <Button disabled className="w-full">
+              {seedBalanceStatus === 'error'
+                ? 'SEED balance unavailable'
+                : seedAllowance.status === 'loading' || seedBalanceStatus === 'unknown'
+                ? 'Checking SEED balance'
+                : seedAllowance.status !== 'known'
+                  ? 'SEED allowance unavailable'
+                  : 'SEED balance unavailable'}
+            </Button>
+          ) : (
+            <ApprovalActionTransaction
+              intentKey={`plant:rename:${plant.id}`}
+              actionCalls={plantNameCalls}
+              approvalSpender={PIXOTCHI_NFT_ADDRESS}
+              needsApproval={seedNeedsApproval}
+              batchButtonText="Approve + Change Name"
+              approvalButtonText="Approve SEED"
+              actionButtonText={nameChangeCostWei > BigInt(0)
+                ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)`
+                : 'Change Name (free)'}
+              buttonClassName="w-full"
+              disabled={!isNameValid || isTransactionPending || !canAffordNameChange || !seedActionReady}
+              onButtonClick={handleTransactionStart}
+              onApprovalSuccess={() => {
+                setIsTransactionPending(false);
+                setSeedAllowance((previous) => ({ status: 'loading', value: previous.value, owner: previous.owner }));
+                if (!address) return;
+                void checkTokenApproval(address).then((value) => {
+                  setSeedAllowance({ status: 'known', value, owner: address.toLowerCase() });
+                }).catch((error) => {
+                  console.error('Failed to refresh SEED allowance after approval:', error);
+                  setSeedAllowance((previous) => ({ status: 'error', value: previous.value, owner: previous.owner }));
+                });
+              }}
               onSuccess={handleSuccess}
               onError={handleError}
-              onButtonClick={handleTransactionStart}
-              buttonText={nameChangeCostWei > BigInt(0) ? `Change Name (${formatTokenAmount(nameChangeCostWei)} SEED)` : 'Change Name (free)'}
-              buttonClassName="w-full"
-              disabled={!canSubmit}
-              hideLabel
             />
-          ) : (
-            <Button
-              disabled
-              className="w-full"
-            >
-              {isSmartWallet && isEthMode && ethQuoteLoading ? 'Loading ETH quote...' :
-                !canAffordNameChange ? (isSmartWallet && isEthMode ? 'Insufficient ETH' : 'Insufficient SEED') :
-                  nameInvalidReason ? nameInvalidReason :
-                      trimmedName === (plant.name || '').trim() ? 'Name unchanged' :
-                        'Change Name'}
-            </Button>
           )}
-          {isSmartWallet && isEthMode && !isSolana && !canAffordNameChange && ethQuote ? (
+          {isSmartWallet && isEthMode && !isSolana && ethBalanceKnown && !canAffordNameChange && ethQuote ? (
             <InlineBalanceNotice>
               Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
             </InlineBalanceNotice>
-          ) : !isSolana && !canAffordNameChange && !isLoadingBalance ? (
+          ) : isSmartWallet && isEthMode && !isSolana && ethBalanceUnavailable && ethQuote ? (
+            <InlineBalanceNotice>
+              ETH balance unavailable. Retry before submitting the name change.
+            </InlineBalanceNotice>
+          ) : !isSolana && seedBalanceStatus === 'error' ? (
+            <InlineBalanceNotice>
+              SEED balance unavailable{balanceError ? `: ${balanceError}` : ''}. Retry before submitting the name change.
+            </InlineBalanceNotice>
+          ) : !isSolana && seedBalanceKnown && !canAffordNameChange ? (
 	            <InlineBalanceNotice>
 	              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
 	            </InlineBalanceNotice>

@@ -15,13 +15,19 @@ import { LoginHero, LoginIntro } from "@/components/login-hero";
 import { FarmViewProvider, useFarmView } from "@/lib/farm-view-context";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
-import { sdk } from "@farcaster/miniapp-sdk";
 import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { Activity,memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type ComponentType,type CSSProperties,type KeyboardEvent } from "react";
 import toast from "react-hot-toast";
+
+let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
+
+function loadFarcasterSdk() {
+  farcasterSdkPromise ??= import('@farcaster/miniapp-sdk');
+  return farcasterSdkPromise;
+}
 
 // Import custom hooks
 import {
@@ -850,6 +856,7 @@ export default function App() {
     // Small delay to let the app settle before showing the prompt
     const timeoutId = setTimeout(async () => {
       try {
+        const { sdk } = await loadFarcasterSdk();
         await sdk.actions.addMiniApp();
         setFrameAdded(true);
       } catch (e) {
@@ -939,6 +946,7 @@ export default function App() {
     }
 
     try {
+      const { sdk } = await loadFarcasterSdk();
       await sdk.actions.addMiniApp();
       setFrameAdded(true);
     } catch (e) {

@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redisGetJSONRaw, redisSetJSONRaw } from '@/lib/redis';
+import { redisSetJSONRaw } from '@/lib/redis';
 import { validateAction, type ExpectedTraits, validateTraits } from '@/lib/trait-validator';
 import {
   getVerifyClaimKey,
+  getVerifyClaimPairState,
   getVerifyPendingKey,
   getVerifyWalletClaimKey,
-  normalizeVerifyWalletAddress,
+  readVerifyClaimJSON,
   VERIFY_PENDING_TTL_SECONDS,
+  type VerifyClaimReservationRecord,
   type VerifyPendingRecord,
 } from '@/lib/verify-claim-records';
+import {
+  resolveVerifyClaimPrincipal,
+  VerifyClaimPrincipalError,
+  type VerifyClaimPrincipal,
+} from '@/lib/verify-claim-principal';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
 /**
  * Feature toggle for Base Verify claims.
@@ -33,11 +41,7 @@ const EXPECTED_TRAITS: ExpectedTraits = {
   // 'followers': 'gte:100',       // Require at least 100 followers
 };
 
-/**
- * The action name used for free plant claims.
- * This must match what the frontend sends in the SIWE message.
- */
-const EXPECTED_ACTION = 'claim_free_plant';
+const VERIFY_CHECK_IP_LIMIT_PER_MINUTE = 10;
 
 export async function POST(req: NextRequest) {
   // Check if feature is enabled
@@ -48,32 +52,70 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { signature, message, address, provider } = body;
+    const rateLimitResponse = await enforceRateLimit(req, {
+      failClosed: true,
+      scope: 'api:verify:check',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(req) ?? 'unknown',
+          limit: VERIFY_CHECK_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+    if (rateLimitResponse) return rateLimitResponse;
 
-    if (!signature || !message || !address || !provider) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+    }
+    const { signature, message, address, provider } = body as Record<string, unknown>;
+
+    if (typeof signature !== 'string' || !signature.startsWith('0x') || signature.length > 32_768) {
+      return NextResponse.json({ error: 'A valid signature is required' }, { status: 400 });
     }
 
-    if (typeof address !== 'string' || typeof provider !== 'string') {
-      return NextResponse.json({ error: 'Invalid request fields' }, { status: 400 });
+    let principal: VerifyClaimPrincipal;
+    try {
+      principal = resolveVerifyClaimPrincipal(message, {
+        ...(address !== undefined ? { claimedAddress: address } : {}),
+        ...(provider !== undefined ? { claimedProvider: provider } : {}),
+      });
+    } catch (error) {
+      if (error instanceof VerifyClaimPrincipalError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
     }
+    const normalizedAddress = principal.address;
+    const verifiedProvider = principal.provider;
+    const signedMessage = message as string;
 
-    const normalizedAddress = normalizeVerifyWalletAddress(address);
-    if (!normalizedAddress) {
-      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
-    }
+    const walletRateLimitResponse = await enforceRateLimit(req, {
+      failClosed: true,
+      scope: 'api:verify:check',
+      rules: [
+        {
+          kind: 'address',
+          identifier: normalizedAddress,
+          limit: VERIFY_CHECK_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+    if (walletRateLimitResponse) return walletRateLimitResponse;
 
     // 1. SECURITY: Validate trait requirements in SIWE message match backend expectations
     // This prevents users from modifying frontend to sign weaker requirements
     const validation = Object.keys(EXPECTED_TRAITS).length > 0
-      ? validateTraits(message, provider, EXPECTED_TRAITS, EXPECTED_ACTION)
-      : validateAction(message, provider, EXPECTED_ACTION);
+      ? validateTraits(signedMessage, verifiedProvider, EXPECTED_TRAITS, principal.action)
+      : validateAction(signedMessage, verifiedProvider, principal.action);
 
     if (!validation.valid) {
       console.warn('[VERIFY] Trait validation failed:', {
         address: normalizedAddress,
-        provider,
+        provider: verifiedProvider,
         error: validation.error,
         parsedTraits: validation.parsedTraits,
         parsedAction: validation.parsedAction,
@@ -86,7 +128,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[VERIFY] Trait validation passed:', {
       address: normalizedAddress,
-      provider,
+      provider: verifiedProvider,
       action: validation.parsedAction,
       traits: validation.parsedTraits,
     });
@@ -100,7 +142,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    console.log('[VERIFY] Calling Base Verify for:', { address: normalizedAddress, provider });
+    console.log('[VERIFY] Calling Base Verify for:', { address: normalizedAddress, provider: verifiedProvider });
 
     const response = await fetch(verifyUrl, {
       method: 'POST',
@@ -110,13 +152,12 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         signature,
-        message,
+        message: signedMessage,
       }),
     });
 
     const responseBody = await response.text();
     console.log('[VERIFY] Base Verify API Status:', response.status);
-    console.log('[VERIFY] Base Verify API Body:', responseBody);
 
     let data;
     try {
@@ -135,17 +176,52 @@ export async function POST(req: NextRequest) {
       // Check if this token has already claimed a free plant
       const claimKey = getVerifyClaimKey(verificationToken);
       const walletClaimKey = getVerifyWalletClaimKey(normalizedAddress);
-      const [existingClaim, existingWalletClaim] = await Promise.all([
-        redisGetJSONRaw<UntypedValue>(claimKey),
-        redisGetJSONRaw<UntypedValue>(walletClaimKey),
+      const [claimRead, walletClaimRead] = await Promise.all([
+        readVerifyClaimJSON<VerifyClaimReservationRecord>(claimKey),
+        readVerifyClaimJSON<VerifyClaimReservationRecord>(walletClaimKey),
       ]);
 
-      if (existingClaim || existingWalletClaim) {
-        return NextResponse.json({ 
-          verified: true, 
+      if (claimRead.status === 'unavailable' || walletClaimRead.status === 'unavailable') {
+        return NextResponse.json(
+          { error: 'Verification claim storage is temporarily unavailable.' },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+
+      let claimRecord = claimRead.status === 'ok' ? claimRead.value : null;
+      const walletRecord = walletClaimRead.status === 'ok' ? walletClaimRead.value : null;
+      if (
+        !claimRecord
+        && walletRecord
+        && typeof walletRecord.verificationToken === 'string'
+      ) {
+        const pairedClaimRead = await readVerifyClaimJSON<VerifyClaimReservationRecord>(
+          getVerifyClaimKey(walletRecord.verificationToken),
+        );
+        if (pairedClaimRead.status === 'unavailable') {
+          return NextResponse.json(
+            { error: 'Verification claim storage is temporarily unavailable.' },
+            { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+          );
+        }
+        claimRecord = pairedClaimRead.status === 'ok' ? pairedClaimRead.value : null;
+      }
+
+      const claimState = getVerifyClaimPairState(claimRecord, walletRecord);
+      const existingRecord = walletRecord ?? claimRecord;
+      if (claimState !== 'unclaimed' && claimState !== 'retryable') {
+        return NextResponse.json({
+          verified: true,
           token: verificationToken,
-          alreadyClaimed: true 
-        }, { status: 200 });
+          alreadyClaimed: true,
+          retryable: false,
+          claimState,
+          reservationId: existingRecord?.reservationId,
+          recoveryStage: existingRecord?.stage,
+        }, {
+          status: 200,
+          headers: { 'Cache-Control': 'private, no-store' },
+        });
       }
 
       const now = Date.now();
@@ -153,18 +229,33 @@ export async function POST(req: NextRequest) {
         status: 'verified_pending',
         token: verificationToken,
         address: normalizedAddress,
-        provider,
-        action: EXPECTED_ACTION,
+        provider: verifiedProvider,
+        action: principal.action,
         createdAt: now,
         expiresAt: now + VERIFY_PENDING_TTL_SECONDS * 1000,
       };
-      await redisSetJSONRaw(getVerifyPendingKey(verificationToken), pendingRecord, VERIFY_PENDING_TTL_SECONDS);
+      const pendingStored = await redisSetJSONRaw(
+        getVerifyPendingKey(verificationToken),
+        pendingRecord,
+        VERIFY_PENDING_TTL_SECONDS,
+      );
+      if (!pendingStored) {
+        return NextResponse.json(
+          { error: 'Verification claim storage is temporarily unavailable.' },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
 
-      return NextResponse.json({ 
-        verified: true, 
+      return NextResponse.json({
+        verified: true,
         token: verificationToken,
-        alreadyClaimed: false
-      }, { status: 200 });
+        alreadyClaimed: false,
+        retryable: claimState === 'retryable',
+        claimState,
+      }, {
+        status: 200,
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
 
     } else if (response.status === 404) {
       return NextResponse.json({ verified: false, needsVerification: true }, { status: 404 });

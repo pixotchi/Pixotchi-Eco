@@ -55,7 +55,11 @@ export default function BalanceCard({ className = "", variant = "default", onRef
     leafBalance,
     pixotchiBalance,
     loading,
-    refreshBalances
+    refreshBalances,
+    seedBalanceStatus,
+    leafBalanceStatus,
+    pixotchiBalanceStatus,
+    balanceError,
   } = useBalances();
   const isSolana = useIsSolanaWallet();
   const {
@@ -63,6 +67,8 @@ export default function BalanceCard({ className = "", variant = "default", onRef
     solBalance,
     twinInfo,
     isLoading: solanaLoading,
+    error: solanaError,
+    refresh: refreshSolana,
   } = useSolanaWallet();
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const manualRefreshingRef = useRef(false);
@@ -73,11 +79,27 @@ export default function BalanceCard({ className = "", variant = "default", onRef
   const {
     data: ethBalance,
     isLoading: ethLoading,
+    isError: ethError,
     refetch: refetchEthBalance,
   } = useBalance({
     address: address as `0x${string}`,
     query: { enabled: !!address && variant === "wallet-profile" && !isSolana }
   });
+  const ethBalanceReady = ethBalance !== undefined && !ethError;
+  const ethBalanceUnavailable = !ethBalanceReady && !ethLoading;
+  const tokenBalancePending = loading
+    || seedBalanceStatus === 'unknown'
+    || leafBalanceStatus === 'unknown'
+    || pixotchiBalanceStatus === 'unknown';
+  const tokenBalanceError = Boolean(balanceError)
+    || seedBalanceStatus === 'error'
+    || leafBalanceStatus === 'error'
+    || pixotchiBalanceStatus === 'error';
+  const balanceErrorMessage = balanceError instanceof Error
+    ? balanceError.message
+    : typeof balanceError === 'string' ? balanceError : null;
+  const formatReadValue = (status: 'unknown' | 'ready' | 'error', value: ReactNode): ReactNode =>
+    status === 'ready' ? value : status === 'error' ? 'Unavailable' : 'Checking…';
 
   // Solana-owned plants live at the Base Twin address. Key the snapshot by the
   // effective Base owner so switching auth surfaces cannot carry EVM profile data
@@ -204,6 +226,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
       if (variant === "wallet-profile" && !isSolana) {
         refreshes.push(refetchEthBalance());
       }
+      if (isSolana) refreshes.push(refreshSolana());
       if (onRefresh) refreshes.push(Promise.resolve(onRefresh()));
       await Promise.allSettled(refreshes);
     } finally {
@@ -294,18 +317,23 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             variant="surfaceControl"
             size="iconCompact"
             onClick={handleRefresh}
-            disabled={ethLoading || loading || manualRefreshing}
+            disabled={ethLoading || tokenBalancePending || manualRefreshing}
             aria-label="Refresh balances"
-            aria-busy={ethLoading || loading || manualRefreshing || undefined}
+            aria-busy={ethLoading || tokenBalancePending || manualRefreshing || undefined}
             className="h-8 min-h-8 w-8 min-w-8 p-0"
           >
-            <RefreshIcon refreshing={ethLoading || loading || manualRefreshing} className="h-4 w-4" />
+            <RefreshIcon refreshing={ethLoading || tokenBalancePending || manualRefreshing} className="h-4 w-4" />
           </Button>
         </div>
 
         {profileResourceError ? (
           <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">
             {profileResourceError}
+          </p>
+        ) : null}
+        {tokenBalanceError || ethError || solanaError ? (
+          <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">
+            {balanceErrorMessage || (ethError ? 'ETH balance could not be loaded' : null) || solanaError || 'Some balances are unavailable. Retry to refresh.'}
           </p>
         ) : null}
 
@@ -319,14 +347,14 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                   label: "Solana",
                   iconSrc: "/icons/solana.svg",
                   iconAlt: "SOL",
-                  value: solBalance !== undefined ? formatSolAmount(solBalance) : "0",
+                  value: solanaError ? 'Unavailable' : formatSolAmount(solBalance),
                   isLoading: solanaLoading,
                 })}
                 {renderBalanceRow({
                   label: "SOL (Base)",
                   iconSrc: "/icons/solana.svg",
                   iconAlt: "wSOL",
-                  value: twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : "0",
+                  value: solanaError ? 'Unavailable' : twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : 'Checking…',
                   isLoading: solanaLoading,
                 })}
                 </>
@@ -335,7 +363,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                   label: "Ethereum",
                   iconSrc: "/icons/ethlogo.svg",
                   iconAlt: "ETH",
-                  value: ethBalance ? parseFloat(ethBalance.formatted).toFixed(6) : "0.000000",
+                  value: ethBalanceReady ? parseFloat(ethBalance.formatted).toFixed(6) : ethBalanceUnavailable ? 'Unavailable' : 'Checking…',
                   isLoading: ethLoading,
                 })
               )}
@@ -344,8 +372,8 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "SEED",
                 iconSrc: "/PixotchiKit/COIN.svg",
                 iconAlt: "SEED",
-                value: formatLargeNumber(tokenBalance),
-                isLoading: loading,
+                value: formatReadValue(seedBalanceStatus, formatLargeNumber(tokenBalance)),
+                isLoading: loading || seedBalanceStatus === 'unknown',
                 subLabel: stakeInfo && stakeInfo.staked > BigInt(0) ? "Staked" : undefined,
                 subValue: stakeInfo && stakeInfo.staked > BigInt(0) ? formatLargeNumber(stakeInfo.staked) : undefined,
               })}
@@ -353,8 +381,8 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "LEAF",
                 iconSrc: "/icons/leaf.png",
                 iconAlt: "LEAF",
-                value: formatLargeNumber(leafBalance),
-                isLoading: loading,
+                value: formatReadValue(leafBalanceStatus, formatLargeNumber(leafBalance)),
+                isLoading: loading || leafBalanceStatus === 'unknown',
                 subLabel: stakeInfo && stakeInfo.rewards > BigInt(0) ? "Claimable" : undefined,
                 subValue: stakeInfo && stakeInfo.rewards > BigInt(0) ? formatLargeNumber(stakeInfo.rewards) : undefined,
               })}
@@ -362,8 +390,8 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "PIXOTCHI",
                 iconSrc: "/icons/cc.png",
                 iconAlt: "PIXOTCHI",
-                value: formatLargeNumber(pixotchiBalance),
-                isLoading: loading,
+                value: formatReadValue(pixotchiBalanceStatus, formatLargeNumber(pixotchiBalance)),
+                isLoading: loading || pixotchiBalanceStatus === 'unknown',
               })}
             </div>
           </div>
@@ -400,16 +428,24 @@ export default function BalanceCard({ className = "", variant = "default", onRef
         <CardTitle>Your Balance</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        {tokenBalanceError ? (
+          <div className="flex items-center justify-between gap-3 text-xs text-[hsl(var(--warning-strong))]" role="status">
+            <span>{balanceErrorMessage || 'Balances are unavailable.'}</span>
+            <Button type="button" variant="outline" size="sm" onClick={handleRefresh} disabled={tokenBalancePending || manualRefreshing}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         <div className="flex items-center space-x-2">
           <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading ? <Skeleton className="h-6 w-40" /> : `${formatLargeNumber(tokenBalance)} SEED`}
+            {loading || seedBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : seedBalanceStatus === 'error' ? 'SEED balance unavailable' : `${formatLargeNumber(tokenBalance)} SEED`}
           </span>
         </div>
         <div className="flex items-center space-x-2">
           <Image src="/icons/leaf.png" alt="LEAF" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading ? <Skeleton className="h-6 w-40" /> : `${formatLargeNumber(leafBalance)} LEAF`}
+            {loading || leafBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : leafBalanceStatus === 'error' ? 'LEAF balance unavailable' : `${formatLargeNumber(leafBalance)} LEAF`}
           </span>
         </div>
       </CardContent>

@@ -1,6 +1,5 @@
 "use client";
 
-import { sdk } from '@farcaster/miniapp-sdk';
 import { FARCASTER_CONNECTED_WALLET_HEADER } from '@/lib/farcaster-miniapp-auth-headers';
 import { getHostEnvironmentSnapshot } from '@/lib/host-environment';
 
@@ -9,6 +8,13 @@ const ETHEREUM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 type MiniAppQuickAuthHeaderOptions = {
   expectedAddress?: string | null;
 };
+
+let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
+
+function loadFarcasterSdk() {
+  farcasterSdkPromise ??= import('@farcaster/miniapp-sdk');
+  return farcasterSdkPromise;
+}
 
 function normalizeEthereumAddress(address: string | null | undefined): string | null {
   const trimmed = address?.trim();
@@ -21,6 +27,7 @@ function normalizeEthereumAddress(address: string | null | undefined): string | 
 
 async function getConnectedMiniAppWalletAddress(): Promise<string | null> {
   try {
+    const { sdk } = await loadFarcasterSdk();
     const accounts = await sdk.wallet.ethProvider.request({
       method: 'eth_accounts',
     });
@@ -43,6 +50,7 @@ export async function getMiniAppQuickAuthHeaders(
     return {};
   }
 
+  const { sdk } = await loadFarcasterSdk();
   const { token } = await sdk.quickAuth.getToken();
   const explicitAddress = normalizeEthereumAddress(options.expectedAddress);
   const connectedWalletAddress = explicitAddress ?? (await getConnectedMiniAppWalletAddress());

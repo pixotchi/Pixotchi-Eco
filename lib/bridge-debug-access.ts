@@ -24,7 +24,10 @@ export async function requireBridgeDebugAccess(request: NextRequest): Promise<Ne
     return rateLimitResponse;
   }
 
-  if (isLocalhostRequest(request)) {
+  // A production process is often bound to localhost behind a reverse proxy.
+  // Do not treat that server-side bind address as proof that the caller is
+  // local; production diagnostics always require admin authentication.
+  if (process.env.NODE_ENV !== 'production' && isLocalhostRequest(request)) {
     return null;
   }
 
@@ -33,7 +36,7 @@ export async function requireBridgeDebugAccess(request: NextRequest): Promise<Ne
     return NextResponse.json(
       {
         success: false,
-        error: 'Bridge diagnostics are restricted outside localhost',
+        error: 'Bridge diagnostics require admin authentication in production or outside localhost',
         code: 'BRIDGE_DEBUG_AUTH_REQUIRED',
         timestamp: new Date().toISOString(),
       },

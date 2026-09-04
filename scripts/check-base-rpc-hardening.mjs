@@ -70,6 +70,25 @@ for (const root of SCAN_ROOTS) {
 
 const contractsPath = 'lib/contracts.ts';
 const contractsSource = fileContents(contractsPath);
+const baseRpcSource = fileContents('lib/base-rpc.ts');
+const rpcProxySource = fileContents('app/api/rpc/route.ts');
+
+if (/['"]web3_clientVersion['"]/.test(rpcProxySource)) {
+  errors.push('app/api/rpc/route.ts: web3_clientVersion must not expose upstream node fingerprints.');
+}
+
+if (!/export function validateBaseRpcLogFilter/.test(rpcProxySource)) {
+  errors.push('app/api/rpc/route.ts: eth_getLogs must validate explicit bounded ranges or block hashes.');
+}
+
+if (!/SERVER_POLICY_DEADLINE_MS/.test(baseRpcSource)) {
+  errors.push('lib/base-rpc.ts: server-side RPC execution requires an overall deadline below the browser timeout.');
+}
+
+if (/if \(method === 'eth_call'\)\s*\{\s*return false;\s*\}/.test(baseRpcSource)) {
+  errors.push('lib/base-rpc.ts: eth_call transport failures must affect endpoint health.');
+}
+
 const retryMarker = 'retryWithBackoff(async () => {';
 let searchIndex = 0;
 while (true) {

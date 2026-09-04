@@ -65,7 +65,7 @@ assert.match(
   'Solana profile resources must use the Base Twin owner rather than a stale EVM address',
 );
 
-const solanaWalletProvider = projectFile('components/solana/SolanaWalletProvider.tsx');
+const solanaWalletProvider = projectFile('components/solana/PrivySolanaWalletIdentity.tsx');
 assert.match(
   solanaWalletProvider,
   /connectedSolanaWallet[\s\S]*solanaWallets\[0\][\s\S]*linkedSolanaWallet/,
@@ -73,7 +73,7 @@ assert.match(
 );
 assert.match(
   solanaWalletProvider,
-  /!!connectedSolanaWallet[\s\S]*!!solanaAddress/,
+  /connectedSolanaWallet[\s\S]*solanaAddress[\s\S]*isSolanaEnabled\(\)/,
   'Solana transaction readiness must require a Privy connected wallet object',
 );
 assert.match(

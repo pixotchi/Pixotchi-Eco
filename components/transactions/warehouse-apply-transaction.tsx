@@ -73,7 +73,7 @@ export default function WarehouseApplyTransaction({
 
   return (
     <GameTransaction
-      effects={{ domains: ["buildings", "lands", "balances"] }}
+      effects={{ domains: ["buildings", "lands", "balances", "plants"] }}
       trackStreak={false}
       intentKey={`warehouse:apply:${landId}:${plantId}`}
       calls={calls}

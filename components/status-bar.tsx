@@ -102,10 +102,25 @@ export default function StatusBar({
   placement?: StatusBarPlacement;
   showEthInStandalone?: boolean;
 }) {
-  const { seedBalance: seed, leafBalance: leaf, pixotchiBalance: pixotchi, loading } = useBalances();
+  const {
+    seedBalance: seed,
+    leafBalance: leaf,
+    pixotchiBalance: pixotchi,
+    loading,
+    seedBalanceStatus,
+    leafBalanceStatus,
+    pixotchiBalanceStatus,
+    balanceError,
+    refreshBalances,
+  } = useBalances();
   const { address } = useAccount();
   const isSolana = useIsSolanaWallet();
-  const { solBalance } = useSolanaWallet();
+  const {
+    solBalance,
+    isLoading: solanaLoading,
+    error: solanaError,
+    refresh: refreshSolana,
+  } = useSolanaWallet();
   const isHeaderPlacement = placement === "header";
   const statusRootRef = React.useRef<HTMLDivElement>(null);
   // Lazy initial read so the ETH slot doesn't pop in a frame after first paint
@@ -120,7 +135,12 @@ export default function StatusBar({
     isHeaderPlacement ||
     (showEthInStandalone && !useCompactStandaloneStatus)
   ) && !isSolana;
-  const { data: ethBalance } = useBalance({
+  const {
+    data: ethBalance,
+    isLoading: ethLoading,
+    isError: ethError,
+    refetch: refetchEthBalance,
+  } = useBalance({
     address,
     query: {
       enabled: showEthBalance && !!address,
@@ -141,7 +161,28 @@ export default function StatusBar({
   // Balance refreshes are handled automatically by balance-context.tsx via events
   // No need for manual refresh on every render or tab change
 
-  // (ETH balance removed) No separate refetch needed here
+  const balanceReadPending = loading
+    || seedBalanceStatus === 'unknown'
+    || leafBalanceStatus === 'unknown'
+    || pixotchiBalanceStatus === 'unknown'
+    || (showEthBalance && ethLoading)
+    || (isSolana && solanaLoading);
+  const balanceReadError = Boolean(balanceError)
+    || seedBalanceStatus === 'error'
+    || leafBalanceStatus === 'error'
+    || pixotchiBalanceStatus === 'error'
+    || ethError
+    || Boolean(solanaError);
+  const balanceErrorMessage = balanceError instanceof Error
+    ? balanceError.message
+    : typeof balanceError === 'string' ? balanceError : null;
+  const retryBalances = () => {
+    void Promise.allSettled([
+      refreshBalances(),
+      ...(showEthBalance ? [refetchEthBalance()] : []),
+      ...(isSolana ? [refreshSolana()] : []),
+    ]);
+  };
 
   // Allow other components to open the staking dialog (e.g., Stake House building)
   useEffect(() => {
@@ -182,27 +223,37 @@ export default function StatusBar({
   }, [isHeaderPlacement]);
 
   const useDetailedBalances = showEthBalance;
-  const seedValue = useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed);
-  const leafValue = useDetailedBalances ? formatTokenDetailed(leaf, 18, { maxFractionDigits: 2 }) : formatTokenShort(leaf);
-  const pixotchiValue = useDetailedBalances ? formatTokenDetailed(pixotchi, 18, { maxFractionDigits: 2 }) : formatTokenShort(pixotchi);
-  const ethValue = ethBalance
+  const seedValue = seedBalanceStatus === 'ready'
+    ? useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed)
+    : seedBalanceStatus === 'error' ? 'Unavailable' : 'Checking…';
+  const leafValue = leafBalanceStatus === 'ready'
+    ? useDetailedBalances ? formatTokenDetailed(leaf, 18, { maxFractionDigits: 2 }) : formatTokenShort(leaf)
+    : leafBalanceStatus === 'error' ? 'Unavailable' : 'Checking…';
+  const pixotchiValue = pixotchiBalanceStatus === 'ready'
+    ? useDetailedBalances ? formatTokenDetailed(pixotchi, 18, { maxFractionDigits: 2 }) : formatTokenShort(pixotchi)
+    : pixotchiBalanceStatus === 'error' ? 'Unavailable' : 'Checking…';
+  const ethValue = ethBalance && !ethError
     ? useDetailedBalances
       ? formatTokenDetailed(ethBalance.value, ethBalance.decimals, { maxFractionDigits: 5, smallValueDigits: 6 })
       : formatTokenShort(ethBalance.value, ethBalance.decimals)
-    : "0";
+    : ethError ? "Unavailable" : "Checking…";
   const balanceSkeletonClassName = "h-4 w-10 max-[340px]:h-3.5 max-[340px]:w-8";
-  const seedText = loading ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
-  const leafText = loading ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;
-  const pixotchiText = loading ? <Skeleton className={balanceSkeletonClassName} /> : pixotchiValue;
+  const seedText = loading || seedBalanceStatus === 'unknown' ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
+  const leafText = loading || leafBalanceStatus === 'unknown' ? <Skeleton className={balanceSkeletonClassName} /> : leafValue;
+  const pixotchiText = loading || pixotchiBalanceStatus === 'unknown' ? <Skeleton className={balanceSkeletonClassName} /> : pixotchiValue;
   // Gate on undefined, not isLoading: when the query is disabled-then-enabled,
   // isLoading is briefly false with no data and the row flashed a literal "0".
-  const ethText = ethBalance === undefined ? <Skeleton className={balanceSkeletonClassName} /> : ethValue;
+  const ethText = ethLoading || ethBalance === undefined && !ethError
+    ? <Skeleton className={balanceSkeletonClassName} />
+    : ethValue;
   const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
   const balanceTextClassName = "shrink-0 whitespace-nowrap text-[13px] font-bold leading-none tabular-nums max-[380px]:text-[11px] max-[340px]:text-[10px]";
   const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
   const statusActionButtonClassName = "px-2.5 max-[380px]:px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] max-[340px]:!gap-1";
   // SOL balance for Solana users (9 decimals)
-  const solText = isSolana ? formatTokenShort(solBalance, 9) : null;
+  const solText = isSolana
+    ? solanaLoading ? <Skeleton className={balanceSkeletonClassName} /> : solanaError ? 'Unavailable' : formatTokenShort(solBalance, 9)
+    : null;
 
   const handleTasksClick = () => {
     openTasksDialog();
@@ -265,6 +316,19 @@ export default function StatusBar({
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-[hsl(var(--divider)/0.72)]" : "hidden h-5 w-px bg-[hsl(var(--divider)/0.72)] xl:block"} aria-hidden="true" />
           <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[380px]:gap-1">
+            {balanceReadError && !balanceReadPending && (
+              <Button
+                type="button"
+                onClick={retryBalances}
+                variant="statusAction"
+                size="touchCompact"
+                className={statusActionButtonClassName}
+                aria-label="Retry balance reads"
+                title={balanceErrorMessage || 'Retry balance reads'}
+              >
+                Retry
+              </Button>
+            )}
             {/* Show Solana badge when connected via Solana */}
             {isSolana && <SolanaBridgeBadge />}
             {showTasksButton && (

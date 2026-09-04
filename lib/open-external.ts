@@ -1,11 +1,17 @@
 "use client";
 
-import { sdk } from "@farcaster/miniapp-sdk";
 import {
 	ensureHostEnvironmentResolved,
 	getHostEnvironmentSnapshot,
 } from "@/lib/host-environment";
 import type React from "react";
+
+let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
+
+function loadFarcasterSdk() {
+	farcasterSdkPromise ??= import('@farcaster/miniapp-sdk');
+	return farcasterSdkPromise;
+}
 
 export async function isMiniApp(): Promise<boolean> {
 	const snapshot = getHostEnvironmentSnapshot();
@@ -25,6 +31,7 @@ export async function openExternalUrl(url: string): Promise<void> {
 	try {
 		const mini = await isMiniApp();
 		if (mini) {
+			const { sdk } = await loadFarcasterSdk();
 			await sdk.actions.openUrl(url);
 			return;
 		}
@@ -63,7 +70,7 @@ export function handleExternalAnchorClick(
 	}
 
 	e.preventDefault();
-	void sdk.actions.openUrl(url).catch(() => {
+	void loadFarcasterSdk().then(({ sdk }) => sdk.actions.openUrl(url)).catch(() => {
 		// If the host rejects it, fall back to a normal window open.
 		try {
 			window.open(url, "_blank", "noopener,noreferrer");

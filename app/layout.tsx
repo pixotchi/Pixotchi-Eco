@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./ock-compat.css";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics } from "@vercel/analytics/next";
 import { coinbaseSans, pixelmix } from "./fonts";
 import { getThemeMetaColor } from "@/lib/theme-utils";
 

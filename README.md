@@ -93,6 +93,7 @@ Production deployments fail fast unless the required public URL, at least one un
 
 ## Configuration notes
 - Feature flags control major surfaces: gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
+- Blackjack is fail-closed while the deployed contract uses its legacy randomness signature. Enabling it requires both the public/server feature flags and the server-only `BLACKJACK_UNSAFE_LEGACY_SIGNATURES_ACKNOWLEDGED=true`; keep that acknowledgement off unless the legacy risk is consciously accepted.
 - Solana flows require `NEXT_PUBLIC_SOLANA_ENABLED=true` and a configured `NEXT_PUBLIC_SOLANA_TWIN_ADAPTER`.
 - Notifications can use the Base App provider or Neynar; keep `NEXT_PUBLIC_NOTIFICATION_PROVIDER` and `NOTIFICATION_PROVIDER` in sync.
 - Neural Seed is intentionally read-only. Set `AI_PROVIDER` plus the matching provider key for AI chat.

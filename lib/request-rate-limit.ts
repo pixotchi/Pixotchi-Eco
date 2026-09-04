@@ -9,6 +9,8 @@ interface RateLimitRule {
 }
 
 interface EnforceRateLimitOptions {
+  /** Paid/signing endpoints should reject requests when durable accounting is unavailable. */
+  failClosed?: boolean;
   scope: string;
   rules: RateLimitRule[];
 }
@@ -46,6 +48,19 @@ export async function enforceRateLimit(
     const currentWindow = Math.floor(Date.now() / 1000 / rule.windowSeconds);
     const rateLimitKey = `ratelimit:${options.scope}:${rule.kind}:${normalizedIdentifier}:${currentWindow}`;
     const hits = await redisIncrBy(rateLimitKey, 1);
+
+    if (hits === null && options.failClosed) {
+      return NextResponse.json(
+        { error: 'Request protection is temporarily unavailable. Please try again shortly.' },
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'private, no-store',
+            'Retry-After': '30',
+          },
+        },
+      );
+    }
 
     if (hits === 1) {
       await redisExpire(rateLimitKey, rule.windowSeconds + 5);

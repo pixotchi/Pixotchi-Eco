@@ -10,6 +10,7 @@ import { getReadClient, STAKE_CONTRACT_ADDRESS, type PixotchiReadClient } from '
 import stakeAbi from '@/public/abi/stakeabi.json';
 import { redis } from './redis';
 import { resolvePrimaryNames } from './ens-resolver';
+import { z } from 'zod';
 
 export interface StakeLeaderboardEntry {
   address: string;
@@ -21,6 +22,48 @@ export interface StakeLeaderboardEntry {
 const CACHE_KEY = 'stake:leaderboard:v2';
 const CACHE_TTL = 15 * 60; // 15 minutes (shared across all users)
 const MIN_STAKE_THRESHOLD = BigInt(5) * BigInt(10) ** BigInt(17); // 0.5 SEED minimum
+
+const cachedStakeLeaderboardSchema = z.array(z.object({
+  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  ensName: z.string().nullable().optional(),
+  rank: z.number().int().positive(),
+  stakedAmount: z.union([
+    z.string().regex(/^(0|[1-9]\d*)$/),
+    z.bigint().nonnegative(),
+  ]),
+}));
+
+/**
+ * Upstash deserializes JSON by default, while other Redis-compatible clients
+ * return the serialized string. Decode either representation once and only
+ * return entries that can safely be restored to the public API shape.
+ */
+export function parseCachedStakeLeaderboard(value: unknown): StakeLeaderboardEntry[] | null {
+  let candidate = value;
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  const parsed = cachedStakeLeaderboardSchema.safeParse(candidate);
+  if (!parsed.success) return null;
+
+  try {
+    return parsed.data.map((entry) => ({
+      address: entry.address,
+      ...(entry.ensName ? { ensName: entry.ensName } : {}),
+      rank: entry.rank,
+      stakedAmount: typeof entry.stakedAmount === 'bigint'
+        ? entry.stakedAmount
+        : BigInt(entry.stakedAmount),
+    }));
+  } catch {
+    return null;
+  }
+}
 
 async function resolveENSBatch(addresses: string[]): Promise<Map<string, string | null>> {
   try {
@@ -153,13 +196,10 @@ export async function getStakeLeaderboard(
   if (redis) {
     try {
       const cached = await redis.get(CACHE_KEY);
-      if (cached && typeof cached === 'string') {
-        console.log('⚡ Returning cached stake leaderboard (< 5 min old)');
-        const parsed = JSON.parse(cached);
-        return parsed.map((entry: UntypedValue) => ({
-          ...entry,
-          stakedAmount: BigInt(entry.stakedAmount)
-        }));
+      const parsed = parseCachedStakeLeaderboard(cached);
+      if (parsed) {
+        console.log(`⚡ Returning cached stake leaderboard (< ${CACHE_TTL / 60} min old)`);
+        return parsed;
       }
     } catch (error) {
       console.error('Error reading cache:', error);

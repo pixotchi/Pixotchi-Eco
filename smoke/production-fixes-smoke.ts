@@ -16,9 +16,12 @@ import { onBalanceRefresh } from '../lib/app-events';
 import { broadcastSignedLocalTestTransaction } from '../lib/local-test-transaction';
 import {
   executeSingleWaveWithInvoker,
+  isBaseRpcConnectivityError,
   isDeterministicBaseRpcError,
+  shouldAffectBaseRpcProviderHealth,
   waitForCanonicalBaseReceipt,
 } from '../lib/base-rpc';
+import { validateBaseRpcLogFilter } from '../app/api/rpc/route';
 import {
   BASE_RPC_MAX_BATCH_SIZE,
   BASE_RPC_MAX_BODY_BYTES,
@@ -36,6 +39,7 @@ import {
   formatMarketplacePriceRatio,
   getMarketplacePriceRatio,
 } from '../lib/marketplace-price';
+import { calculateTimeLeft, calculateUpgradeProgress } from '../lib/utils';
 import {
   PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS,
   PENDING_EVM_HARD_LOCK_MS,
@@ -516,7 +520,12 @@ assert.match(
   /const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;/,
   'multicall sizing must come from the shared envelope the body cap is derived from',
 );
-assert.match(rpcRouteSource, /const ALLOWED_READ_METHODS = new Set\(\[/);
+  assert.match(rpcRouteSource, /const ALLOWED_READ_METHODS = new Set\(\[/);
+  assert.doesNotMatch(
+    rpcRouteSource.match(/const ALLOWED_READ_METHODS = new Set\(\[[\s\S]*?\]\);/)?.[0] ?? '',
+    /['"]web3_clientVersion['"]/,
+    'the RPC proxy must not expose upstream node fingerprinting',
+  );
 assert.doesNotMatch(rpcRouteSource, /startsWith\(['"]eth_/);
 for (const deniedMethod of [
   'eth_sendTransaction',
@@ -541,7 +550,59 @@ assert.match(rpcRouteSource, /validationErrors\.some\(Boolean\)/);
 assert.match(rpcRouteSource, /isLoopbackHostname\(request\.nextUrl\.hostname\)/);
 assert.match(rpcRouteSource, /NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY/);
 assert.match(rpcRouteSource, /safeRpcMessage\(safe\.code\)/);
-assert.doesNotMatch(rpcRouteSource, /error instanceof Error \? error\.message/);
+  assert.doesNotMatch(rpcRouteSource, /error instanceof Error \? error\.message/);
+  assert.equal(
+    validateBaseRpcLogFilter([{ fromBlock: '0x1', toBlock: '0x2711' }]),
+    null,
+    'an explicitly bounded log range must remain available to the game client',
+  );
+  assert.match(
+    validateBaseRpcLogFilter([{ fromBlock: 'earliest', toBlock: 'latest' }]) ?? '',
+    /explicit hexadecimal/i,
+    'provider-resolved log tags must not bypass the range cap',
+  );
+  assert.match(
+    validateBaseRpcLogFilter([{}]) ?? '',
+    /explicit hexadecimal/i,
+    'an omitted log range must not become an implicit archive scan',
+  );
+  assert.equal(
+    validateBaseRpcLogFilter([{ blockHash: `0x${'11'.repeat(32)}` }]),
+    null,
+    'a single-block hash log query remains safe',
+  );
+  assert.match(
+    validateBaseRpcLogFilter([{ fromBlock: '0x0', toBlock: '0x2711' }]) ?? '',
+    /limited/i,
+    'numeric log ranges above the cap must be rejected',
+  );
+
+  const namedTimeout = Object.assign(new Error('request failed'), { name: 'TimeoutError' });
+  const nestedTimeout = Object.assign(new Error('outer transport failure'), {
+    cause: Object.assign(new Error('connection timed out'), { code: 'ETIMEDOUT' }),
+  });
+  assert.equal(isBaseRpcConnectivityError(namedTimeout), true);
+  assert.equal(isBaseRpcConnectivityError(nestedTimeout), true);
+  assert.equal(
+    shouldAffectBaseRpcProviderHealth('eth_call', namedTimeout),
+    true,
+    'eth_call transport failures must open the provider circuit like any other read',
+  );
+  assert.equal(
+    shouldAffectBaseRpcProviderHealth('eth_call', Object.assign(new Error('execution reverted'), { code: 3 })),
+    false,
+    'deterministic eth_call reverts remain application failures, not provider failures',
+  );
+  assert.match(
+    baseRpcSource,
+    /const SERVER_POLICY_DEADLINE_MS:[\s\S]*read: 9_000,[\s\S]*receipt: 6_500,/,
+    'server RPC deadlines must remain shorter than the browser read and receipt timeouts',
+  );
+  assert.match(
+    baseRpcSource,
+    /runWithinServerDeadline\([\s\S]*\(\) => executeSingleWave\(/,
+    'each proxy-side execution wave must consume the same server deadline budget',
+  );
 
 const ownerInvalidationSource = projectFile('lib/owner-resource-invalidation.ts');
 assert.match(ownerInvalidationSource, /\[0, 350, 900, 1_800, 3_000, 5_000\]/);
@@ -706,6 +767,22 @@ assert.match(transactionKit, /statusName: "transactionUnresolved"/);
 assert.match(transactionKit, /hasSubmittedProof && !isDefinitivePostSubmissionError\(error\)/);
 assert.match(transactionKit, /pendingReceipt = requestCanonicalReceipt\(\)/);
 assert.match(transactionKit, /pendingStatus = requestCallsStatus\(\)/);
+assert.match(transactionKit, /activeCallsRef\.current \?\? stableCallsRef\.current/);
+assert.match(transactionKit, /activeCallsRef\.current = \{[\s\S]*digest: pendingCallsDigest/);
+const callsSnapshotIndex = transactionKit.indexOf('Capture this before the first await.');
+for (const preflightError of [
+  'Wallet client unavailable.',
+  'No transaction calls provided.',
+  'Transaction call is missing a destination address.',
+]) {
+  assert.ok(
+    transactionKit.indexOf(preflightError) < callsSnapshotIndex,
+    'call snapshots must be captured after every synchronous build-error preflight',
+  );
+}
+assert.match(transactionKit, /accountChainId !== base\.id/);
+assert.match(transactionKit, /getCapabilities\?\./);
+assert.doesNotMatch(transactionKit, /requiresAtomicBundle && result\?\.atomic !== true/);
 assert.match(
   transactionKit,
   /currentPendingRecord\.proof\.kind === "calls"[\s\S]*id: currentPendingRecord\.proof\.id[\s\S]*kind: "calls"[\s\S]*kind: "hash"/,
@@ -1307,14 +1384,16 @@ const fallbackGateIndex = wagmiRouterSource.indexOf(
   "if (loadedConfig?.key !== desiredConfigKey) return",
 );
 const coreProviderIndex = wagmiRouterSource.indexOf('<CoreWagmiProvider');
-const miniAppReadyIndex = wagmiRouterSource.indexOf('<MiniAppReadySignal');
 assert.ok(fallbackGateIndex >= 0);
 assert.ok(coreProviderIndex > fallbackGateIndex);
-assert.ok(miniAppReadyIndex > coreProviderIndex);
-assert.match(
-  wagmiRouterSource,
-  /\{isMiniApp \? <MiniAppReadySignal hostEnvironment=\{hostEnvironmentState\} \/> : null\}/,
-);
+assert.doesNotMatch(wagmiRouterSource, /<MiniAppReadySignal/);
+const providerTreeSource = providers.slice(providers.indexOf('return (', providers.indexOf('export function Providers')));
+const hostProviderIndex = providerTreeSource.indexOf('<HostEnvironmentProvider>');
+const miniAppReadyIndex = providerTreeSource.indexOf('<MiniAppReadySignal />');
+const providersContentIndex = providerTreeSource.indexOf('<ProvidersContent');
+assert.ok(hostProviderIndex >= 0);
+assert.ok(miniAppReadyIndex > hostProviderIndex);
+assert.ok(providersContentIndex > miniAppReadyIndex);
 const providersContentSource = providers.slice(providers.indexOf('function ProvidersContent('));
 assert.doesNotMatch(providersContentSource, /useMiniAppReadySignal\(/);
 
@@ -1437,7 +1516,29 @@ const farmerHousePanel = projectFile('components/building-details/FarmerHousePan
 assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:start:/);
 assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:commit:/);
 assert.match(farmerHousePanel, /onSuccess=\{async \(tx: UntypedValue\) => \{\s*await handleSuccess/);
-assert.match(farmerHousePanel, /onSuccess=\{async \(\) => \{\s*await handleSuccess/);
+assert.match(farmerHousePanel, /QUEST_FINALIZE_EXPIRY_BLOCKS = BigInt\(256\)/);
+assert.match(farmerHousePanel, /currentBlock > slot\.pseudoRndBlock \+ QUEST_FINALIZE_EXPIRY_BLOCKS/);
+assert.match(farmerHousePanel, /QUEST_EXPIRED_STATUS/);
+assert.match(farmerHousePanel, /decodeEventLog/);
+assert.match(farmerHousePanel, /decoded\.eventName === 'QuestFinalized'/);
+assert.match(farmerHousePanel, /decoded\.eventName !== 'QuestFinalized' && decoded\.eventName !== 'QuestReset'/);
+assert.match(farmerHousePanel, /Loot bag expired; reset required/);
+assert.match(farmerHousePanel, /onSuccess=\{async \(tx: UntypedValue\) => \{\s*const outcome = getQuestFinalizeOutcome/);
+
+assert.equal(
+  calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt(43_200) }, BigInt(0)),
+  '1d 0h 0m',
+  'upgrade countdowns must retain whole days',
+);
+assert.equal(
+  calculateUpgradeProgress({
+    isUpgrading: true,
+    blockHeightUpgradeInitiated: BigInt(100),
+    blockHeightUntilUpgradeDone: BigInt(100),
+  }, BigInt(100)),
+  100,
+  'zero-duration upgrades must resolve to complete progress',
+);
 
 const smartWalletTransaction = projectFile('components/transactions/smart-wallet-transaction.tsx');
 assert.match(smartWalletTransaction, /<GameTransaction \{\.\.\.props\}/);

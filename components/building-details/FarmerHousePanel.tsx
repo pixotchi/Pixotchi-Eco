@@ -5,13 +5,14 @@ import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
-import { getQuestSlotsByLandId,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS, type QuestSlot } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import React from 'react';
 import { toast } from 'react-hot-toast';
+import { decodeEventLog } from 'viem';
 import { useAccount,useBlockNumber } from 'wagmi';
 
 interface FarmerHousePanelProps {
@@ -23,6 +24,60 @@ interface FarmerHousePanelProps {
 const QUEST_SLOT_SURFACE_CLASS = 'chromatic-white-surface flex flex-col gap-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]';
 const QUEST_START_SURFACE_CLASS = 'building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2';
 const QUEST_STATUS_PILL_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]';
+const QUEST_FINALIZE_EXPIRY_BLOCKS = BigInt(256);
+const QUEST_RECONCILE_DELAYS_MS = [500, 1_000, 1_500, 2_500, 4_000, 6_000] as const;
+export const QUEST_EXPIRED_STATUS = 'Expired — reset required';
+
+/** The contract resets an unfinalized quest once this block window closes. */
+export function isQuestFinalizeExpired(slot: Pick<QuestSlot, 'pseudoRndBlock'>, currentBlock: bigint) {
+  return (
+    slot.pseudoRndBlock !== BigInt(0)
+    && currentBlock > slot.pseudoRndBlock + QUEST_FINALIZE_EXPIRY_BLOCKS
+  );
+}
+
+export type QuestFinalizeOutcome = 'finalized' | 'reset' | 'unknown';
+
+/**
+ * Decode the authoritative quest event from a receipt when the wallet exposed
+ * logs. A successful transaction status alone is insufficient: questFinalize
+ * deliberately returns success while emitting QuestReset after blockhash expiry.
+ */
+export function getQuestFinalizeOutcome(
+  proof: UntypedValue,
+  landId: bigint,
+  slotIndex: number,
+): QuestFinalizeOutcome {
+  const receipts = [
+    ...(Array.isArray(proof?.transactionReceipts) ? proof.transactionReceipts : []),
+    proof,
+  ];
+
+  for (const receipt of receipts) {
+    if (!Array.isArray(receipt?.logs)) continue;
+    for (const log of receipt.logs) {
+      if (typeof log?.data !== 'string' || !Array.isArray(log?.topics)) continue;
+      try {
+        const decoded: UntypedValue = decodeEventLog({
+          abi: landAbi,
+          data: log.data as `0x${string}`,
+          topics: log.topics as UntypedValue,
+        });
+        if (decoded.eventName !== 'QuestFinalized' && decoded.eventName !== 'QuestReset') continue;
+        const args = decoded.args as UntypedValue;
+        const eventLandId = args?.landId ?? args?.[0];
+        const eventSlotIndex = args?.farmerSlotId ?? args?.slot ?? args?.[1];
+        if (eventLandId === undefined || eventSlotIndex === undefined) continue;
+        if (BigInt(eventLandId) !== landId || BigInt(eventSlotIndex) !== BigInt(slotIndex)) continue;
+        return decoded.eventName === 'QuestFinalized' ? 'finalized' : 'reset';
+      } catch {
+        // Ignore unrelated or wallet-normalized logs and continue scanning.
+      }
+    }
+  }
+
+  return 'unknown';
+}
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
@@ -104,19 +159,24 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);
   }, [liveBlock]);
 
-  const statusOf = (s: import('@/lib/contracts').QuestSlot): string => {
+  const statusOf = (s: QuestSlot): string => {
     // Until we know the current block, avoid guessing to prevent huge time estimates
     if (currentBlock === BigInt(0)) return 'Loading';
     const now = currentBlock;
     if (s.coolDownBlock !== BigInt(0) && now < s.coolDownBlock) return 'Cooldown';
     if (s.startBlock === BigInt(0)) return 'Available';
-    if (now >= s.startBlock && now <= s.endBlock) return 'In progress';
+    // A non-zero start block is authoritative even if the local block watcher
+    // is briefly behind the just-confirmed receipt. Treat that slot as active
+    // so a stale head cannot expose a second Start transaction.
+    if (s.startBlock !== BigInt(0) && now <= s.endBlock) return 'In progress';
     if (now > s.endBlock && s.pseudoRndBlock === BigInt(0)) return 'Ready to commit';
-    if (s.pseudoRndBlock !== BigInt(0)) return 'Committed';
+    if (s.pseudoRndBlock !== BigInt(0)) {
+      return isQuestFinalizeExpired(s, now) ? QUEST_EXPIRED_STATUS : 'Committed';
+    }
     return 'Available';
   };
 
-  const progressPct = (s: import('@/lib/contracts').QuestSlot) => {
+  const progressPct = (s: QuestSlot) => {
     if (s.startBlock === BigInt(0)) return 0;
     const total = Number(s.endBlock - s.startBlock);
     const done = Math.max(0, Math.min(total, Number(currentBlock - s.startBlock)));
@@ -142,16 +202,16 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
 
     // Optional: poll for desired status transition using fresh reads (avoids stale state)
     if (opts && typeof opts.slotIndex === 'number' && (opts.awaitCommitted || opts.awaitUncommitted || opts.awaitInProgress)) {
-      for (let i = 0; i < 6; i++) {
-        await new Promise((r) => setTimeout(r, 500));
+      for (const delayMs of QUEST_RECONCILE_DELAYS_MS) {
+        await new Promise((r) => setTimeout(r, delayMs));
         if (currentLandIdRef.current !== operationLandId) return;
         try {
-          const fresh = await getQuestSlotsByLandId(operationLandId);
+          const fresh = await fetchSlots();
           if (currentLandIdRef.current !== operationLandId) return;
           const s = fresh?.[opts.slotIndex];
           const st = s ? statusOf(s) : undefined;
           if (opts.awaitCommitted && st === 'Committed') break;
-          if (opts.awaitUncommitted && st !== 'Committed') break;
+          if (opts.awaitUncommitted && s?.pseudoRndBlock === BigInt(0)) break;
           if (opts.awaitInProgress && st === 'In progress') break;
         } catch { }
       }
@@ -207,9 +267,41 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           buttonClassName="h-11 min-h-11 px-3 text-xs"
                           hideStatus
                           disabled={questActionsBlocked}
-                          onSuccess={async () => {
+                          onSuccess={async (tx: UntypedValue) => {
+                            const outcome = getQuestFinalizeOutcome(tx, landId, idx);
                             await handleSuccess({ slotIndex: idx, awaitUncommitted: true });
-                            toast.success('Loot bag opened!');
+                            if (outcome === 'finalized') {
+                              toast.success('Loot bag opened!');
+                            } else if (outcome === 'reset') {
+                              toast.error('Loot bag expired; the quest was reset.');
+                            } else {
+                              toast('Quest updated, but the loot result could not be verified.');
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    {statusOf(s) === QUEST_EXPIRED_STATUS && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-amber-700">Loot bag expired; reset required</span>
+                        <GameTransaction
+                          effects={{ domains: ["balances"] }}
+                          intentKey={`quest:finalize:${landId}:${idx}`}
+                          calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
+                          buttonText="Reset expired quest"
+                          buttonClassName="h-11 min-h-11 px-3 text-xs"
+                          hideStatus
+                          disabled={questActionsBlocked}
+                          onSuccess={async (tx: UntypedValue) => {
+                            const outcome = getQuestFinalizeOutcome(tx, landId, idx);
+                            await handleSuccess({ slotIndex: idx, awaitUncommitted: true });
+                            if (outcome === 'reset') {
+                              toast.success('Expired quest reset.');
+                            } else if (outcome === 'finalized') {
+                              toast.success('Loot bag opened!');
+                            } else {
+                              toast('Quest updated, but the reset result could not be verified.');
+                            }
                           }}
                         />
                       </div>

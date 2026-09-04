@@ -11,6 +11,7 @@ import {
   toUIMessageStream,
   type FinishReason,
   type GatewayModelId,
+  type SystemModelMessage,
   type TextStreamPart,
   type UIMessage,
 } from 'ai';
@@ -31,6 +32,9 @@ import { AIChatMessage,AIConversation,AIUsageStats,AIToolCallTrace } from './typ
 const AI_MESSAGE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const AI_RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
 const AI_USAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
+// Covers output caps plus a conservative allowance for prompt, history, and tool tokens.
+// If a provider aborts without reporting usage, this reservation becomes the charge.
+const AI_USAGE_MIN_RESERVATION_TOKENS = 65_536;
 
 // Rate limiting configuration
 const AI_RATE_LIMIT_WINDOW = 10; // 10 seconds between AI messages
@@ -95,6 +99,28 @@ type AIUsageTrackingOptions = {
   recoveredFromLength?: boolean;
 };
 
+type AIUsageSnapshot = {
+  messages: number;
+  tokens: number;
+};
+
+type AIUsageReservation = {
+  id: string;
+  reservationKey: string;
+  reservedTokens: number;
+  usageKey: string;
+};
+
+type AIUsageSettlement = AIUsageTrackingOptions & {
+  conservative?: boolean;
+  tokensUsed: number;
+};
+
+type ReservedAIRequestBudget = {
+  budget: AIRequestBudget;
+  reservation?: AIUsageReservation;
+};
+
 type AIRequestBudget = {
   autoContinueOnLength: boolean;
   continuationMaxOutputTokens: number;
@@ -109,6 +135,167 @@ type AIRequestBudget = {
     tokens: number;
   };
 };
+
+const RESERVE_AI_USAGE_LUA = `
+local rawUsage = redis.call('GET', KEYS[1])
+local usage = {}
+local messages = 0
+local tokens = 0
+if rawUsage then
+  local decodedOk, decoded = pcall(cjson.decode, rawUsage)
+  if not decodedOk or type(decoded) ~= 'table' then
+    return {-1, 0, 0, 0}
+  end
+  usage = decoded
+  messages = tonumber(usage.messages)
+  tokens = tonumber(usage.tokens)
+end
+
+if not messages or not tokens or messages < 0 or tokens < 0 then
+  return {-1, 0, 0, 0}
+end
+
+local maxMessages = tonumber(ARGV[1])
+local maxTokens = tonumber(ARGV[2])
+if (maxMessages > 0 and messages >= maxMessages) or tokens >= maxTokens then
+  return {0, messages, tokens, 0}
+end
+
+local requestedTokens = tonumber(ARGV[3])
+local reservedTokens = math.min(requestedTokens, maxTokens - tokens)
+if reservedTokens <= 0 then
+  return {0, messages, tokens, 0}
+end
+
+usage.date = ARGV[4]
+usage.messages = messages + 1
+usage.tokens = tokens + reservedTokens
+usage.reservedMessages = tonumber(usage.reservedMessages or 0) + 1
+usage.reservedTokens = tonumber(usage.reservedTokens or 0) + reservedTokens
+
+redis.call('SET', KEYS[1], cjson.encode(usage), 'EX', ARGV[5])
+redis.call('SET', KEYS[2], cjson.encode({ reservedTokens = reservedTokens }), 'EX', ARGV[5])
+redis.call('SADD', KEYS[3], KEYS[1])
+redis.call('EXPIRE', KEYS[3], ARGV[5])
+return {1, messages, tokens, reservedTokens}
+`;
+
+const SETTLE_AI_USAGE_LUA = `
+local rawReservation = redis.call('GET', KEYS[2])
+if not rawReservation then
+  return {0, 0}
+end
+
+local reservationOk, reservation = pcall(cjson.decode, rawReservation)
+local rawUsage = redis.call('GET', KEYS[1])
+if not reservationOk or type(reservation) ~= 'table' or not rawUsage then
+  return {-1, 0}
+end
+
+local usageOk, usage = pcall(cjson.decode, rawUsage)
+if not usageOk or type(usage) ~= 'table' then
+  return {-1, 0}
+end
+
+local reservedTokens = tonumber(reservation.reservedTokens)
+local currentTokens = tonumber(usage.tokens)
+local actualTokens = tonumber(ARGV[1])
+if not reservedTokens or not currentTokens or not actualTokens or actualTokens < 0 then
+  return {-1, 0}
+end
+
+usage.tokens = math.max(0, currentTokens - reservedTokens) + actualTokens
+usage.reservedMessages = math.max(0, tonumber(usage.reservedMessages or 1) - 1)
+usage.reservedTokens = math.max(0, tonumber(usage.reservedTokens or reservedTokens) - reservedTokens)
+usage.inputTokens = tonumber(usage.inputTokens or 0) + tonumber(ARGV[2])
+usage.outputTokens = tonumber(usage.outputTokens or 0) + tonumber(ARGV[3])
+usage.reasoningTokens = tonumber(usage.reasoningTokens or 0) + tonumber(ARGV[4])
+usage.continuations = tonumber(usage.continuations or 0) + tonumber(ARGV[5])
+usage.lengthFinishes = tonumber(usage.lengthFinishes or 0) + tonumber(ARGV[6])
+usage.recoveredFromLengthCount = tonumber(usage.recoveredFromLengthCount or 0) + tonumber(ARGV[7])
+
+if ARGV[8] ~= '' then
+  usage.finishReasons = usage.finishReasons or {}
+  usage.finishReasons[ARGV[8]] = tonumber(usage.finishReasons[ARGV[8]] or 0) + 1
+end
+if ARGV[9] ~= '' then usage.model = ARGV[9] end
+if ARGV[10] ~= '' then usage.provider = ARGV[10] end
+
+redis.call('SET', KEYS[1], cjson.encode(usage), 'EX', ARGV[11])
+redis.call('DEL', KEYS[2])
+return {1, usage.tokens}
+`;
+
+const REFUND_AI_USAGE_LUA = `
+local rawReservation = redis.call('GET', KEYS[2])
+if not rawReservation then
+  return {0, 0}
+end
+
+local reservationOk, reservation = pcall(cjson.decode, rawReservation)
+local rawUsage = redis.call('GET', KEYS[1])
+if not reservationOk or type(reservation) ~= 'table' or not rawUsage then
+  return {-1, 0}
+end
+
+local usageOk, usage = pcall(cjson.decode, rawUsage)
+if not usageOk or type(usage) ~= 'table' then
+  return {-1, 0}
+end
+
+local reservedTokens = tonumber(reservation.reservedTokens)
+local currentTokens = tonumber(usage.tokens)
+local currentMessages = tonumber(usage.messages)
+if not reservedTokens or not currentTokens or not currentMessages then
+  return {-1, 0}
+end
+
+usage.tokens = math.max(0, currentTokens - reservedTokens)
+usage.messages = math.max(0, currentMessages - 1)
+usage.reservedMessages = math.max(0, tonumber(usage.reservedMessages or 1) - 1)
+usage.reservedTokens = math.max(0, tonumber(usage.reservedTokens or reservedTokens) - reservedTokens)
+
+redis.call('SET', KEYS[1], cjson.encode(usage), 'EX', ARGV[1])
+redis.call('DEL', KEYS[2])
+return {1, usage.tokens}
+`;
+
+const INCREMENT_AI_USAGE_LUA = `
+local rawUsage = redis.call('GET', KEYS[1])
+local usage = {}
+if rawUsage then
+  local decodedOk, decoded = pcall(cjson.decode, rawUsage)
+  if not decodedOk or type(decoded) ~= 'table' or
+    not tonumber(decoded.messages) or not tonumber(decoded.tokens) then
+    return {-1, 0}
+  end
+  usage = decoded
+else
+  usage.messages = 0
+  usage.tokens = 0
+end
+
+usage.date = ARGV[1]
+usage.messages = tonumber(usage.messages or 0) + 1
+usage.tokens = tonumber(usage.tokens or 0) + tonumber(ARGV[2])
+usage.inputTokens = tonumber(usage.inputTokens or 0) + tonumber(ARGV[3])
+usage.outputTokens = tonumber(usage.outputTokens or 0) + tonumber(ARGV[4])
+usage.reasoningTokens = tonumber(usage.reasoningTokens or 0) + tonumber(ARGV[5])
+usage.continuations = tonumber(usage.continuations or 0) + tonumber(ARGV[6])
+usage.lengthFinishes = tonumber(usage.lengthFinishes or 0) + tonumber(ARGV[7])
+usage.recoveredFromLengthCount = tonumber(usage.recoveredFromLengthCount or 0) + tonumber(ARGV[8])
+if ARGV[9] ~= '' then
+  usage.finishReasons = usage.finishReasons or {}
+  usage.finishReasons[ARGV[9]] = tonumber(usage.finishReasons[ARGV[9]] or 0) + 1
+end
+if ARGV[10] ~= '' then usage.model = ARGV[10] end
+if ARGV[11] ~= '' then usage.provider = ARGV[11] end
+
+redis.call('SET', KEYS[1], cjson.encode(usage), 'EX', ARGV[12])
+redis.call('SADD', KEYS[2], KEYS[1])
+redis.call('EXPIRE', KEYS[2], ARGV[12])
+return {1, usage.tokens}
+`;
 
 export type PixotchiAIMessageMetadata = {
   continuations?: number;
@@ -193,8 +380,6 @@ export function getSDKModel() {
   if (providerName === 'openai') {
     return openai(config.model);
   } else if (providerName === 'claude') {
-    // Note: @ai-sdk/anthropic handles cache control automatically if headers/structured prompts are used,
-    // but we will rely on its standard behavior for now.
     return anthropic(config.model);
   } else if (providerName === 'google') {
     return google(config.model);
@@ -258,15 +443,6 @@ function isDirectGoogleGemini3Model(): boolean {
   return config.provider === 'google' && /^gemini-3/i.test(config.model);
 }
 
-function isGemini3ModelConfigured(): boolean {
-  const config = getCurrentModelConfig();
-  const models = [
-    config.model,
-    ...config.fallbackModels,
-  ];
-  return models.some((entry) => /(?:^|\/)gemini-3/i.test(entry));
-}
-
 function getConfiguredModelIds(): string[] {
   const config = getCurrentModelConfig();
   return [
@@ -293,8 +469,21 @@ function isReasoningModelConfigured(): boolean {
   );
 }
 
-function getModelRequestSettings() {
-  const settings: { reasoning?: AIReasoningLevel; temperature?: number } = isGemini3ModelConfigured()
+function requiresProviderDefaultSampling(modelId: string): boolean {
+  return /(?:^|\/)gpt-[5-9](?:[.\-]|$)/i.test(modelId) ||
+    /(?:^|\/)o[1-9](?:[.\-]|$)/i.test(modelId) ||
+    /(?:^|\/)claude-(?:fable|haiku|mythos|opus|sonnet)-[4-9](?:[.\-]|$)/i.test(modelId) ||
+    /(?:^|\/)gemini-[3-9](?:[.\-]|$)/i.test(modelId);
+}
+
+function hasSamplingSensitiveModelConfigured(): boolean {
+  // Gateway applies these top-level settings to whichever fallback is selected,
+  // so use the least-common-denominator settings for the entire configured chain.
+  return getConfiguredModelIds().some(requiresProviderDefaultSampling);
+}
+
+export function getModelRequestSettings() {
+  const settings: { reasoning?: AIReasoningLevel; temperature?: number } = hasSamplingSensitiveModelConfigured()
     ? {}
     : { temperature: AI_TEMPERATURE };
 
@@ -1383,8 +1572,52 @@ export async function updateAIRateLimit(address: string): Promise<void> {
   }
 }
 
-async function getTodayUserAIUsage(address: string): Promise<{ messages: number; tokens: number }> {
-  if (!redis) return { messages: 0, tokens: 0 };
+class AIUsageAccountingUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'AIUsageAccountingUnavailableError';
+  }
+}
+
+function parseNonNegativeUsageNumber(value: unknown, field: string): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new AIUsageAccountingUnavailableError(`AI usage accounting contains an invalid ${field} value.`);
+  }
+  return parsed;
+}
+
+function parseAIUsageSnapshot(value: unknown): AIUsageSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AIUsageAccountingUnavailableError('AI usage accounting contains an invalid record.');
+  }
+
+  const usage = value as Record<string, unknown>;
+  if (!Object.hasOwn(usage, 'messages') || !Object.hasOwn(usage, 'tokens')) {
+    throw new AIUsageAccountingUnavailableError('AI usage accounting is missing required totals.');
+  }
+  return {
+    messages: parseNonNegativeUsageNumber(usage.messages, 'messages'),
+    tokens: parseNonNegativeUsageNumber(usage.tokens, 'tokens'),
+  };
+}
+
+function parseRedisScriptResult(value: unknown, operation: string): number[] {
+  if (!Array.isArray(value)) {
+    throw new AIUsageAccountingUnavailableError(`AI usage ${operation} returned an invalid result.`);
+  }
+
+  const parsed = value.map((entry) => Number(entry));
+  if (parsed.some((entry) => !Number.isFinite(entry))) {
+    throw new AIUsageAccountingUnavailableError(`AI usage ${operation} returned invalid numbers.`);
+  }
+  return parsed;
+}
+
+async function getTodayUserAIUsage(address: string): Promise<AIUsageSnapshot> {
+  if (!redis) {
+    throw new AIUsageAccountingUnavailableError('AI usage accounting is unavailable.');
+  }
 
   const today = new Date().toISOString().split('T')[0];
   const usageKey = `ai:usage:${address.toLowerCase()}:${today}`;
@@ -1393,22 +1626,17 @@ async function getTodayUserAIUsage(address: string): Promise<{ messages: number;
     const currentUsage = await redis.get(usageKey);
     if (!currentUsage) return { messages: 0, tokens: 0 };
     const usage = typeof currentUsage === 'object' ? currentUsage : JSON.parse(currentUsage as string);
-
-    return {
-      messages: Number(usage.messages || 0),
-      tokens: Number(usage.tokens || 0),
-    };
+    return parseAIUsageSnapshot(usage);
   } catch (error) {
-    console.warn('Failed to read AI usage budget:', error);
-    return { messages: 0, tokens: 0 };
+    if (error instanceof AIUsageAccountingUnavailableError) throw error;
+    throw new AIUsageAccountingUnavailableError('Failed to read the AI usage budget.', { cause: error });
   }
 }
 
-export async function resolveAIRequestBudget(
-  address: string,
+function buildAIRequestBudget(
+  usage: AIUsageSnapshot,
   modelConfig: ReturnType<typeof getCurrentModelConfig>,
-): Promise<AIRequestBudget> {
-  const usage = await getTodayUserAIUsage(address);
+): AIRequestBudget {
   const remainingTokens = Math.max(MAX_AI_TOKENS_PER_DAY - usage.tokens, 0);
   const messageCapReached = MAX_AI_MESSAGES_PER_DAY > 0 && usage.messages >= MAX_AI_MESSAGES_PER_DAY;
   const tokenCapReached = usage.tokens >= MAX_AI_TOKENS_PER_DAY;
@@ -1434,13 +1662,13 @@ export async function resolveAIRequestBudget(
   const answerCap = mode === 'soft'
     ? Math.min(modelConfig.maxTokens, AI_SOFT_BUDGET_MAX_OUTPUT_TOKENS)
     : modelConfig.maxTokens;
-  const maxOutputTokens = Math.max(128, Math.min(answerCap, Math.max(128, remainingTokens)));
+  const maxOutputTokens = Math.max(1, Math.min(answerCap, remainingTokens));
   const planningMaxOutputTokens = mode === 'soft'
-    ? Math.min(AI_PLANNING_MAX_OUTPUT_TOKENS, 512)
-    : AI_PLANNING_MAX_OUTPUT_TOKENS;
+    ? Math.min(AI_PLANNING_MAX_OUTPUT_TOKENS, 512, remainingTokens)
+    : Math.min(AI_PLANNING_MAX_OUTPUT_TOKENS, remainingTokens);
   const continuationMaxOutputTokens = mode === 'soft'
-    ? Math.min(AI_CONTINUATION_MAX_OUTPUT_TOKENS, 768)
-    : AI_CONTINUATION_MAX_OUTPUT_TOKENS;
+    ? Math.min(AI_CONTINUATION_MAX_OUTPUT_TOKENS, 768, remainingTokens)
+    : Math.min(AI_CONTINUATION_MAX_OUTPUT_TOKENS, remainingTokens);
 
   return {
     autoContinueOnLength: AI_AUTO_CONTINUE_ON_LENGTH,
@@ -1454,6 +1682,152 @@ export async function resolveAIRequestBudget(
       : 'Answer style: lead with the direct recommendation first, then details. Use compact bullets. Do not use long tables unless the user explicitly asks for one.',
     usage,
   };
+}
+
+function getAIUsageReservationTarget(modelConfig: ReturnType<typeof getCurrentModelConfig>): number {
+  const configuredOutputCapacity = modelConfig.maxTokens +
+    AI_PLANNING_MAX_OUTPUT_TOKENS +
+    AI_CONTINUATION_MAX_OUTPUT_TOKENS;
+  return Math.min(
+    MAX_AI_TOKENS_PER_DAY,
+    Math.max(AI_USAGE_MIN_RESERVATION_TOKENS, configuredOutputCapacity),
+  );
+}
+
+async function reserveAIRequestBudget(
+  address: string,
+  modelConfig: ReturnType<typeof getCurrentModelConfig>,
+): Promise<ReservedAIRequestBudget> {
+  if (!redis) {
+    throw new AIUsageAccountingUnavailableError('AI usage accounting is unavailable.');
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const lowerAddress = address.toLowerCase();
+  const id = nanoid();
+  const usageKey = `ai:usage:${lowerAddress}:${today}`;
+  const reservationKey = `ai:usage_reservation:${lowerAddress}:${today}:${id}`;
+  const dateIndexKey = `ai:usage_index:${today}`;
+
+  try {
+    const rawResult = await redis.eval(
+      RESERVE_AI_USAGE_LUA,
+      [usageKey, reservationKey, dateIndexKey],
+      [
+        String(MAX_AI_MESSAGES_PER_DAY),
+        String(MAX_AI_TOKENS_PER_DAY),
+        String(getAIUsageReservationTarget(modelConfig)),
+        today,
+        String(AI_USAGE_TTL),
+      ],
+    );
+    const [status, messages, tokens, reservedTokens] = parseRedisScriptResult(rawResult, 'reservation');
+
+    if (status === -1) {
+      throw new AIUsageAccountingUnavailableError('AI usage accounting contains an invalid record.');
+    }
+
+    const budget = buildAIRequestBudget({ messages, tokens }, modelConfig);
+    if (status === 0) {
+      return { budget };
+    }
+    if (status !== 1 || reservedTokens <= 0) {
+      throw new AIUsageAccountingUnavailableError('AI usage reservation was not confirmed.');
+    }
+
+    return {
+      budget,
+      reservation: {
+        id,
+        reservationKey,
+        reservedTokens,
+        usageKey,
+      },
+    };
+  } catch (error) {
+    if (error instanceof AIUsageAccountingUnavailableError) throw error;
+    throw new AIUsageAccountingUnavailableError('Failed to reserve the AI usage budget.', { cause: error });
+  }
+}
+
+function normalizeUsageCount(value: number | undefined): number {
+  return Number.isFinite(value) && Number(value) > 0 ? Number(value) : 0;
+}
+
+async function settleAIUsageReservation(
+  reservation: AIUsageReservation,
+  settlement: AIUsageSettlement,
+): Promise<boolean> {
+  if (!redis) {
+    console.error('Cannot settle AI usage reservation: Redis is unavailable.', { reservationId: reservation.id });
+    return false;
+  }
+
+  const measuredTokens = normalizeUsageCount(settlement.tokensUsed);
+  const actualTokens = settlement.conservative
+    ? Math.max(measuredTokens, reservation.reservedTokens)
+    : measuredTokens;
+
+  try {
+    const rawResult = await redis.eval(
+      SETTLE_AI_USAGE_LUA,
+      [reservation.usageKey, reservation.reservationKey],
+      [
+        String(actualTokens),
+        String(normalizeUsageCount(settlement.inputTokens)),
+        String(normalizeUsageCount(settlement.outputTokens)),
+        String(normalizeUsageCount(settlement.reasoningTokens)),
+        String(normalizeUsageCount(settlement.continuations)),
+        String(normalizeUsageCount(settlement.lengthFinishes)),
+        settlement.recoveredFromLength ? '1' : '0',
+        settlement.finishReason || '',
+        settlement.model || '',
+        settlement.provider || '',
+        String(AI_USAGE_TTL),
+      ],
+    );
+    const [status] = parseRedisScriptResult(rawResult, 'settlement');
+    if (status === -1) {
+      console.error('AI usage reservation could not be settled safely.', { reservationId: reservation.id });
+      return false;
+    }
+    return status === 0 || status === 1;
+  } catch (error) {
+    console.error('Failed to settle AI usage reservation:', error);
+    return false;
+  }
+}
+
+async function refundAIUsageReservation(reservation: AIUsageReservation): Promise<boolean> {
+  if (!redis) {
+    console.error('Cannot refund AI usage reservation: Redis is unavailable.', { reservationId: reservation.id });
+    return false;
+  }
+
+  try {
+    const rawResult = await redis.eval(
+      REFUND_AI_USAGE_LUA,
+      [reservation.usageKey, reservation.reservationKey],
+      [String(AI_USAGE_TTL)],
+    );
+    const [status] = parseRedisScriptResult(rawResult, 'refund');
+    if (status === -1) {
+      console.error('AI usage reservation could not be refunded safely.', { reservationId: reservation.id });
+      return false;
+    }
+    return status === 0 || status === 1;
+  } catch (error) {
+    console.error('Failed to refund AI usage reservation:', error);
+    return false;
+  }
+}
+
+export async function resolveAIRequestBudget(
+  address: string,
+  modelConfig: ReturnType<typeof getCurrentModelConfig>,
+): Promise<AIRequestBudget> {
+  const usage = await getTodayUserAIUsage(address);
+  return buildAIRequestBudget(usage, modelConfig);
 }
 
 function buildBudgetFallbackMessage(reason?: string): string {
@@ -2113,8 +2487,32 @@ function applyFinishReasonNotice(text: string, finishReason: string | undefined)
   return `${text.trim()}\n\n${TRUNCATED_RESPONSE_NOTICE}`;
 }
 
-function buildResponseSystemPrompt(requestBudget: AIRequestBudget): string {
-  return `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${requestBudget.responseInstruction}`;
+function hasAnthropicModelConfigured(): boolean {
+  const config = getCurrentModelConfig();
+  return config.provider === 'claude' ||
+    (config.provider === 'gateway' && getConfiguredModelIds().some((modelId) => /^anthropic\/claude-/i.test(modelId)));
+}
+
+export function buildAIInstructions(content: string): string | SystemModelMessage {
+  if (!hasAnthropicModelConfigured()) {
+    return content;
+  }
+
+  // Anthropic caching is opt-in: the AI SDK forwards this explicit cache breakpoint.
+  // The role and content stay unchanged, so this only affects provider-side prompt reuse.
+  return {
+    content,
+    providerOptions: {
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
+    },
+    role: 'system',
+  };
+}
+
+function buildResponseSystemPrompt(requestBudget: AIRequestBudget): string | SystemModelMessage {
+  return buildAIInstructions(`${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${requestBudget.responseInstruction}`);
 }
 
 function getShortestUsefulNextStep(): string {
@@ -2326,7 +2724,13 @@ export async function streamAIMessage(
     });
   }
 
-  const requestBudget = await resolveAIRequestBudget(address, modelConfig);
+  const configValidation = validateAIConfig();
+  if (!configValidation.valid) {
+    throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
+  }
+
+  const reservedBudget = await reserveAIRequestBudget(address, modelConfig);
+  const requestBudget = reservedBudget.budget;
   if (requestBudget.mode === 'blocked') {
     const aiResponse = await storeAIMessage(
       address,
@@ -2347,48 +2751,54 @@ export async function streamAIMessage(
     });
   }
 
-  const configValidation = validateAIConfig();
-  if (!configValidation.valid) {
-    throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
+  const usageReservation = reservedBudget.reservation;
+  if (!usageReservation) {
+    throw new AIUsageAccountingUnavailableError('AI usage reservation was not created.');
   }
 
-  console.log('AI stream prompt info:', {
-    hasHistory: historyMessages.length > 0,
-    messageLength: message.length,
-    model: modelConfig.model,
-    provider,
-  });
-
-  const responseMessageId = nanoid();
-  const tools = createReadOnlyAITools();
-  const readOnlyToolContext: ReadOnlyAIToolContext = {
-    sourceAddress: options.sourceAddress ?? null,
-    userAddress: address,
-  };
-  const toolsContext = createReadOnlyAIToolsContext(readOnlyToolContext, tools);
+  let paidGenerationStarted = false;
+  let settlementHandedOff = false;
+  let usageMeasurementIncomplete = false;
   let finishReason: string | undefined;
   let finalFinishReason: string | undefined;
   let outputTokens = 0;
   let reasoningTokens = 0;
   let tokensUsed = 0;
-  let toolCalls: AIToolCallTrace[] = [];
-  let generationMessages = buildPlainModelMessages(historyMessages, message);
-  let generationTools: ReadOnlyAITools | undefined = tools;
-  let preflightOutputTokens = 0;
-  let preflightReasoningTokens = 0;
-  let preflightTokensUsed = 0;
-  let preflightToolContextText = '';
-  let preflightToolCalls: AIToolCallTrace[] = [];
   let continuations = 0;
   let recoveredFromLength = false;
-  let toolContextText = '';
-  const deterministicToolContext = await buildDeterministicToolContext({
-    abortSignal: options.abortSignal,
-    address,
-    currentMessage: message,
-    toolContext: readOnlyToolContext,
-    tools,
-  });
+
+  try {
+
+    console.log('AI stream prompt info:', {
+      hasHistory: historyMessages.length > 0,
+      messageLength: message.length,
+      model: modelConfig.model,
+      provider,
+    });
+
+    const responseMessageId = nanoid();
+    const tools = createReadOnlyAITools();
+    const readOnlyToolContext: ReadOnlyAIToolContext = {
+      sourceAddress: options.sourceAddress ?? null,
+      userAddress: address,
+    };
+    const toolsContext = createReadOnlyAIToolsContext(readOnlyToolContext, tools);
+    let toolCalls: AIToolCallTrace[] = [];
+    let generationMessages = buildPlainModelMessages(historyMessages, message);
+    let generationTools: ReadOnlyAITools | undefined = tools;
+    let preflightOutputTokens = 0;
+    let preflightReasoningTokens = 0;
+    let preflightTokensUsed = 0;
+    let preflightToolContextText = '';
+    let preflightToolCalls: AIToolCallTrace[] = [];
+    let toolContextText = '';
+    const deterministicToolContext = await buildDeterministicToolContext({
+      abortSignal: options.abortSignal,
+      address,
+      currentMessage: message,
+      toolContext: readOnlyToolContext,
+      tools,
+    });
 
   if (deterministicToolContext.toolContextText) {
     generationMessages = appendToolContextMessage(
@@ -2402,6 +2812,7 @@ export async function streamAIMessage(
   }
 
   if (isDirectGoogleGemini3Model()) {
+    paidGenerationStarted = true;
     const planning = await buildGemini3SingleRoundToolContext({
       abortSignal: options.abortSignal,
       address,
@@ -2467,6 +2878,7 @@ export async function streamAIMessage(
     },
     ...getModelRequestSettings(),
   };
+  paidGenerationStarted = true;
   const result = generationTools
     ? streamText({
       ...streamTextOptions,
@@ -2543,6 +2955,7 @@ export async function streamAIMessage(
               provider,
             });
           } catch (error) {
+            usageMeasurementIncomplete = true;
             finalFinishReason = 'length';
             const fallbackPartId = `length-fallback-${responseMessageId}`;
             writer.write({ id: fallbackPartId, type: 'text-start' });
@@ -2580,6 +2993,7 @@ export async function streamAIMessage(
       });
     },
     onError: (error) => {
+      usageMeasurementIncomplete = true;
       console.error('AI stream error:', {
         address: address.slice(0, 6) + '...',
         error: error instanceof Error ? error.message : String(error),
@@ -2588,8 +3002,38 @@ export async function streamAIMessage(
       });
       return normalizeAIProviderError(error);
     },
-    onEnd: async ({ isAborted, responseMessage }) => {
-      if (isAborted) {
+    onEnd: async ({ isAborted, outcome, responseMessage }) => {
+      const streamWasAborted = isAborted || options.abortSignal?.aborted === true;
+      if (outcome.status === 'failed') {
+        usageMeasurementIncomplete = true;
+      }
+
+      let responseText = '';
+      try {
+        responseText = getTextFromUIMessage(responseMessage);
+      } catch (error) {
+        usageMeasurementIncomplete = true;
+        console.error('Failed to read the completed AI stream:', error);
+      }
+
+      const settlementFinishReason = streamWasAborted
+        ? 'abort'
+        : (finalFinishReason || (usageMeasurementIncomplete ? 'error' : 'stop'));
+      await settleAIUsageReservation(usageReservation, {
+        conservative: streamWasAborted || usageMeasurementIncomplete || tokensUsed === 0,
+        continuations,
+        finishReason: settlementFinishReason,
+        inputTokens: Math.max(tokensUsed - outputTokens, 0),
+        lengthFinishes: finishReason === 'length' ? 1 : 0,
+        model: modelConfig.model,
+        outputTokens,
+        provider,
+        reasoningTokens,
+        recoveredFromLength,
+        tokensUsed,
+      });
+
+      if (streamWasAborted) {
         console.warn('AI stream aborted before completion:', {
           address: address.slice(0, 6) + '...',
           model: modelConfig.model,
@@ -2597,8 +3041,6 @@ export async function streamAIMessage(
         });
         return;
       }
-
-      const responseText = getTextFromUIMessage(responseMessage);
 
       if (!responseText.trim()) {
         return;
@@ -2620,27 +3062,39 @@ export async function streamAIMessage(
           toolCalls,
         },
       );
-
-      await trackAIUsage(address, tokensUsed, {
-        continuations,
-        finishReason: finalFinishReason,
-        inputTokens: Math.max(tokensUsed - outputTokens, 0),
-        lengthFinishes: finishReason === 'length' ? 1 : 0,
-        model: modelConfig.model,
-        outputTokens,
-        provider,
-        reasoningTokens,
-        recoveredFromLength,
-      });
     },
   });
 
-  return createUIMessageStreamResponse({
+  const response = createUIMessageStreamResponse({
     headers: {
       'Cache-Control': 'private, no-store',
     },
     stream,
   });
+  settlementHandedOff = true;
+  return response;
+  } catch (error) {
+    if (!settlementHandedOff) {
+      if (paidGenerationStarted) {
+        await settleAIUsageReservation(usageReservation, {
+          conservative: isAbortError(error) || usageMeasurementIncomplete || tokensUsed === 0,
+          continuations,
+          finishReason: isAbortError(error) ? 'abort' : 'error',
+          inputTokens: Math.max(tokensUsed - outputTokens, 0),
+          lengthFinishes: finishReason === 'length' ? 1 : 0,
+          model: modelConfig.model,
+          outputTokens,
+          provider,
+          reasoningTokens,
+          recoveredFromLength,
+          tokensUsed,
+        });
+      } else {
+        await refundAIUsageReservation(usageReservation);
+      }
+    }
+    throw error;
+  }
 }
 
 // Send message to AI and get response
@@ -2675,22 +3129,40 @@ export async function sendAIMessage(address: string, message: string, options: S
   }
 
   const modelConfig = getCurrentModelConfig();
-  const requestBudget = await resolveAIRequestBudget(address, modelConfig);
-  if (requestBudget.mode === 'blocked') {
-    const aiResponse = await storeAIMessage(
-      address,
-      buildBudgetFallbackMessage(requestBudget.hardStopReason),
-      'assistant',
-      conversationId,
-    );
-
-    return { userMessage, aiResponse };
-  }
+  let usageReservation: AIUsageReservation | undefined;
+  let paidGenerationStarted = false;
+  let usageFinalized = false;
+  let usageMeasurementIncomplete = false;
+  let tokensUsed = 0;
+  let outputTokens = 0;
+  let reasoningTokens = 0;
+  let continuations = 0;
+  let recoveredFromLength = false;
+  let finalFinishReason: string | undefined;
+  let initialFinishReason: string | undefined;
 
   try {
     const configValidation = validateAIConfig();
     if (!configValidation.valid) {
       throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
+    }
+
+    const reservedBudget = await reserveAIRequestBudget(address, modelConfig);
+    const requestBudget = reservedBudget.budget;
+    if (requestBudget.mode === 'blocked') {
+      const aiResponse = await storeAIMessage(
+        address,
+        buildBudgetFallbackMessage(requestBudget.hardStopReason),
+        'assistant',
+        conversationId,
+      );
+
+      return { userMessage, aiResponse };
+    }
+
+    usageReservation = reservedBudget.reservation;
+    if (!usageReservation) {
+      throw new AIUsageAccountingUnavailableError('AI usage reservation was not created.');
     }
 
     console.log('📝 AI Prompt Info:', {
@@ -2733,6 +3205,7 @@ export async function sendAIMessage(address: string, message: string, options: S
     }
 
     if (isDirectGoogleGemini3Model()) {
+      paidGenerationStarted = true;
       const planning = await buildGemini3SingleRoundToolContext({
         abortSignal: options.abortSignal,
         address,
@@ -2777,6 +3250,7 @@ export async function sendAIMessage(address: string, message: string, options: S
       },
       ...getModelRequestSettings(),
     };
+    paidGenerationStarted = true;
     const result = await (generationTools
       ? generateText({
         ...generateTextOptions,
@@ -2787,12 +3261,11 @@ export async function sendAIMessage(address: string, message: string, options: S
 
     const usage = result.usage;
     let response = result.text;
-    let finalFinishReason = result.finishReason;
-    let tokensUsed = preflightTokensUsed + getTokenCount(usage);
-    let outputTokens = preflightOutputTokens + getOutputTokenCount(usage);
-    let reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
-    let continuations = 0;
-    let recoveredFromLength = false;
+    initialFinishReason = result.finishReason;
+    finalFinishReason = result.finishReason;
+    tokensUsed = preflightTokensUsed + getTokenCount(usage);
+    outputTokens = preflightOutputTokens + getOutputTokenCount(usage);
+    reasoningTokens = preflightReasoningTokens + getReasoningTokenCount(usage);
     const toolCalls = mergeToolCallTraces([...preflightToolCalls, ...extractAIToolTraces(result)]);
     const toolContextText = combineToolContextText(preflightToolContextText, buildToolContextText(result));
 
@@ -2838,6 +3311,7 @@ export async function sendAIMessage(address: string, message: string, options: S
             provider: getCurrentAIProvider(),
           });
         } catch (error) {
+          usageMeasurementIncomplete = true;
           finalFinishReason = 'length';
           response = `${response.trim()}\n\n${getShortestUsefulNextStep()}`;
           console.warn('[AI_LENGTH_RECOVERY_FAILED]', {
@@ -2859,6 +3333,20 @@ export async function sendAIMessage(address: string, message: string, options: S
       responsePreview: response.substring(0, 100) + (response.length > 100 ? '...' : ''),
     });
 
+    usageFinalized = await settleAIUsageReservation(usageReservation, {
+      conservative: usageMeasurementIncomplete || tokensUsed === 0,
+      continuations,
+      finishReason: finalFinishReason || 'stop',
+      inputTokens: Math.max(tokensUsed - outputTokens, 0),
+      lengthFinishes: initialFinishReason === 'length' ? 1 : 0,
+      model: modelConfig.model,
+      outputTokens,
+      provider: getCurrentAIProvider(),
+      reasoningTokens,
+      recoveredFromLength,
+      tokensUsed,
+    });
+
     // Store AI response
     const aiResponse = await storeAIMessage(
       address,
@@ -2876,21 +3364,30 @@ export async function sendAIMessage(address: string, message: string, options: S
       },
     );
 
-    // Track usage
-    await trackAIUsage(address, tokensUsed, {
-      continuations,
-      finishReason: finalFinishReason,
-      inputTokens: Math.max(tokensUsed - outputTokens, 0),
-      lengthFinishes: result.finishReason === 'length' ? 1 : 0,
-      model: modelConfig.model,
-      outputTokens,
-      provider: getCurrentAIProvider(),
-      reasoningTokens,
-      recoveredFromLength,
-    });
-
     return { userMessage, aiResponse };
   } catch (error) {
+    if (usageReservation && !usageFinalized) {
+      usageFinalized = paidGenerationStarted
+        ? await settleAIUsageReservation(usageReservation, {
+          conservative: isAbortError(error) || usageMeasurementIncomplete || tokensUsed === 0,
+          continuations,
+          finishReason: isAbortError(error) ? 'abort' : 'error',
+          inputTokens: Math.max(tokensUsed - outputTokens, 0),
+          lengthFinishes: initialFinishReason === 'length' ? 1 : 0,
+          model: modelConfig.model,
+          outputTokens,
+          provider: getCurrentAIProvider(),
+          reasoningTokens,
+          recoveredFromLength,
+          tokensUsed,
+        })
+        : await refundAIUsageReservation(usageReservation);
+    }
+
+    if (error instanceof AIUsageAccountingUnavailableError) {
+      throw error;
+    }
+
     if (isAbortError(error)) {
       console.warn('AI request stopped before completion:', {
         address: address.slice(0, 6) + '...',
@@ -2925,67 +3422,40 @@ export async function trackAIUsage(
   tokensUsed: number,
   options: AIUsageTrackingOptions = {},
 ): Promise<void> {
-  if (!redis) return;
+  if (!redis) {
+    throw new AIUsageAccountingUnavailableError('AI usage accounting is unavailable.');
+  }
 
   const today = new Date().toISOString().split('T')[0];
   const usageKey = `ai:usage:${address.toLowerCase()}:${today}`;
   const dateIndexKey = `ai:usage_index:${today}`;
 
   try {
-    const pipeline = redis.pipeline();
-
-    // 1. Get current usage
-    const currentUsage = await redis.get(usageKey);
-    let totalTokens = tokensUsed;
-    let totalMessages = 1;
-    let inputTokens = options.inputTokens || 0;
-    let outputTokens = options.outputTokens || 0;
-    let reasoningTokens = options.reasoningTokens || 0;
-    let continuations = options.continuations || 0;
-    let lengthFinishes = options.lengthFinishes || 0;
-    let recoveredFromLengthCount = options.recoveredFromLength ? 1 : 0;
-    let finishReasons: Record<string, number> = {};
-
-    if (currentUsage) {
-      const usage = typeof currentUsage === 'object' ? currentUsage : JSON.parse(currentUsage as string);
-      totalTokens += usage.tokens || 0;
-      totalMessages += usage.messages || 0;
-      inputTokens += usage.inputTokens || 0;
-      outputTokens += usage.outputTokens || 0;
-      reasoningTokens += usage.reasoningTokens || usage.outputTokenDetails?.reasoningTokens || 0;
-      continuations += usage.continuations || 0;
-      lengthFinishes += usage.lengthFinishes || 0;
-      recoveredFromLengthCount += usage.recoveredFromLengthCount || 0;
-      finishReasons = usage.finishReasons || {};
+    const rawResult = await redis.eval(
+      INCREMENT_AI_USAGE_LUA,
+      [usageKey, dateIndexKey],
+      [
+        today,
+        String(normalizeUsageCount(tokensUsed)),
+        String(normalizeUsageCount(options.inputTokens)),
+        String(normalizeUsageCount(options.outputTokens)),
+        String(normalizeUsageCount(options.reasoningTokens)),
+        String(normalizeUsageCount(options.continuations)),
+        String(normalizeUsageCount(options.lengthFinishes)),
+        options.recoveredFromLength ? '1' : '0',
+        options.finishReason || '',
+        options.model || '',
+        options.provider || '',
+        String(AI_USAGE_TTL),
+      ],
+    );
+    const [status] = parseRedisScriptResult(rawResult, 'increment');
+    if (status !== 1) {
+      throw new AIUsageAccountingUnavailableError('AI usage accounting could not be updated safely.');
     }
-
-    if (options.finishReason) {
-      finishReasons[options.finishReason] = (finishReasons[options.finishReason] || 0) + 1;
-    }
-
-    // 2. Update usage
-    pipeline.set(usageKey, JSON.stringify({
-      date: today,
-      finishReasons,
-      inputTokens,
-      messages: totalMessages,
-      model: options.model,
-      outputTokens,
-      provider: options.provider,
-      reasoningTokens,
-      continuations,
-      lengthFinishes,
-      recoveredFromLengthCount,
-      tokens: totalTokens,
-    }), { ex: AI_USAGE_TTL });
-
-    // 3. Add to date index (avoids KEYS * scan for usage stats)
-    pipeline.sadd(dateIndexKey, usageKey);
-    pipeline.expire(dateIndexKey, AI_USAGE_TTL);
-
-    await pipeline.exec();
   } catch (error) {
-    console.error('Error tracking AI usage:', error);
+    if (error instanceof AIUsageAccountingUnavailableError) throw error;
+    throw new AIUsageAccountingUnavailableError('Error tracking AI usage.', { cause: error });
   }
 }
 

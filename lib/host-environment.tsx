@@ -1,6 +1,5 @@
 "use client";
 
-import { sdk } from "@farcaster/miniapp-sdk";
 import React,{ createContext,useContext,useEffect,useState } from "react";
 
 export type SafeAreaInsets = {
@@ -52,6 +51,10 @@ export type HostEnvironmentState = {
 
 type HostEnvironmentListener = (state: HostEnvironmentState) => void;
 type TimedMiniAppCheck = (timeoutMs?: number) => Promise<boolean>;
+type MiniAppSdk = {
+  context?: UntypedValue;
+  isInMiniApp?: TimedMiniAppCheck;
+};
 
 /*
  * Matches @farcaster/miniapp-sdk's own default (its isInMiniApp takes a timeout
@@ -83,8 +86,19 @@ const HostEnvironmentContext = createContext<HostEnvironmentState>(DEFAULT_HOST_
 let hostEnvironmentSnapshot = DEFAULT_HOST_ENVIRONMENT;
 let hostEnvironmentPromise: Promise<HostEnvironmentState> | null = null;
 let hostEnvironmentContextPromise: Promise<MiniAppContext | undefined> | null = null;
+let miniAppSdkPromise: Promise<MiniAppSdk> | null = null;
 let lateContextListenerAttached = false;
 const listeners = new Set<HostEnvironmentListener>();
+
+function loadMiniAppSdk(): Promise<MiniAppSdk> {
+  miniAppSdkPromise ??= import('@farcaster/miniapp-sdk')
+    .then(({ sdk }) => sdk as MiniAppSdk)
+    .catch((error) => {
+      miniAppSdkPromise = null;
+      throw error;
+    });
+  return miniAppSdkPromise;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
   return Promise.race([
@@ -144,15 +158,16 @@ function getMiniAppContextPromise(): Promise<MiniAppContext | undefined> {
     return hostEnvironmentContextPromise;
   }
 
-  try {
-    const maybeContext: UntypedValue = (sdk as { context?: UntypedValue }).context;
-    hostEnvironmentContextPromise =
+  hostEnvironmentContextPromise = loadMiniAppSdk()
+    .then((sdk) => {
+      const maybeContext = sdk.context;
+      return (
       typeof (maybeContext as Promise<MiniAppContext | undefined>)?.then === "function"
         ? (maybeContext as Promise<MiniAppContext | undefined>)
-        : Promise.resolve(maybeContext as MiniAppContext | undefined);
-  } catch {
-    hostEnvironmentContextPromise = Promise.resolve(undefined);
-  }
+        : Promise.resolve(maybeContext as MiniAppContext | undefined)
+      );
+    })
+    .catch(() => undefined);
 
   return hostEnvironmentContextPromise;
 }
@@ -236,13 +251,27 @@ export async function ensureHostEnvironmentResolved(): Promise<HostEnvironmentSt
   const contextPromise = getMiniAppContextPromise();
   attachLateContextListener(contextPromise);
 
+  // Resolve the cheap host signal while context is loading. On the web the
+  // SDK short-circuits this check synchronously; in an embedded host it may
+  // take up to the SDK timeout, but it no longer adds a second serial wait.
+  const miniAppSignalPromise = (async () => {
+    try {
+      const sdk = await loadMiniAppSdk();
+      if (!sdk.isInMiniApp) return false;
+      return Boolean(
+        await sdk.isInMiniApp(HOST_ENVIRONMENT_TIMEOUT_MS),
+      );
+    } catch {
+      return false;
+    }
+  })();
+
   hostEnvironmentPromise = (async () => {
     try {
-      const initialContext = await withTimeout(
-        contextPromise,
-        HOST_ENVIRONMENT_TIMEOUT_MS,
-        undefined,
-      );
+      const [initialContext, isMiniApp] = await Promise.all([
+        withTimeout(contextPromise, HOST_ENVIRONMENT_TIMEOUT_MS, undefined),
+        miniAppSignalPromise,
+      ]);
 
       if (initialContext) {
         const nextState = toHostEnvironmentState({
@@ -253,15 +282,6 @@ export async function ensureHostEnvironmentResolved(): Promise<HostEnvironmentSt
         });
         updateHostEnvironmentSnapshot(nextState);
         return nextState;
-      }
-
-      let isMiniApp = false;
-      try {
-        isMiniApp = Boolean(
-          await (sdk.isInMiniApp as TimedMiniAppCheck)(HOST_ENVIRONMENT_TIMEOUT_MS),
-        );
-      } catch {
-        isMiniApp = false;
       }
 
       const resolvedContext = isMiniApp

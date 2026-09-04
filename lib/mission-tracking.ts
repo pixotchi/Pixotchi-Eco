@@ -2,6 +2,8 @@
 
 import { requestBaseChatSessionRefresh } from "@/lib/base-chat-session-refresh";
 import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
+import { getHostEnvironmentSnapshot } from "@/lib/host-environment";
+import { requestPublicChatSessionRefresh } from "@/lib/public-chat-session-refresh";
 import { sessionStorageManager } from "@/lib/session-storage-manager";
 
 export type MissionTrackingPayload = Record<string, UntypedValue>;
@@ -28,6 +30,10 @@ const RETRYABLE_MISSION_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 let missionOutboxFlushPromise: Promise<void> | null = null;
 let missionLifecycleListenersAttached = false;
+const latestMissionTrackingNotices = new Map<
+  string,
+  { detail: MissionTrackingEventDetail; id: string }
+>();
 
 export class MissionTrackingError extends Error {
   readonly retryable: boolean;
@@ -73,6 +79,25 @@ function getMissionOutboxId(payload: MissionTrackingPayload): string {
 }
 
 function emitMissionTrackingEvent(detail: MissionTrackingEventDetail): void {
+  const address = getExpectedAddress(detail.payload);
+  if (address) {
+    const id = getMissionOutboxId(detail.payload);
+    if (detail.status === "success") {
+      if (latestMissionTrackingNotices.get(address)?.id === id) {
+        latestMissionTrackingNotices.delete(address);
+      }
+    } else {
+      latestMissionTrackingNotices.delete(address);
+      latestMissionTrackingNotices.set(address, { detail, id });
+      if (latestMissionTrackingNotices.size > 8) {
+        const oldestAddress = latestMissionTrackingNotices.keys().next().value;
+        if (typeof oldestAddress === "string") {
+          latestMissionTrackingNotices.delete(oldestAddress);
+        }
+      }
+    }
+  }
+
   if (typeof window === "undefined") {
     return;
   }
@@ -99,6 +124,7 @@ export function onMissionTrackingEvent(
   };
 
   window.addEventListener(MISSION_TRACKING_EVENT, handler as EventListener);
+  latestMissionTrackingNotices.forEach(({ detail }) => listener(detail));
   return () =>
     window.removeEventListener(
       MISSION_TRACKING_EVENT,
@@ -211,13 +237,33 @@ async function postMissionRequest(
   });
 }
 
-function canRecoverBaseMissionAuth(): boolean {
-  if (typeof window === "undefined") {
-    return false;
+async function recoverMissionAuth(
+  payload: MissionTrackingPayload,
+): Promise<{ message?: string; status: "error" | "ignored" | "success" } | null> {
+  if (typeof window === "undefined") return null;
+  const expectedAddress = getExpectedAddress(payload);
+  if (!expectedAddress) return null;
+
+  if (getHostEnvironmentSnapshot().isMiniApp) {
+    return requestPublicChatSessionRefresh({
+      expectedAddress,
+      reason: "mission-auth-failure",
+      surface: "farcaster",
+    });
   }
 
-  const surface = sessionStorageManager.getAuthSurface();
-  return surface === "base" || surface === "test";
+  const surface = sessionStorageManager.getEffectiveAuthSurface();
+  if (surface === "base" || surface === "test") {
+    return requestBaseChatSessionRefresh("mission-auth-failure", 15_000);
+  }
+  if (surface === "privy" || surface === "privysolana") {
+    return requestPublicChatSessionRefresh({
+      expectedAddress,
+      reason: "mission-auth-failure",
+      surface,
+    });
+  }
+  return null;
 }
 
 async function performMissionRequest(
@@ -249,23 +295,26 @@ async function performMissionRequest(
       return response;
     }
 
-    if (
-      response.status === 401 &&
-      !authRecoveryAttempted &&
-      canRecoverBaseMissionAuth()
-    ) {
+    if (response.status === 401 && !authRecoveryAttempted) {
       authRecoveryAttempted = true;
-      const recovery = await requestBaseChatSessionRefresh(
-        "mission-auth-failure",
-        15_000,
-      );
-      if (recovery.status === "success") {
+      const recovery = await recoverMissionAuth(payload);
+      if (recovery?.status === "success") {
         // Authentication failures occur before mutation, so this retry is safe
         // even for counted mission payloads.
-        response = await postMissionRequest(payload);
-        if (response.ok) {
-          return response;
+        try {
+          return await postMissionRequest(payload);
+        } catch {
+          throw new MissionTrackingError(
+            "Secure session was restored, but task progress could not be reached.",
+            { retryable: true },
+          );
         }
+      }
+      if (recovery?.message) {
+        throw new MissionTrackingError(
+          `The task action succeeded, but progress could not restore its secure session: ${recovery.message}`,
+          { retryable: true, status: 401 },
+        );
       }
     }
 
@@ -376,7 +425,7 @@ export async function postMissionProgress(
           });
     const queued = missionError.retryable && enqueueMissionProgress(payload);
     const message = queued
-      ? "Task progress is queued and will retry automatically."
+      ? "Task progress is safely queued and will retry automatically."
       : missionError.message;
 
     emitMissionTrackingEvent({

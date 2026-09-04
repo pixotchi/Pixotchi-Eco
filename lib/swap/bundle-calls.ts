@@ -80,6 +80,8 @@ function currentDeadline(): bigint {
  * Ticking bounds staleness to one minute, so the deadline at click time is always
  * between 9 and 10 minutes out. The interval only runs while `enabled` is true
  * (i.e. the bundle actually has a usable quote), so idle screens cost nothing.
+ * Transaction freezes the generated raw calls at submission, so later ticks
+ * prepare a fresh next attempt without changing an in-flight swap's calldata.
  */
 export function useSwapDeadline(enabled: boolean): bigint {
   const [deadline, setDeadline] = useState<bigint>(currentDeadline);

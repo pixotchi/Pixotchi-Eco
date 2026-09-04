@@ -3,15 +3,22 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { BarracksConfigV2, BarracksTroopConfigV2, BuildingType } from '@/lib/types';
-import { cn, formatDuration, formatTokenAmountPrecise } from '@/lib/utils';
+import { BarracksConfigV2, BarracksTroopConfigV2, BuildingData, BuildingType } from '@/lib/types';
+import {
+  cn,
+  formatDuration,
+  formatLifetimeProduction,
+  formatProductionRate,
+  formatTokenAmount,
+  formatTokenAmountPrecise,
+} from '@/lib/utils';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { barracksGetConfigV2 } from '@/lib/contracts';
 
 interface BuildingInfoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  buildingId: number;
+  building: BuildingData;
   buildingType: BuildingType;
 }
 
@@ -80,47 +87,15 @@ const buildingInfo = {
   // Village Buildings (Production-Focused)
   "village-0": { // Solar Panels
     name: "Solar Panels",
-    description: "Generates Plant Points over time for your plants. At Level 4 it upgrades into a hybrid that also delivers Plant Lifetime (TOD).",
-    production: {
-      level1: "~8 PTS/day",
-      level2: "~24 PTS/day",
-      level3: "~41 PTS/day",
-      level4: "~85 PTS/day + ~3.56h TOD/day"
-    },
-    upgradeCosts: {
-      level1: "1.35M LEAF (36h)",
-      level2: "2.12M LEAF (48h)",
-      level3: "2.84M LEAF (78h)",
-      level4: "6.5M LEAF (93.6h)"
-    }
+    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
   },
   "village-3": { // Soil Factory
     name: "Soil Factory",
-    description: "Generates PTS daily for your plants.",
-    production: {
-      level1: "~12 PTS/day",
-      level2: "~34 PTS/day",
-      level3: "~61 PTS/day"
-    },
-    upgradeCosts: {
-      level1: "2.03M LEAF (24h)",
-      level2: "2.86M LEAF (60h)",
-      level3: "4.69M LEAF (96h)"
-    }
+    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
   },
   "village-5": { // Bee Farm
     name: "Bee Farm",
-    description: "Generates Plant Lifetime (TOD) for your plants.",
-    production: {
-      level1: "~1.0 hours/day",
-      level2: "~2.5 hours/day",
-      level3: "~4.5 hours/day"
-    },
-    upgradeCosts: {
-      level1: "1.13M LEAF (6h)",
-      level2: "1.32M LEAF (18h)",
-      level3: "2.37M LEAF (30h)"
-    }
+    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
   },
   // Town Buildings (Utility-Focused)
   "town-1": { // Stake House
@@ -162,11 +137,6 @@ const buildingInfo = {
       "Quest rewards can include LEAF, SEED, land XP, and Plant Lifetime.",
       "Higher levels matter most for players who want more parallel quest uptime."
     ],
-    upgradeCosts: {
-      level1: "550K LEAF (24h)",
-      level2: "12M LEAF (50h)",
-      level3: "18M LEAF (90h)"
-    }
   },
   "town-6": { // Casino
     name: "Casino",
@@ -411,37 +381,26 @@ function BarracksInfoContent({ open }: { open: boolean }) {
 export default function BuildingInfoDialog({
   open,
   onOpenChange,
-  buildingId,
+  building,
   buildingType
 }: BuildingInfoDialogProps) {
   const [selectedGame, setSelectedGame] = useState<'roulette' | 'blackjack' | 'baccarat'>('roulette');
 
-  const key = `${buildingType}-${buildingId}` as keyof typeof buildingInfo;
+  const key = `${buildingType}-${building.id}` as keyof typeof buildingInfo;
   const info = buildingInfo[key];
 
   if (!info) {
     return null;
   }
 
-  const isProductionBuilding = buildingType === 'village' && 'production' in info;
+  const isProductionBuilding = buildingType === 'village';
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
   const isCasino = 'isCasino' in info && info.isCasino;
   const isBarracks = 'isBarracks' in info && info.isBarracks;
-
-  const productionEntries = isProductionBuilding && 'production' in info
-    ? Object.entries(info.production as Record<string, string>)
-    : null;
-  const upgradeEntries = 'upgradeCosts' in info && info.upgradeCosts
-    ? Object.entries(info.upgradeCosts as Record<string, string>)
-    : null;
-
-  const formatLevelLabel = (key: string) => {
-    if (key.toLowerCase().startsWith('level')) {
-      const levelNumber = key.replace(/[^0-9]/g, '');
-      return `Level ${levelNumber || key.slice(5)}`;
-    }
-    return key;
-  };
+  const hasUpgradeCost = building.level < building.maxLevel && (
+    building.levelUpgradeCostLeaf > BigInt(0)
+    || building.levelUpgradeCostSeedInstant > BigInt(0)
+  );
 
   // Get current game info based on toggle
   const currentGameInfo = selectedGame === 'roulette'
@@ -589,17 +548,24 @@ export default function BuildingInfoDialog({
 
             {isBarracks && <BarracksInfoContent open={open} />}
 
-            {isProductionBuilding && productionEntries && (
+            {isProductionBuilding && (
               <InfoSection title="Production Rates">
                 <InfoRows>
-                  {productionEntries.map(([levelKey, value]) => (
+                  <InfoRow label="Current level" value={`Level ${building.level}/${building.maxLevel}`} />
+                  {building.productionRatePlantPointsPerDay > BigInt(0) && (
                     <InfoRow
-                      key={levelKey}
-                      label={formatLevelLabel(levelKey)}
-                      value={value}
+                      label="PTS / day"
+                      value={formatProductionRate(building.productionRatePlantPointsPerDay)}
                       valueClassName="text-primary"
                     />
-                  ))}
+                  )}
+                  {building.productionRatePlantLifetimePerDay > BigInt(0) && (
+                    <InfoRow
+                      label="TOD / day"
+                      value={formatLifetimeProduction(building.productionRatePlantLifetimePerDay)}
+                      valueClassName="text-primary"
+                    />
+                  )}
                 </InfoRows>
               </InfoSection>
             )}
@@ -617,17 +583,19 @@ export default function BuildingInfoDialog({
               </InfoSection>
             )}
 
-            {upgradeEntries && (
+            {hasUpgradeCost && (
               <InfoSection title="Upgrade Costs">
                 <InfoRows>
-                  {upgradeEntries.map(([levelKey, value]) => (
-                    <InfoRow
-                      key={levelKey}
-                      label={formatLevelLabel(levelKey)}
-                      value={value}
-                      valueClassName="text-amber-600"
-                    />
-                  ))}
+                  <InfoRow
+                    label={`Next upgrade (Level ${building.level + 1})`}
+                    value={`${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF`}
+                    valueClassName="text-amber-600"
+                  />
+                  <InfoRow
+                    label="Speed up"
+                    value={`${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI`}
+                    valueClassName="text-amber-600"
+                  />
                 </InfoRows>
               </InfoSection>
             )}

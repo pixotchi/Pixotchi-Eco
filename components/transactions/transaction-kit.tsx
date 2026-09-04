@@ -518,6 +518,27 @@ function createAtomicBundleUnsupportedError() {
   );
 }
 
+function getAtomicCapabilityStatus(
+  capabilities: UntypedValue,
+  chainId: number,
+): "supported" | "ready" | "unsupported" | null {
+  if (!capabilities || typeof capabilities !== "object") return null;
+
+  // wallet_getCapabilities normally returns a chain-id keyed map. Some wallet
+  // clients already select the requested chain and return its capability object
+  // directly, so tolerate both shapes rather than making discovery itself a
+  // compatibility requirement.
+  const byChain = (capabilities as Record<string, UntypedValue>)[String(chainId)];
+  const selected = byChain && typeof byChain === "object" ? byChain : capabilities;
+  const atomic = (selected as { atomic?: UntypedValue }).atomic;
+  const status = atomic && typeof atomic === "object"
+    ? (atomic as { status?: UntypedValue }).status
+    : null;
+  return status === "supported" || status === "ready" || status === "unsupported"
+    ? status
+    : null;
+}
+
 function isUnresolvedWaitError(error: UntypedValue) {
   const message = getErrorMessage(error).toLowerCase();
   return message.includes("timed out")
@@ -815,17 +836,28 @@ export function Transaction({
       normalizedCalls: nextNormalizedCalls,
     };
   }
-  const normalizedCalls = stableCallsRef.current.normalizedCalls;
-  const pendingCallsDigest = stableCallsRef.current.digest;
+  const activeCallsRef = useRef<{
+    digest: Hex;
+    normalizedCalls: typeof nextNormalizedCalls;
+  } | null>(null);
+  // A quote/deadline tick is intentionally allowed to prepare the *next*
+  // submission. Once an operation starts, however, its exact calldata and
+  // digest must remain the controller identity until the durable proof is
+  // terminal. Otherwise the tick unregisters the active monitor and suppresses
+  // its confirmation callback.
+  const callsSnapshot = activeCallsRef.current ?? stableCallsRef.current;
+  const normalizedCalls = callsSnapshot.normalizedCalls;
+  const pendingCallsDigest = callsSnapshot.digest;
   const resolvedIntentKey = intentKey.trim() || `calls:${pendingCallsDigest}`;
   const currentConnectorId = connector?.id;
   const recoveryRegistryIdentity = useMemo(() => {
-    if (!walletClient?.account) return null;
+    const chainId = walletClient?.chain?.id ?? accountChainId;
+    if (!walletClient?.account || chainId !== base.id) return null;
     return {
       accountAddress: walletClient.account.address,
-      chainId: (walletClient.chain ?? base).id,
+      chainId,
     };
-  }, [walletClient]);
+  }, [accountChainId, walletClient]);
   const recoveryIntentDigest = useMemo(
     () => getPendingEvmIntentDigest(resolvedIntentKey),
     [resolvedIntentKey],
@@ -836,13 +868,17 @@ export function Transaction({
     && walletClient.account.address.toLowerCase() === connectedAccountAddress.toLowerCase()
     && (walletClient.chain?.id ?? accountChainId) === accountChainId,
   );
-  const walletRoutingLockMessage = walletClient?.account
-    ? !walletClientMatchesAccount || isSmartWalletDetectionLoading
-      ? "Checking wallet type…"
-      : walletType === "UntypedValue"
-        ? "Retry wallet check"
-        : null
-    : null;
+  const walletRoutingLockMessage = !connectedAccountAddress
+    ? "Connect a Base wallet"
+    : accountChainId !== base.id || (walletClient?.chain?.id !== undefined && walletClient.chain.id !== base.id)
+      ? "Switch wallet to Base"
+      : !walletClient?.account
+        ? "Wallet is not ready"
+        : !walletClientMatchesAccount || isSmartWalletDetectionLoading
+          ? "Checking wallet type…"
+          : walletType === "UntypedValue"
+            ? "Retry wallet check"
+            : null;
   const recoveryGateActive =
     isRecoveryChecking || isPeerBlocked || walletRoutingLockMessage !== null;
   const walletRoutingIdentity = walletClient?.account && walletRoutingLockMessage === null
@@ -1178,6 +1214,17 @@ export function Transaction({
         setTransactionId(getPendingRecordId(recoveryRecord));
       }
     }
+    // Capture this before the first await. Swap builders refresh their deadline
+    // on a timer; subsequent renders must keep observing this submission rather
+    // than re-keying the monitor to fresh, never-submitted calldata. Keep this
+    // after every synchronous build-error return so a rejected preflight cannot
+    // leave stale calls frozen for the next submission.
+    if (!activeCallsRef.current) {
+      activeCallsRef.current = {
+        digest: pendingCallsDigest,
+        normalizedCalls,
+      };
+    }
     executingRef.current = true;
     if (mountedRef.current) {
       setIsExecuting(true);
@@ -1211,6 +1258,23 @@ export function Transaction({
       typeof (walletClient as UntypedValue).sendCalls === "function"
       && typeof (walletClient as UntypedValue).waitForCallsStatus === "function";
     const requiresAtomicBundle = normalizedCalls.length > 1;
+    if (!recoveryRecord && requiresAtomicBundle && canBatch) {
+      // Capability discovery is optional in EIP-5792. An unsupported response
+      // is useful preflight evidence; an absent method, missing field, or a
+      // discovery transport failure must not prevent forceAtomic from asking the
+      // wallet to enforce the requirement at submission time.
+      try {
+        const reportedCapabilities = await (walletClient as UntypedValue).getCapabilities?.({
+          account: walletClient.account,
+          chainId: chain.id,
+        });
+        if (getAtomicCapabilityStatus(reportedCapabilities, chain.id) === "unsupported") {
+          throw createAtomicBundleUnsupportedError();
+        }
+      } catch (error) {
+        if (getErrorMessage(error).includes("atomic bundled transactions")) throw error;
+      }
+    }
     const shouldUseBatchedExecution = recoveryRecord
       ? recoveryRecord.method === "batch"
       : (
@@ -1704,9 +1768,11 @@ export function Transaction({
               "Wallet reported success without a transaction hash; canonical Base receipt is not confirmed.",
             );
           }
-          if (requiresAtomicBundle && result?.atomic !== true) {
-            throw new Error("Wallet did not confirm atomic execution for this transaction bundle.");
-          }
+          // `atomic` metadata is optional in real wallet status payloads. The
+          // canonical Base receipts below are authoritative evidence that the
+          // submitted calls executed; missing metadata must not turn that proof
+          // into a false failure. `forceAtomic` still requests atomic execution
+          // from wallets that implement the EIP-5792 capability.
 
           // A calls status can contain multiple ordered receipts. Canonicalize
           // every hash (including partial/reverted results), rather than letting
@@ -1909,6 +1975,12 @@ export function Transaction({
       if (mountedRef.current) {
         setIsExecuting(false);
       }
+      // Keep a submitted proof's payload frozen while it remains unresolved so
+      // a deadline tick cannot replace the recovery controller mid-monitor.
+      // Terminal/pre-submission outcomes have no durable record to protect.
+      if (!activePendingRecordRef.current) {
+        activeCallsRef.current = null;
+      }
     }
   }, [
     clearPersistedPendingRecord,
@@ -1936,6 +2008,7 @@ export function Transaction({
       blockerStaleTimerRef.current = null;
     }
     activePendingRecordRef.current = null;
+    activeCallsRef.current = null;
     setIsPeerBlocked(false);
     notifyStatusCallbacksRef.current = true;
     clearTransactionArtifacts();
@@ -1994,7 +2067,24 @@ export function Transaction({
   ]);
 
   const submit = useCallback((beforeSubmit?: (() => void) | null) => {
-    if (executingRef.current || recoveryGateActive) return;
+    if (executingRef.current) return;
+    if (recoveryGateActive) {
+      const error = new Error(
+        walletRoutingLockMessage
+        ?? (isRecoveryChecking
+          ? "Checking pending transaction state. Please wait."
+          : isPeerBlocked
+            ? "Another transaction from this wallet is being checked."
+            : "Transaction submission is temporarily unavailable."),
+      );
+      setIsToastVisible(true);
+      const shouldNotifyError = emitStatus({
+        statusData: { error, transactionReceipts: [] },
+        statusName: "buildError",
+      });
+      if (shouldNotifyError) onErrorRef.current?.(error);
+      return;
+    }
 
     // Passing null deliberately clears an earlier pre-submit callback. Omitting
     // the argument (the toast retry path) replays the callback from the original
@@ -2008,7 +2098,7 @@ export function Transaction({
       console.warn("Transaction button pre-handler failed", error);
     }
     void execute();
-  }, [execute, recoveryGateActive]);
+  }, [emitStatus, execute, isPeerBlocked, isRecoveryChecking, recoveryGateActive, walletRoutingLockMessage]);
 
   const retrySync = useCallback(() => {
     const syncingStatus = confirmedSyncStatusRef.current;
@@ -2061,6 +2151,7 @@ export function Transaction({
       );
     }
     activePendingRecordRef.current = null;
+    activeCallsRef.current = null;
     executingRef.current = false;
     clearTransactionArtifacts();
     setIsExecuting(false);

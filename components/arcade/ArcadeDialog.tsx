@@ -506,7 +506,13 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       const lastSeen = lastSeenCommitBlockRef.current != null
         ? BigInt(Math.max(0, lastSeenCommitBlockRef.current - LOG_LOOKBACK_BUFFER_BLOCKS))
         : null;
-      const fromBlock = lastSeen !== null && lastSeen < fallbackFrom ? lastSeen : fallbackFrom;
+      // The persisted commit hint is an optimization, not authority over the
+      // scan window. A stale/corrupt 48-hour record must never widen this read
+      // beyond the bounded fallback window (or point beyond the current head).
+      const boundedLastSeen = lastSeen !== null && lastSeen <= currentBlock
+        ? lastSeen
+        : fallbackFrom;
+      const fromBlock = boundedLastSeen > fallbackFrom ? boundedLastSeen : fallbackFrom;
       const filterBase = {
         address: PIXOTCHI_NFT_ADDRESS,
         fromBlock,
@@ -571,10 +577,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           cursor = to + BigInt(1);
         }
 
-        const chunkResults: Awaited<ReturnType<typeof baseLogClient.getLogs>>[] = [];
-        for (const [start, end] of ranges) {
-          chunkResults.push(await fetchChunk(start, end));
-        }
+        // The bounded window creates at most three initial chunks. Fetch them
+        // concurrently so one slow provider response does not serialize the
+        // entire reconciliation path.
+        const chunkResults = await Promise.all(
+          ranges.map(([start, end]) => fetchChunk(start, end)),
+        );
         return chunkResults.flat();
       };
 

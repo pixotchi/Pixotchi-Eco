@@ -11,8 +11,31 @@ export interface BalanceContextType {
   seedBalance: bigint;
   leafBalance: bigint;
   pixotchiBalance: bigint;
+  seedBalanceStatus: BalanceReadStatus;
+  leafBalanceStatus: BalanceReadStatus;
+  pixotchiBalanceStatus: BalanceReadStatus;
+  balanceError: unknown;
   loading: boolean;
   refreshBalances: () => Promise<void>;
+}
+
+export type BalanceReadStatus = 'unknown' | 'ready' | 'error';
+
+type BalanceSnapshot = {
+  seedBalance: bigint;
+  leafBalance: bigint;
+  pixotchiBalance: bigint;
+};
+
+function readBalanceResult(value: UntypedValue): { value: bigint | null; error: unknown } {
+  if (value?.status === 'success' && typeof value.result === 'bigint') {
+    return { value: value.result, error: null };
+  }
+  // Older wagmi result shapes may omit status while still exposing a valid result.
+  if (value?.status === undefined && !value?.error && typeof value?.result === 'bigint') {
+    return { value: value.result, error: null };
+  }
+  return { value: null, error: value?.error ?? null };
 }
 
 const BalanceContext = createContext<BalanceContextType | undefined>(undefined);
@@ -28,7 +51,7 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const isConnected = isEvmConnected || isSolanaConnected;
 
   // Use wagmi's useReadContracts for automatic fetching, caching, and deduplication
-  const { data, refetch, isLoading: isWagmiLoading } = useReadContracts({
+  const { data, refetch, isLoading: isWagmiLoading, error: wagmiError } = useReadContracts({
     contracts: [
       {
         address: PIXOTCHI_TOKEN_ADDRESS,
@@ -56,9 +79,44 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const seedBalance = data?.[0]?.result as bigint ?? BigInt(0);
-  const leafBalance = data?.[1]?.result as bigint ?? BigInt(0);
-  const pixotchiBalance = data?.[2]?.result as bigint ?? BigInt(0);
+  const identity = address?.toLowerCase() ?? null;
+  const lastKnownByAddressRef = useRef(new Map<string, BalanceSnapshot>());
+  const seedRead = readBalanceResult(data?.[0]);
+  const leafRead = readBalanceResult(data?.[1]);
+  const pixotchiRead = readBalanceResult(data?.[2]);
+  const lastKnown = identity ? lastKnownByAddressRef.current.get(identity) : undefined;
+  const seedBalance = seedRead.value ?? lastKnown?.seedBalance ?? BigInt(0);
+  const leafBalance = leafRead.value ?? lastKnown?.leafBalance ?? BigInt(0);
+  const pixotchiBalance = pixotchiRead.value ?? lastKnown?.pixotchiBalance ?? BigInt(0);
+  const balanceReadSettled = Boolean(identity && isConnected && !isWagmiLoading && (data !== undefined || wagmiError));
+  const getBalanceReadStatus = (read: { value: bigint | null; error: unknown }, snapshot?: bigint): BalanceReadStatus => {
+    if (read.value !== null) return 'ready';
+    if (snapshot !== undefined) return 'error';
+    if (balanceReadSettled) return 'error';
+    return 'unknown';
+  };
+  const seedBalanceStatus: BalanceReadStatus = seedRead.value !== null
+    ? 'ready'
+    : getBalanceReadStatus(seedRead, lastKnown?.seedBalance);
+  const leafBalanceStatus: BalanceReadStatus = leafRead.value !== null
+    ? 'ready'
+    : getBalanceReadStatus(leafRead, lastKnown?.leafBalance);
+  const pixotchiBalanceStatus: BalanceReadStatus = pixotchiRead.value !== null
+    ? 'ready'
+    : getBalanceReadStatus(pixotchiRead, lastKnown?.pixotchiBalance);
+  const balanceError = seedRead.error ?? leafRead.error ?? pixotchiRead.error ?? wagmiError ?? null;
+
+  useEffect(() => {
+    if (!identity || (seedRead.value === null && leafRead.value === null && pixotchiRead.value === null)) return;
+    const previous = lastKnownByAddressRef.current.get(identity);
+    lastKnownByAddressRef.current.set(identity, {
+      // Persist each successful read independently. A single RPC failure must
+      // not discard a newer good value or make a later render fall back to 0.
+      seedBalance: seedRead.value ?? previous?.seedBalance ?? BigInt(0),
+      leafBalance: leafRead.value ?? previous?.leafBalance ?? BigInt(0),
+      pixotchiBalance: pixotchiRead.value ?? previous?.pixotchiBalance ?? BigInt(0),
+    });
+  }, [identity, leafRead.value, pixotchiRead.value, seedRead.value]);
 
   const addressRef = useRef(address);
   const refetchRef = useRef(refetch);
@@ -154,11 +212,17 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
       seedBalance,
       leafBalance,
       pixotchiBalance,
-      // Show loading only on initial load, not during refetches (optimistic UI)
+      seedBalanceStatus,
+      leafBalanceStatus,
+      pixotchiBalanceStatus,
+      balanceError,
+      // Keep the existing skeleton behavior for the initial read; background
+      // refresh failures retain the last known snapshot and expose an error
+      // status instead of rewriting balances to zero.
       loading: isWagmiLoading && !data,
       refreshBalances,
     }),
-    [seedBalance, leafBalance, pixotchiBalance, isWagmiLoading, data, refreshBalances],
+    [balanceError, isWagmiLoading, data, leafBalance, leafBalanceStatus, pixotchiBalance, pixotchiBalanceStatus, refreshBalances, seedBalance, seedBalanceStatus],
   );
 
   return (

@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
 import { useFrameContext } from '@/lib/frame-context';
-import { sdk } from '@farcaster/miniapp-sdk';
+
+let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
+
+function loadFarcasterSdk() {
+  farcasterSdkPromise ??= import('@farcaster/miniapp-sdk');
+  return farcasterSdkPromise;
+}
 
 export function useFarcaster() {
   const fc = useFrameContext();
@@ -10,6 +16,7 @@ export function useFarcaster() {
     (async () => {
       if (fc?.isInMiniApp) {
         try {
+          const { sdk } = await loadFarcasterSdk();
           await sdk.back.enableWebNavigation();
           await sdk.back.show();
         } catch (error) {

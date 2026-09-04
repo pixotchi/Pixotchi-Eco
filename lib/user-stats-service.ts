@@ -14,14 +14,15 @@ getVillageBuildingsByLandId
 import { redis } from './redis';
 import { BuildingData } from './types';
 import {
-formatDuration,
-formatLargeNumber,
+  formatDuration,
+  formatLargeNumber,
 formatScore,
 formatTokenAmount,
 getFenceStatus,
 getPlantStatusText,
-getStrainName
+  getStrainName
 } from './utils';
+import { z } from 'zod';
 
 const ZERO_BIGINT = BigInt(0);
 const HOME_DEFENSE_MAX_BPS = 1000;
@@ -187,6 +188,116 @@ export interface UserGameStats {
   timestamp: number;
 }
 
+const cachedFiniteNumber = z.number().finite();
+const cachedUrgencySchema = z.enum(['critical', 'warning', 'ok']);
+const cachedBuildingSchema = z.object({
+  type: z.string(),
+  level: cachedFiniteNumber,
+  dailyPTSProduction: cachedFiniteNumber,
+  dailyTODProduction: cachedFiniteNumber,
+});
+const cachedLandBuildingSchema = cachedBuildingSchema.extend({
+  unclaimedPTS: cachedFiniteNumber,
+  unclaimedTOD: cachedFiniteNumber,
+});
+const cachedStatsSchema = z.object({
+  totalPlants: cachedFiniteNumber,
+  healthyPlants: cachedFiniteNumber,
+  dyingPlants: cachedFiniteNumber,
+  totalPTS: cachedFiniteNumber,
+  totalRewards: cachedFiniteNumber,
+  totalStars: cachedFiniteNumber,
+  avgLevel: cachedFiniteNumber,
+  plantDetails: z.array(z.object({
+    id: cachedFiniteNumber,
+    name: z.string(),
+    strain: cachedFiniteNumber,
+    strainName: z.string(),
+    level: cachedFiniteNumber,
+    status: cachedFiniteNumber,
+    statusText: z.string(),
+    score: cachedFiniteNumber,
+    formattedScore: z.string(),
+    rewards: cachedFiniteNumber,
+    formattedRewards: z.string(),
+    stars: cachedFiniteNumber,
+    timeUntilStarving: cachedFiniteNumber,
+    timeUntilStarvingDisplay: z.string(),
+    urgency: cachedUrgencySchema,
+    timePlantBorn: z.string(),
+    hasActiveFence: z.boolean(),
+    fenceV2Active: z.boolean(),
+    activeItems: z.array(z.object({
+      name: z.string(),
+      effectIsOngoingActive: z.boolean(),
+    })),
+  })),
+  totalLands: cachedFiniteNumber,
+  totalLandXP: cachedFiniteNumber,
+  totalStoredPTS: cachedFiniteNumber,
+  totalStoredTOD: cachedFiniteNumber,
+  landsWithCasino: cachedFiniteNumber,
+  landsWithBarracks: cachedFiniteNumber,
+  landDetails: z.array(z.object({
+    tokenId: z.string(),
+    name: z.string(),
+    coordinates: z.object({ x: cachedFiniteNumber, y: cachedFiniteNumber }),
+    experiencePoints: cachedFiniteNumber,
+    storedPTS: cachedFiniteNumber,
+    storedTOD: cachedFiniteNumber,
+    casinoBuilt: z.boolean(),
+    barracksBuilt: z.boolean(),
+    barracks: z.object({
+      stationedSwordsmen: z.string(),
+      stationedPhalanx: z.string(),
+      readySwordsmen: z.string(),
+      readyPhalanx: z.string(),
+      trainingQueue: z.string(),
+      attackCooldown: z.string(),
+      defenseCooldown: z.string(),
+      homeDefenseBonus: z.string(),
+    }).nullable(),
+    villageBuildings: z.array(cachedLandBuildingSchema),
+    townBuildings: z.array(cachedLandBuildingSchema),
+  })),
+  villageBuildings: z.array(cachedBuildingSchema),
+  townBuildings: z.array(cachedBuildingSchema),
+  totalDailyPTSProduction: cachedFiniteNumber,
+  totalDailyTODProduction: cachedFiniteNumber,
+  unclaimedPTS: cachedFiniteNumber,
+  unclaimedTOD: cachedFiniteNumber,
+  formattedSeedBalance: z.string(),
+  formattedLeafBalance: z.string(),
+  formattedPixotchiBalance: z.string(),
+  plantsNeedingCare: z.array(z.object({
+    id: cachedFiniteNumber,
+    name: z.string(),
+    status: z.string(),
+    timeUntilStarving: z.string(),
+    urgency: cachedUrgencySchema,
+  })),
+  timestamp: cachedFiniteNumber,
+});
+
+/**
+ * Decode Redis values returned either as a JSON string or an already
+ * deserialized object. Invalid or stale cache entries are treated as misses so
+ * callers never receive a partial stats object.
+ */
+export function parseCachedUserGameStats(value: unknown): UserGameStats | null {
+  let candidate = value;
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  const parsed = cachedStatsSchema.safeParse(candidate);
+  return parsed.success ? parsed.data as UserGameStats : null;
+}
+
 const USER_STATS_TTL = 30; // 30 seconds cache
 
 export async function getUserGameStats(address: string): Promise<UserGameStats> {
@@ -199,8 +310,9 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
   if (redis) {
     try {
       const cached = await redis.get(cacheKey);
-      if (cached && typeof cached === 'string') {
-        return JSON.parse(cached);
+      const parsed = parseCachedUserGameStats(cached);
+      if (parsed) {
+        return parsed;
       }
     } catch (error) {
       console.error('Error reading cached user stats:', error);

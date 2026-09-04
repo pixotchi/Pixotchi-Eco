@@ -14,7 +14,6 @@ import dynamic from 'next/dynamic';
 import { useIdentityToken, usePrivy } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import { useAccount } from 'wagmi';
-import { sdk } from '@farcaster/miniapp-sdk';
 import { useFrameContext } from '@/lib/frame-context';
 import {
   clearPublicChatSession,
@@ -26,6 +25,11 @@ import {
   type PublicChatSession,
 } from '@/lib/chat-auth-client';
 import { requestBaseChatSessionRefresh } from '@/lib/base-chat-session-refresh';
+import {
+  emitPublicChatSessionRefreshResult,
+  PUBLIC_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+  type PublicChatSessionRefreshRequest,
+} from '@/lib/public-chat-session-refresh';
 import {
   clearConfirmedMiniAppSession,
   useConfirmedMiniAppSession,
@@ -48,6 +52,13 @@ import {
   type AiChatStatus,
   type AIUIMessage,
 } from './ai-message-utils';
+
+let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
+
+function loadFarcasterSdk() {
+  farcasterSdkPromise ??= import('@farcaster/miniapp-sdk');
+  return farcasterSdkPromise;
+}
 
 // The AI SDK loads only when chat is first opened; see ai-chat-engine.tsx.
 const AiChatEngine = dynamic(() => import('./ai-chat-engine'), { ssr: false });
@@ -198,6 +209,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const previousChatAddressRef = useRef<string | null>(null);
   const previousPublicIdentityAddressRef = useRef<string | null>(null);
   const publicChatSessionRef = useRef<PublicChatSession | null>(null);
+  const providerSessionRefreshRef = useRef<{
+    key: string;
+    promise: Promise<PublicChatSession>;
+  } | null>(null);
   const normalizedChatAddress = chatAddress?.toLowerCase() ?? null;
   const confirmedMiniAppAddress = isMiniApp && confirmedMiniAppSession.confirmed
     ? confirmedMiniAppSession.address?.toLowerCase() ?? null
@@ -333,6 +348,184 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(PUBLIC_CHAT_SESSION_EVENT, handlePublicChatSession as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let disposed = false;
+
+    const getOrStartProviderRefresh = (
+      key: string,
+      start: () => Promise<PublicChatSession>,
+    ): Promise<PublicChatSession> => {
+      const active = providerSessionRefreshRef.current;
+      if (active?.key === key) return active.promise;
+
+      const promise = start();
+      providerSessionRefreshRef.current = { key, promise };
+      void promise.then(
+        () => {
+          if (providerSessionRefreshRef.current?.promise === promise) {
+            providerSessionRefreshRef.current = null;
+          }
+        },
+        () => {
+          if (providerSessionRefreshRef.current?.promise === promise) {
+            providerSessionRefreshRef.current = null;
+          }
+        },
+      );
+      return promise;
+    };
+
+    const handlePublicChatSessionRefreshRequest = async (event: Event) => {
+      const detail = (event as CustomEvent<PublicChatSessionRefreshRequest>).detail;
+      if (
+        !detail
+        || typeof detail.requestId !== 'string'
+        || detail.requestId.length === 0
+        || detail.requestId.length > 128
+        || typeof detail.expectedAddress !== 'string'
+        || detail.expectedAddress.length === 0
+        || detail.expectedAddress.length > 128
+        || (
+          detail.surface !== 'privy'
+          && detail.surface !== 'privysolana'
+          && detail.surface !== 'farcaster'
+        )
+      ) return;
+
+      const expectedAddress = detail.expectedAddress.trim().toLowerCase();
+      const connectedAddress = chatAddress?.trim().toLowerCase() ?? null;
+      if (!connectedAddress || expectedAddress !== connectedAddress) {
+        emitPublicChatSessionRefreshResult({
+          message: 'Secure-session recovery does not match the connected wallet.',
+          requestId: detail.requestId,
+          status: 'ignored',
+        });
+        return;
+      }
+
+      try {
+        let nextSession: PublicChatSession;
+        if (detail.surface === 'farcaster') {
+          if (!isMiniApp) {
+            emitPublicChatSessionRefreshResult({
+              message: 'Farcaster session recovery is only available in the Mini App.',
+              requestId: detail.requestId,
+              status: 'ignored',
+            });
+            return;
+          }
+
+          nextSession = await getOrStartProviderRefresh(
+            `farcaster:${expectedAddress}`,
+            async () => {
+              const { sdk } = await loadFarcasterSdk();
+              const { token } = await sdk.quickAuth.getToken();
+              return createFarcasterPublicChatSession({
+                expectedAddress,
+                token,
+              });
+            },
+          );
+          if (
+            nextSession.provider !== 'farcaster'
+            || nextSession.method !== 'farcaster-miniapp'
+          ) {
+            throw new Error('Farcaster session recovery returned the wrong provider.');
+          }
+        } else {
+          const currentSurface = getCurrentWebAuthSurface();
+          if (
+            isMiniApp
+            || currentSurface !== detail.surface
+            || !privyReady
+            || !authenticated
+            || (detail.surface === 'privysolana' && !solanaAddress)
+          ) {
+            emitPublicChatSessionRefreshResult({
+              message: 'Privy session recovery is unavailable on this auth surface.',
+              requestId: detail.requestId,
+              status: 'ignored',
+            });
+            return;
+          }
+
+          nextSession = await getOrStartProviderRefresh(
+            `${detail.surface}:${expectedAddress}`,
+            async () => {
+              const accessToken = identityToken ? null : await getAccessToken();
+              if (!identityToken && !accessToken) {
+                throw new Error('Privy token unavailable.');
+              }
+
+              return createPrivyPublicChatSession({
+                ...(identityToken ? { identityToken } : {}),
+                ...(accessToken ? { accessToken } : {}),
+                expectedAddress,
+                ...(detail.surface === 'privysolana' ? { solanaAddress } : {}),
+              });
+            },
+          );
+          const expectedMethod = detail.surface === 'privysolana'
+            ? 'privy-solana'
+            : 'privy-ethereum';
+          if (nextSession.provider !== 'privy' || nextSession.method !== expectedMethod) {
+            throw new Error('Privy session recovery returned the wrong provider.');
+          }
+        }
+
+        if (nextSession.address.toLowerCase() !== expectedAddress) {
+          throw new Error('Recovered session does not match the connected wallet.');
+        }
+        if (disposed) {
+          emitPublicChatSessionRefreshResult({
+            message: 'Connected wallet changed during secure-session recovery.',
+            requestId: detail.requestId,
+            status: 'error',
+          });
+          return;
+        }
+        publicChatSessionRef.current = nextSession;
+        setPublicChatSession(nextSession);
+        setPublicChatState('ready');
+        setError(null);
+        emitPublicChatSessionRefreshResult({
+          requestId: detail.requestId,
+          status: 'success',
+        });
+      } catch (error) {
+        emitPublicChatSessionRefreshResult({
+          message: error instanceof Error
+            ? error.message
+            : 'Could not restore the secure session.',
+          requestId: detail.requestId,
+          status: 'error',
+        });
+      }
+    };
+
+    window.addEventListener(
+      PUBLIC_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+      handlePublicChatSessionRefreshRequest as EventListener,
+    );
+    return () => {
+      disposed = true;
+      window.removeEventListener(
+        PUBLIC_CHAT_SESSION_REFRESH_REQUEST_EVENT,
+        handlePublicChatSessionRefreshRequest as EventListener,
+      );
+    };
+  }, [
+    authenticated,
+    chatAddress,
+    getAccessToken,
+    getCurrentWebAuthSurface,
+    identityToken,
+    isMiniApp,
+    privyReady,
+    solanaAddress,
+  ]);
 
   const handleChatAuthFailure = useCallback(async () => {
     const currentSurface = getCurrentWebAuthSurface();
@@ -788,6 +981,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
 
           if (!nextSession) {
+            const { sdk } = await loadFarcasterSdk();
             const { token } = await sdk.quickAuth.getToken();
             if (!isCurrentBootstrap()) {
               return;

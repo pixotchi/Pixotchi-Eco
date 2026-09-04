@@ -1,5 +1,5 @@
 export const CASINO_DISABLED_MESSAGE = "Casino is currently unavailable.";
-export const BLACKJACK_DISABLED_MESSAGE = "Blackjack is currently unavailable.";
+export const BLACKJACK_DISABLED_MESSAGE = "Blackjack is temporarily unavailable while gameplay security maintenance is in progress.";
 
 export function buildCasinoPolicy(input: {
   casinoEnabled: boolean;

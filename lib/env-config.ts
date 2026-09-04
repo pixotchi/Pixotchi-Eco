@@ -50,7 +50,7 @@ export const CLIENT_ENV = {
   CASINO_ENABLED: process.env.NEXT_PUBLIC_CASINO_ENABLED === 'true',
   // Deprecated: mini-app-only feature gating is ignored after the Base App web cutover.
   CASINO_MINIAPP_ONLY: false,
-  BLACKJACK_ENABLED: process.env.NEXT_PUBLIC_BLACKJACK_ENABLED !== 'false',
+  BLACKJACK_ENABLED: process.env.NEXT_PUBLIC_BLACKJACK_ENABLED === 'true',
   // Base Verify - Free plant claim for verified users
   // Single toggle controls both frontend UI and backend API
   VERIFY_CLAIM_ENABLED: process.env.NEXT_PUBLIC_VERIFY_CLAIM_ENABLED === 'true',

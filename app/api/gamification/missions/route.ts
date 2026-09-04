@@ -5,13 +5,31 @@ import {
   createChatAuthErrorResponse,
   getChatSessionOrQuickAuthFromRequest,
 } from '@/lib/chat-auth';
-import { getMissionDay, markMissionTask, getMissionScore } from '@/lib/gamification-service';
+import {
+  getMissionDay,
+  markMissionTask,
+  getMissionScore,
+  assertMissionProofUnused,
+  MissionProofAlreadyUsedError,
+  MissionProofPersistenceError,
+} from '@/lib/gamification-service';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
-import type { GmProgressProof, GmTaskId } from '@/lib/gamification-types';
-import { getReadClient } from '@/lib/contracts';
-import type { Hex } from 'viem';
+import { isGmTaskId } from '@/lib/gamification-types';
+import {
+  missionTaskRequiresProof,
+  validateMissionProofEvidence,
+  type MissionEvidenceLog,
+} from '@/lib/gamification-proof';
+import {
+  getReadClient,
+  getShopItems,
+  LAND_CONTRACT_ADDRESS,
+  PIXOTCHI_NFT_ADDRESS,
+} from '@/lib/contracts';
+import { parseAbi, type Address, type Hex } from 'viem';
 import { getGamificationPolicy } from '@/lib/gamification-feature';
 import { getBaseTransactionReceipt } from '@/lib/base-rpc';
+import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 
 const DEFAULT_ORIGINS = [
   process.env.NEXT_PUBLIC_URL,
@@ -26,127 +44,98 @@ const ALLOWED_ORIGINS = new Set(
   DEFAULT_ORIGINS.flatMap(origin => origin.split(',').map(o => o.trim()).filter(Boolean)),
 );
 
-const TASKS_REQUIRING_PROOF: ReadonlySet<GmTaskId> = new Set([
-  's1_make_swap',
-  's1_stake_seed',
-  's1_claim_stake',
-  's1_place_order',
-  's3_apply_resources',
-  's3_send_quest',
-  's3_claim_production',
-  's3_play_casino_game',
-  's4_buy10_elements',
-  's4_buy_shield',
-  's4_collect_star',
-  's4_play_arcade',
-]);
-
 const MAX_COUNT_PER_UPDATE = 120;
+const MAX_POST_BODY_CHARS = 2_048;
+const PROOF_VERIFICATION_LIMIT_PER_MINUTE = 20;
+const PROOF_VERIFICATION_IP_LIMIT_PER_MINUTE = 40;
+const ERC721_ACCESS_ABI = parseAbi([
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function getApproved(uint256 tokenId) view returns (address)',
+]);
 
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
-  if (!origin) return true; // SSR or same-origin fetch
+  if (!origin) return true;
   if (origin === 'null') return false;
   return ALLOWED_ORIGINS.has(origin);
 }
 
-function isHexHash(value: string): value is Hex {
-  return /^0x[a-fA-F0-9]{64}$/.test(value);
+function isHexHash(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value);
 }
 
-/**
- * Check if an address is a smart contract (smart wallet)
- */
-async function isContractAddress(addr: string): Promise<boolean> {
-  try {
-    const client = getReadClient();
-    const code = await client.getBytecode({ address: addr as `0x${string}` });
-    return code !== undefined && code !== '0x' && code.length > 2;
-  } catch {
-    return false;
-  }
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/**
- * Helper to wait for a specified time
- */
+function parseCanonicalProof(value: unknown): { txHash: Hex } | null {
+  if (!isPlainRecord(value)) return null;
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || keys[0] !== 'txHash' || !isHexHash(value.txHash)) return null;
+  return { txHash: value.txHash.toLowerCase() as Hex };
+}
+
+function isAllowedMonth(value: string): boolean {
+  return /^\d{4}(0[1-9]|1[0-2])$/.test(value) || /^(all|combined|lifetime)$/i.test(value);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Fetches transaction receipt with retry logic for timing issues.
- * Base blocks are fast but RPC indexing can lag behind.
- */
 async function getTransactionReceiptWithRetry(
   txHash: Hex,
   maxAttempts = 3,
-  delayMs = 1000
+  delayMs = 1000,
 ): Promise<Awaited<ReturnType<typeof getBaseTransactionReceipt>> | null> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const receipt = await getBaseTransactionReceipt(txHash);
       if (receipt) return receipt;
     } catch (error: UntypedValue) {
-      // Check if it's a "not found" or "indexing in progress" error
       const isTimingError =
-        error?.shortMessage?.includes('could not be found') ||
-        error?.details?.includes('indexing in progress') ||
-        error?.message?.includes('not found');
+        error?.shortMessage?.includes('could not be found')
+        || error?.details?.includes('indexing in progress')
+        || error?.message?.includes('not found');
 
       if (isTimingError && attempt < maxAttempts - 1) {
-        // Wait before retrying with exponential backoff
         await sleep(delayMs * (attempt + 1));
         continue;
       }
-      throw error; // Re-throw if not a timing error or final attempt
+      throw error;
     }
   }
   return null;
 }
 
-/**
- * Validates onchain proof for a task.
- * For smart wallets, we only verify the transaction exists and succeeded.
- * The sender address check is skipped for smart wallets since they use different addresses.
- */
-async function validateOnchainProof(address: string, proof: GmProgressProof | undefined, taskId: GmTaskId): Promise<boolean> {
-  if (!proof || typeof proof.txHash !== 'string' || !proof.txHash) {
-    return false; // No proof provided, but we'll allow the task to be tracked
-  }
-
-  const txHash = proof.txHash;
-  if (!isHexHash(txHash)) {
-    return false; // Invalid hash format
-  }
-
+async function hasAssetAccess(
+  contract: Address,
+  address: Address,
+  tokenId: bigint,
+  blockNumber: bigint,
+): Promise<boolean> {
+  const client = getReadClient();
   try {
-    const receipt = await getTransactionReceiptWithRetry(txHash);
-    if (!receipt) {
-      return false; // Transaction not found after retries
-    }
-    if (receipt.status !== 'success') {
-      return false; // Transaction failed
-    }
-
-    // Check if sender is a smart contract (smart wallet)
-    // Smart wallets will have different 'from' addresses, so we skip that check
-    const senderIsContract = receipt.from ? await isContractAddress(receipt.from) : false;
-
-    // For smart wallets (contract addresses), we only verify transaction succeeded
-    // For EOAs, we verify sender matches the user's address
-    if (!senderIsContract) {
-      if (!receipt.from || receipt.from.toLowerCase() !== address.toLowerCase()) {
-        return false; // Sender mismatch for EOA
-      }
-    }
-    // For smart wallets, we trust that if the transaction succeeded, it was authorized
-    // The smart wallet contract handles authorization internally
-
-    return true; // Proof validated
-  } catch (error) {
-    console.warn(`Failed to validate proof for task ${taskId}:`, error);
-    return false; // Validation failed, but we'll still allow tracking
+    const [owner, approved] = await Promise.all([
+      client.readContract({
+        address: contract,
+        abi: ERC721_ACCESS_ABI,
+        functionName: 'ownerOf',
+        args: [tokenId],
+        blockNumber,
+      }),
+      client.readContract({
+        address: contract,
+        abi: ERC721_ACCESS_ABI,
+        functionName: 'getApproved',
+        args: [tokenId],
+        blockNumber,
+      }),
+    ]);
+    return owner.toLowerCase() === address.toLowerCase()
+      || approved.toLowerCase() === address.toLowerCase();
+  } catch {
+    return false;
   }
 }
 
@@ -157,6 +146,9 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month') || undefined;
     if (!address || !isValidEthereumAddressFormat(address)) {
       return NextResponse.json({ error: 'Valid wallet address is required' }, { status: 400 });
+    }
+    if (month && !isAllowedMonth(month)) {
+      return NextResponse.json({ error: 'month must be YYYYMM, all, combined, or lifetime' }, { status: 400 });
     }
     const gamificationPolicy = getGamificationPolicy();
     if (!gamificationPolicy.enabled) {
@@ -175,6 +167,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, day, total });
   } catch (error) {
     console.error('Error fetching mission day:', error);
+    if (error instanceof MissionProofPersistenceError) {
+      return NextResponse.json(
+        {
+          error: 'Mission summary is temporarily unavailable',
+          code: error.code,
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'private, no-store' },
+        },
+      );
+    }
     return NextResponse.json({ error: 'Failed to fetch mission day' }, { status: 500 });
   }
 }
@@ -185,8 +189,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { taskId, proof, count } = body || {};
+    const contentLength = Number(request.headers.get('content-length') || '0');
+    if (Number.isFinite(contentLength) && contentLength > MAX_POST_BODY_CHARS) {
+      return NextResponse.json({ error: 'Request body is too large' }, { status: 413 });
+    }
+    const rawBody = await request.text();
+    if (rawBody.length > MAX_POST_BODY_CHARS) {
+      return NextResponse.json({ error: 'Request body is too large' }, { status: 413 });
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 });
+    }
+    if (!isPlainRecord(body)) {
+      return NextResponse.json({ error: 'Request body must be an object' }, { status: 400 });
+    }
+    const { taskId, proof, count } = body;
+    if (!isGmTaskId(taskId)) {
+      return NextResponse.json({ error: 'Unknown taskId' }, { status: 400 });
+    }
+    if (count !== undefined && (
+      typeof count !== 'number'
+      || !Number.isSafeInteger(count)
+      || count < 1
+      || count > MAX_COUNT_PER_UPDATE
+    )) {
+      return NextResponse.json({ error: `count must be an integer from 1 to ${MAX_COUNT_PER_UPDATE}` }, { status: 400 });
+    }
     const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
 
     const gamificationPolicy = getGamificationPolicy();
@@ -206,45 +237,140 @@ export async function POST(request: NextRequest) {
     }
 
     const address = session.address;
-    if (!taskId) {
-      return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
+    if (!isValidEthereumAddressFormat(address)) {
+      return createChatAuthRequiredResponse({
+        clearCookie: Boolean(sessionId),
+        message: 'Authenticated wallet is invalid.',
+      });
     }
-    const missionTaskId = taskId as GmTaskId;
-    const safeCount = typeof count === 'number'
-      ? Math.max(1, Math.min(MAX_COUNT_PER_UPDATE, Math.floor(count)))
-      : 1;
-
-    // Validate proof if provided, but don't block task tracking if validation fails
-    // This allows smart wallets to work even if proof validation has issues
-    let proofValid = false;
-    if (proof && proof.txHash) {
-      try {
-        proofValid = await validateOnchainProof(address, proof, missionTaskId);
-      } catch (error) {
-        console.warn(`Proof validation failed for ${missionTaskId}, but allowing task tracking:`, error);
-        // Continue without proof validation - task will still be tracked
+    if (!missionTaskRequiresProof(taskId)) {
+      if (taskId === 's2_chat_message') {
+        return NextResponse.json(
+          { error: 'Chat mission progress is recorded only after a stored public message.' },
+          { status: 400 },
+        );
       }
+      if (count !== undefined) {
+        return NextResponse.json({ error: 'count is only supported for element purchases' }, { status: 400 });
+      }
+      const updated = await markMissionTask(address, taskId, undefined, 1);
+      return NextResponse.json({ success: true, day: updated });
     }
 
-    // For tasks requiring proof, we prefer validated proof but don't strictly require it
-    // This ensures smart wallets work even if proof extraction/validation fails
-    if (TASKS_REQUIRING_PROOF.has(missionTaskId) && !proofValid && !proof?.txHash) {
-      // Only reject if no proof was provided at all
-      // If proof was provided but validation failed, we still allow tracking
-      // (smart wallets might have proof extraction issues)
-      console.warn(`Task ${missionTaskId} requires proof but none provided - allowing anyway for smart wallet compatibility`);
+    const canonicalProof = parseCanonicalProof(proof);
+    if (!canonicalProof) {
+      return NextResponse.json({ error: 'A valid transaction proof is required' }, { status: 400 });
+    }
+    if (taskId !== 's4_buy10_elements' && count !== undefined) {
+      return NextResponse.json({ error: 'count is only supported for element purchases' }, { status: 400 });
     }
 
-    const updated = await markMissionTask(address, missionTaskId, proof, safeCount);
+    const rateLimitResponse = await enforceRateLimit(request, {
+      failClosed: true,
+      scope: 'api:gamification:missions:proof',
+      rules: [
+        {
+          kind: 'ip',
+          identifier: getRequestIp(request) ?? 'unknown',
+          limit: PROOF_VERIFICATION_IP_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+        {
+          kind: 'address',
+          identifier: address,
+          limit: PROOF_VERIFICATION_LIMIT_PER_MINUTE,
+          windowSeconds: 60,
+        },
+      ],
+    });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    // This read is an optimization only; the atomic write in markMissionTask
+    // remains the authoritative race-safe replay guard.
+    await assertMissionProofUnused(canonicalProof.txHash);
+
+    const receipt = await getTransactionReceiptWithRetry(canonicalProof.txHash);
+    if (!receipt || receipt.status !== 'success') {
+      return NextResponse.json({ error: 'Transaction proof was not found or did not succeed' }, { status: 403 });
+    }
+
+    const client = getReadClient();
+    const [transaction, block] = await Promise.all([
+      client.getTransaction({ hash: canonicalProof.txHash }),
+      client.getBlock({ blockNumber: receipt.blockNumber }),
+    ]);
+    const proofDay = new Date(Number(block.timestamp) * 1_000).toISOString().slice(0, 10);
+    const currentDay = new Date().toISOString().slice(0, 10);
+    if (proofDay !== currentDay) {
+      return NextResponse.json({ error: 'Transaction proof is not from the current mission day' }, { status: 403 });
+    }
+
+    let fenceItemIdsPromise: Promise<Set<string>> | null = null;
+    const evidence = await validateMissionProofEvidence(
+      address as Address,
+      taskId,
+      {
+        status: receipt.status,
+        logs: receipt.logs as MissionEvidenceLog[],
+      },
+      {
+        from: transaction.from,
+        to: transaction.to,
+        input: transaction.input,
+      },
+      {
+        hasLandAccess: (actor, tokenId) => hasAssetAccess(
+          LAND_CONTRACT_ADDRESS,
+          actor,
+          tokenId,
+          receipt.blockNumber,
+        ),
+        hasPlantAccess: (actor, tokenId) => hasAssetAccess(
+          PIXOTCHI_NFT_ADDRESS,
+          actor,
+          tokenId,
+          receipt.blockNumber,
+        ),
+        isFenceShopItem: async itemId => {
+          try {
+            fenceItemIdsPromise ??= getShopItems(client).then(items => new Set(
+              items
+                .filter(item => /(fence|shield)/i.test(item.name))
+                .map(item => item.id),
+            ));
+            return (await fenceItemIdsPromise).has(itemId.toString());
+          } catch {
+            return false;
+          }
+        },
+      },
+    );
+    if (!evidence.valid) {
+      return NextResponse.json({ error: 'Transaction does not prove this mission task' }, { status: 403 });
+    }
+
+    const verifiedCount = taskId === 's4_buy10_elements' ? evidence.count : 1;
+    if (taskId === 's4_buy10_elements' && (
+      !verifiedCount
+      || (count !== undefined && count !== verifiedCount)
+    )) {
+      return NextResponse.json({ error: 'count does not match the verified purchase events' }, { status: 400 });
+    }
+
+    const updated = await markMissionTask(address, taskId, canonicalProof, verifiedCount || 1);
     return NextResponse.json({ success: true, day: updated });
   } catch (error) {
     if (error instanceof ChatAuthError) {
       return createChatAuthErrorResponse(error);
     }
+    if (error instanceof MissionProofAlreadyUsedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    }
+    if (error instanceof MissionProofPersistenceError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 503 });
+    }
 
     console.error('Error updating mission:', error);
-    const message = error instanceof Error ? error.message : 'Failed to update mission';
-    const status = /proof|origin|sender|transaction/i.test(message) ? 403 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: 'Failed to update mission' }, { status: 500 });
   }
 }

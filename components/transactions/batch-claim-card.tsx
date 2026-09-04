@@ -1,6 +1,7 @@
 "use client";
 
 import { Card,CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useBalances } from '@/lib/balance-context';
 import { getLandBuildingsBatch,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -88,12 +89,22 @@ export default function BatchClaimCard({
   // Key to force re-mount of Transaction component after each batch (resets button state)
   const [txKey, setTxKey] = useState(0);
   const { isSmartWallet } = useSmartWallet();
-  const { pixotchiBalance } = useBalances();
+  const {
+    pixotchiBalance,
+    pixotchiBalanceStatus,
+    balanceError,
+    refreshBalances,
+  } = useBalances();
   const { address } = useAccount();
 
-  const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
+  const pixotchiBalanceKnown = pixotchiBalanceStatus === 'ready';
+  const pixotchiBalanceNum = pixotchiBalanceKnown ? parseFloat(formatUnits(pixotchiBalance, 18)) : null;
   const burnAmountWei = parseUnits(BURN_AMOUNT_TOKENS.toString(), 18);
-  const hasEnoughTokens = pixotchiBalance >= burnAmountWei;
+  const hasEnoughTokens = pixotchiBalanceKnown && pixotchiBalance >= burnAmountWei;
+  const retryBalance = () => { void refreshBalances(); };
+  const balanceErrorMessage = balanceError instanceof Error
+    ? balanceError.message
+    : typeof balanceError === 'string' ? balanceError : null;
 
   // Memoize land IDs to detect changes
   const landIdsHash = useMemo(() =>
@@ -348,6 +359,23 @@ export default function BatchClaimCard({
               Smart Wallet Required
             </div>
           </div>
+        ) : !pixotchiBalanceKnown ? (
+          <div className="space-y-2 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
+            <div className="flex items-center gap-2 text-value font-bold text-xs">
+              <Lock className="w-3 h-3" />
+              {pixotchiBalanceStatus === 'unknown' ? 'Checking PIXOTCHI Balance' : 'PIXOTCHI balance unavailable'}
+            </div>
+            {pixotchiBalanceStatus === 'error' && (
+              <>
+                <div className="text-[10px] text-muted-foreground" role="status">
+                  {balanceErrorMessage || 'Unable to verify the PIXOTCHI balance. Retry before burning tokens.'}
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={retryBalance}>
+                  Retry balance check
+                </Button>
+              </>
+            )}
+          </div>
         ) : !hasEnoughTokens ? (
           <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
@@ -355,7 +383,7 @@ export default function BatchClaimCard({
               Insufficient PIXOTCHI Balance
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
-              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: {pixotchiBalanceNum.toFixed(2)}
+              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: {pixotchiBalanceNum?.toFixed(2)}
             </div>
           </div>
         ) : (

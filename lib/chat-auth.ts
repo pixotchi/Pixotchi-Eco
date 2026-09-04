@@ -9,7 +9,15 @@ import { getBaseReadClient } from '@/lib/base-rpc';
 import { getPrivyChatAuthConfigStatus } from '@/lib/env-config';
 import { FARCASTER_CONNECTED_WALLET_HEADER } from '@/lib/farcaster-miniapp-auth-headers';
 import { getTwinAddress } from '@/lib/solana-twin';
-import { redis, redisDel, redisGetJSON, redisSetJSON, withPrefix } from '@/lib/redis';
+import {
+  redis,
+  redisDel,
+  redisGetJSON,
+  redisGetJSONResult,
+  redisSetJSON,
+  type RedisJSONReadResult,
+  withPrefix,
+} from '@/lib/redis';
 import { isValidEthereumAddressFormat } from '@/lib/utils';
 
 export type ChatSessionProvider = 'privy' | 'farcaster' | 'base';
@@ -84,6 +92,7 @@ const BASE_SIWE_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const BASE_SIWE_MAX_ISSUED_AT_AGE_MS =
   BASE_AUTH_NONCE_TTL_SECONDS * 1000 + BASE_SIWE_MAX_CLOCK_SKEW_MS;
 const BASE_AUTH_DEBUG_LOGS_ENABLED = process.env.BASE_AUTH_DEBUG_LOGS_ENABLED === 'true';
+const DEFAULT_BASE_AUTH_URL = 'https://mini.pixotchi.tech';
 const ERC1271_MAGIC_VALUE = '0x1626ba7e';
 const FARCASTER_AUTH_ADDRESS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 const FARCASTER_VERIFIED_ADDRESSES_CACHE_TTL_SECONDS = 60 * 10;
@@ -332,36 +341,6 @@ async function resolveFarcasterVerifiedEthereumAddressesFromFid(
   }
 }
 
-function pushUrlCandidate(candidates: URL[], candidate: string | null | undefined): void {
-  if (!candidate) {
-    return;
-  }
-
-  try {
-    candidates.push(new URL(candidate));
-  } catch {
-    // Ignore malformed URL candidates.
-  }
-}
-
-function pushHostCandidate(
-  candidates: URL[],
-  host: string | null | undefined,
-  protocol: string | null | undefined,
-): void {
-  if (!host) {
-    return;
-  }
-
-  const trimmedHost = host.trim();
-  if (!trimmedHost) {
-    return;
-  }
-
-  const normalizedProtocol = (protocol?.trim() || 'https').replace(/:$/, '');
-  pushUrlCandidate(candidates, `${normalizedProtocol}://${trimmedHost}`);
-}
-
 function normalizeOrigin(origin: string): string {
   return origin.toLowerCase();
 }
@@ -539,24 +518,29 @@ function parseBaseSiweMessage(message: string): ParsedBaseSiweMessage {
   };
 }
 
-function getExpectedBaseUrls(request: NextRequest): URL[] {
-  const candidates: URL[] = [];
-  const hostHeader = request.headers.get('host');
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const forwardedProto = request.headers.get('x-forwarded-proto');
-  const explicitBaseUrl = process.env.NEXT_PUBLIC_URL?.trim();
+export function resolveConfiguredBaseAuthUrl(configuredUrl?: string): URL {
+  const rawUrl = configuredUrl?.trim() || DEFAULT_BASE_AUTH_URL;
 
-  pushUrlCandidate(candidates, explicitBaseUrl);
-  pushUrlCandidate(candidates, request.nextUrl.origin);
-  pushHostCandidate(candidates, forwardedHost, forwardedProto);
-  pushHostCandidate(candidates, hostHeader, forwardedProto);
+  try {
+    const url = new URL(rawUrl);
+    if (
+      (url.protocol !== 'https:' && url.protocol !== 'http:') ||
+      !url.host ||
+      url.username ||
+      url.password
+    ) {
+      throw new Error('Unsupported authentication URL');
+    }
+    return url;
+  } catch {
+    throw new ChatAuthError('Base authentication URL is misconfigured.', 500);
+  }
+}
 
-  const deduped = new Map<string, URL>();
-  candidates.forEach((candidate) => {
-    deduped.set(normalizeOrigin(candidate.origin), candidate);
-  });
-
-  return Array.from(deduped.values());
+function getExpectedBaseUrls(): URL[] {
+  // NEXT_PUBLIC_URL is deployment configuration, not request metadata. Never
+  // derive the signed SIWE trust boundary from Host/X-Forwarded-* or nextUrl.
+  return [resolveConfiguredBaseAuthUrl(process.env.NEXT_PUBLIC_URL)];
 }
 
 function validateBaseSiweTemporalClaims(siweMessage: ParsedBaseSiweMessage): void {
@@ -714,7 +698,7 @@ async function logBaseAuthFailureDiagnostic(
     return;
   }
 
-  const expectedUrls = getExpectedBaseUrls(request);
+  const expectedUrls = getExpectedBaseUrls();
   const expectedDomains = getExpectedBaseDomains(expectedUrls);
   const signatureShape = getBaseSignatureShape(payload.signature);
   const normalizedPayloadAddress = isValidEthereumAddressFormat(payload.address)
@@ -798,17 +782,12 @@ function logBaseAuthDirectErc1271SuccessDiagnostic(
   });
 }
 
-function getConfiguredBaseUrl(request: NextRequest): URL {
-  const expectedUrls = getExpectedBaseUrls(request);
-  if (expectedUrls.length > 0) {
-    return expectedUrls[0];
-  }
-
-  return new URL('https://mini.pixotchi.tech');
+function getConfiguredBaseUrl(): URL {
+  return getExpectedBaseUrls()[0];
 }
 
-function getExpectedDomain(request: NextRequest): string {
-  return getConfiguredBaseUrl(request).host;
+function getExpectedDomain(): string {
+  return getConfiguredBaseUrl().host;
 }
 
 function buildPrivateNoStoreHeaders(): HeadersInit {
@@ -941,11 +920,10 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
     return { session: null, sessionId: null };
   }
 
-  if (!redis) {
-    return { session: null, sessionId };
-  }
-
-  const session = await redisGetJSON<ChatSessionRecord>(getChatSessionKey(sessionId));
+  const { session } = resolveChatSessionReadResult(
+    sessionId,
+    await redisGetJSONResult<ChatSessionRecord>(getChatSessionKey(sessionId)),
+  );
   if (session) {
     void redisSetJSON(getChatSessionKey(sessionId), session, CHAT_SESSION_TTL_SECONDS).catch(
       (error) => {
@@ -955,6 +933,25 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
   }
   return {
     session,
+    sessionId,
+  };
+}
+
+/**
+ * Preserve the difference between an expired session and an unavailable
+ * session store. Callers already turn ChatAuthError(503) into a no-store 503
+ * response, without deleting the browser cookie.
+ */
+export function resolveChatSessionReadResult(
+  sessionId: string,
+  result: RedisJSONReadResult<ChatSessionRecord>,
+): { session: ChatSessionRecord | null; sessionId: string } {
+  if (result.status === 'unavailable') {
+    throw new ChatAuthError('Chat session storage is currently unavailable.', 503);
+  }
+
+  return {
+    session: result.status === 'ok' ? result.value : null,
     sessionId,
   };
 }
@@ -1234,7 +1231,7 @@ export async function verifyFarcasterChatIdentity(
 
   try {
     verified = await quickAuthClient.verifyJwt({
-      domain: getExpectedDomain(request),
+      domain: getExpectedDomain(),
       token,
     }) as { sub?: UntypedValue };
   } catch (error) {
@@ -1295,7 +1292,7 @@ export async function verifyBaseChatIdentity(
     siweMessage = parseBaseSiweMessage(payload.message);
     validateBaseSiweTemporalClaims(siweMessage);
 
-    const expectedUrls = getExpectedBaseUrls(request);
+    const expectedUrls = getExpectedBaseUrls();
     const expectedDomains = getExpectedBaseDomains(expectedUrls);
     const expectedOrigins = new Set(expectedUrls.map((url) => normalizeOrigin(url.origin)));
     const normalizedAddress = normalizeAddress(payload.address);

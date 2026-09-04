@@ -1,9 +1,15 @@
 import { getBaseReadClient } from '@/lib/base-rpc';
-import { getCasinoPolicy } from '@/lib/casino-feature';
+import { getCasinoPolicy,isLegacyBlackjackContractAcknowledged } from '@/lib/casino-feature';
 import { BLACKJACK_DISABLED_MESSAGE } from '@/lib/casino-policy';
+import {
+    ChatAuthError,
+    createChatAuthErrorResponse,
+    createChatAuthRequiredResponse,
+    getChatSessionOrQuickAuthFromRequest,
+} from '@/lib/chat-auth';
 import { blackjackRandomnessLockMismatch,normalizeBlackjackLockBetAmount } from '@/lib/blackjack-randomness-lock.mjs';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { redis,redisCompareAndSetJSON,redisDel,redisGetJSON } from '@/lib/redis';
+import { redis,redisCompareAndSetJSON,redisDel,redisGetJSONResult } from '@/lib/redis';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { NextRequest,NextResponse } from 'next/server';
@@ -29,7 +35,6 @@ const recentRequests = new Map<string, { count: number; timestamp: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // Max 30 requests per minute per address
 const RANDOMNESS_LIFETIME_SECONDS = 60;
-const ACTION_LOCK_TTL_SECONDS = RANDOMNESS_LIFETIME_SECONDS + 45;
 const ALLOW_MEMORY_RANDOMNESS_LOCKS = process.env.NODE_ENV !== 'production';
 
 interface CachedRandomness {
@@ -82,28 +87,26 @@ function isCachedRandomness(value: UntypedValue): value is CachedRandomness {
     );
 }
 
-function isExpiredActionLock(lock: CachedRandomness): boolean {
-    return Date.now() - lock.timestamp > ACTION_LOCK_TTL_SECONDS * 1000;
-}
-
 async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness | null; source: 'redis' | 'memory' | 'none' }> {
     if (redis) {
-        const redisLock = await redisGetJSON<CachedRandomness>(lockKey);
-        if (isCachedRandomness(redisLock)) {
-            if (isExpiredActionLock(redisLock)) {
-                await redisDel(lockKey);
-                return { data: null, source: 'none' };
-            }
-            return { data: redisLock, source: 'redis' };
+        const redisResult = await redisGetJSONResult<CachedRandomness>(lockKey);
+        if (redisResult.status === 'unavailable') {
+            throw new Error('Blackjack randomness lock service unavailable');
         }
+        if (redisResult.status === 'ok') {
+            if (!isCachedRandomness(redisResult.value)) {
+                throw new Error('Blackjack randomness lock is invalid');
+            }
+            return { data: redisResult.value, source: 'redis' };
+        }
+        return { data: null, source: 'none' };
     }
 
+    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+        throw new Error('Blackjack randomness lock service unavailable');
+    }
     const memoryLock = nonceRandomnessCache.get(lockKey);
     if (isCachedRandomness(memoryLock)) {
-        if (isExpiredActionLock(memoryLock)) {
-            nonceRandomnessCache.delete(lockKey);
-            return { data: null, source: 'none' };
-        }
         return { data: memoryLock, source: 'memory' };
     }
 
@@ -113,17 +116,27 @@ async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness
 async function createActionLockIfAbsent(lockKey: string, payload: CachedRandomness): Promise<{ created: boolean; data: CachedRandomness; source: 'redis' | 'memory' }> {
     if (redis) {
         const serialized = JSON.stringify(payload);
-        const created = await redisCompareAndSetJSON(lockKey, null, serialized, ACTION_LOCK_TTL_SECONDS);
+        // Keep one decision for the entire onchain nonce lifetime. The lock is
+        // removed only after the nonce advances, because the deployed contract
+        // signature itself has no expiry.
+        const created = await redisCompareAndSetJSON(lockKey, null, serialized);
         if (created) {
             return { created: true, data: payload, source: 'redis' };
         }
 
-        const existing = await redisGetJSON<CachedRandomness>(lockKey);
-        if (isCachedRandomness(existing)) {
-            return { created: false, data: existing, source: 'redis' };
+        const existingResult = await redisGetJSONResult<CachedRandomness>(lockKey);
+        if (existingResult.status === 'ok' && isCachedRandomness(existingResult.value)) {
+            return { created: false, data: existingResult.value, source: 'redis' };
         }
+        // CAS helpers intentionally return false on both contention and
+        // infrastructure failure. If no valid winner can be read, issuing a
+        // process-local signature could create a second seed on another node.
+        throw new Error('Blackjack randomness lock could not be confirmed');
     }
 
+    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) {
+        throw new Error('Blackjack randomness lock service unavailable');
+    }
     const existing = nonceRandomnessCache.get(lockKey);
     if (isCachedRandomness(existing)) {
         return { created: false, data: existing, source: 'memory' };
@@ -349,18 +362,17 @@ function cleanupRateLimits() {
             recentRequests.delete(address);
         }
     }
-    for (const [lockKey, data] of nonceRandomnessCache.entries()) {
-        if (isExpiredActionLock(data)) {
-            nonceRandomnessCache.delete(lockKey);
-        }
-    }
 }
 
 export async function POST(request: NextRequest) {
     try {
         const casinoPolicy = getCasinoPolicy();
 
-        if (!casinoPolicy.casinoEnabled || !casinoPolicy.blackjackEnabled) {
+        if (
+            !casinoPolicy.casinoEnabled ||
+            !casinoPolicy.blackjackEnabled ||
+            !isLegacyBlackjackContractAcknowledged()
+        ) {
             return NextResponse.json(
                 { error: BLACKJACK_DISABLED_MESSAGE },
                 { status: 503 }
@@ -416,6 +428,20 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'playerAddress is required' }, { status: 400 });
         }
         const normalizedPlayerAddress = playerAddress.toLowerCase();
+
+        const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
+        if (!session) {
+            return createChatAuthRequiredResponse({
+                clearCookie: Boolean(sessionId),
+                message: 'Authentication is required to prepare Blackjack randomness.',
+            });
+        }
+        if (session.address.toLowerCase() !== normalizedPlayerAddress) {
+            return NextResponse.json(
+                { error: 'Authenticated wallet does not match the Blackjack player.' },
+                { status: 403 },
+            );
+        }
         if (handIndex !== undefined && (typeof handIndex !== 'number' || !Number.isInteger(handIndex) || handIndex < 0 || handIndex > 1)) {
             return NextResponse.json({ error: 'Invalid handIndex' }, { status: 400 });
         }
@@ -572,7 +598,7 @@ export async function POST(request: NextRequest) {
                 randomSeed: effectiveCachedData.randomSeed,
                 nonce,
                 signature: effectiveCachedData.signature,
-                expiresAt: Math.floor(Date.now() / 1000) + 60,
+                expiresAt: Math.floor(Date.now() / 1000) + RANDOMNESS_LIFETIME_SECONDS,
                 signerAddress: effectiveCachedData.signerAddress,
                 bettingToken: effectiveCachedData.bettingToken,
                 lockedBetAmountWei: effectiveCachedData.betAmountWei,
@@ -628,7 +654,7 @@ export async function POST(request: NextRequest) {
                 randomSeed: lockResult.data.randomSeed,
                 nonce,
                 signature: lockResult.data.signature,
-                expiresAt: Math.floor(Date.now() / 1000) + 60,
+                expiresAt: Math.floor(Date.now() / 1000) + RANDOMNESS_LIFETIME_SECONDS,
                 signerAddress: lockResult.data.signerAddress,
                 bettingToken: lockResult.data.bettingToken,
                 lockedBetAmountWei: lockResult.data.betAmountWei,
@@ -638,7 +664,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Client-facing API lock expiry. The current contract signature has no expiry field.
-        const expiresAt = Math.floor(Date.now() / 1000) + 60;
+        const expiresAt = Math.floor(Date.now() / 1000) + RANDOMNESS_LIFETIME_SECONDS;
 
         // Log for auditing
         console.log(`[Blackjack Random] NEW - landId=${landId} action=${action}(${actionNum}) hand=${handIndexNum} nonce=${nonce} token=${effectiveBettingToken} source=${lockResult.source} amount=${effectiveBetAmountWei ?? 'none'}`);
@@ -656,6 +682,9 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
+        if (error instanceof ChatAuthError) {
+            return createChatAuthErrorResponse(error);
+        }
         console.error('Blackjack random API error:', error);
         return NextResponse.json(
             { error: 'Internal server error' },

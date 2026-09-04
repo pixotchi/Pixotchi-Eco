@@ -3834,7 +3834,8 @@ export const blackjackFetchRandomness = async (
   playerAddress?: string,
   handIndex?: number,
   bettingToken?: string,
-  betAmountWei?: string
+  betAmountWei?: string,
+  authHeaders: Record<string, string> = {},
 ): Promise<{
   randomSeed: string;
   nonce: number;
@@ -3846,7 +3847,8 @@ export const blackjackFetchRandomness = async (
 }> => {
   const response = await fetch('/api/blackjack/random', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify({
       landId: landId.toString(),
       action,

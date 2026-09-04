@@ -1,4 +1,16 @@
-import { getBaseReadClient } from '@/lib/base-rpc';
+import { getBaseReadClient, getBaseTransactionReceipt } from '@/lib/base-rpc';
+import {
+    canRetryAirdropReservation,
+    createAirdropReservation,
+    getAirdropRecordStatus,
+    parseAirdropEligibility,
+    type AirdropEligibilityRecord,
+} from '@/lib/airdrop-claim-state';
+import {
+    getAirdropOperationOutcome,
+    isAirdropTransactionHash,
+    isAirdropUserOperationHash,
+} from '@/lib/airdrop-claim-reconciliation';
 import { redis, redisCompareAndSetJSONRaw } from '@/lib/redis';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { NextRequest,NextResponse } from 'next/server';
@@ -41,31 +53,6 @@ let agentSmartAccount: UntypedValue = null;
 const CLAIM_LOCK_PREFIX = 'airdrop:lock:';
 const CLAIM_RESERVATION_TTL_MS = 15 * 60 * 1000;
 
-type AirdropClaimRecordStatus = 'eligible' | 'pending' | 'claimed' | 'failed';
-
-type AirdropEligibilityRecord = {
-    seed?: string;
-    leaf?: string;
-    pixotchi?: string;
-    claimed?: boolean;
-    claimedAt?: number;
-    txHash?: string | null;
-    status?: AirdropClaimRecordStatus;
-    attemptId?: string;
-    operationId?: string;
-    reservedAt?: number;
-    reservationExpiresAt?: number;
-    failedAt?: number;
-    failureReason?: string;
-};
-
-function getRecordStatus(record: AirdropEligibilityRecord, now = Date.now()): AirdropClaimRecordStatus {
-    if (record.claimed || record.status === 'claimed') return 'claimed';
-    if (record.status === 'pending' && (record.operationId || (record.reservationExpiresAt || 0) > now)) return 'pending';
-    if (record.status === 'failed') return 'failed';
-    return 'eligible';
-}
-
 function getClaimedResponse(record: AirdropEligibilityRecord) {
     return NextResponse.json({
         success: true,
@@ -78,9 +65,12 @@ function getClaimedResponse(record: AirdropEligibilityRecord) {
     });
 }
 
-function parseEligibility(raw: UntypedValue): AirdropEligibilityRecord | null {
+function parseAllocationAmount(value: string | undefined): bigint | null {
+    const normalized = value?.trim() || '0';
+    if (!/^\d+(?:\.\d{1,18})?$/.test(normalized)) return null;
+
     try {
-        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return parseUnits(normalized, 18);
     } catch {
         return null;
     }
@@ -92,6 +82,30 @@ async function compareAndSetEligibility(
     next: AirdropEligibilityRecord,
 ): Promise<boolean> {
     return redisCompareAndSetJSONRaw(key, expectedRaw, JSON.stringify(next));
+}
+
+/**
+ * Claim/status reconciliation can both observe a submitted operation. Never
+ * replace a newer record with an older request's view: in particular, a slow
+ * POST must not turn a canonically claimed record back into pending or failed.
+ */
+async function persistExpectedEligibilityTransition(
+    key: string,
+    expectedRaw: string,
+    next: AirdropEligibilityRecord,
+): Promise<string> {
+    const nextRaw = JSON.stringify(next);
+    if (await redisCompareAndSetJSONRaw(key, expectedRaw, nextRaw)) {
+        return nextRaw;
+    }
+
+    const latestRaw = await redis?.get(key);
+    const latestRecord = latestRaw ? parseAirdropEligibility(latestRaw) : null;
+    const error = new Error('Claim state changed while the operation was being confirmed') as Error & {
+        latestRecord?: AirdropEligibilityRecord | null;
+    };
+    error.latestRecord = latestRecord;
+    throw error;
 }
 
 async function incrementClaimedCountOnce(): Promise<void> {
@@ -184,16 +198,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Not eligible for airdrop' }, { status: 400 });
         }
 
-        const eligibility = parseEligibility(eligibilityRaw);
+        const eligibility = parseAirdropEligibility(eligibilityRaw);
         if (!eligibility) {
             return NextResponse.json({ error: 'Invalid eligibility data' }, { status: 500 });
         }
 
-        const currentStatus = getRecordStatus(eligibility);
+        const currentStatus = getAirdropRecordStatus(eligibility);
         if (currentStatus === 'claimed') {
             return getClaimedResponse(eligibility);
         }
-        if (currentStatus === 'pending') {
+        if (currentStatus === 'pending' && !canRetryAirdropReservation(eligibility)) {
             return NextResponse.json({
                 error: 'Claim already in progress. Please wait.',
                 status: 'pending',
@@ -202,6 +216,10 @@ export async function POST(req: NextRequest) {
                 reservationExpiresAt: eligibility.reservationExpiresAt,
             }, { status: 409 });
         }
+        // `failed` is recorded only for an explicit CDP terminal failure or a
+        // canonical reverted receipt. Neither can have paid the allocation, so
+        // a fresh reservation is safe and receives a new idempotency key.
+        // Ambiguous operations remain `pending` and never reach this path.
 
         // Acquire distributed lock
         const lockKey = `${CLAIM_LOCK_PREFIX}${normalizedAddress}`;
@@ -217,16 +235,16 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Not eligible for airdrop' }, { status: 400 });
             }
 
-            const latestEligibility = parseEligibility(latestRaw);
+            const latestEligibility = parseAirdropEligibility(latestRaw);
             if (!latestEligibility) {
                 return NextResponse.json({ error: 'Invalid eligibility data' }, { status: 500 });
             }
 
-            const latestStatus = getRecordStatus(latestEligibility);
+            const latestStatus = getAirdropRecordStatus(latestEligibility);
             if (latestStatus === 'claimed') {
                 return getClaimedResponse(latestEligibility);
             }
-            if (latestStatus === 'pending') {
+            if (latestStatus === 'pending' && !canRetryAirdropReservation(latestEligibility)) {
                 return NextResponse.json({
                     error: 'Claim already in progress. Please wait.',
                     status: 'pending',
@@ -235,23 +253,29 @@ export async function POST(req: NextRequest) {
                     reservationExpiresAt: latestEligibility.reservationExpiresAt,
                 }, { status: 409 });
             }
+            // A terminal failed record is known unpaid. The compare-and-set
+            // reservation below creates a new attempt while keeping concurrent
+            // requests serialized; ambiguous operations are still pending.
+
+            const seedAmount = parseAllocationAmount(latestEligibility.seed);
+            const leafAmount = parseAllocationAmount(latestEligibility.leaf);
+            const pixotchiAmount = parseAllocationAmount(latestEligibility.pixotchi);
+            if (seedAmount === null || leafAmount === null || pixotchiAmount === null) {
+                return NextResponse.json({ error: 'Invalid airdrop allocation data' }, { status: 500 });
+            }
 
             const reservationStartedAt = Date.now();
-            const attemptId = crypto.randomUUID();
-            const reservation: AirdropEligibilityRecord = {
-                ...latestEligibility,
-                attemptId,
-                claimed: false,
-                operationId: undefined,
-                reservedAt: reservationStartedAt,
-                reservationExpiresAt: reservationStartedAt + CLAIM_RESERVATION_TTL_MS,
-                status: 'pending',
-            };
+            const reservation = createAirdropReservation(
+                latestEligibility,
+                reservationStartedAt,
+                CLAIM_RESERVATION_TTL_MS,
+            );
             const expectedRaw = typeof latestRaw === 'string' ? latestRaw : JSON.stringify(latestEligibility);
             const reserved = await compareAndSetEligibility(eligibilityKey, expectedRaw, reservation);
             if (!reserved) {
                 return NextResponse.json({ error: 'Claim in progress. Please wait.' }, { status: 409 });
             }
+            let activeRaw = JSON.stringify(reservation);
 
             const client = getClient();
 
@@ -265,50 +289,45 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // Parse amounts
-            const seedAmount = parseFloat(reservation.seed || '0');
-            const leafAmount = parseFloat(reservation.leaf || '0');
-            const pixotchiAmount = parseFloat(reservation.pixotchi || '0');
-
             // Build transfer calls for non-zero amounts
             const calls: Array<{ to: `0x${string}`; value: bigint; data: `0x${string}` }> = [];
 
-            if (seedAmount > 0) {
+            if (seedAmount > BigInt(0)) {
                 const seedData = encodeFunctionData({
                     abi: ERC20_TRANSFER_ABI,
                     functionName: 'transfer',
-                    args: [userAddress as `0x${string}`, parseUnits(reservation.seed || '0', 18)],
+                    args: [userAddress as `0x${string}`, seedAmount],
                 });
                 calls.push({ to: AIRDROP_TOKENS.SEED, value: BigInt(0), data: seedData });
             }
 
-            if (leafAmount > 0) {
+            if (leafAmount > BigInt(0)) {
                 const leafData = encodeFunctionData({
                     abi: ERC20_TRANSFER_ABI,
                     functionName: 'transfer',
-                    args: [userAddress as `0x${string}`, parseUnits(reservation.leaf || '0', 18)],
+                    args: [userAddress as `0x${string}`, leafAmount],
                 });
                 calls.push({ to: AIRDROP_TOKENS.LEAF, value: BigInt(0), data: leafData });
             }
 
-            if (pixotchiAmount > 0) {
+            if (pixotchiAmount > BigInt(0)) {
                 const pixotchiData = encodeFunctionData({
                     abi: ERC20_TRANSFER_ABI,
                     functionName: 'transfer',
-                    args: [userAddress as `0x${string}`, parseUnits(reservation.pixotchi || '0', 18)],
+                    args: [userAddress as `0x${string}`, pixotchiAmount],
                 });
                 calls.push({ to: AIRDROP_TOKENS.PIXOTCHI, value: BigInt(0), data: pixotchiData });
             }
 
             if (calls.length === 0) {
                 // Mark as claimed even if no tokens (edge case)
-                await redis.set(eligibilityKey, JSON.stringify({
+                await persistExpectedEligibilityTransition(eligibilityKey, activeRaw, {
                     ...reservation,
                     claimed: true,
                     claimedAt: Date.now(),
                     txHash: null,
                     status: 'claimed',
-                }));
+                });
                 return NextResponse.json({ success: true, message: 'No tokens to claim' });
             }
 
@@ -324,48 +343,82 @@ export async function POST(req: NextRequest) {
                 smartAccount: agentSmartAccount,
                 network: 'base',
                 calls,
+                // The same attempt survives an application crash. Retrying it
+                // asks CDP for the same operation instead of paying twice.
+                idempotencyKey: reservation.attemptId,
             });
             const operationResult = op as UntypedValue;
-            const operationId = typeof operationResult?.userOpHash === 'string'
+            // CDP documents `userOpHash` as the operation identifier returned
+            // by sendUserOperation. Do not persist opaque ids or string
+            // fallbacks: status reconciliation can safely query only a user-op
+            // hash, while an unrecorded reservation retries with this attempt's
+            // stable idempotency key.
+            const operationId = isAirdropUserOperationHash(operationResult?.userOpHash)
                 ? operationResult.userOpHash
-                : typeof operationResult?.id === 'string'
-                    ? operationResult.id
-                    : typeof operationResult === 'string'
-                        ? operationResult
-                        : undefined;
+                : undefined;
 
             if (operationId) {
                 const opRecord: AirdropEligibilityRecord = {
                     ...reservation,
                     operationId,
                 };
-                await redis.set(eligibilityKey, JSON.stringify(opRecord));
+                activeRaw = await persistExpectedEligibilityTransition(
+                    eligibilityKey,
+                    activeRaw,
+                    opRecord,
+                );
             }
 
             const receipt = await agentSmartAccount.waitForUserOperation(op);
 
-            if (receipt.status !== 'complete') {
-                await redis.set(eligibilityKey, JSON.stringify({
+            const operationOutcome = getAirdropOperationOutcome(receipt.status);
+            if (operationOutcome === 'failed') {
+                await persistExpectedEligibilityTransition(eligibilityKey, activeRaw, {
                     ...reservation,
                     failedAt: Date.now(),
                     failureReason: 'Transfer transaction failed',
                     operationId,
                     status: 'failed',
-                }));
+                });
                 throw new Error('Transfer transaction failed');
+            }
+            // A transport timeout or an intermediate CDP state is not proof
+            // that the transfer failed. Keep the persisted user-op pending so
+            // GET reconciliation can continue observing it without a resend.
+            if (operationOutcome !== 'complete') {
+                throw new Error('Transfer transaction confirmation is still pending');
+            }
+
+            if (!isAirdropTransactionHash(receipt.transactionHash)) {
+                throw new Error('Transfer completed without a valid transaction hash');
+            }
+
+            // A CDP operation reaching a terminal state is not enough to prove
+            // that every transfer call succeeded. Confirm the canonical Base
+            // receipt before consuming the allocation.
+            const canonicalReceipt = await getBaseTransactionReceipt(receipt.transactionHash);
+            if (canonicalReceipt.status !== 'success') {
+                await persistExpectedEligibilityTransition(eligibilityKey, activeRaw, {
+                    ...reservation,
+                    failedAt: Date.now(),
+                    failureReason: 'Transfer transaction reverted',
+                    operationId,
+                    status: 'failed',
+                });
+                throw new Error('Transfer transaction reverted');
             }
 
             console.log(`[AIRDROP_CLAIM] Success, tx: ${receipt.transactionHash}`);
 
             // Mark as claimed
-            await redis.set(eligibilityKey, JSON.stringify({
+            await persistExpectedEligibilityTransition(eligibilityKey, activeRaw, {
                 ...reservation,
                 operationId,
                 claimed: true,
                 claimedAt: Date.now(),
                 txHash: receipt.transactionHash,
                 status: 'claimed',
-            }));
+            });
 
             await incrementClaimedCountOnce();
 
@@ -380,8 +433,14 @@ export async function POST(req: NextRequest) {
 
         } catch (err: UntypedValue) {
             console.error('[AIRDROP_CLAIM] Claim error:', err);
+            // GET may have already saved the same canonical completion while
+            // this POST was waiting. Treat that as success rather than
+            // reporting a spurious 500 or attempting to overwrite it.
+            if (err?.latestRecord && getAirdropRecordStatus(err.latestRecord) === 'claimed') {
+                return getClaimedResponse(err.latestRecord);
+            }
             const latestRaw = await redis.get(eligibilityKey);
-            const latestEligibility = latestRaw ? parseEligibility(latestRaw) : null;
+            const latestEligibility = latestRaw ? parseAirdropEligibility(latestRaw) : null;
             if (latestEligibility?.status === 'pending') {
                 if (latestEligibility.operationId) {
                     return NextResponse.json({
@@ -393,12 +452,18 @@ export async function POST(req: NextRequest) {
                     }, { status: 409 });
                 }
 
-                await redis.set(eligibilityKey, JSON.stringify({
+                // The request may have reached CDP before the response was
+                // interrupted. Keep the same attempt pending so a later retry
+                // reuses its idempotency key instead of creating a new payout.
+                await compareAndSetEligibility(eligibilityKey, typeof latestRaw === 'string'
+                    ? latestRaw
+                    : JSON.stringify(latestEligibility), {
                     ...latestEligibility,
                     failedAt: Date.now(),
                     failureReason: err?.message || 'Claim failed',
-                    status: 'failed',
-                }));
+                    reservationExpiresAt: Date.now() + CLAIM_RESERVATION_TTL_MS,
+                    status: 'pending',
+                });
             }
             return NextResponse.json({ error: err.message || 'Claim failed' }, { status: 500 });
         } finally {

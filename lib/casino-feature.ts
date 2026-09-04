@@ -6,12 +6,6 @@ function isTruthyFlag(value: string | undefined | null): boolean {
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
-function isFalsyFlag(value: string | undefined | null): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off";
-}
-
 export function isCasinoEnabled(): boolean {
   return (
     isTruthyFlag(process.env.CASINO_ENABLED) ||
@@ -26,12 +20,21 @@ export function isCasinoMiniAppOnly(): boolean {
 
 export function isBlackjackEnabled(): boolean {
   if (process.env.BLACKJACK_ENABLED != null) {
-    return !isFalsyFlag(process.env.BLACKJACK_ENABLED);
+    return isTruthyFlag(process.env.BLACKJACK_ENABLED);
   }
   if (process.env.NEXT_PUBLIC_BLACKJACK_ENABLED != null) {
-    return !isFalsyFlag(process.env.NEXT_PUBLIC_BLACKJACK_ENABLED);
+    return isTruthyFlag(process.env.NEXT_PUBLIC_BLACKJACK_ENABLED);
   }
-  return true;
+  return false;
+}
+
+/**
+ * The deployed Blackjack contract verifies a legacy signature that does not
+ * bind every economic input. This explicit, server-only acknowledgement keeps
+ * the signer disabled by default until the contract verifier can be upgraded.
+ */
+export function isLegacyBlackjackContractAcknowledged(): boolean {
+  return isTruthyFlag(process.env.BLACKJACK_UNSAFE_LEGACY_SIGNATURES_ACKNOWLEDGED);
 }
 
 export function getCasinoPolicy() {

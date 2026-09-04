@@ -19,6 +19,7 @@ import {
   PENDING_BRIDGE_PREPARATION_STALE_MS,
   releasePendingBridgeReservation,
   recoverPendingBridgeWalletRequest,
+  reconcilePendingBridgeRecord,
   confirmSolanaTransaction,
   SolanaTransactionExecutionError,
   SolanaTransactionExpiredError,
@@ -572,6 +573,70 @@ assert.equal(
   loadPendingBridgeRecord('solana-wallet-uncertain:active', uncertainStorage)?.kind,
   'reservation',
 );
+assert.deepEqual(
+  await reconcilePendingBridgeRecord(
+    uncertainWalletPending,
+    {
+      getAccountInfo: async () => { throw new Error('RPC unavailable'); },
+      getBlockHeight: async () => walletMetadata.lastValidBlockHeight + 100,
+      getSignaturesForAddress: async () => [],
+    },
+    uncertainStorage,
+  ),
+  { status: 'ambiguous', reason: 'ambiguous' },
+);
+
+// Re-checking is read-only: preparation remains pending, authoritative expiry
+// clears a wallet-pending record, and missing evidence stays ambiguous.
+const recheckPreparingStorage = new MemoryStorage();
+const recheckPreparingAdmission = await acquirePendingBridgeReservation({
+  actionKey: 'solana-wallet-recheck-preparing:active',
+  requestKey: 'mint:strain=7',
+  requestedAction: 'mint',
+  storage: recheckPreparingStorage,
+  settleMs: 0,
+});
+assert.ok(recheckPreparingAdmission.acquired);
+const recheckPreparing = await reconcilePendingBridgeRecord(
+  recheckPreparingAdmission.reservation,
+  {} as never,
+  recheckPreparingStorage,
+);
+assert.deepEqual(recheckPreparing, { status: 'pending', reason: 'preparing' });
+
+const recheckExpiredStorage = new MemoryStorage();
+const recheckExpiredAdmission = await acquirePendingBridgeReservation({
+  actionKey: 'solana-wallet-recheck-expired:active',
+  requestKey: 'mint:strain=8',
+  requestedAction: 'mint',
+  storage: recheckExpiredStorage,
+  settleMs: 0,
+});
+assert.ok(recheckExpiredAdmission.acquired);
+const recheckExpiredWalletPending = await markPendingBridgeWalletRequest(
+  recheckExpiredAdmission.reservation,
+  walletMetadata,
+  recheckExpiredStorage,
+  0,
+);
+assert.ok(recheckExpiredWalletPending);
+assert.deepEqual(
+  await reconcilePendingBridgeRecord(
+    recheckExpiredWalletPending,
+    {
+      getAccountInfo: async () => null,
+      getBlockHeight: async () => walletMetadata.lastValidBlockHeight + 1,
+      getSignaturesForAddress: async () => [],
+    },
+    recheckExpiredStorage,
+  ),
+  { status: 'cleared', reason: 'expired-absent' },
+);
+assert.equal(loadPendingBridgeRecord('solana-wallet-recheck-expired:active', recheckExpiredStorage), null);
+assert.deepEqual(
+  await reconcilePendingBridgeRecord(terminalAction, {} as never, terminalStorage),
+  { status: 'submitted', action: terminalAction },
+);
 
 // Restricted or non-enumerable storage fails closed before preparation.
 const unavailableStorage = {
@@ -654,6 +719,17 @@ assert.match(buttonSource, /outgoingMessageAddress:\s*metadata\.outgoingMessageA
 assert.match(buttonSource, /recentBlockhash:\s*metadata\.recentBlockhash/);
 assert.match(buttonSource, /lastValidBlockHeight:\s*metadata\.lastValidBlockHeight/);
 assert.match(buttonSource, /outgoingMessageAddress:\s*currentAction\.outgoingMessageAddress/);
+assert.match(buttonSource, /const reconcilePendingBridge = useCallback/);
+assert.match(buttonSource, /Re-check bridge status/);
+assert.match(buttonSource, /No new transaction was sent/);
+assert.doesNotMatch(
+  buttonSource.slice(
+    buttonSource.indexOf('const reconcilePendingBridge = useCallback'),
+    buttonSource.indexOf('const handleClick = useCallback'),
+  ),
+  /prepareAction\(|signAndSendTransaction/,
+  'the manual bridge re-check must never prepare or submit another transaction',
+);
 assert.equal((buttonSource.match(/const ownsTerminal = await clearPendingBridgeAction/g) ?? []).length, 2);
 assert.match(buttonSource, /if \(!ownsTerminal\) \{/);
 assert.ok(

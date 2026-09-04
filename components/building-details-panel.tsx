@@ -232,7 +232,7 @@ function BuildingDetailsPanel({
       <BuildingInfoDialog
         open={showInfoDialog}
         onOpenChange={setShowInfoDialog}
-        buildingId={selectedBuilding.id}
+        building={selectedBuilding}
         buildingType={buildingType}
       />
     </Card>

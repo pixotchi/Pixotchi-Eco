@@ -7,6 +7,7 @@ import {
   rouletteRevealBlocksRemaining,
 } from '../lib/casino-hardening-rules.mjs';
 import { blackjackRandomnessLockMismatch } from '../lib/blackjack-randomness-lock.mjs';
+import fs from 'node:fs';
 import {
   BACCARAT_BET_TYPE,
   BACCARAT_OUTCOME,
@@ -27,6 +28,36 @@ assert.equal(
   rouletteBetWins(ROULETTE_BET_TYPE.STREET, [0, 1, 2], 0),
   false,
   'Zero-containing street/trio must not preview a win on 0.'
+);
+
+const blackjackRoute = fs.readFileSync(
+  new URL('../app/api/blackjack/random/route.ts', import.meta.url),
+  'utf8',
+);
+assert.match(
+  blackjackRoute,
+  /isLegacyBlackjackContractAcknowledged\(\)/,
+  'Legacy Blackjack signing must require an explicit server-side acknowledgement.',
+);
+assert.match(
+  blackjackRoute,
+  /getChatSessionOrQuickAuthFromRequest\(request\)/,
+  'Randomness requests must derive the player from an authenticated app identity.',
+);
+assert.match(
+  blackjackRoute,
+  /session\.address\.toLowerCase\(\) !== normalizedPlayerAddress/,
+  'The authenticated app identity must match the requested Blackjack player.',
+);
+assert.match(
+  blackjackRoute,
+  /redisCompareAndSetJSON\(lockKey, null, serialized\)/,
+  'Randomness locks must live for the full onchain nonce lifetime.',
+);
+assert.doesNotMatch(
+  blackjackRoute,
+  /redisCompareAndSetJSON\(lockKey, null, serialized,\s*ACTION_LOCK_TTL/,
+  'Randomness locks must not expire while a contract-valid signature can still be replayed.',
 );
 
 assert.equal(

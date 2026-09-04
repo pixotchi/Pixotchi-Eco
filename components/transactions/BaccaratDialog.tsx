@@ -9,6 +9,7 @@ import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { loadBetPreference, storeBetPreference } from "@/lib/casino-bet-preferences";
 import { formatCasinoLimitForToken, getCasinoUiMaxBet, getCasinoUiMinBet, isPotentialCasinoAmountInput, parseCasinoAmountInput } from "@/lib/casino-amount-input";
 import { getClientCasinoPolicy } from "@/lib/casino-client";
+import { getPoolBoundedMaxBet, BACCARAT_WORST_CASE_RETURN_FACTOR } from "@/lib/casino-pool-solvency";
 import { rouletteCanReveal, rouletteRevealBlocksRemaining } from "@/lib/casino-hardening-rules.mjs";
 import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
 import {
@@ -221,13 +222,30 @@ export default function BaccaratDialog({
     () => tokenConfig ? getCasinoUiMaxBet(effectiveToken, tokenDecimals, tokenConfig.maxBet) : BigInt(0),
     [effectiveToken, tokenConfig, tokenDecimals]
   );
+  const { data: payoutPoolData, isLoading: isPayoutPoolLoading, error: payoutPoolError, refetch: refetchPayoutPool } = useBalance({
+    address: tokenConfig?.rewardPool as `0x${string}` | undefined,
+    token: effectiveToken as `0x${string}` | undefined,
+    query: {
+      enabled: open && !!tokenConfig?.rewardPool && !!effectiveToken,
+      refetchInterval: open ? 10_000 : false,
+    },
+  });
+  const payoutPoolReadStatus: 'unknown' | 'loading' | 'ready' | 'error' = payoutPoolData?.value !== undefined
+    ? 'ready'
+    : isPayoutPoolLoading
+      ? 'loading'
+      : payoutPoolError || tokenConfig
+        ? 'error'
+        : 'unknown';
+  const payoutPoolBalance = payoutPoolData?.value ?? null;
+  const offeredMaxBet = getPoolBoundedMaxBet(uiMaxBet, payoutPoolBalance, BACCARAT_WORST_CASE_RETURN_FACTOR) ?? uiMaxBet;
   const formattedMinBet = useMemo(
     () => tokenConfig ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, effectiveToken, "min") : "0",
     [effectiveToken, tokenConfig, tokenDecimals, uiMinBet]
   );
   const formattedMaxBet = useMemo(
-    () => tokenConfig ? formatCasinoLimitForToken(uiMaxBet, tokenDecimals, effectiveToken, "max") : "0",
-    [effectiveToken, tokenConfig, tokenDecimals, uiMaxBet]
+    () => tokenConfig ? formatCasinoLimitForToken(offeredMaxBet, tokenDecimals, effectiveToken, "max") : "0",
+    [effectiveToken, offeredMaxBet, tokenConfig, tokenDecimals]
   );
   const betInputWidth = useMemo(() => {
     const visibleChars = Math.max(betAmount.length, formattedMinBet.length, 4);
@@ -274,7 +292,9 @@ export default function BaccaratDialog({
   const hasBalance = !address || !tokenConfig || balanceWei >= betWei;
   const hasApproval = allowanceWei >= betWei;
   const amountBelowMin = !!tokenConfig && betWei > BigInt(0) && betWei < uiMinBet;
-  const amountAboveMax = !!tokenConfig && betWei > uiMaxBet;
+  const amountAboveMax = !!tokenConfig && betWei > offeredMaxBet;
+  const payoutPoolUnknown = payoutPoolReadStatus !== "ready";
+  const poolLiquidityBinds = payoutPoolReadStatus === "ready" && offeredMaxBet < uiMaxBet;
   const tokenDisabled = !tokenConfig?.supported || !tokenConfig.enabled;
   const hasPendingGame = !!activeGame?.isActive && !hasResolvedRound;
   const bettingLocked = walletTxPending || hasPendingGame || phase === "waiting" || phase === "revealing";
@@ -287,9 +307,10 @@ export default function BaccaratDialog({
     tokenConfig.supported &&
     tokenConfig.enabled &&
     betWei >= uiMinBet &&
-    betWei <= uiMaxBet &&
+    betWei <= offeredMaxBet &&
     hasBalance &&
     hasApproval &&
+    !payoutPoolUnknown &&
     !bettingLocked;
   const refreshScopeKey = [
     open ? "open" : "closed",
@@ -325,11 +346,18 @@ export default function BaccaratDialog({
     for (const delay of POST_TRANSACTION_REFRESH_DELAYS_MS) {
       if (delay <= 0) {
         void refetchBalance();
+        void refetchPayoutPool();
       } else {
         window.setTimeout(() => void refetchBalance(), delay);
+        window.setTimeout(() => void refetchPayoutPool(), delay);
       }
     }
-  }, [refetchBalance]);
+  }, [refetchBalance, refetchPayoutPool]);
+  const retryPayoutPool = useCallback(() => {
+    void refetchPayoutPool().catch((error) => {
+      console.warn("Failed to refresh Baccarat reward pool:", error);
+    });
+  }, [refetchPayoutPool]);
 
   const applyOptimisticBalanceDelta = useCallback((deltaWei: bigint) => {
     setOptimisticBalanceWei((current) => {
@@ -467,11 +495,11 @@ export default function BaccaratDialog({
       game: "baccarat",
       token: effectiveToken,
       minBet: uiMinBet,
-      maxBet: uiMaxBet,
+      maxBet: offeredMaxBet,
       decimals: tokenDecimals,
       fallback: formattedMinBet,
     }));
-  }, [activeGame?.isActive, effectiveToken, formattedMinBet, open, tokenConfig, tokenDecimals, uiMaxBet, uiMinBet]);
+  }, [activeGame?.isActive, effectiveToken, formattedMinBet, offeredMaxBet, open, tokenConfig, tokenDecimals, uiMinBet]);
 
   useEffect(() => {
     const waitingForActiveGame = !activeGame?.isActive && phase === "waiting" && !hasResolvedRound;
@@ -837,6 +865,22 @@ export default function BaccaratDialog({
                         <div className="mt-2 text-xs text-white/60">
                           Min {formattedMinBet} • Max {formattedMaxBet}
                         </div>
+                        {payoutPoolUnknown ? (
+                          <div className="mt-2 text-xs text-amber-200" role="status">
+                            <p>{payoutPoolReadStatus === "error"
+                              ? "Reward pool liquidity could not be verified. Retry before dealing."
+                              : "Checking reward pool liquidity before enabling bets..."}</p>
+                            {payoutPoolReadStatus === "error" && (
+                              <Button type="button" variant="outline" className="mt-2" onClick={retryPayoutPool}>
+                                Retry reward pool read
+                              </Button>
+                            )}
+                          </div>
+                        ) : poolLiquidityBinds ? (
+                          <div className="mt-2 text-xs text-amber-200" role="alert">
+                            Reward pool liquidity limits the max bet to {formattedMaxBet} {tokenSymbol}.
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="min-w-0 space-y-1 text-sm text-white/80 sm:min-w-[12rem] sm:text-right">
@@ -899,6 +943,10 @@ export default function BaccaratDialog({
             ) : tokenDisabled ? (
               <Button className="w-full" variant="secondary" disabled>
                 Baccarat unavailable for {tokenSymbol}
+              </Button>
+            ) : payoutPoolUnknown ? (
+              <Button className="w-full" variant="secondary" disabled>
+                {payoutPoolReadStatus === "error" ? "Reward pool unavailable" : "Checking reward pool..."}
               </Button>
             ) : betWei <= BigInt(0) ? (
               <Button className="w-full" variant="secondary" disabled>

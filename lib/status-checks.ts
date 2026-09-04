@@ -28,7 +28,9 @@ const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
 const STATUS_CACHE_KEY = `status:checks:snapshot:${SERVER_ENV.NOTIFICATION_PROVIDER}:v1`;
-const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 300);
+// The Vercel cron refreshes every 15 minutes. Keep the default snapshot just
+// beyond that cadence so public cache-only reads remain available between runs.
+const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 960);
 
 let inFlightSnapshot: Promise<StatusSnapshot> | null = null;
 let memorySnapshot: StatusSnapshot | null = null;
@@ -499,6 +501,29 @@ function snapshotMatchesCurrentNotificationProvider(snapshot: StatusSnapshot): b
   return notifications?.label === `Notifications (${getNotificationProviderLabel(SERVER_ENV.NOTIFICATION_PROVIDER)})`;
 }
 
+/**
+ * Returns an existing status snapshot without starting any external checks.
+ * This keeps the public status endpoint inexpensive; the authenticated cron
+ * remains responsible for refreshing an expired snapshot.
+ */
+export async function getStoredStatusSnapshot(): Promise<StatusSnapshot | null> {
+  if (
+    memorySnapshot &&
+    memorySnapshotExpiresAt > Date.now() &&
+    snapshotMatchesCurrentNotificationProvider(memorySnapshot)
+  ) {
+    return memorySnapshot;
+  }
+
+  const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
+  if (cached && snapshotMatchesCurrentNotificationProvider(cached)) {
+    rememberSnapshot(cached);
+    return cached;
+  }
+
+  return null;
+}
+
 export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Promise<StatusSnapshot> {
   const now = Date.now();
 
@@ -512,11 +537,8 @@ export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Pr
   }
 
   if (!forceRefresh) {
-    const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
-    if (cached && snapshotMatchesCurrentNotificationProvider(cached)) {
-      rememberSnapshot(cached);
-      return cached;
-    }
+    const cached = await getStoredStatusSnapshot();
+    if (cached) return cached;
   }
 
   if (inFlightSnapshot) {

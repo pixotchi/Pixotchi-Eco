@@ -14,7 +14,7 @@ import {
   PENDING_BRIDGE_ACTION_EVENT,
   PENDING_BRIDGE_PREPARATION_STALE_MS,
   PendingBridgeStorageUnavailableError,
-  recoverPendingBridgeWalletRequest,
+  reconcilePendingBridgeRecord,
   releasePendingBridgeReservation,
   replacePendingBridgeAction,
   SolanaConfirmationTimeoutError,
@@ -494,6 +494,66 @@ export default function SolanaBridgeButton({
     }
   }, [actionType, bridge, itemId, name, needsSetup, plantId, strain, targetId]);
 
+  const reconcilePendingBridge = useCallback(async (record: PendingBridgeRecord) => {
+    // This path is deliberately read-only. It never calls prepareAction or a
+    // wallet signer, so re-checking a stale record cannot create a second mint.
+    const connection = (await import('@/lib/solana-bridge-implementation'))
+      .solanaBridgeImplementation.getConnection();
+    const recovery = await reconcilePendingBridgeRecord(record, connection);
+
+    if (recovery.status === 'submitted') {
+      setPendingRecord(recovery.action);
+      toast('Checking the submitted Solana transaction and Base bridge status…', {
+        icon: 'ℹ️',
+      });
+      await confirmAndTrack(recovery.action, true);
+      return;
+    }
+    if (recovery.status === 'cleared') {
+      setPendingRecord(loadPendingBridgeRecord(record.actionKey));
+      setPhase(null);
+      toast('The prior wallet request expired without reaching Solana. It is safe to try again.', {
+        icon: 'ℹ️',
+      });
+      return;
+    }
+
+    setPendingRecord(loadPendingBridgeRecord(record.actionKey) ?? record);
+    setPhase(null);
+    toast(
+      recovery.status === 'pending'
+        ? 'The prior wallet request is still pending. No new transaction was sent.'
+        : 'Bridge status is still ambiguous. No new transaction was sent; re-check later or contact support with the Solana signature.',
+      { icon: 'ℹ️' },
+    );
+  }, [confirmAndTrack]);
+
+  const recheckPendingBridge = useCallback(async () => {
+    if (submitLockRef.current || !actionStorageKey) return;
+
+    submitLockRef.current = true;
+    setIsLoading(true);
+    try {
+      const record = loadPendingBridgeRecord(actionStorageKey);
+      if (!record) {
+        setPendingRecord(null);
+        setPhase(null);
+        toast('No active Solana bridge action needs re-checking.', { icon: 'ℹ️' });
+        return;
+      }
+      setPendingRecord(record);
+      await reconcilePendingBridge(record);
+    } catch (error) {
+      setPhase(null);
+      const message = error instanceof Error ? error.message : 'Bridge status could not be checked.';
+      toast.error(`${message} The saved bridge action was not resubmitted.`);
+      onError?.(error);
+    } finally {
+      submitLockRef.current = false;
+      setIsLoading(false);
+    }
+  }, [actionStorageKey, onError, reconcilePendingBridge]);
+
   const handleClick = useCallback(async () => {
     if (submitLockRef.current) return;
     if (!actionStorageKey || !solanaWallet || !solanaAddress || !signAndSendTransaction) {
@@ -511,50 +571,9 @@ export default function SolanaBridgeButton({
       // React state is advisory. Admission always re-reads a stable storage
       // snapshot so two components or tabs cannot both reach the wallet.
       const activeRecord = loadPendingBridgeRecord(actionStorageKey);
-      if (activeRecord?.kind === 'submitted') {
+      if (activeRecord) {
         setPendingRecord(activeRecord);
-        await confirmAndTrack(activeRecord, true);
-        return;
-      }
-      if (activeRecord?.kind === 'reservation') {
-        setPendingRecord(activeRecord);
-        if (activeRecord.phase === 'preparing') {
-          toast('This Solana action is already being prepared in another window.', {
-            icon: 'ℹ️',
-          });
-          return;
-        }
-
-        setPhase('solana-confirming');
-        const connection = (await import('@/lib/solana-bridge-implementation'))
-          .solanaBridgeImplementation.getConnection();
-        const recovery = await recoverPendingBridgeWalletRequest(activeRecord, connection);
-        if (recovery.status === 'submitted') {
-          setPendingRecord(recovery.action);
-          toast('Recovered the submitted Solana transaction. Checking bridge execution...', {
-            icon: 'ℹ️',
-          });
-          await confirmAndTrack(recovery.action, true);
-          return;
-        }
-        if (recovery.status === 'cleared') {
-          setPendingRecord(loadPendingBridgeRecord(actionStorageKey));
-          setPhase(null);
-          toast(
-            'The previous wallet request expired without reaching Solana. It is now safe to try again.',
-            { icon: 'ℹ️' },
-          );
-          return;
-        }
-        setPhase(null);
-        toast(
-          recovery.reason === 'landed-without-signature'
-            ? 'Solana transaction evidence was found. Waiting for its signature index before continuing.'
-            : recovery.reason === 'unexpired'
-              ? 'The previous wallet request is still within its Solana validity window.'
-              : 'The previous wallet request cannot be resolved safely yet. No new transaction was opened.',
-          { icon: 'ℹ️' },
-        );
+        await reconcilePendingBridge(activeRecord);
         return;
       }
 
@@ -677,6 +696,7 @@ export default function SolanaBridgeButton({
     onError,
     prepareAction,
     requestKey,
+    reconcilePendingBridge,
     signAndSendTransaction,
     solanaAddress,
     solanaWallet,
@@ -687,12 +707,9 @@ export default function SolanaBridgeButton({
   // and a quote outage must never strand the pending-action lock.
   const quoteBlocksAction =
     pendingRecord === null && requiresQuote && !needsSetup && (!quoteReady || isQuoteLoading);
-  const isDisabled =
-    (pendingRecord === null && disabled) ||
-    !isConnected ||
-    !solanaWallet ||
-    isLoading ||
-    quoteBlocksAction;
+  const isDisabled = pendingRecord !== null
+    ? isLoading
+    : disabled || !isConnected || !solanaWallet || isLoading || quoteBlocksAction;
   const canConnectSolanaWallet = Boolean(
     solanaAddress &&
     solanaWalletsReady &&
@@ -717,17 +734,20 @@ export default function SolanaBridgeButton({
     }
   }, [canConnectSolanaWallet, connectWallet, onError]);
   const actionDisabled = canConnectSolanaWallet ? false : isDisabled;
-  const pendingDisplayText = pendingRecord?.kind === 'reservation'
-    ? pendingRecord.phase === 'wallet-pending'
-      ? 'Recover Solana transaction'
-      : 'Solana action in progress'
-    : null;
+  const pendingDisplayText = pendingRecord?.kind === 'submitted'
+    ? 'Re-check bridge status'
+    : pendingRecord?.phase === 'wallet-pending'
+      ? 'Re-check Solana status'
+      : pendingRecord
+        ? 'Solana action in progress'
+        : null;
   const displayText =
-    canConnectSolanaWallet
+    pendingDisplayText
+      ?? (canConnectSolanaWallet
       ? 'Connect Solana Wallet'
       : !solanaWallet && isConnected
-      ? 'Wallet not ready'
-      : pendingDisplayText ?? getSolanaActionButtonLabel({
+        ? 'Wallet not ready'
+        : getSolanaActionButtonLabel({
           connected: isConnected,
           needsImplicitSetup: needsSetup,
           pending: pendingRecord !== null,
@@ -735,11 +755,15 @@ export default function SolanaBridgeButton({
           quoteReady,
           requestedLabel: buttonText,
           defaultLabel: DEFAULT_LABELS[actionType],
-        });
+        }));
 
   return (
     <Button
-      onClick={canConnectSolanaWallet ? handleConnectWallet : handleClick}
+      onClick={pendingRecord !== null
+        ? recheckPendingBridge
+        : canConnectSolanaWallet
+          ? handleConnectWallet
+          : handleClick}
       disabled={actionDisabled}
       aria-busy={isLoading}
       className={`w-full bg-[image:var(--gradient-solana)] text-white hover:brightness-105 disabled:opacity-55 ${buttonClassName}`}

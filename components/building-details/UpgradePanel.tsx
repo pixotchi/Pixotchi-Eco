@@ -12,6 +12,7 @@ import DisabledTransaction from '@/components/transactions/disabled-transaction'
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
 import { toast } from 'react-hot-toast';
 import { InlineBalanceNotice } from '@/components/ui/premium';
+import { Button } from '@/components/ui/button';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useBalances } from '@/lib/balance-context';
 import ApproveTransaction from '@/components/transactions/approve-transaction';
@@ -43,15 +44,46 @@ export default function UpgradePanel({
 }: UpgradePanelProps) {
   const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
-  const { pixotchiBalance: userPixotchiBalance, leafBalance: userLeafBalance } = useBalances();
+  const {
+    pixotchiBalance: userPixotchiBalance,
+    leafBalance: userLeafBalance,
+    pixotchiBalanceStatus,
+    leafBalanceStatus,
+    balanceError,
+    refreshBalances,
+  } = useBalances();
+
+  const pixotchiBalanceReady = pixotchiBalanceStatus === 'ready';
+  const leafBalanceReady = leafBalanceStatus === 'ready';
 
   // Determine if approval is needed based on allowance vs cost
   const needsLeafApproval = leafAllowance < building.levelUpgradeCostLeaf;
   const needsSeedApproval = seedAllowance < building.levelUpgradeCostSeedInstant;
 
-  const hasInsufficientLeaf = building.levelUpgradeCostLeaf > userLeafBalance;
+  const hasInsufficientLeaf = leafBalanceReady && building.levelUpgradeCostLeaf > userLeafBalance;
   // Speedup cost is now in PIXOTCHI
-  const hasInsufficientPixotchi = building.levelUpgradeCostSeedInstant > userPixotchiBalance;
+  const hasInsufficientPixotchi = pixotchiBalanceReady && building.levelUpgradeCostSeedInstant > userPixotchiBalance;
+
+  const retryBalances = () => { void refreshBalances(); };
+  const balanceErrorMessage = balanceError instanceof Error
+    ? balanceError.message
+    : typeof balanceError === 'string' ? balanceError : null;
+  const balanceUnavailable = (token: 'LEAF' | 'PIXOTCHI', status: string) => (
+    <div className="space-y-2">
+      <DisabledTransaction
+        buttonText={status === 'unknown' ? `Checking ${token} balance` : `${token} balance unavailable`}
+        buttonClassName="w-full"
+      />
+      {status === 'error' && (
+        <Button type="button" variant="outline" className="w-full" onClick={retryBalances}>
+          Retry balance check
+        </Button>
+      )}
+      {status === 'error' && balanceErrorMessage && (
+        <p className="text-center text-xs text-[hsl(var(--warning-strong))]" role="status">{balanceErrorMessage}</p>
+      )}
+    </div>
+  );
 
   const upgradeProgress = calculateUpgradeProgress(building, currentBlock);
   const timeLeft = calculateTimeLeft(building, currentBlock);
@@ -74,7 +106,7 @@ export default function UpgradePanel({
           </div>
         )}
 
-        {!isMaxLevel && (
+        {(!isMaxLevel || building.isUpgrading) && (
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">Upgrade Costs</h4>
             <div className="flex justify-between items-center text-sm">
@@ -95,15 +127,13 @@ export default function UpgradePanel({
         <div className="space-y-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">
-              {isMaxLevel ? 'Building at Max Level' :
-                building.isUpgrading ? 'Upgrade Actions' : 'Upgrade Building'}
+              {building.isUpgrading ? 'Upgrade Actions' :
+                isMaxLevel ? 'Building at Max Level' : 'Upgrade Building'}
             </span>
             <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
-          {isMaxLevel ? (
-            <DisabledTransaction buttonText="Max Level Reached" buttonClassName="w-full" />
-          ) : building.isUpgrading ? (
-            needsSeedApproval ? (
+          {building.isUpgrading ? (
+            !pixotchiBalanceReady ? balanceUnavailable('PIXOTCHI', pixotchiBalanceStatus) : needsSeedApproval ? (
               <div className="space-y-2">
                 <div className="text-sm text-center text-muted-foreground">Approve PIXOTCHI spending to use speed ups</div>
                 <ApproveTransaction
@@ -136,6 +166,10 @@ export default function UpgradePanel({
                 disabled={hasInsufficientPixotchi}
               />
             )
+          ) : isMaxLevel ? (
+            <DisabledTransaction buttonText="Max Level Reached" buttonClassName="w-full" />
+          ) : !leafBalanceReady ? (
+            balanceUnavailable('LEAF', leafBalanceStatus)
           ) : needsLeafApproval ? (
             <div className="space-y-2">
               <div className="text-sm text-center text-muted-foreground">Step 1: Approve LEAF spending</div>

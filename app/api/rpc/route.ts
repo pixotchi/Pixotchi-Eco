@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseLogClient, getBaseReadClient, getBaseReceiptClient } from '@/lib/base-rpc';
 import { BASE_RPC_MAX_BATCH_SIZE, BASE_RPC_MAX_BODY_BYTES } from '@/lib/base-rpc-policy';
+import { ChatAuthError, getChatSessionOrQuickAuthFromRequest } from '@/lib/chat-auth';
+import { redisExpire, redisIncrBy } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,6 +20,14 @@ export const runtime = 'nodejs';
  * This endpoint is same-origin-only (enforced in proxy.ts) and read-oriented: only
  * the methods the app actually needs are forwarded, so it can't be repurposed as a
  * free general-purpose archive node against our paid quota.
+ *
+ * `Origin` protects browser callers from cross-site use, but it is a caller-supplied
+ * header for non-browser HTTP clients. It is therefore never treated as a credential
+ * here. Requests with an app session (or a verified Farcaster Quick Auth identity)
+ * receive an address-bound rate-limit tier. The small anonymous tier below exists
+ * solely for the chain reads a wallet must make before it can authenticate; it has a
+ * shared global limiter so spoofed Origin/IP headers cannot turn it into an unlimited
+ * provider-key relay.
  */
 
 /** Public-client methods exercised by the game and by Viem's receipt waiter. */
@@ -39,8 +49,36 @@ const ALLOWED_READ_METHODS = new Set([
   'eth_getTransactionReceipt',
   'eth_maxPriorityFeePerGas',
   'net_version',
-  'web3_clientVersion',
 ]);
+
+/**
+ * Wallet connection and first-login flows need these read-only calls before a
+ * session exists. Storage access deliberately requires an authenticated
+ * identity; bounded log queries remain available but carry a much higher cost.
+ * Keep this list narrower than ALLOWED_READ_METHODS.
+ */
+const ANONYMOUS_READ_METHODS = new Set([
+  'eth_blockNumber',
+  'eth_call',
+  'eth_chainId',
+  'eth_estimateGas',
+  'eth_feeHistory',
+  'eth_gasPrice',
+  'eth_getBalance',
+  'eth_getBlockByHash',
+  'eth_getBlockByNumber',
+  'eth_getCode',
+  'eth_getLogs',
+  'eth_getTransactionByHash',
+  'eth_getTransactionCount',
+  'eth_getTransactionReceipt',
+  'eth_maxPriorityFeePerGas',
+  'net_version',
+]);
+
+export function isAnonymousBaseRpcMethodAllowed(method: string): boolean {
+  return ANONYMOUS_READ_METHODS.has(method);
+}
 
 const DEVELOPMENT_WRITE_METHODS = new Set([
   'eth_fillTransaction',
@@ -98,41 +136,153 @@ type JsonRpcRequest = {
   params?: unknown;
 };
 
-// Approximate, per-instance throttle. Serverless instances are ephemeral so this
-// is a DoS guard rather than a security boundary (the method allowlist and the
-// same-origin check are the real controls); doing it in memory avoids adding a
-// Redis round-trip to the latency of every single RPC call.
+// Redis is the production security boundary: serverless-instance Maps are not
+// shared and can be bypassed by spreading requests across instances. Development
+// retains a small process-local fallback so a local app without Upstash stays
+// usable; production returns 503 instead of exposing a paid provider key when
+// durable accounting is unavailable.
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_REQUESTS = 1_500;
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_SECONDS = RATE_LIMIT_WINDOW_MS / 1_000;
+const ANONYMOUS_GLOBAL_RATE_LIMIT = 1_200;
+const ANONYMOUS_IP_RATE_LIMIT = 240;
+const AUTHENTICATED_ADDRESS_RATE_LIMIT = 1_500;
+const AUTHENTICATED_IP_RATE_LIMIT = 2_000;
+const developmentRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+type RpcAccessTier =
+  | { kind: 'anonymous' }
+  | { address: string; kind: 'authenticated' };
+
+type RpcRateLimitResult =
+  | { status: 'allowed' }
+  | { status: 'limited' }
+  | { status: 'unavailable' };
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
 
 function getClientKey(request: NextRequest): string {
-  return (
+  const candidate = (
     request.headers.get('x-real-ip')?.trim() ||
     request.headers.get('cf-connecting-ip')?.trim() ||
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     'unknown'
   );
+
+  // Do not let an arbitrary header become an unbounded Redis key. The global
+  // anonymous bucket remains the protection if an upstream has not normalized
+  // these forwarded-IP headers for us.
+  return /^[0-9a-f:.]{3,64}$/i.test(candidate) ? candidate.toLowerCase() : 'unknown';
 }
 
-function isRateLimited(key: string, cost: number): boolean {
+function isDevelopmentRateLimited(key: string, cost: number, limit: number): boolean {
   const now = Date.now();
-  const bucket = rateLimitBuckets.get(key);
+  const bucket = developmentRateLimitBuckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {
-    rateLimitBuckets.set(key, { count: cost, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    developmentRateLimitBuckets.set(key, { count: cost, resetAt: now + RATE_LIMIT_WINDOW_MS });
 
     // Opportunistic cleanup so the map can't grow without bound.
-    if (rateLimitBuckets.size > 10_000) {
-      for (const [bucketKey, value] of rateLimitBuckets) {
-        if (value.resetAt <= now) rateLimitBuckets.delete(bucketKey);
+    if (developmentRateLimitBuckets.size > 10_000) {
+      for (const [bucketKey, value] of developmentRateLimitBuckets) {
+        if (value.resetAt <= now) developmentRateLimitBuckets.delete(bucketKey);
       }
     }
-    return false;
+    return cost > limit;
   }
 
   bucket.count += cost;
-  return bucket.count > RATE_LIMIT_MAX_REQUESTS;
+  return bucket.count > limit;
+}
+
+async function incrementRpcRateLimit(
+  key: string,
+  cost: number,
+  limit: number,
+): Promise<RpcRateLimitResult> {
+  const hits = await redisIncrBy(key, cost);
+  if (hits === null) {
+    if (isProduction()) return { status: 'unavailable' };
+    return isDevelopmentRateLimited(key, cost, limit)
+      ? { status: 'limited' }
+      : { status: 'allowed' };
+  }
+
+  // The first increment must attach a TTL. The window is also encoded into the
+  // key, but a missing expiry would leak keys and leave the limiter's retention
+  // state unknown; fail closed instead of silently accepting that condition.
+  if (hits === cost && !(await redisExpire(key, RATE_LIMIT_WINDOW_SECONDS + 5))) {
+    return { status: 'unavailable' };
+  }
+
+  return hits > limit ? { status: 'limited' } : { status: 'allowed' };
+}
+
+async function enforceRpcRateLimit(
+  request: NextRequest,
+  access: RpcAccessTier,
+  cost: number,
+): Promise<RpcRateLimitResult> {
+  const currentWindow = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
+  const clientKey = getClientKey(request);
+  const rules = access.kind === 'authenticated'
+    ? [
+      {
+        key: `rpc:rate:authenticated:address:${access.address}:${currentWindow}`,
+        limit: AUTHENTICATED_ADDRESS_RATE_LIMIT,
+      },
+      {
+        key: `rpc:rate:authenticated:ip:${clientKey}:${currentWindow}`,
+        limit: AUTHENTICATED_IP_RATE_LIMIT,
+      },
+    ]
+    : [
+      // This is intentionally shared rather than keyed by Origin/IP. An
+      // unauthenticated script can forge both headers, but cannot bypass this
+      // bucket without a session-bearing or Quick-Auth request.
+      {
+        key: `rpc:rate:anonymous:global:${currentWindow}`,
+        limit: ANONYMOUS_GLOBAL_RATE_LIMIT,
+      },
+      {
+        key: `rpc:rate:anonymous:ip:${clientKey}:${currentWindow}`,
+        limit: ANONYMOUS_IP_RATE_LIMIT,
+      },
+    ];
+
+  for (const rule of rules) {
+    const result = await incrementRpcRateLimit(rule.key, cost, rule.limit);
+    if (result.status !== 'allowed') return result;
+  }
+
+  return { status: 'allowed' };
+}
+
+/** Weight costly provider operations more heavily than ordinary wallet reads. */
+export function getBaseRpcRequestCost(method: string): number {
+  if (method === 'eth_getLogs') return 16;
+  if (method === 'eth_call' || method === 'eth_estimateGas' || method === 'eth_feeHistory') return 2;
+  return 1;
+}
+
+function getRequestCost(requests: JsonRpcRequest[]): number {
+  return requests.reduce((total, request) => (
+    total + getBaseRpcRequestCost(typeof request.method === 'string' ? request.method : '')
+  ), 0);
+}
+
+async function getRpcAccessTier(request: NextRequest): Promise<RpcAccessTier> {
+  const { session } = await getChatSessionOrQuickAuthFromRequest(request);
+  const address = session?.address?.trim().toLowerCase();
+
+  // A persisted session is created only after wallet/provider verification;
+  // require a canonical EVM address before it can receive the higher tier.
+  if (address && /^0x[0-9a-f]{40}$/.test(address)) {
+    return { address, kind: 'authenticated' };
+  }
+
+  return { kind: 'anonymous' };
 }
 
 function rpcError(id: JsonRpcId, code: number, message: string, data?: string) {
@@ -178,20 +328,50 @@ function toBlockNumber(value: unknown): bigint | null {
 }
 
 /**
- * Reject unbounded eth_getLogs spans. Named-tag ranges ('latest', 'earliest', …)
- * and blockHash lookups are left alone; only explicit numeric spans are bounded.
+ * Only forward log filters whose range can be bounded locally. JSON-RPC tags
+ * such as `earliest` and `latest` are provider-resolved, so allowing either one
+ * turns a numeric range guard into an easy archive scan bypass. A block-hash
+ * filter is inherently one block and remains safe.
  */
-function isLogRangeTooWide(params: unknown): boolean {
-  if (!Array.isArray(params) || params.length === 0) return false;
+export function validateBaseRpcLogFilter(params: unknown): string | null {
+  if (!Array.isArray(params) || params.length === 0) {
+    return 'eth_getLogs requires one filter object';
+  }
   const filter = params[0];
-  if (!filter || typeof filter !== 'object') return false;
+  if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
+    return 'eth_getLogs requires one filter object';
+  }
 
-  const { fromBlock, toBlock } = filter as { fromBlock?: unknown; toBlock?: unknown };
+  const { blockHash, fromBlock, toBlock } = filter as {
+    blockHash?: unknown;
+    fromBlock?: unknown;
+    toBlock?: unknown;
+  };
+  if (blockHash !== undefined) {
+    if (
+      typeof blockHash !== 'string'
+      || !/^0x[0-9a-fA-F]{64}$/.test(blockHash)
+      || fromBlock !== undefined
+      || toBlock !== undefined
+    ) {
+      return 'eth_getLogs blockHash must be a 32-byte hash and cannot be combined with a range';
+    }
+    return null;
+  }
+
   const from = toBlockNumber(fromBlock);
   const to = toBlockNumber(toBlock);
-  if (from === null || to === null) return false;
+  if (from === null || to === null) {
+    return 'eth_getLogs requires explicit hexadecimal fromBlock and toBlock values';
+  }
+  if (to < from) {
+    return 'eth_getLogs toBlock must not precede fromBlock';
+  }
+  if (to - from > MAX_LOG_BLOCK_RANGE) {
+    return `eth_getLogs range is limited to ${MAX_LOG_BLOCK_RANGE} blocks`;
+  }
 
-  return to - from > MAX_LOG_BLOCK_RANGE;
+  return null;
 }
 
 function getClientForMethod(method: string) {
@@ -221,11 +401,35 @@ function validateSingle(payload: JsonRpcRequest, allowDevelopmentWrites: boolean
     return notForwardedError(id, INVALID_PARAMS, 'params must be an array');
   }
 
-  if (method === 'eth_getLogs' && isLogRangeTooWide(params)) {
+  const logFilterError = method === 'eth_getLogs'
+    ? validateBaseRpcLogFilter(params)
+    : null;
+  if (logFilterError) {
     return notForwardedError(
       id,
       INVALID_PARAMS,
-      `eth_getLogs range is limited to ${MAX_LOG_BLOCK_RANGE} blocks`,
+      logFilterError,
+    );
+  }
+
+  return null;
+}
+
+function validateAnonymousTier(
+  payload: JsonRpcRequest,
+  allowDevelopmentWrites: boolean,
+) {
+  const id = (payload?.id ?? null) as JsonRpcId;
+  const method = payload.method as string;
+
+  if (
+    !isAnonymousBaseRpcMethodAllowed(method)
+    && !(allowDevelopmentWrites && DEVELOPMENT_WRITE_METHODS.has(method))
+  ) {
+    return notForwardedError(
+      id,
+      METHOD_NOT_FOUND,
+      `Method ${method} requires an authenticated session`,
     );
   }
 
@@ -379,7 +583,46 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (isRateLimited(getClientKey(request), requests.length)) {
+  let access: RpcAccessTier;
+  try {
+    access = await getRpcAccessTier(request);
+  } catch (error) {
+    const status = error instanceof ChatAuthError && error.status === 503 ? 503 : 401;
+    const message = status === 503
+      ? 'Authentication session storage is temporarily unavailable'
+      : 'Authentication session is invalid';
+    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, message), {
+      headers: { 'Cache-Control': 'private, no-store', ...(status === 503 ? { 'Retry-After': '30' } : {}) },
+      status,
+    });
+  }
+
+  if (access.kind === 'anonymous') {
+    const anonymousTierErrors = requests.map((entry) => validateAnonymousTier(entry, allowDevelopmentWrites));
+    if (anonymousTierErrors.some(Boolean)) {
+      const rejected = anonymousTierErrors.map((error, index) => (
+        error ?? notForwardedError(
+          (requests[index]?.id ?? null) as JsonRpcId,
+          INVALID_REQUEST,
+          'JSON-RPC batch rejected because another request requires authentication',
+        )
+      ));
+      return NextResponse.json(isBatch ? rejected : rejected[0], {
+        headers: { 'Cache-Control': 'private, no-store' },
+        status: 401,
+      });
+    }
+  }
+
+  const rateLimit = await enforceRpcRateLimit(request, access, getRequestCost(requests));
+  if (rateLimit.status === 'unavailable') {
+    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, 'Rate limiting is temporarily unavailable'), {
+      headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '30' },
+      status: 503,
+    });
+  }
+
+  if (rateLimit.status === 'limited') {
     return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, 'Rate limit exceeded'), {
       headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '60' },
       status: 429,

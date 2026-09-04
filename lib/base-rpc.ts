@@ -130,7 +130,10 @@ const LOG_HEDGE_DELAY_MS = resolveHedgeDelayMs('BASE_RPC_LOG_HEDGE_MS', 300);
 const POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = {
   read: {
     timeoutMs: 4_500,
-    fallbackRetryCount: 1,
+    // Each wave already visits every ranked provider. Replaying the exact
+    // sequence made a browser wait for a second failure cascade instead of
+    // trying the next healthy endpoint promptly.
+    fallbackRetryCount: 0,
     hedgeDelayMs: 0,
     pollingIntervalMs: 300_000,
     rankIntervalMs: 15_000,
@@ -200,6 +203,25 @@ const RESOLVED_POLICY_CONFIG: Record<BaseRpcPolicy, BaseRpcPolicyConfig> = IS_BR
       ]),
     ) as Record<BaseRpcPolicy, BaseRpcPolicyConfig>)
   : POLICY_CONFIG;
+
+// The browser's same-origin transport has to allow the proxy enough time to
+// fail over, but the proxy must still return before that browser deadline. This
+// bounds how long the route awaits its cascade; it cannot abort an already
+// dispatched viem transport, whose tighter per-request timeout remains the
+// final bound on that upstream work.
+const SERVER_POLICY_DEADLINE_MS: Record<BaseRpcPolicy, number> = {
+  log: 10_000,
+  probe: 3_500,
+  read: 9_000,
+  receipt: 6_500,
+};
+
+class BaseRpcDeadlineError extends Error {
+  constructor(policy: BaseRpcPolicy) {
+    super(`Base RPC ${policy} request timed out before the server deadline`);
+    this.name = 'TimeoutError';
+  }
+}
 
 const policyMetrics = new Map<
   BaseRpcPolicy,
@@ -388,40 +410,66 @@ const updateLatency = (
   );
 };
 
-const isRateLimitError = (error?: Error) => {
+const errorMatches = (
+  error: UntypedValue,
+  predicate: (details: { code: string; message: string; name: string }) => boolean,
+) => collectRpcErrors(error).some((candidate) => {
+  const typed = candidate as { code?: unknown; message?: unknown; name?: unknown };
+  return predicate({
+    code: typed?.code === undefined ? '' : String(typed.code).toLowerCase(),
+    message: typeof typed?.message === 'string' ? typed.message.toLowerCase() : String(candidate).toLowerCase(),
+    name: typeof typed?.name === 'string' ? typed.name.toLowerCase() : '',
+  });
+});
+
+const isRateLimitError = (error?: UntypedValue) => {
   if (!error) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('429') ||
-    message.includes('rate limit') ||
-    message.includes('over rate limit')
-  );
+  return errorMatches(error, ({ code, message }) => (
+    code === '429'
+    || message.includes('429')
+    || message.includes('rate limit')
+    || message.includes('over rate limit')
+  ));
 };
 
-const isConnectivityError = (error?: Error) => {
+export const isBaseRpcConnectivityError = (error?: UntypedValue) => {
   if (!error) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('timeout') ||
-    message.includes('fetch') ||
-    message.includes('network') ||
-    message.includes('connection')
-  );
+  return errorMatches(error, ({ code, message, name }) => (
+    name.includes('timeout')
+    || name.includes('abort')
+    || name.includes('network')
+    || code === 'etimedout'
+    || code === 'econnreset'
+    || code === 'econnrefused'
+    || code === 'ehostunreach'
+    || code === 'enetunreach'
+    || code.includes('connect_timeout')
+    || message.includes('timeout')
+    || message.includes('timed out')
+    || message.includes('fetch')
+    || message.includes('network')
+    || message.includes('connection')
+    || message.includes('socket')
+    || message.includes('aborted')
+  ));
 };
 
-const isServerSideRpcError = (error?: Error) => {
+const isServerSideRpcError = (error?: UntypedValue) => {
   if (!error) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('500') ||
-    message.includes('502') ||
-    message.includes('503') ||
-    message.includes('504') ||
-    message.includes('bad gateway') ||
-    message.includes('service unavailable') ||
-    message.includes('gateway timeout') ||
-    message.includes('internal server error')
-  );
+  return errorMatches(error, ({ code, message }) => (
+    code === '500'
+    || code === '502'
+    || code === '503'
+    || code === '504'
+    || message.includes('500')
+    || message.includes('502')
+    || message.includes('503')
+    || message.includes('504')
+    || message.includes('bad gateway')
+    || message.includes('service unavailable')
+    || message.includes('gateway timeout')
+    || message.includes('internal server error')
+  ));
 };
 
 const isExpectedApplicationError = (error?: Error) => {
@@ -486,26 +534,22 @@ const getSafeRpcFailureLabel = (error?: Error): string => {
   if (!error) return 'unknown';
   if (isDeterministicBaseRpcError(error)) return 'deterministic';
   if (isRateLimitError(error)) return 'rate_limited';
-  if (isConnectivityError(error)) return 'connectivity';
+  if (isBaseRpcConnectivityError(error)) return 'connectivity';
   if (isServerSideRpcError(error)) return 'server_error';
   return 'rpc_error';
 };
 
-const shouldAffectProviderHealth = (
+export const shouldAffectBaseRpcProviderHealth = (
   method: string,
-  error?: Error,
+  error?: UntypedValue,
 ) => {
   if (!error) return true;
   if (
     isRateLimitError(error) ||
-    isConnectivityError(error) ||
+    isBaseRpcConnectivityError(error) ||
     isServerSideRpcError(error)
   ) {
     return true;
-  }
-
-  if (method === 'eth_call') {
-    return false;
   }
 
   if (isDeterministicBaseRpcError(error)) {
@@ -758,7 +802,7 @@ const invokeEndpoint = async (
   } catch (error) {
     const typedError = error as Error;
     recordPolicyResult(policy, url, {
-      affectsHealth: shouldAffectProviderHealth(method, typedError),
+      affectsHealth: shouldAffectBaseRpcProviderHealth(method, typedError),
       error: typedError,
       latencyMs: Date.now() - started,
       status: 'error',
@@ -868,14 +912,44 @@ const executeSingleWave = async (
 ) =>
   executeSingleWaveWithInvoker(policy, wave, method, params, attemptedUrls);
 
+const runWithinServerDeadline = async <T>(
+  policy: BaseRpcPolicy,
+  deadlineAt: number | null,
+  task: () => Promise<T>,
+): Promise<T> => {
+  if (deadlineAt === null) return task();
+
+  const remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0) throw new BaseRpcDeadlineError(policy);
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new BaseRpcDeadlineError(policy)), remainingMs);
+  });
+
+  try {
+    return await Promise.race([task(), deadline]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
 const executePolicyRequest = async (
   policy: BaseRpcPolicy,
   method: string,
   params: UntypedValue[] = [],
   inputUrls?: readonly string[],
 ) => {
+  const deadlineAt = IS_BROWSER
+    ? null
+    : Date.now() + SERVER_POLICY_DEADLINE_MS[policy];
+
   if (!inputUrls) {
-    await ensureReadRank({ awaitFresh: readRankRefreshedAt === 0 });
+    await runWithinServerDeadline(
+      policy,
+      deadlineAt,
+      () => ensureReadRank({ awaitFresh: readRankRefreshedAt === 0 }),
+    );
     if (shouldRefreshReadRank()) void ensureReadRank();
   }
 
@@ -889,10 +963,15 @@ const executePolicyRequest = async (
   let lastError: UntypedValue = new Error('Base RPC request failed before execution');
   let previousWaveSignature: string | null = null;
   let sawNullReceipt = false;
+  let fallbackAttempt = 0;
 
   for (const wave of executionPlan) {
     try {
-      const result = await executeSingleWave(policy, wave, method, params, attemptedUrls);
+      const result = await runWithinServerDeadline(
+        policy,
+        deadlineAt,
+        () => executeSingleWave(policy, wave, method, params, attemptedUrls),
+      );
       if (
         policy === 'receipt'
         && (method === 'eth_getTransactionReceipt' || method === 'eth_getTransactionByHash')
@@ -912,7 +991,12 @@ const executePolicyRequest = async (
         RESOLVED_POLICY_CONFIG[policy].retryDelayMs > 0 &&
         wave.urls.length === 1
       ) {
-        await sleep(RESOLVED_POLICY_CONFIG[policy].retryDelayMs);
+        const delayMs = Math.min(
+          RESOLVED_POLICY_CONFIG[policy].retryDelayMs * (2 ** fallbackAttempt),
+          600,
+        );
+        fallbackAttempt += 1;
+        await runWithinServerDeadline(policy, deadlineAt, () => sleep(delayMs));
       }
       previousWaveSignature = signature;
     }
@@ -1208,7 +1292,7 @@ const isRetryableCanonicalReceiptError = (
     error.name === 'TransactionReceiptNotFoundError' ||
     getRetryableFlag(error) ||
     isRateLimitError(error) ||
-    isConnectivityError(error) ||
+    isBaseRpcConnectivityError(error) ||
     isServerSideRpcError(error)
   ) {
     return true;

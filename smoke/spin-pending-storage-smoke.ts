@@ -104,12 +104,26 @@ const projectFile = (relativePath: string) => fs.readFileSync(
 );
 const arcade = projectFile("components/arcade/ArcadeDialog.tsx");
 const spinTransaction = projectFile("components/transactions/spin-game-transaction.tsx");
+const commitStateRoute = projectFile("app/api/spin/commit-state/route.ts");
 
 assert.match(arcade, /persistPreparedSpin\(\)/);
 assert.match(arcade, /spinStorageHydratedFor !== spinStorageIdentity/);
 assert.match(arcade, /commitment=\{pending\.commitment\}/);
 assert.doesNotMatch(arcade, /Stuck\? Reset and start new spin/);
+assert.match(
+  arcade,
+  /const fromBlock = boundedLastSeen > fallbackFrom \? boundedLastSeen : fallbackFrom;/,
+  "the persisted commit hint must not widen the bounded log lookback",
+);
+assert.match(
+  arcade,
+  /const chunkResults = await Promise\.all\([\s\S]*?ranges\.map\(\(\[start, end\]\) => fetchChunk\(start, end\)\)/,
+  "bounded SpinLeaf log chunks should be fetched concurrently",
+);
 assert.match(spinTransaction, /`spin:\$\{mode\}:\$\{plantId\}:\$\{commitment\.toLowerCase\(\)\}`/);
 assert.doesNotMatch(spinTransaction, /intentKey[\s\S]{0,120}secret/);
+assert.match(commitStateRoute, /getBaseReadClient\(\)/);
+assert.match(commitStateRoute, /publicClient\.verifyMessage\(\{/);
+assert.doesNotMatch(commitStateRoute, /import \{[^}]*verifyMessage[^}]*\} from ["']viem["']/);
 
 console.log("Spin pending storage smoke checks passed.");

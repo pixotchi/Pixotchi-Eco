@@ -15,7 +15,10 @@ import {
 import type { QuestSlot } from '../lib/contracts';
 import {
   clearBatchQuestRun,
+  getBatchQuestRunSubmissionIdentity,
+  isBatchQuestRunPending,
   isBatchQuestRunPaid,
+  markBatchQuestRunPending,
   markBatchQuestRunPaid,
 } from '../lib/quest-preferences';
 
@@ -192,6 +195,25 @@ assert.equal(isBatchQuestRunPaid(RUN_A, T0), false, 'a fresh run must charge the
 
 markBatchQuestRunPaid(RUN_A, T0);
 assert.equal(isBatchQuestRunPaid(RUN_A, T0), true, 'continuation bundles must be free');
+markBatchQuestRunPaid(RUN_A, T0, '0xcalls-id-1');
+assert.equal(
+  JSON.parse(store.get('pixotchi:quest:batch-run')!).submissionIdentity,
+  '0xcalls-id-1',
+  'paid marker must retain the submitted transaction or user-op identity',
+);
+assert.equal(
+  getBatchQuestRunSubmissionIdentity(RUN_A, T0),
+  '0xcalls-id-1',
+  'a remounted card must restore the paid operation identity before handling a revert',
+);
+markBatchQuestRunPending(RUN_A, T0, '0xcalls-id-pending');
+assert.equal(isBatchQuestRunPending(RUN_A, T0), true, 'a submitted fee must stay pending');
+assert.equal(
+  isBatchQuestRunPaid(RUN_A, T0),
+  false,
+  'a pending or dropped fee must not unlock a free continuation bundle',
+);
+markBatchQuestRunPaid(RUN_A, T0, '0xcalls-id-1');
 assert.equal(
   isBatchQuestRunPaid(RUN_A, T0 + 59 * 60 * 1000),
   true,
@@ -237,12 +259,24 @@ assert.match(batchCard, /taskId: "s3_send_quest"/);
 assert.match(batchCard, /unreadableLands > 0 &&/);
 assert.match(batchCard, /entry\) => !entry\.ok/);
 assert.match(batchCard, /REFRESH_DEBOUNCE_MS/);
-// The burn must be conditional, recorded on success, and cleared when the run
-// finishes - otherwise a multi-transaction fleet pays the fee more than once.
+// The burn must be conditional, recorded durably once a submission identity is
+// known (with a success fallback), and cleared when the run finishes - otherwise
+// a multi-transaction fleet pays the fee more than once.
 assert.match(batchCard, /if \(!shouldBurn\) return startCalls;/);
-assert.match(batchCard, /markBatchQuestRunPaid\(landIdsHash\)/);
+assert.match(batchCard, /const handleBatchSuccess = useCallback/);
+assert.match(batchCard, /markBatchQuestRunPaid\(batchRunScope, Date\.now\(\), identity\)/);
+assert.match(batchCard, /onSuccess=\{handleBatchSuccess\}/);
+assert.match(batchCard, /address\?\.toLowerCase\(\) \?\? "disconnected"/);
+assert.match(batchCard, /status\.statusName === "transactionPending" \|\| status\.statusName === "transactionUnresolved"/);
+assert.match(batchCard, /markBatchQuestRunPending\(batchRunScope, Date\.now\(\), identity\)/);
+assert.match(batchCard, /feePending \? \(/);
+assert.match(batchCard, /buttonText="Confirming fee…"/);
+assert.match(batchCard, /onStatusUpdate=\{handleBatchStatus\}/);
 assert.match(batchCard, /clearBatchQuestRun\(\)/);
-assert.match(batchCard, /const hasEnoughTokens = !shouldBurn \|\| pixotchiBalance >= burnAmountWei;/);
+assert.match(batchCard, /pixotchiBalanceStatus === "ready" && pixotchiBalance >= burnAmountWei/);
+assert.match(batchCard, /feeSubmissionIdentityRef\.current = identity;[\s\S]*markBatchQuestRunPending[\s\S]*setFeePending\(true\)/);
+assert.match(batchCard, /getBatchQuestRunSubmissionIdentity\(batchRunScope\) \?\? null/);
+assert.match(batchCard, /status\.statusName === "reverted"[\s\S]*feeSubmissionIdentityRef\.current !== null[\s\S]*matchesSubmittedIdentity\(status\.statusData, feeSubmissionIdentityRef\.current\)[\s\S]*setRunPaid\(false\)/);
 
 // Gate order must match batch claim's semantics: "nothing to do" outranks every
 // other blocker. Batch claim gets this free by returning early when nothing is

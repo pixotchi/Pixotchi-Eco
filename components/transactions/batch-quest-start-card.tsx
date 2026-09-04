@@ -20,8 +20,11 @@ import { postMissionProgress } from "@/lib/mission-tracking";
 import {
   DEFAULT_BATCH_QUEST_DIFFICULTY,
   clearBatchQuestRun,
+  getBatchQuestRunSubmissionIdentity,
+  isBatchQuestRunPending,
   isBatchQuestRunPaid,
   loadBatchQuestDifficulty,
+  markBatchQuestRunPending,
   markBatchQuestRunPaid,
   storeBatchQuestDifficulty,
 } from "@/lib/quest-preferences";
@@ -36,6 +39,7 @@ import { toast } from "react-hot-toast";
 import { erc20Abi, formatUnits, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 import SmartWalletTransaction from "./smart-wallet-transaction";
+import type { LifecycleStatus } from "./transaction-kit";
 
 interface BatchQuestStartCardProps {
   lands: Land[];
@@ -122,6 +126,25 @@ function soonestHint(
   return `~${formatBlocksAsDuration(targetBlock - currentBlock)}`;
 }
 
+function getSubmittedIdentity(value: UntypedValue): string | undefined {
+  const hash = extractTransactionHash(value);
+  if (hash) return hash.toLowerCase();
+
+  const candidate = value?.transactionId ?? value?.id;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
+}
+
+function matchesSubmittedIdentity(value: UntypedValue, expected: string): boolean {
+  const hash = extractTransactionHash(value);
+  if (typeof hash === "string" && hash.toLowerCase() === expected) return true;
+
+  // A batched EIP-5792 submission is initially recorded under its calls ID,
+  // then may later report both that ID and the canonical transaction hash.
+  // Check every documented identity rather than letting the later hash hide
+  // the saved calls ID.
+  return value?.transactionId === expected || value?.id === expected;
+}
+
 export default function BatchQuestStartCard({
   lands,
   onSuccess,
@@ -137,12 +160,13 @@ export default function BatchQuestStartCard({
   // The flat fee is charged once per run, not once per bundle. A fleet larger
   // than MAX_BATCH_SIZE still costs BURN_AMOUNT_TOKENS in total.
   const [runPaid, setRunPaid] = useState(false);
+  const [feePending, setFeePending] = useState(false);
   const [totalSentThisSession, setTotalSentThisSession] = useState(0);
   const [txKey, setTxKey] = useState(0);
   const [difficulty, setDifficulty] = useState<QuestDifficultyId>(DEFAULT_BATCH_QUEST_DIFFICULTY);
 
   const { isLoading: smartWalletLoading, isSmartWallet } = useSmartWallet();
-  const { pixotchiBalance } = useBalances();
+  const { pixotchiBalance, pixotchiBalanceStatus } = useBalances();
   const { address } = useAccount();
   const rewards = useQuestRewardsAvailability();
 
@@ -156,18 +180,26 @@ export default function BatchQuestStartCard({
   const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
   const burnAmountWei = useMemo(() => parseUnits(BURN_AMOUNT_TOKENS.toString(), 18), []);
   const shouldBurn = !runPaid;
-  const hasEnoughTokens = !shouldBurn || pixotchiBalance >= burnAmountWei;
+  const hasEnoughTokens = !shouldBurn
+    || (pixotchiBalanceStatus === "ready" && pixotchiBalance >= burnAmountWei);
 
   const landIdsHash = useMemo(
     () => lands.map((land) => land.tokenId.toString()).sort().join(","),
     [lands],
   );
+  const batchRunScope = useMemo(
+    () => `${address?.toLowerCase() ?? "disconnected"}:${landIdsHash}`,
+    [address, landIdsHash],
+  );
+  const feeSubmissionIdentityRef = useRef<string | null>(null);
 
   // Re-read on every land-set change so a different wallet or holdings starts a
   // fresh, unpaid run.
   useEffect(() => {
-    setRunPaid(isBatchQuestRunPaid(landIdsHash));
-  }, [landIdsHash]);
+    feeSubmissionIdentityRef.current = getBatchQuestRunSubmissionIdentity(batchRunScope) ?? null;
+    setRunPaid(isBatchQuestRunPaid(batchRunScope));
+    setFeePending(isBatchQuestRunPending(batchRunScope));
+  }, [batchRunScope]);
 
   const scanQuests = useCallback(async () => {
     if (lands.length === 0) {
@@ -305,6 +337,82 @@ export default function BatchQuestStartCard({
     setDifficulty(parsed);
     storeBatchQuestDifficulty(parsed);
   }, []);
+
+  const handleBatchStatus = useCallback((status: LifecycleStatus) => {
+    const identity = getSubmittedIdentity(status.statusData);
+    if (
+      shouldBurn
+      && identity
+      && (status.statusName === "transactionPending" || status.statusName === "transactionUnresolved")
+    ) {
+      // Persist the submitted identity for recovery, but do not waive the fee
+      // for another bundle until transaction-kit has a canonical success
+      // receipt. A dropped operation must never create a free continuation.
+      feeSubmissionIdentityRef.current = identity;
+      markBatchQuestRunPending(batchRunScope, Date.now(), identity);
+      setFeePending(true);
+      return;
+    }
+
+    if (
+      status.statusName === "reverted"
+      && feeSubmissionIdentityRef.current !== null
+      && matchesSubmittedIdentity(status.statusData, feeSubmissionIdentityRef.current)
+    ) {
+      // A submitted but reverted fee must remain retryable, including after a
+      // remount restored its durable submission identity. Do not let an old
+      // callback revoke a newer run's marker.
+      clearBatchQuestRun();
+      feeSubmissionIdentityRef.current = null;
+      setFeePending(false);
+      setRunPaid(false);
+    }
+  }, [batchRunScope, shouldBurn]);
+
+  const handleBatchSuccess = useCallback((tx: UntypedValue) => {
+    const sentCount = currentBatchSlots.length;
+    const remainingCount = idleSlots.length - sentCount;
+    const newTotalSent = totalSentThisSession + sentCount;
+
+    setTotalSentThisSession(newTotalSent);
+    setTxKey((key) => key + 1);
+
+    if (shouldBurn) {
+      const identity = getSubmittedIdentity(tx) ?? feeSubmissionIdentityRef.current ?? undefined;
+      markBatchQuestRunPaid(batchRunScope, Date.now(), identity);
+      feeSubmissionIdentityRef.current = identity ?? null;
+      setFeePending(false);
+      setRunPaid(true);
+    }
+
+    const feeNote = shouldBurn
+      ? `Burned ${BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI & sent`
+      : "Sent";
+
+    if (remainingCount > 0) {
+      toast.success(`${feeNote} ${sentCount} farmers! ${remainingCount} left - no extra fee.`);
+    } else {
+      toast.success(`${feeNote} all ${newTotalSent} farmers!`);
+    }
+
+    onSuccess?.();
+    // buildings:refresh drives the re-scan through the debounced listener
+    // above, so no direct scanQuests() call here.
+    dispatchPostTransactionRefresh(["buildings:refresh"], undefined, {
+      address,
+      source: "batch-quest-start",
+      transactionHash: extractTransactionHash(tx),
+    });
+
+    try {
+      const payload: Record<string, UntypedValue> = { address, taskId: "s3_send_quest" };
+      const txHash = extractTransactionHash(tx);
+      if (txHash) payload.proof = { txHash };
+      postMissionProgress(payload);
+    } catch {
+      // Mission tracking is best-effort and must never block the send.
+    }
+  }, [address, batchRunScope, currentBatchSlots.length, idleSlots.length, onSuccess, shouldBurn, totalSentThisSession]);
 
   const scanPending = lands.length > 0 && landIdsHash !== lastScannedLandIds;
 
@@ -502,6 +610,34 @@ export default function BatchQuestStartCard({
             </div>
           ) : !smartWalletLoading && !isSmartWallet ? (
             null
+          ) : feePending ? (
+            <div className="space-y-2">
+              <div className="rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-muted-foreground">
+                Fee transaction submitted. Confirming it before sending another batch.
+              </div>
+              <SmartWalletTransaction
+                effects={{ domains: ["balances"] }}
+                key={txKey}
+                intentKey={batchQuestIntentKey}
+                calls={calls}
+                buttonText="Confirming fee…"
+                buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
+                disabled
+                onStatusUpdate={handleBatchStatus}
+                onSuccess={handleBatchSuccess}
+                onError={() => toast.error("Batch fee confirmation failed")}
+              />
+            </div>
+          ) : shouldBurn && pixotchiBalanceStatus !== "ready" ? (
+            <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-value">
+                <AlertTriangle className="h-3 w-3" />
+                Balance unavailable
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                PIXOTCHI balance could not be confirmed. Refresh before paying the run fee.
+              </div>
+            </div>
           ) : !hasEnoughTokens ? (
             <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-value">
@@ -539,56 +675,8 @@ export default function BatchQuestStartCard({
                 }
                 buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
                 disabled={!rewards.isReady || smartWalletLoading}
-                onSuccess={(tx) => {
-                  const sentCount = currentBatchSlots.length;
-                  const remainingCount = idleSlots.length - sentCount;
-                  const newTotalSent = totalSentThisSession + sentCount;
-
-                  setTotalSentThisSession(newTotalSent);
-                  setTxKey((key) => key + 1);
-
-                  // Record the fee before anything else so a follow-up bundle
-                  // can never be charged twice for the same run.
-                  if (shouldBurn) {
-                    markBatchQuestRunPaid(landIdsHash);
-                    setRunPaid(true);
-                  }
-
-                  const feeNote = shouldBurn
-                    ? `Burned ${BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI & sent`
-                    : "Sent";
-
-                  if (remainingCount > 0) {
-                    toast.success(
-                      `${feeNote} ${sentCount} farmers! ${remainingCount} left - no extra fee.`,
-                    );
-                  } else {
-                    toast.success(`${feeNote} all ${newTotalSent} farmers!`);
-                  }
-
-                  onSuccess?.();
-                  // buildings:refresh drives the re-scan through the debounced
-                  // listener above, so no direct scanQuests() call here.
-                  dispatchPostTransactionRefresh(["buildings:refresh"], undefined, {
-                    address,
-                    source: "batch-quest-start",
-                    transactionHash: extractTransactionHash(tx),
-                  });
-
-                  try {
-                    const payload: Record<string, UntypedValue> = {
-                      address,
-                      taskId: "s3_send_quest",
-                    };
-                    const txHash = extractTransactionHash(tx);
-                    if (txHash) {
-                      payload.proof = { txHash };
-                    }
-                    postMissionProgress(payload);
-                  } catch {
-                    // Mission tracking is best-effort and must never block the send.
-                  }
-                }}
+                onStatusUpdate={handleBatchStatus}
+                onSuccess={handleBatchSuccess}
                 onError={() => toast.error("Batch send failed")}
               />
             </div>

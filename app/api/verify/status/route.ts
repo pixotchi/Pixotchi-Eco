@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/redis';
 import { parseUnits } from 'viem';
 import { getBaseReadClient } from '@/lib/base-rpc';
 import { PIXOTCHI_TOKEN_ADDRESS, ERC20_BALANCE_ABI } from '@/lib/contracts';
 import { VERIFY_CLAIM_SEED_BONUS_AMOUNT } from '@/lib/verify-claim-config';
+import {
+  getVerifyClaimKey,
+  getVerifyClaimPairState,
+  getVerifyWalletClaimKey,
+  normalizeVerifyWalletAddress,
+  readVerifyClaimJSON,
+  type VerifyClaimReservationRecord,
+} from '@/lib/verify-claim-records';
 
 /**
  * Feature toggle for Base Verify claims.
@@ -45,38 +52,59 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing address parameter' }, { status: 400 });
     }
 
-    // Validate address format
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    const normalizedAddress = normalizeVerifyWalletAddress(address);
+    if (!normalizedAddress) {
       return NextResponse.json({ error: 'Invalid address format' }, { status: 400 });
     }
 
-    // Check Redis for existing claim by wallet address
-    const walletClaimKey = `wallet_claims:${address.toLowerCase()}`;
-    const existingClaim = await redis?.get(walletClaimKey);
-
-    if (existingClaim) {
-      let claimData = null;
-      try {
-        claimData = typeof existingClaim === 'string'
-          ? JSON.parse(existingClaim)
-          : existingClaim;
-      } catch {
-        // If parsing fails, just indicate claimed
-      }
-
-      return NextResponse.json({
-        enabled: true,
-        claimed: true,
-        claimData: claimData ? {
-          tokenId: claimData.tokenId,
-          strainId: claimData.strainId,
-          timestamp: claimData.timestamp,
-          status: claimData.status,
-        } : null
-      });
+    const walletRead = await readVerifyClaimJSON<VerifyClaimReservationRecord>(
+      getVerifyWalletClaimKey(normalizedAddress),
+    );
+    if (walletRead.status === 'unavailable') {
+      console.error('[VERIFY_STATUS] Wallet claim state unavailable:', walletRead.error);
+      return NextResponse.json(
+        { error: 'Claim status is temporarily unavailable.' },
+        { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+      );
     }
 
-    // Check SEED bonus availability (onchain balance) for unclaimed users
+    const walletRecord = walletRead.status === 'ok' ? walletRead.value : null;
+    let claimRecord: VerifyClaimReservationRecord | null = null;
+    if (walletRecord && typeof walletRecord.verificationToken === 'string') {
+      const claimRead = await readVerifyClaimJSON<VerifyClaimReservationRecord>(
+        getVerifyClaimKey(walletRecord.verificationToken),
+      );
+      if (claimRead.status === 'unavailable') {
+        console.error('[VERIFY_STATUS] Verification claim state unavailable:', claimRead.error);
+        return NextResponse.json(
+          { error: 'Claim status is temporarily unavailable.' },
+          { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+      claimRecord = claimRead.status === 'ok' ? claimRead.value : null;
+    }
+
+    const claimState = getVerifyClaimPairState(claimRecord, walletRecord);
+    const retryable = claimState === 'retryable';
+    const blocksNewClaim = claimState !== 'unclaimed' && !retryable;
+    if (walletRecord && !retryable) {
+      return NextResponse.json({
+        enabled: true,
+        claimed: blocksNewClaim,
+        retryable: false,
+        claimState,
+        claimData: {
+          tokenId: walletRecord.tokenId,
+          strainId: walletRecord.strainId,
+          timestamp: walletRecord.timestamp,
+          status: walletRecord.status,
+          stage: walletRecord.stage,
+          reservationId: walletRecord.reservationId,
+        },
+      }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    // Bonuses are advertised only when a new or safely retryable claim may run.
     let seedAvailable = false;
     if (SEED_BONUS_ENABLED && AGENT_ADDRESS) {
       try {
@@ -97,11 +125,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       enabled: true,
       claimed: false,
+      retryable,
+      claimState,
+      claimData: retryable && walletRecord ? {
+        strainId: walletRecord.strainId,
+        timestamp: walletRecord.timestamp,
+        status: walletRecord.status,
+        stage: walletRecord.stage,
+        reservationId: walletRecord.reservationId,
+      } : null,
       bonuses: {
         leaf: LEAF_BONUS_ENABLED,
         seed: SEED_BONUS_ENABLED && seedAvailable,
       },
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
 
   } catch (error: UntypedValue) {
     console.error('[VERIFY_STATUS] Error:', error);
