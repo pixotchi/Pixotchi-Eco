@@ -1,0 +1,82 @@
+name: Frontend quality
+
+on:
+  push:
+    branches: [beta, 'dev/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run frontend:smoke
+      - run: npm run app-fixes:smoke
+      - run: npm run build
+      - run: npm run frontend:release-check
+
+  browser-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - run: npx playwright install --with-deps webkit
+      - run: npm run frontend:test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-browser-results
+          path: |
+            output/frontend-test-report
+            output/frontend-tests
+          retention-days: 14
+
+  visual-baselines:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium --only-shell
+      - run: npx playwright install webkit
+      - run: npx playwright test tests/frontend/dense-surfaces.spec.ts --project=390-light --project=1440-dark --project=webkit-390-light
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-visual-results-windows
+          path: |
+            output/frontend-test-report
+            output/frontend-tests
+          retention-days: 14

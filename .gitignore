@@ -18,6 +18,7 @@ contracts/
 # cannot re-include a path whose parent directory is excluded.
 scripts/*
 !scripts/check-base-rpc-hardening.mjs
+!scripts/check-frontend-release.mjs
 !scripts/run-eslint-chunked.mjs
 !scripts/run-react-server-smoke.mjs
 !scripts/art/
@@ -43,7 +44,10 @@ output/
 .claude/
 .codex
 unused-assets/
-.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/frontend-quality.yml
 bin/
 claimed-wallets.json
 compute_errors.js
