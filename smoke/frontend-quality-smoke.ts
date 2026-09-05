@@ -14,6 +14,32 @@ import { parseFirstCareProgress } from '../lib/first-care-progress';
 import { calculateHandValue } from '../lib/blackjack-cards';
 import { deriveInitialPlayerActions, hasTrustedActionState, parseBlackjackSnapshot, reconcileTurnCards } from '../lib/blackjack-state';
 import { BlackjackPhase } from '../public/abi/blackjack-abi';
+import { canPlantAttack, getPlantAttackAvailability, getPlantAttackReadyAt, type AttackPlant } from '../lib/plant-attack';
+
+const attackNow = 1_800_000_000;
+const readyAttacker: AttackPlant = { id: 1, owner: '0xA', status: 0, level: 2, lastAttackUsed: '0', lastAttacked: '0' };
+const restingAttacker = { ...readyAttacker, lastAttackUsed: String(attackNow - 600) };
+const attackTarget = { ...readyAttacker, id: 2, owner: '0xB', level: 3 };
+assert.deepEqual(getPlantAttackAvailability([restingAttacker], attackNow), { kind: 'cooldown', readyAt: attackNow + 1200, livingCount: 1 });
+assert.deepEqual(getPlantAttackAvailability([restingAttacker, { ...restingAttacker, id: 3, lastAttackUsed: String(attackNow - 1200) }], attackNow), { kind: 'cooldown', readyAt: attackNow + 600, livingCount: 2 });
+assert.equal(getPlantAttackAvailability([restingAttacker, readyAttacker], attackNow).kind, 'ready', 'One resting plant cannot block a ready one');
+assert.equal(getPlantAttackAvailability([{ ...restingAttacker, status: 4 }], attackNow).kind, 'no-living-plants');
+assert.equal(getPlantAttackAvailability([], attackNow).kind, 'no-plants');
+assert.equal(getPlantAttackAvailability([restingAttacker], attackNow + 1200).kind, 'ready');
+for (const timestamp of ['', '-1', 'NaN', 'Infinity', '1.5', '9007199254740991']) {
+  assert.equal(getPlantAttackReadyAt(timestamp), null);
+  assert.equal(getPlantAttackAvailability([{ ...readyAttacker, lastAttackUsed: timestamp }], attackNow).kind, 'unavailable');
+}
+assert.equal(canPlantAttack(readyAttacker, attackTarget, attackNow, false), true);
+assert.equal(canPlantAttack(restingAttacker, attackTarget, attackNow, false), false);
+assert.equal(canPlantAttack(restingAttacker, attackTarget, attackNow + 1200, false), true);
+assert.equal(canPlantAttack(readyAttacker, attackTarget, attackNow, true), false);
+for (const target of [
+  { ...attackTarget, status: 4 }, { ...attackTarget, level: 2 }, { ...attackTarget, level: 1 },
+  { ...attackTarget, owner: '0xa' }, { ...attackTarget, lastAttacked: String(attackNow - 3599) },
+  { ...attackTarget, lastAttacked: 'invalid' },
+]) assert.equal(canPlantAttack(readyAttacker, target, attackNow, false), false);
+assert.equal(canPlantAttack(readyAttacker, { ...attackTarget, lastAttacked: String(attackNow - 3600) }, attackNow, false), true);
 
 const B = BigInt;
 const sellLeaf = [100, 1000].map(n => ({ sellToken: 1, amount: B(n), amountAsk: B(1) }));

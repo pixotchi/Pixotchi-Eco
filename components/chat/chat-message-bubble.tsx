@@ -20,9 +20,9 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
   const isOwn = kind === 'own';
   const alignment = isAIMessage || !isOwn ? 'justify-start' : 'justify-end';
 
-  const bgColor = isAIMessage ? 'border border-border/60 bg-card text-foreground' :
-                  isOwn ? 'bg-primary text-primary-foreground' :
-                  'bg-muted/50 text-foreground';
+  const bgColor = isOwn
+    ? 'bg-primary text-primary-foreground'
+    : 'border border-border/60 bg-card text-foreground';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
@@ -43,7 +43,7 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
       onClick={() => {
         onOpenProfile?.();
       }}
-      variant="outline"
+      variant="ghost"
       size="compact"
       className="min-h-11 min-w-11 rounded-md border-transparent bg-transparent px-2 py-1 text-xs text-foreground shadow-none hover:bg-muted active:translate-y-0 active:scale-100"
       aria-label={`Open profile for ${displayName}`}

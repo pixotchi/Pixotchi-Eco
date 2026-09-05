@@ -38,6 +38,14 @@ test('chat long content and profile actions fit with readable timestamps', async
   await expect(region.locator('time')).toHaveCount(3);
   expect(await region.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(await region.getByRole('article').evaluateAll(els => els.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
+  const publicBubble = region.getByRole('article', { name: /Message from A very long/ });
+  const assistantBubble = region.getByRole('article', { name: 'Message from Neural Seed', exact: true });
+  const surface = (element: HTMLElement | SVGElement) => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderTopWidth });
+  const publicSurface = await publicBubble.evaluate(surface);
+  expect(publicSurface).toEqual(await assistantBubble.evaluate(surface));
+  expect(publicSurface.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(publicSurface.border).toBe('1px');
+  expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none');
 });
 
 test('arcade values wrap and ranking columns keep continuous order', async ({ page }, testInfo) => {

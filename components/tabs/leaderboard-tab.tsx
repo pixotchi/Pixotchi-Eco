@@ -10,6 +10,9 @@ import { useLandLeaderboard } from "@/hooks/useLandLeaderboard";
 import type { LandLeaderboardRow } from "@/lib/land-ranking";
 import { ResourceState } from "@/components/ui/resource-state";
 import { RankingPlantSummary } from "@/components/ranking-plant-summary";
+import { PlantAttackEmptyState } from "@/components/plant-attack-empty-state";
+import { useDeadlineClock } from "@/hooks/useDeadlineClock";
+import { canPlantAttack, getPlantAttackAvailability, getPlantAttackReadyAt, PLANT_TARGET_COOLDOWN_SECONDS } from "@/lib/plant-attack";
 import { RankingColumns } from "@/components/ranking-columns";
 import { getTotalPages, getBoundedPage, getPageRows, DESKTOP_ITEMS_PER_PAGE, type RankedRow } from "@/lib/ranking-pagination";
 
@@ -71,6 +74,7 @@ type LeaderboardPlant = Plant & {
 };
 
 const ITEMS_PER_PAGE = 12;
+const NO_PLANTS: Plant[] = [];
 
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
@@ -90,14 +94,6 @@ function formatAttackScoreDelta(score: number, direction: "gain" | "loss") {
 function hasActiveFence(plant: LeaderboardPlant) {
   const fenceInfo = getFenceStatus(plant);
   return fenceInfo.hasActiveFence;
-}
-
-function isDead(p: { status: number }) {
-  return p.status === 4;
-}
-
-function nowSec() {
-  return Math.floor(Date.now() / 1000);
 }
 
 export default function LeaderboardTab() {
@@ -181,7 +177,11 @@ export default function LeaderboardTab() {
     return () => mq.removeListener(handleChange);
   }, [setCurrentPage]);
 
-  const [myPlants, setMyPlants] = useState<Plant[]>([]);
+  const [myPlantSnapshot, setMyPlantSnapshot] = useState<{
+    owner: string | null; plants: Plant[]; status: 'loading' | 'ready' | 'error';
+  }>({ owner: null, plants: NO_PLANTS, status: 'loading' });
+  const myPlants = myPlantSnapshot.owner === address ? myPlantSnapshot.plants : NO_PLANTS;
+  const myPlantsReadStatus = myPlantSnapshot.owner === address ? myPlantSnapshot.status : 'loading';
   const [attackDialogOpen, setAttackDialogOpen] = useState(false);
   const [targetPlant, setTargetPlant] = useState<LeaderboardPlant | null>(null);
   const [selectedAttackerId, setSelectedAttackerId] = useState<number | null>(null);
@@ -334,7 +334,7 @@ export default function LeaderboardTab() {
   // Fetch user's plants for attack selection
   const fetchMyPlants = useCallback(async () => {
     if (!address) {
-      setMyPlants([]);
+      setMyPlantSnapshot({ owner: null, plants: NO_PLANTS, status: 'ready' });
       fetchMyPlantsPendingRef.current = null;
       return;
     }
@@ -345,15 +345,18 @@ export default function LeaderboardTab() {
     }
 
     fetchMyPlantsPendingRef.current = address;
+    setMyPlantSnapshot(previous => ({ owner: address, plants: previous.owner === address ? previous.plants : NO_PLANTS, status: 'loading' }));
 
     try {
       const owned = await getPlantsByOwner(address);
       // Only update if address hasn't changed during the fetch
       if (fetchMyPlantsPendingRef.current === address) {
-        setMyPlants(owned);
+        setMyPlantSnapshot({ owner: address, plants: owned, status: 'ready' });
       }
     } catch {
-      // ignore
+      if (fetchMyPlantsPendingRef.current === address) {
+        setMyPlantSnapshot({ owner: address, plants: NO_PLANTS, status: 'error' });
+      }
     } finally {
       // Clear pending flag only if address hasn't changed
       if (fetchMyPlantsPendingRef.current === address) {
@@ -451,25 +454,22 @@ export default function LeaderboardTab() {
     return ownerMatches || myPlantIds.has(plant.id);
   }, [address, myPlantIds]);
 
-  // Eligibility checks (client-side guardrails based on app rules)
-  const attackerCooldownOver = useCallback((attacker: Plant) => {
-    const last = Number(attacker.lastAttackUsed || '0');
-    return nowSec() >= last + 30 * 60; // 30 minutes
-  }, []);
-  const targetCooldownOver = useCallback((target: LeaderboardPlant) => {
-    const last = Number(target.lastAttacked || '0');
-    return nowSec() >= last + 60 * 60; // 60 minutes
-  }, []);
+  const attackDeadlines = useMemo(() => [
+    ...myPlants.map(plant => getPlantAttackReadyAt(plant.lastAttackUsed) ?? 0),
+    ...plants.flatMap(plant => [
+      getPlantAttackReadyAt(plant.lastAttacked, PLANT_TARGET_COOLDOWN_SECONDS) ?? 0,
+      Number(plant.fenceV2?.activeUntil ?? 0),
+      ...(plant.extensions ?? []).flatMap(extension => (extension.shopItemOwned ?? []).map(item => Number(item.effectUntil))),
+    ]),
+  ], [myPlants, plants]);
+  const attackClock = useDeadlineClock(attackDeadlines, isVisible && boardType === 'plants');
+  const attackAvailability = getPlantAttackAvailability(myPlants, attackClock);
+
+  // The clock invalidates memoized targets at cooldown/protection boundaries.
+  // Read the current time as well so a click never relies on a delayed timer.
   const canAttackWith = useCallback((attacker: Plant, target: LeaderboardPlant) => {
-    if (!attacker || !target) return false;
-    if (isDead(attacker) || isDead(target)) return false;
-    if (attacker.id === target.id) return false;
-    if (attacker.level >= target.level) return false;
-    if (!attackerCooldownOver(attacker)) return false;
-    if (!targetCooldownOver(target)) return false;
-    if (hasActiveFence(target)) return false;
-    return true;
-  }, [attackerCooldownOver, targetCooldownOver]);
+    return canPlantAttack(attacker, target, Math.max(attackClock, Math.floor(Date.now() / 1000)), hasActiveFence(target));
+  }, [attackClock]);
   const eligibleAttackers = useCallback((target: LeaderboardPlant): Plant[] => myPlants.filter((p) => canAttackWith(p, target)), [canAttackWith, myPlants]);
   const attackDialogAttackers = useMemo(
     () => (targetPlant ? eligibleAttackers(targetPlant) : []),
@@ -1084,23 +1084,14 @@ export default function LeaderboardTab() {
     }
 
     if (totalItems === 0) {
-      // Check if user is in attackable mode and has no plants
-      if (filterMode === 'attackable' && address && myPlants.length === 0) {
+      if (filterMode === 'attackable' && address) {
         return renderRankingState(
-          <EmptyState
-            icon={Flower2}
-            title="No plants to attack with"
-            description="Mint a plant first to attack other plants with it. Go to the Mint tab to get started."
+          <PlantAttackEmptyState
+            availability={myPlantsReadStatus === 'error' ? { kind: 'unavailable' } : attackAvailability}
+            loading={myPlantsReadStatus === 'loading'}
+            onRetry={() => { void fetchMyPlants(); }}
+            onViewAll={() => { setFilterMode('all'); setShowOnlyMyPlants(false); setCurrentPage(1); }}
           />
-        );
-      }
-
-      // Check if user is in attackable mode but has plants (just no attackable targets)
-      if (filterMode === 'attackable' && address && myPlants.length > 0) {
-        return renderRankingState(
-          <div className="text-center text-muted-foreground">
-            <p>No attackable plants found. All plants are either yours, dead, or protected by fences.</p>
-          </div>
         );
       }
 

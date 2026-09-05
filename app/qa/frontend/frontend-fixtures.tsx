@@ -22,6 +22,7 @@ import { DialogLayoutFixtures } from './dialog-layout-fixtures';
 import { DenseSurfaceFixtures } from './dense-surface-fixtures';
 import { RankingQueryFixtures } from './ranking-query-fixtures';
 import { ControllerFixtures } from './controller-fixtures';
+import { PlantAttackFixtures } from './plant-attack-fixtures';
 
 const gardenItems: GardenItem[] = [
   { id: '1', name: 'Water', price: BigInt('25875000000000000000'), points: 0, timeExtension: 43200 },
@@ -102,6 +103,7 @@ export function FrontendFixtures() {
       {['idle', 'buildingTransaction', 'transactionPending', 'submissionAmbiguous', 'transactionStale', 'confirmedSyncing', 'success', 'rejected', 'reverted'].map(state => <option key={state}>{state}</option>)}
     </select>
     {feedback && <TransactionFeedbackCard feedback={feedback} onDismiss={() => setFeedbackState('idle')} />}
+    <PlantAttackFixtures />
     <ControllerFixtures />
   </main>;
 }
