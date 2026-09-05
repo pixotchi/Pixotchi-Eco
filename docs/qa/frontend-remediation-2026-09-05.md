@@ -6,6 +6,8 @@ The initial findings now have implemented remedies, including the prioritized co
 
 ## Restored incoming chat backgrounds
 
+Follow-up: the chat Profile action now uses the existing 32px compact button height, matching mobile Tasks/Stake, instead of overriding it to 44px. Live checks at 390/820/1440px confirmed the height and no message overflow. All 14 chat behavior cases and three visual contexts passed; the updated chat images were reviewed. Focused lint passed.
+
 Restored the pre-remediation AI bubble surface from `6f7ddf0` and applied it to both AI replies and other players' public messages: `chat-white-surface`, its theme-specific highlight gradient, border and hairline shadow. This supersedes the flat `bg-card` treatment recorded below. The change is confined to the shared incoming bubble; outgoing message styling and chat behavior are unchanged.
 
 Live public and AI histories were checked at 390, 820 and 1440px in Light, Green and Dark. All nine combinations use matching received backgrounds, gradients, borders and foregrounds with no message overflow. Reviewed phone, tablet and desktop captures include [both conversations in Green](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-green-1440-both.png), [public messages in Dark](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-dark-390-public.png) and [AI replies in Dark](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-dark-390-ai.png).

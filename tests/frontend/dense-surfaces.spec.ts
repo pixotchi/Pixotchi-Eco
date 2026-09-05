@@ -32,7 +32,7 @@ test('chat long content and profile actions fit with readable timestamps', async
   await expect(region.getByRole('heading', { name: 'Your next steps' })).toBeVisible();
   const button = region.getByRole('button', { name: /Open profile for/ });
   const box = (await button.boundingBox())!;
-  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBe(32);
   await button.click();
   await expect(region.getByLabel('Fixture profile visits')).toHaveText('1');
   await expect(region.locator('time')).toHaveCount(3);

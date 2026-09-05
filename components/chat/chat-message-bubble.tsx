@@ -45,7 +45,7 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
       }}
       variant="ghost"
       size="compact"
-      className="min-h-11 min-w-11 rounded-md border-transparent bg-transparent px-2 py-1 text-xs text-foreground shadow-none hover:bg-muted active:translate-y-0 active:scale-100"
+      className="min-w-11 rounded-md border-transparent bg-transparent px-2 py-1 text-xs text-foreground shadow-none hover:bg-muted active:translate-y-0 active:scale-100"
       aria-label={`Open profile for ${displayName}`}
     >
       Profile
