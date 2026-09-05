@@ -4,6 +4,14 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Restored incoming chat backgrounds
+
+Restored the pre-remediation AI bubble surface from `6f7ddf0` and applied it to both AI replies and other players' public messages: `chat-white-surface`, its theme-specific highlight gradient, border and hairline shadow. This supersedes the flat `bg-card` treatment recorded below. The change is confined to the shared incoming bubble; outgoing message styling and chat behavior are unchanged.
+
+Live public and AI histories were checked at 390, 820 and 1440px in Light, Green and Dark. All nine combinations use matching received backgrounds, gradients, borders and foregrounds with no message overflow. Reviewed phone, tablet and desktop captures include [both conversations in Green](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-green-1440-both.png), [public messages in Dark](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-dark-390-public.png) and [AI replies in Dark](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/chat-restored-dark-390-ai.png).
+
+Focused lint and all 14 Chromium/WebKit chat behavior cases passed. The three Windows chat baselines were regenerated and visually reviewed; the existing image checks now use a tighter color threshold for chat so flattening the subtle gradient cannot hide inside the former tolerance. All three visual contexts passed against the updated baselines. No message or transaction was sent.
+
 ## Plant attack availability and public chat bubbles
 
 The Attackable ranking no longer blames missing targets when the player's own plants are on cooldown. It shows a resting state, the 30-minute rule, a live countdown to the earliest living attacker's availability, and a way to browse all plants. Dead plants, no owned plants, failed/loading reads and ready attackers with no eligible targets have distinct copy. Owned snapshots are scoped to the wallet. A deadline clock invalidates the target list when attacker/target cooldowns or protection expire, without rerendering the entire ranking each second; the existing countdown hook updates only the countdown. Shared pure attack rules cover ownership, level, death, protection and timestamps.

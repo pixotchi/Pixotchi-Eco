@@ -22,7 +22,7 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
 
   const bgColor = isOwn
     ? 'bg-primary text-primary-foreground'
-    : 'border border-border/60 bg-card text-foreground';
+    : 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';

@@ -40,10 +40,11 @@ test('chat long content and profile actions fit with readable timestamps', async
   expect(await region.getByRole('article').evaluateAll(els => els.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
   const publicBubble = region.getByRole('article', { name: /Message from A very long/ });
   const assistantBubble = region.getByRole('article', { name: 'Message from Neural Seed', exact: true });
-  const surface = (element: HTMLElement | SVGElement) => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderTopWidth });
+  const surface = (element: HTMLElement | SVGElement) => ({ background: getComputedStyle(element).backgroundColor, image: getComputedStyle(element).backgroundImage, border: getComputedStyle(element).borderTopWidth });
   const publicSurface = await publicBubble.evaluate(surface);
   expect(publicSurface).toEqual(await assistantBubble.evaluate(surface));
   expect(publicSurface.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(publicSurface.image).toContain('linear-gradient');
   expect(publicSurface.border).toBe('1px');
   expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none');
 });
@@ -68,7 +69,7 @@ test('reviewed dense surface appearance', async ({ page }, testInfo) => {
   for (const name of ['barracks', 'chat', 'arcade']) {
     const surface = page.locator(`[data-visual=${name}]`);
     await surface.scrollIntoViewIfNeeded();
-    await expect(surface).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', scale: 'css' });
+    await expect(surface).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', scale: 'css', threshold: name === 'chat' ? 0.05 : 0.2 });
   }
 });
 
