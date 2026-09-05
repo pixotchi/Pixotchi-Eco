@@ -36,7 +36,6 @@ import { queryKeys } from "@/lib/query-keys";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
 import dynamic from "next/dynamic";
-import { PackageCheck, Route } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { useAccount,useBlockNumber } from "wagmi";
@@ -205,7 +204,7 @@ function UtilityBuildingTile({
               className={`font-pixel text-[1.35rem] leading-none tracking-normal ${selected ? 'text-primary' : 'text-foreground/80'}`}
               aria-hidden="true"
             >
-              {glyph === "BC" ? <PackageCheck className="h-8 w-8" /> : <Route className="h-8 w-8" />}
+              {glyph}
             </span>
           </div>
         </button>
