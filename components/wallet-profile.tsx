@@ -141,7 +141,7 @@ function WalletStatusPill({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-[11px] font-semibold leading-none shadow-[var(--shadow-hairline)]",
+        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-[11px] font-semibold leading-tight shadow-[var(--shadow-hairline)]",
         toneClassName
       )}
     >
@@ -151,7 +151,7 @@ function WalletStatusPill({
           className="h-2.5 w-2.5 shrink-0 rounded-[5%] bg-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.88),0_1px_3px_rgba(0,0,0,0.16)]"
         />
       ) : null}
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 break-words">{children}</span>
     </span>
   );
 }
@@ -174,12 +174,12 @@ function WalletInfoRow({
         className
       )}
     >
-      <div className="min-w-0">
-        <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="min-w-min">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </span>
         {description ? (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
             {description}
           </span>
         ) : null}
@@ -687,11 +687,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 </div>
               )}
 
-              {/* Wallet Connection Info */}
-
-              {/* Airdrop Claim Card - shown when eligible */}
-
-
               <div className="space-y-3">
                 <WalletSectionHeader title="Account" />
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
@@ -723,22 +718,18 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             onClick={() => openExternalUrl("https://base.org/names")}
                             variant="outline"
                             size="compact"
-                            className="basis-full px-3 text-xs"
+                            className={cn("basis-full px-3 text-xs", BASE_BRAND_BUTTON_CLASSNAME, "!bg-none")}
                           >
                             Get Basename
                           </Button>
                         ) : null}
                       </div>
 
-                      <BalanceCard variant="wallet-profile" />
-                      <AirdropClaimCard />
-                      <details>
-                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Connection and preferences</summary>
                       <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
                         <WalletInfoRow
                           label="Provider"
                         >
-                          <span className="truncate">{getWalletProviderName()}</span>
+                          <span className="min-w-0 break-words">{getWalletProviderName()}</span>
                         </WalletInfoRow>
 
                         <WalletInfoRow
@@ -795,8 +786,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
                         <PerformanceModeToggleRow />
                       </div>
-
-                      </details>
 
                       {debugMode && isMiniApp && fcContext && (
                         <div className="overflow-hidden rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.24)] bg-background/40 shadow-[var(--shadow-hairline)]">
@@ -928,9 +917,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 </div>
               )}
 
-
-
-
+              <BalanceCard variant="wallet-profile" />
+              <AirdropClaimCard />
             </div>
           </DialogBody>
           <DialogFooter sticky className="grid grid-cols-2 gap-2 space-x-0 max-[380px]:grid-cols-1">
