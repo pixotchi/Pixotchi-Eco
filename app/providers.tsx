@@ -17,6 +17,7 @@ import {
 } from "@/lib/host-environment";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
+import { OwnerResourceQuerySync } from "@/components/owner-resource-query-sync";
 import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
@@ -661,6 +662,7 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
                   config={privyConfig}
                 >
                   <QueryClientProvider client={queryClient}>
+                    <OwnerResourceQuerySync />
                     <HostEnvironmentProvider>
                       <MiniAppReadySignal />
                       <ProvidersContent

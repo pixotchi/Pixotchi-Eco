@@ -340,7 +340,18 @@ export type FrameContext = {
 export type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
 // Types for Ponder Indexer
-export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent | BaccaratRoundResultEvent;
+export type ActivityEvent = AttackEvent | KilledEvent | MintEvent | PlayedEvent | ItemConsumedEvent | ShopItemPurchasedEvent | LandTransferEvent | LandMintedEvent | LandNameChangedEvent | VillageUpgradedWithLeafEvent | VillageSpeedUpWithSeedEvent | TownUpgradedWithLeafEvent | TownSpeedUpWithSeedEvent | QuestStartedEvent | QuestFinalizedEvent | VillageProductionClaimedEvent | BarracksBuiltEvent | BarracksRaidEvent | CasinoBuiltEvent | RouletteSpinResultEvent | BlackjackResultEvent | BaccaratRoundResultEvent | WarehouseAssignmentEvent;
+
+export type WarehouseAssignmentEvent = {
+  __typename: 'WarehouseAssignmentEvent';
+  id: string;
+  timestamp: string;
+  blockHeight: string;
+  landId: string;
+  plantId: string;
+  resource: 'points' | 'lifetime';
+  amount: string;
+};
 
 export type GameKnowledgeTopic = {
   aliases: string[];

@@ -68,6 +68,12 @@ export function formatEthShort(wei: number | bigint): string {
 }
 
 // Format duration from seconds to a readable string (e.g., "2d 4h", "30m")
+export const BASE_SECONDS_PER_BLOCK = 2;
+
+export function formatUpgradeDuration(blocks: bigint): string {
+  return blocks === BigInt(0) ? 'Instant' : `~${formatDuration(Number(blocks) * BASE_SECONDS_PER_BLOCK)}`;
+}
+
 export function formatDuration(seconds: number): string {
   if (seconds === 0) return '0s';
 
@@ -458,9 +464,8 @@ export function calculateUpgradeProgress(building: UntypedValue, currentBlock: b
 }
 
 export function calculateTimeLeft(building: UntypedValue, currentBlock: bigint): string {
-  const SECONDS_PER_BLOCK = 2; // Base network: ~2 seconds per block
   const blocksLeft = building.blockHeightUntilUpgradeDone - currentBlock;
-  const secondsLeft = Number(blocksLeft) * SECONDS_PER_BLOCK;
+  const secondsLeft = Number(blocksLeft) * BASE_SECONDS_PER_BLOCK;
 
   if (secondsLeft <= 0) return "Complete";
 

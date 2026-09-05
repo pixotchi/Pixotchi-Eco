@@ -7,6 +7,7 @@ import { BarracksConfigV2, BarracksTroopConfigV2, BuildingData, BuildingType } f
 import {
   cn,
   formatDuration,
+  formatUpgradeDuration,
   formatLifetimeProduction,
   formatProductionRate,
   formatTokenAmount,
@@ -592,11 +593,16 @@ export default function BuildingInfoDialog({
                     valueClassName="text-amber-600"
                   />
                   <InfoRow
-                    label="Speed up"
+                    label="Construction time"
+                    value={formatUpgradeDuration(building.levelUpgradeBlockInterval)}
+                  />
+                  <InfoRow
+                    label="Optional speed up"
                     value={`${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI`}
                     valueClassName="text-amber-600"
                   />
                 </InfoRows>
+                <p className="text-xs text-muted-foreground">Speed up completes an upgrade after it has started.</p>
               </InfoSection>
             )}
           </div>

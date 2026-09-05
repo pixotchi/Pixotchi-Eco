@@ -23,6 +23,8 @@ import {
 } from 'viem';
 import { base } from 'viem/chains';
 import { useAccount, useBalance, useSwitchChain, useWalletClient } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
+import { estimateNextSwapFee, requireSwapCallFunds } from '@/lib/swap/gas';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,12 +122,6 @@ type SmartWalletBatchCall = {
   data: Hex;
   value: bigint;
 };
-
-// Reserve kept after every ETH sell, and required for unsponsored token sells.
-// A single value is intentional: the previous 0.00005 ETH Max reserve
-// conflicted with a separate 0.0002 ETH execution gate, making the screen's
-// own Max result impossible to submit.
-const ETH_GAS_RESERVE_WEI = BigInt(50_000_000_000_000);
 
 const SWAP_APPROVAL_INTENT_KEY = 'pixotchi-swap:approval:v1';
 const SWAP_EXECUTION_INTENT_KEY = 'pixotchi-swap:execution:v1';
@@ -435,6 +431,16 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   return json;
 }
 
+async function fetchSwapStep(address: Address, step: SwapQuoteStep, amountIn: string, quoteToken: string, signal?: AbortSignal) {
+  return fetchJson<SwapBuildStepResponse>('/api/swap/build-step', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quoteToken, kind: step.kind, sellToken: step.sellToken, buyToken: step.buyToken, amountIn, sender: address, recipient: address }),
+    signal,
+    credentials: 'same-origin',
+  });
+}
+
 export default function PixotchiSwapPanel() {
   const { address, chainId, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -449,6 +455,8 @@ export default function PixotchiSwapPanel() {
   const deferredSellAmount = useDeferredValue(sellAmount);
   const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isSettingMax, setIsSettingMax] = useState(false);
+  const maxRequestRef = useRef<AbortController | null>(null);
   const [isRecoveryChecking, setIsRecoveryChecking] = useState(true);
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<PendingEvmRecord | null>(null);
@@ -588,18 +596,25 @@ export default function PixotchiSwapPanel() {
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
   );
-  const usesSponsoredSmartWalletForSwap =
+  const usesSmartWalletBatch =
     isSmartWallet &&
-    isSponsored &&
     typeof (walletClient as UntypedValue)?.sendCalls === 'function' &&
     typeof (walletClient as UntypedValue)?.waitForCallsStatus === 'function';
-  const requiredEthForSwap = useMemo(() => {
-    const nativeValue = sellToken === 'ETH' && parsedAmount ? parsedAmount : BigInt(0);
-    const reserve = sellToken === 'ETH' || !usesSponsoredSmartWalletForSwap
-      ? ETH_GAS_RESERVE_WEI
-      : BigInt(0);
-    return nativeValue + reserve;
-  }, [parsedAmount, sellToken, usesSponsoredSmartWalletForSwap]);
+  const feeQuery = useQuery({
+    queryKey: ['swapFee', address, chainId, currentQuote?.quoteToken],
+    queryFn: async ({ signal }) => {
+      if (!address || !currentQuote?.quoteToken || !currentQuote.steps[0]) throw new Error('A fresh quote is required.');
+      const step = currentQuote.steps[0];
+      const built = await fetchSwapStep(address, step, step.amountIn, currentQuote.quoteToken, signal);
+      return estimateNextSwapFee(readClient, address, built);
+    },
+    enabled: Boolean(address && chainId === BASE_CHAIN_ID && currentQuote?.quoteToken && currentQuote.strategy !== 'blocked' && isAmountValid && !hasInsufficientBalance && !usesSmartWalletBatch && isVisible && !isExecuting),
+    staleTime: 10_000,
+    refetchInterval: isVisible && !isExecuting ? 15_000 : false,
+    retry: 1,
+  });
+  const feeUnavailable = !usesSmartWalletBatch && Boolean(currentQuote?.quoteToken) && (feeQuery.isError || !feeQuery.data);
+  const requiredEthForSwap = (sellToken === 'ETH' && parsedAmount ? parsedAmount : BigInt(0)) + (usesSmartWalletBatch ? BigInt(0) : feeQuery.data?.fee ?? BigInt(0));
   const hasInsufficientGas = Boolean(
     address &&
       currentQuote &&
@@ -610,6 +625,7 @@ export default function PixotchiSwapPanel() {
   );
   const actionDisabled =
     isExecuting ||
+    isSettingMax ||
     isRecoveryChecking ||
     isPeerBlocked ||
     !currentQuote ||
@@ -619,6 +635,7 @@ export default function PixotchiSwapPanel() {
     chainId !== BASE_CHAIN_ID ||
     !walletClient?.account ||
     hasInsufficientBalance ||
+    feeUnavailable ||
     hasInsufficientGas;
 
   const markQuoteActivity = useCallback(() => {
@@ -909,23 +926,7 @@ export default function PixotchiSwapPanel() {
         throw new Error(S.errors.connectWallet);
       }
 
-      return fetchJson<SwapBuildStepResponse>('/api/swap/build-step', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          quoteToken,
-          kind: step.kind,
-          sellToken: step.sellToken,
-          buyToken: step.buyToken,
-          amountIn,
-          sender: address,
-          recipient: address,
-        }),
-        signal,
-        credentials: 'same-origin',
-      });
+      return fetchSwapStep(address, step, amountIn, quoteToken, signal);
     },
     [address],
   );
@@ -1280,7 +1281,7 @@ export default function PixotchiSwapPanel() {
         message: S.execution.approveToken,
       });
 
-      const approvalCall: PendingEvmCall = {
+      const approvalCall = {
         to: approval.token,
         data: encodeFunctionData({
           abi: ERC20_TOKEN_ABI,
@@ -1289,6 +1290,7 @@ export default function PixotchiSwapPanel() {
         }),
         value: BigInt(0),
       };
+      await requireSwapCallFunds(readClient, address, approvalCall);
       const submitted = await submitTrackedAttempt({
         calls: [approvalCall],
         method: 'direct',
@@ -1348,6 +1350,7 @@ export default function PixotchiSwapPanel() {
       address,
       monitorTrackedSubmission,
       readAllowance,
+      readClient,
       submitTrackedAttempt,
       updateExecutionStep,
       walletClient,
@@ -1477,24 +1480,12 @@ export default function PixotchiSwapPanel() {
         isSmartWallet &&
         typeof walletClient?.sendCalls === 'function' &&
         typeof walletClient?.waitForCallsStatus === 'function';
-      const usesSponsoredSmartWallet = canUseSmartWalletBatch && isSponsored;
-
-      // Gas safety: make sure the wallet has enough ETH to actually broadcast
-      // the transaction. Sponsored smart-wallet paths still need any ETH value
-      // attached to the swap itself, but they do not need the extra gas buffer.
-      if (address && ethBalanceData?.value !== undefined) {
-        const reserve = builtStep.step.sellToken === 'ETH' || !usesSponsoredSmartWallet
-          ? ETH_GAS_RESERVE_WEI
-          : BigInt(0);
-        const requiredEth =
-          BigInt(builtStep.transaction.value || '0') +
-          reserve;
-        if (ethBalanceData.value < requiredEth) {
+      if (canUseSmartWalletBatch) {
+        // The bundler estimates account-execution fees and sponsorship. Native
+        // swap value still has to be funded by the connected account.
+        if (address && await readClient.getBalance({ address }) < BigInt(builtStep.transaction.value)) {
           throw new Error(S.errors.insufficientGas);
         }
-      }
-
-      if (canUseSmartWalletBatch) {
         return executeSmartWalletSwapBatch(
           builtStep,
           stepIndex,
@@ -1511,11 +1502,12 @@ export default function PixotchiSwapPanel() {
         message: builtStep.step.routeLabel,
       });
 
-      const swapCall: PendingEvmCall = {
+      const swapCall = {
         to: builtStep.transaction.to,
         data: builtStep.transaction.data,
         value: BigInt(builtStep.transaction.value),
       };
+      await requireSwapCallFunds(readClient, walletClient.account.address, swapCall);
       const submitted = await submitTrackedAttempt({
         calls: [swapCall],
         method: 'direct',
@@ -1566,10 +1558,9 @@ export default function PixotchiSwapPanel() {
       address,
       buildStep,
       ensureApproval,
-      ethBalanceData?.value,
       executeSmartWalletSwapBatch,
-      isSponsored,
       isSmartWallet,
+      readClient,
       monitorTrackedSubmission,
       submitTrackedAttempt,
       updateExecutionStep,
@@ -1895,7 +1886,11 @@ export default function PixotchiSwapPanel() {
     setBuyToken(sellToken);
   }, [buyToken, markQuoteActivity, sellToken]);
 
-  const handleSetMax = useCallback(() => {
+  useEffect(() => () => {
+    maxRequestRef.current?.abort();
+  }, [address, buyToken, sellToken, isVisible]);
+
+  const handleSetMax = useCallback(async () => {
     if (!address) {
       toast.error(S.errors.connectWallet);
       return;
@@ -1906,23 +1901,46 @@ export default function PixotchiSwapPanel() {
       return;
     }
 
-    let amount = sellBalanceRaw;
-    if (sellToken === 'ETH') {
-      if (amount <= ETH_GAS_RESERVE_WEI) {
-        toast.error(S.errors.keepEthForGas);
-        return;
+    maxRequestRef.current?.abort();
+    const controller = new AbortController();
+    maxRequestRef.current = controller;
+    setIsSettingMax(true);
+    try {
+      let amount = sellBalanceRaw;
+      if (sellToken === 'ETH') {
+        const balance = await readClient.getBalance({ address });
+        amount = balance;
+        if (!(usesSmartWalletBatch && isSponsored)) {
+          // Probe below the balance so estimation itself can afford gas, then
+          // re-estimate the exact Max calldata and only adjust downward.
+          let probe = balance / BigInt(2);
+          for (let i = 0; i < 3; i++) {
+            controller.signal.throwIfAborted();
+            if (probe <= BigInt(0)) throw new Error(S.errors.keepEthForGas);
+            const quote = await fetchQuoteOnce(probe, controller.signal);
+            if (!quote.quoteToken || !quote.steps[0] || quote.strategy === 'blocked') throw new Error('Could not estimate Max for this pair.');
+            const built = await buildStep(quote.steps[0], quote.steps[0].amountIn, quote.quoteToken, controller.signal);
+            const { fee } = await estimateNextSwapFee(readClient, address, built);
+            const affordable = balance - fee;
+            if (i > 0 && amount <= affordable) break;
+            amount = affordable;
+            probe = amount;
+          }
+        }
       }
-      amount -= ETH_GAS_RESERVE_WEI;
+      controller.signal.throwIfAborted();
+      if (amount <= BigInt(0)) throw new Error(S.errors.keepEthForGas);
+      markQuoteActivity();
+      setSellAmount(formatEditableAmount(amount, SWAP_TOKEN_MAP[sellToken].decimals));
+    } catch (error) {
+      if (!controller.signal.aborted) toast.error(humanizeSwapError(error));
+    } finally {
+      if (maxRequestRef.current === controller) {
+        maxRequestRef.current = null;
+        setIsSettingMax(false);
+      }
     }
-
-    if (amount <= BigInt(0)) {
-      toast.error(S.errors.noBalance);
-      return;
-    }
-
-    markQuoteActivity();
-    setSellAmount(formatEditableAmount(amount, SWAP_TOKEN_MAP[sellToken].decimals));
-  }, [address, markQuoteActivity, sellBalanceLoading, sellBalanceRaw, sellToken]);
+  }, [address, buildStep, fetchQuoteOnce, isSponsored, markQuoteActivity, readClient, sellBalanceLoading, sellBalanceRaw, sellToken, usesSmartWalletBatch]);
 
   const handleSellTokenSelect = useCallback(
     (next: UserSwapTokenId) => {
@@ -2003,10 +2021,13 @@ export default function PixotchiSwapPanel() {
     if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
     if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
     if (!currentQuote) return 'Waiting for a swap quote.';
+    if (feeUnavailable) return feeQuery.isError ? 'Network fee unavailable. Retry the estimate.' : 'Checking the network fee...';
     return null;
   }, [
     chainId,
     currentQuote,
+    feeUnavailable,
+    feeQuery.isError,
     hasInsufficientBalance,
     hasInsufficientGas,
     isAmountValid,
@@ -2033,9 +2054,12 @@ export default function PixotchiSwapPanel() {
     if (isDeferredLagging || isQuoteLoading) return 'Fetching Quote...';
     if (currentQuote?.strategy === 'blocked') return 'Pair Unavailable';
     if (!currentQuote) return 'Waiting for Quote';
+    if (feeUnavailable) return feeQuery.isError ? 'Fee Unavailable' : 'Checking Fee...';
     return S.buttons.swap;
   }, [
     actionDisabled,
+    feeUnavailable,
+    feeQuery.isError,
     chainId,
     currentQuote,
     hasInsufficientBalance,
@@ -2088,7 +2112,7 @@ export default function PixotchiSwapPanel() {
                 }}
                 inputMode="decimal"
                 placeholder="0.0"
-                disabled={isExecuting}
+                disabled={isExecuting || isSettingMax}
                 aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
                 className={SWAP_AMOUNT_INPUT_CLASS}
               />
@@ -2096,7 +2120,7 @@ export default function PixotchiSwapPanel() {
                 value={sellToken}
                 options={allowedSources}
                 onSelect={handleSellTokenSelect}
-                disabled={isExecuting}
+                disabled={isExecuting || isSettingMax}
               />
             </div>
             <div className={SWAP_BALANCE_ROW_CLASS}>
@@ -2125,10 +2149,10 @@ export default function PixotchiSwapPanel() {
                     type="button"
                     className={SWAP_MAX_BUTTON_CLASS}
                     onClick={handleSetMax}
-                    disabled={isExecuting || sellBalanceLoading || sellBalanceRaw <= BigInt(0)}
+                    disabled={isExecuting || isSettingMax || sellBalanceLoading || sellBalanceRaw <= BigInt(0)}
                     aria-label={`${S.labels.max} ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
                   >
-                    {S.labels.max}
+                    {isSettingMax ? 'Checking...' : S.labels.max}
                   </button>
                 ) : null}
               </div>
@@ -2140,7 +2164,7 @@ export default function PixotchiSwapPanel() {
             className={SWAP_DIRECTION_BUTTON_CLASS}
             data-testid="SwapTokensButton"
             onClick={handleFlipTokens}
-            disabled={isExecuting}
+            disabled={isExecuting || isSettingMax}
             aria-label={S.aria.toggleDirection}
           >
             <svg
@@ -2180,7 +2204,7 @@ export default function PixotchiSwapPanel() {
                 value={buyToken}
                 options={allowedTargets}
                 onSelect={handleBuyTokenSelect}
-                disabled={isExecuting}
+                disabled={isExecuting || isSettingMax}
               />
             </div>
             <div className={SWAP_BALANCE_ROW_CLASS}>
@@ -2252,6 +2276,16 @@ export default function PixotchiSwapPanel() {
               className="mt-2"
               onContinue={handleAcknowledgeStaleTransaction}
             />
+          ) : null}
+          {currentQuote && !usesSmartWalletBatch && !hasInsufficientBalance ? (
+            <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">
+              {feeQuery.isError ? (
+                <Button type="button" variant="outline" size="sm" disabled={feeQuery.isFetching} onClick={() => void feeQuery.refetch()}>Retry fee estimate</Button>
+              ) : feeQuery.data ? (
+                <span>{feeQuery.data.stage === 'approval' ? 'Approval' : 'Swap'} fee budget: {formatTokenAmountRounded(feeQuery.data.fee, 18, 8)} ETH, including a buffer.
+                  {feeQuery.data.stage === 'approval' ? ' The swap fee is checked after approval.' : ''}</span>
+              ) : null}
+            </div>
           ) : null}
           <div
             id={messageId}

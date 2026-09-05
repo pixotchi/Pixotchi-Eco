@@ -129,6 +129,7 @@ export function useOwnerResourceList<TItem>({
     enabled: isEnabled,
     gcTime: gcTimeMs,
     queryFn: () => queryFn(),
+    meta: { ownerResourceRead: queryFn },
     queryKey,
     // React Query's focus manager already listens for `visibilitychange`, and
     // the reconnect hook covers `online`. Both used to be hand-wired listeners
@@ -196,6 +197,7 @@ export function useOwnerResourceList<TItem>({
         // renders the result even if this reconciliation is cancelled a moment
         // later. Concurrent calls for the same key are deduped by React Query.
         return queryClient.fetchQuery<TItem[]>({
+          meta: { ownerResourceRead: read },
           queryFn: () => read({ blockNumber }),
           queryKey: key,
           staleTime: force || until ? 0 : staleTime,

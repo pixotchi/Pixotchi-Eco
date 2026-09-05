@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
-import { formatTokenAmount, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
+import { formatTokenAmount, formatUpgradeDuration, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
 import { usePaymaster } from '@/lib/paymaster-context';
 import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
@@ -109,6 +109,12 @@ export default function UpgradePanel({
         {(!isMaxLevel || building.isUpgrading) && (
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">Upgrade Costs</h4>
+            {!building.isUpgrading && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Construction time</span>
+                <span className="font-semibold">{formatUpgradeDuration(building.levelUpgradeBlockInterval)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Normal</span>
               <span className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
@@ -116,11 +122,12 @@ export default function UpgradePanel({
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Speed up</span>
+              <span className="text-muted-foreground">Optional speed up</span>
               <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
                 {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
               </span>
             </div>
+            <p className="text-xs text-muted-foreground">Speed up completes an upgrade after it has started.</p>
           </div>
         )}
 

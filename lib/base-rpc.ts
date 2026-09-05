@@ -507,7 +507,16 @@ function collectRpcErrors(error: UntypedValue, depth = 0, visited = new Set<unkn
 
 /** Errors whose outcome cannot improve by asking another RPC for the same call. */
 export const isDeterministicBaseRpcError = (error: UntypedValue): boolean => {
-  return collectRpcErrors(error).some((candidate) => {
+  const candidates = collectRpcErrors(error);
+  // Some providers report subscription/range restrictions as -32600/-32602.
+  // The same valid log filter can succeed elsewhere in the configured pool.
+  if (candidates.some((candidate) => {
+    const message = String(candidate?.details ?? candidate?.message ?? '').toLowerCase();
+    return message.includes('eth_getlogs') && (
+      message.includes('free tier') || message.includes('upgrade to') || message.includes('limited to')
+    );
+  })) return false;
+  return candidates.some((candidate) => {
     const typed = candidate as { code?: unknown; message?: unknown; name?: unknown };
     const code = typeof typed?.code === 'string' ? Number(typed.code) : typed?.code;
     const name = typeof typed?.name === 'string' ? typed.name.toLowerCase() : '';

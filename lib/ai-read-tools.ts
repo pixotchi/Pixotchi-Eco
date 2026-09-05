@@ -1,5 +1,6 @@
 import 'server-only';
 import { formatAddress } from "@/lib/utils";
+import { getPlantLifetime } from '@/lib/plant-lifetime';
 
 import { tool } from 'ai';
 import { decodeEventLog, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Hex } from 'viem';
@@ -785,8 +786,7 @@ function normalizePlant(plant: Plant) {
     statusLabel: statusLabel(plant.status, plant.statusStr),
     strainId: plant.strain,
     strainName: PLANT_STRAINS_BY_ID[plant.strain]?.name || `Strain ${plant.strain}`,
-    timeUntilStarvingHours: plant.timeUntilStarving / 3600,
-    timeUntilStarvingSeconds: plant.timeUntilStarving,
+    ...getPlantLifetime(plant.timeUntilStarving, Math.floor(Date.now() / 1000)),
   };
 }
 

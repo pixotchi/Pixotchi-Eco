@@ -46,6 +46,7 @@ import {
   QuestStartedEventRenderer,
   QuestFinalizedEventRenderer,
   VillageProductionClaimedEventRenderer,
+  WarehouseAssignmentEventRenderer,
   BarracksBuiltEventRenderer,
   BarracksRaidEventRenderer,
   CasinoBuiltEventRenderer,
@@ -403,6 +404,8 @@ export default function ActivityTab() {
         return <QuestFinalizedEventRenderer key={activity.id} event={activity} userAddress={address} />;
       case "VillageProductionClaimedEvent":
         return <VillageProductionClaimedEventRenderer key={activity.id} event={activity} />;
+      case "WarehouseAssignmentEvent":
+        return <WarehouseAssignmentEventRenderer key={activity.id} event={activity} />;
       case "BarracksBuiltEvent":
         return <BarracksBuiltEventRenderer key={activity.id} event={activity} />;
       case "BarracksRaidEvent":

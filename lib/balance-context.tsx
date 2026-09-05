@@ -90,20 +90,15 @@ export function BalanceProvider({ children }: { children: ReactNode }) {
   const pixotchiBalance = pixotchiRead.value ?? lastKnown?.pixotchiBalance ?? BigInt(0);
   const balanceReadSettled = Boolean(identity && isConnected && !isWagmiLoading && (data !== undefined || wagmiError));
   const getBalanceReadStatus = (read: { value: bigint | null; error: unknown }, snapshot?: bigint): BalanceReadStatus => {
+    if (wagmiError) return 'error';
     if (read.value !== null) return 'ready';
     if (snapshot !== undefined) return 'error';
     if (balanceReadSettled) return 'error';
     return 'unknown';
   };
-  const seedBalanceStatus: BalanceReadStatus = seedRead.value !== null
-    ? 'ready'
-    : getBalanceReadStatus(seedRead, lastKnown?.seedBalance);
-  const leafBalanceStatus: BalanceReadStatus = leafRead.value !== null
-    ? 'ready'
-    : getBalanceReadStatus(leafRead, lastKnown?.leafBalance);
-  const pixotchiBalanceStatus: BalanceReadStatus = pixotchiRead.value !== null
-    ? 'ready'
-    : getBalanceReadStatus(pixotchiRead, lastKnown?.pixotchiBalance);
+  const seedBalanceStatus = getBalanceReadStatus(seedRead, lastKnown?.seedBalance);
+  const leafBalanceStatus = getBalanceReadStatus(leafRead, lastKnown?.leafBalance);
+  const pixotchiBalanceStatus = getBalanceReadStatus(pixotchiRead, lastKnown?.pixotchiBalance);
   const balanceError = seedRead.error ?? leafRead.error ?? pixotchiRead.error ?? wagmiError ?? null;
 
   useEffect(() => {

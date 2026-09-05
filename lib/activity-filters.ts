@@ -53,6 +53,7 @@ const CATEGORY_BY_TYPENAME: Record<ActivityTypename, ActivityCategoryBucket> = {
   QuestStartedEvent: 'lands',
   QuestFinalizedEvent: 'lands',
   VillageProductionClaimedEvent: 'lands',
+  WarehouseAssignmentEvent: 'lands',
   BarracksBuiltEvent: 'lands',
   CasinoBuiltEvent: 'lands',
 

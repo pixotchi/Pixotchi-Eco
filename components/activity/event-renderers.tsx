@@ -2,6 +2,7 @@
 
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import type { ActivityPerspective } from '@/lib/activity-filters';
+import type { WarehouseAssignmentEvent } from '@/lib/types';
 import { ITEM_ICONS } from '@/lib/constants';
 import {
 ActivityEvent,AttackEvent,BaccaratRoundResultEvent,BarracksBuiltEvent,
@@ -101,6 +102,8 @@ const EventIcon = React.memo(({
         }
         return { iconSrc: "/icons/BEE.png", altText: "Shop Item" };
       // Land Event Icons
+      case 'WarehouseAssignmentEvent':
+        return { iconSrc: '/icons/ware-house.png', altText: 'Warehouse assignment' };
       case 'LandTransferEvent':
         return { iconSrc: "/icons/ware-house.png", altText: "Land Transfer" };
       case 'LandMintedEvent':
@@ -551,6 +554,19 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
     </EventWrapper>
   );
 };
+
+export const WarehouseAssignmentEventRenderer = ({ event }: { event: WarehouseAssignmentEvent }) => (
+  <EventWrapper event={event}>
+    <p className="text-sm">
+      <LandName landId={event.landId} isYou={false} /> applied{' '}
+      <span className="font-semibold text-value">{event.resource === 'points'
+        ? `${formatScore(Number(event.amount))} PTS`
+        : `${formatDuration(Number(event.amount))} lifetime`}</span>{' '}
+      from its warehouse to <span className="font-bold">Plant #{event.plantId}</span>.{' '}
+      <a className="underline underline-offset-2" href={`https://basescan.org/block/${event.blockHeight}`} target="_blank" rel="noopener noreferrer">View block</a>
+    </p>
+  </EventWrapper>
+);
 
 export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();

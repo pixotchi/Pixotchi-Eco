@@ -4,6 +4,7 @@ import { unstable_cache } from 'next/cache';
 import { ActivityEvent, PlayedEvent } from './types';
 import { getPlantsByOwner, getLandsByOwner } from './contracts';
 import { fetchIndexerGraphQL } from './indexer-client';
+import { normalizeWarehouseActivity, warehouseActivityQuery } from './warehouse-activity';
 
 const ALL_ACTIVITY_CACHE_SECONDS = 3;
 const MY_ACTIVITY_CACHE_SECONDS = 5;
@@ -114,6 +115,7 @@ function dedupePlayedEvents(activities: ActivityEvent[]): ActivityEvent[] {
 
 const GET_ALL_ACTIVITY_QUERY = `
   query GetAllActivity($cutoff: BigInt!) {
+    ${warehouseActivityQuery(ALL_ACTIVITY_LIMIT, ACTIVITY_WINDOW_FILTER)}
     attacks(orderBy: "timestamp", orderDirection: "desc", limit: ${ALL_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER} }) {
       items {
         __typename
@@ -362,6 +364,7 @@ const GET_ALL_ACTIVITY_QUERY = `
 
 const GET_MY_ACTIVITY_QUERY = `
   query GetMyActivity($plantIds: [BigInt!], $landIds: [BigInt!], $playerAddress: String!, $cutoff: BigInt!) {
+    ${warehouseActivityQuery(MY_ACTIVITY_LIMIT, `${ACTIVITY_WINDOW_FILTER}, OR: [{ landId_in: $landIds }, { plantId_in: $plantIds }]`)}
     attacks(orderBy: "timestamp", orderDirection: "desc", limit: ${MY_ACTIVITY_LIMIT}, where: { ${ACTIVITY_WINDOW_FILTER}, OR: [{ attacker_in: $plantIds }, { winner_in: $plantIds }, { loser_in: $plantIds }]}) {
       items {
         __typename
@@ -741,6 +744,7 @@ export async function getAllActivity(): Promise<ActivityEvent[]> {
       ...(data.blackjackResultEvents?.items || []),
       ...(data.baccaratRoundResultEvents?.items || []),
       ...barracksEvents,
+      ...normalizeWarehouseActivity(data),
     ];
 
     const deduped = dedupePlayedEvents(allActivities);
@@ -837,6 +841,7 @@ export async function getMyActivityFeed(address: string): Promise<MyActivityFeed
       ...(data.blackjackResultEvents?.items || []),
       ...(data.baccaratRoundResultEvents?.items || []),
       ...barracksEvents,
+      ...normalizeWarehouseActivity(data),
     ];
 
     const deduped = dedupePlayedEvents(myActivities);
@@ -865,7 +870,7 @@ export async function getMyActivity(address: string): Promise<ActivityEvent[]> {
 
 export const getCachedAllActivity = unstable_cache(
   async () => getAllActivity(),
-  ['activity:all:v1'],
+  ['activity:all:v3'],
   { revalidate: ALL_ACTIVITY_CACHE_SECONDS, tags: ['activity:all'] },
 );
 
@@ -873,7 +878,7 @@ export function getCachedMyActivityFeed(address: string): Promise<MyActivityFeed
   const normalizedAddress = address.toLowerCase();
   const cachedGetter = unstable_cache(
     async () => getMyActivityFeed(normalizedAddress),
-    ['activity:my:v2', normalizedAddress],
+    ['activity:my:v4', normalizedAddress],
     {
       revalidate: MY_ACTIVITY_CACHE_SECONDS,
       tags: [`activity:${normalizedAddress}`],

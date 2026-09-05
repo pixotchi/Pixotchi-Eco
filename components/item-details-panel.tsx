@@ -15,7 +15,9 @@ import { Input } from '@/components/ui/input';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FenceV2Config } from '@/lib/contracts';
-import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,getTokenBalance,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
+import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
+import { useBalances } from '@/lib/balance-context';
+import { Button } from '@/components/ui/button';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { usePaymaster } from '@/lib/paymaster-context';
@@ -23,7 +25,7 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
-import { formatDuration,formatTokenAmount,getFriendlyErrorMessage } from '@/lib/utils';
+import { formatDuration,formatTokenAmount,formatTokenAmountRounded,getFriendlyErrorMessage } from '@/lib/utils';
 import Image from 'next/image';
 import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -64,8 +66,8 @@ export default function ItemDetailsPanel({
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const { isEthMode } = useEthModeSafe();
-  const [userSeedBalance, setUserSeedBalance] = useState<bigint>(BigInt(0));
-  const [, setBalanceLoading] = useState(true);
+  const { seedBalance: userSeedBalance, seedBalanceStatus, refreshBalances } = useBalances();
+  const seedBalanceReady = seedBalanceStatus === 'ready';
   const [fenceV2Config, setFenceV2Config] = useState<FenceV2Config | null>(null);
   const [fenceV2Days, setFenceV2Days] = useState<number>(1);
   const [fenceV2DaysInput, setFenceV2DaysInput] = useState("1");
@@ -109,36 +111,12 @@ export default function ItemDetailsPanel({
     ? false
     : isSmartWallet && isEthMode && ethQuote
       ? ethBalance < ethQuote.ethAmountWithBuffer
-      : isFenceItem
+      : !seedBalanceReady ? false : isFenceItem
         ? fenceV2QuoteState.status === 'known' && fenceV2QuoteState.value > userSeedBalance
         : totalCost > userSeedBalance;
 
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
-
-  // Fetch user's SEED balance
-  useEffect(() => {
-    const fetchBalance = async () => {
-      if (!address) {
-        setUserSeedBalance(BigInt(0));
-        setBalanceLoading(false);
-        return;
-      }
-
-      setBalanceLoading(true);
-      try {
-        const balance = await getTokenBalance(address);
-        setUserSeedBalance(balance || BigInt(0));
-      } catch (error) {
-        console.error("Failed to fetch SEED balance:", error);
-        setUserSeedBalance(BigInt(0));
-      } finally {
-        setBalanceLoading(false);
-      }
-    };
-
-    fetchBalance();
-  }, [address]);
 
   // Fetch SEED approval for Pixotchi NFT contract
   useEffect(() => {
@@ -722,6 +700,19 @@ export default function ItemDetailsPanel({
                 </InlineBalanceNotice>
               )}
             </div>
+          ) : !seedBalanceReady ? (
+            <div className="space-y-2">
+              <DisabledTransaction
+                buttonText={seedBalanceStatus === 'unknown' ? 'Checking SEED balance' : 'SEED balance unavailable'}
+                buttonClassName="w-full"
+              />
+              {seedBalanceStatus === 'error' && (
+                <>
+                  <p role="status" className="text-center text-xs text-muted-foreground">We could not refresh your SEED balance. Retry to check what you can spend.</p>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => void refreshBalances()}>Retry balance check</Button>
+                </>
+              )}
+            </div>
           ) : disabledMessage ? (
             <DisabledTransaction
               buttonText={disabledMessage}
@@ -874,7 +865,7 @@ export default function ItemDetailsPanel({
 
           {hasInsufficientFunds && !isEthMode && (
             <InlineBalanceNotice>
-              Not enough SEED. Balance: {formatTokenAmount(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
+              Not enough SEED. Balance: {formatTokenAmountRounded(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
             </InlineBalanceNotice>
           )}
 
