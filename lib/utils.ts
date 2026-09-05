@@ -1,5 +1,6 @@
+import { formatTokenDisplay, formatTokenDisplayCompact } from './token-display';
+import { formatDurationSeconds } from './duration-display';
 import { type ClassValue,clsx } from "clsx";
-import { intervalToDuration } from "date-fns";
 import { twMerge } from "tailwind-merge";
 import { ADDRESS_REGEX,CREATOR_TOKEN_ADDRESS,CRYPTICPOET_TOKEN_ADDRESS,JESSE_TOKEN_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from "./contracts";
 import { type Plant } from "./types";
@@ -75,26 +76,8 @@ export function formatUpgradeDuration(blocks: bigint): string {
 }
 
 export function formatDuration(seconds: number): string {
-  if (seconds === 0) return '0s';
-
-  const duration = intervalToDuration({ start: 0, end: seconds * 1000 });
-
-  // Custom formatting to match previous output style: "2d 4h", "30m"
-  // date-fns formatDuration is a bit verbose ("2 days 4 hours"), so we manually construct short strings
-  // from the duration object for consistency with UI.
-
-  const d = duration.days || 0;
-  const h = duration.hours || 0;
-  const m = duration.minutes || 0;
-  const s = duration.seconds || 0;
-
-  let result = '';
-  if (d > 0) result += `${d}d `;
-  if (h > 0) result += `${h}h `;
-  if (m > 0 && d === 0) result += `${m}m `;
-  if (s > 0 && h === 0 && d === 0) result += `${s}s`;
-
-  return result.trim() || '0s';
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0s';
+  return formatDurationSeconds(BigInt(Math.floor(seconds)));
 }
 
 
@@ -109,7 +92,7 @@ export function formatNumber(num: number): string {
  * (e.g., "5520" vs "99.309") and to avoid Number precision loss.
  */
 export function formatTokenAmount(amount: bigint, decimals: number = 18): string {
-  return formatTokenAmountPrecise(amount, decimals, 2);
+  return formatTokenDisplay(amount, decimals, 2);
 }
 
 /**
@@ -121,82 +104,8 @@ export function formatTokenAmount(amount: bigint, decimals: number = 18): string
  * @param maxDisplayDecimals - Maximum decimals to display (default: 4)
  * @returns Formatted string with locale-aware thousand separators
  */
-export function formatTokenAmountPrecise(
-  amount: bigint,
-  decimals: number = 18,
-  maxDisplayDecimals: number = 4
-): string {
-  if (amount === BigInt(0)) return '0';
-
-  const isNegative = amount < BigInt(0);
-  const absAmount = isNegative ? -amount : amount;
-
-  // Convert to string and pad with leading zeros if needed
-  const amountStr = absAmount.toString();
-  const paddedStr = amountStr.padStart(decimals + 1, '0');
-
-  // Split into whole and fractional parts
-  const splitIndex = paddedStr.length - decimals;
-  const wholePart = paddedStr.slice(0, splitIndex) || '0';
-  const fractionalPart = paddedStr.slice(splitIndex);
-
-  // Trim trailing zeros from fractional part, but keep at least minDecimals
-  let trimmedFractional = fractionalPart.replace(/0+$/, '');
-
-  // Limit to maxDisplayDecimals
-  if (trimmedFractional.length > maxDisplayDecimals) {
-    trimmedFractional = trimmedFractional.slice(0, maxDisplayDecimals);
-    // Remove trailing zeros after truncation
-    trimmedFractional = trimmedFractional.replace(/0+$/, '');
-  }
-
-  // Format whole part with thousand separators
-  const formattedWhole = formatWholeNumberWithSeparators(wholePart);
-
-  // Combine parts
-  const sign = isNegative ? '-' : '';
-  if (trimmedFractional.length === 0) {
-    return `${sign}${formattedWhole}`;
-  }
-
-  return `${sign}${formattedWhole}.${trimmedFractional}`;
-}
-
-/**
- * Format a token amount with rounding and no grouping separators.
- * This is useful for editable inputs and config-driven labels where tiny onchain dust
- * should not leak into the UI (for example, 24999.999999999997902848 -> 25000).
- */
-export function formatTokenAmountRounded(
-  amount: bigint,
-  decimals: number = 18,
-  maxDisplayDecimals: number = 6
-): string {
-  if (amount === BigInt(0)) return '0';
-
-  const isNegative = amount < BigInt(0);
-  const absAmount = isNegative ? -amount : amount;
-  const displayDecimals = Math.max(0, Math.min(decimals, maxDisplayDecimals));
-  const roundingFactor = BigInt(10) ** BigInt(Math.max(0, decimals - displayDecimals));
-  const roundedAmount =
-    displayDecimals === decimals
-      ? absAmount
-      : (absAmount + (roundingFactor / BigInt(2))) / roundingFactor;
-
-  const amountStr = roundedAmount
-    .toString()
-    .padStart(displayDecimals + 1, '0');
-  const splitIndex = amountStr.length - displayDecimals;
-  const wholePart = amountStr.slice(0, splitIndex) || '0';
-  const fractionalPart =
-    displayDecimals > 0
-      ? amountStr.slice(splitIndex).replace(/0+$/, '')
-      : '';
-  const sign = isNegative ? '-' : '';
-
-  return fractionalPart.length > 0
-    ? `${sign}${wholePart}.${fractionalPart}`
-    : `${sign}${wholePart}`;
+export function formatTokenAmountPrecise(amount: bigint, decimals = 18, maxDisplayDecimals = 4): string {
+  return formatTokenDisplay(amount, decimals, maxDisplayDecimals);
 }
 
 export function getCasinoTokenImage(tokenAddress: string | null | undefined): string {
@@ -212,67 +121,11 @@ export function getCasinoTokenImage(tokenAddress: string | null | undefined): st
 }
 
 /**
- * Helper to add thousand separators to a whole number string.
- * Works with arbitrarily large numbers without precision loss.
- */
-function formatWholeNumberWithSeparators(numStr: string): string {
-  // Remove leading zeros except for "0" itself
-  const trimmed = numStr.replace(/^0+/, '') || '0';
-
-  // Add thousand separators (locale-aware would require more complexity)
-  const parts: string[] = [];
-  let remaining = trimmed;
-
-  while (remaining.length > 3) {
-    parts.unshift(remaining.slice(-3));
-    remaining = remaining.slice(0, -3);
-  }
-  parts.unshift(remaining);
-
-  return parts.join(',');
-}
-
-/**
  * Format token amount for display with compact notation (K, M, B, T).
  * Uses precision-safe BigInt handling for accurate threshold comparisons.
  */
 export function formatTokenAmountCompact(amount: bigint, decimals: number = 18): string {
-  if (amount === BigInt(0)) return '0';
-
-  const isNegative = amount < BigInt(0);
-  const absAmount = isNegative ? -amount : amount;
-  const sign = isNegative ? '-' : '';
-
-  // Define thresholds as BigInt for precision-safe comparison
-  const divisor = BigInt(10 ** decimals);
-  const thousand = BigInt(1000);
-  const million = BigInt(1000000);
-  const billion = BigInt(1000000000);
-  const trillion = BigInt(1000000000000);
-
-  // Get the whole number part
-  const wholeAmount = absAmount / divisor;
-
-  // Format based on magnitude
-  if (wholeAmount >= trillion) {
-    const value = Number(absAmount * BigInt(100) / (divisor * trillion)) / 100;
-    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}T`;
-  }
-  if (wholeAmount >= billion) {
-    const value = Number(absAmount * BigInt(100) / (divisor * billion)) / 100;
-    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}B`;
-  }
-  if (wholeAmount >= million) {
-    const value = Number(absAmount * BigInt(100) / (divisor * million)) / 100;
-    return `${sign}${value.toFixed(2).replace(/\.?0+$/, '')}M`;
-  }
-  if (wholeAmount >= thousand) {
-    const value = Number(absAmount * BigInt(10) / (divisor * thousand)) / 10;
-    return `${sign}${value.toFixed(1).replace(/\.?0+$/, '')}K`;
-  }
-
-  // For smaller amounts, use precision formatting
-  return `${sign}${formatTokenAmountPrecise(absAmount, decimals, 2).replace(/^-/, '')}`;
+  return formatTokenDisplayCompact(amount, decimals);
 }
 
 // Standardized address formatting. Defined in ./format-address (a leaf module that
@@ -335,7 +188,7 @@ export function getFriendlyErrorMessage(error: UntypedValue): string {
 // Static building data for caching
 const TOWN_BUILDINGS: { [key: number]: string } = {
   1: "Stake House",
-  3: "Ware House",
+  3: "Warehouse",
   5: "Marketplace",
   6: "Casino",
   7: "Farmer House",
@@ -353,7 +206,7 @@ const BUILDING_ICON_MAP: { [key: string]: string } = {
   "Soil Factory": "/icons/soil-factory.png",
   "Bee Farm": "/icons/bee-house.png",
   "Stake House": "/icons/stake-house.png",
-  "Ware House": "/icons/ware-house.png",
+  "Warehouse": "/icons/ware-house.png",
   "Marketplace": "/icons/marketplace.png",
   "Casino": "/icons/casino.png",
   "Farmer House": "/icons/farmer-house.png",
@@ -463,24 +316,21 @@ export function calculateUpgradeProgress(building: UntypedValue, currentBlock: b
   return Math.max(0, Math.min(100, progress));
 }
 
-export function calculateTimeLeft(building: UntypedValue, currentBlock: bigint): string {
+export function calculateTimeLeft(building: { blockHeightUntilUpgradeDone: bigint }, currentBlock: bigint): string {
   const blocksLeft = building.blockHeightUntilUpgradeDone - currentBlock;
-  const secondsLeft = Number(blocksLeft) * BASE_SECONDS_PER_BLOCK;
+  if (blocksLeft <= BigInt(0)) return "Complete";
+  const seconds = blocksLeft * BigInt(BASE_SECONDS_PER_BLOCK);
+  const d = seconds / BigInt(86400);
+  const h = seconds % BigInt(86400) / BigInt(3600);
+  const m = seconds % BigInt(3600) / BigInt(60);
 
-  if (secondsLeft <= 0) return "Complete";
-
-  const duration = intervalToDuration({ start: 0, end: secondsLeft * 1000 });
-  const d = duration.days || 0;
-  const h = duration.hours || 0;
-  const m = duration.minutes || 0;
-
-  if (d > 0) {
+  if (d > BigInt(0)) {
     return `${d}d ${h}h ${m}m`;
   }
-  if (h > 0) {
+  if (h > BigInt(0)) {
     return `${h}h ${m}m`;
   } else {
-    return `${m}m`;
+    return m > BigInt(0) ? `${m}m` : '<1m';
   }
 }
 
@@ -500,13 +350,11 @@ export function getBuildingIcon(buildingName: string): string {
 }
 
 export function formatProductionRate(rate: bigint): string {
-  const rateValue = Number(rate) / 1e12; // Contract uses 12 decimals for production rates
-  return rateValue.toFixed(2);
+  return formatTokenDisplay(rate, 12);
 }
 
 export function formatLifetimeProduction(seconds: bigint): string {
-  const hours = Number(seconds) / 3600;
-  return `${hours.toFixed(2)} hours`;
+  return formatDurationSeconds(seconds);
 }
 
 // Utility function for formatting large numbers with M/K suffixes (used in balance-card and user-stats-service)

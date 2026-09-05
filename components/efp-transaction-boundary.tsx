@@ -516,7 +516,7 @@ function SafeEfpTransactionModal() {
                 error: new Error("Transaction reverted."),
                 ...(transactionHash ? { transactionHash } : {}),
                 transactionId: currentProof.transactionId,
-                transactionReceipts: callsResult.receipts ?? [],
+                transactionReceipts: (callsResult.receipts ?? []).map(normalizeTransactionReceipt),
               },
               statusName: "reverted",
             });

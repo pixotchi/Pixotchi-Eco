@@ -1,4 +1,9 @@
 "use client";
+import { ResourceState } from "@/components/ui/resource-state";
+import { parseSpinMetadata, parseSpinCommit } from "@/lib/spin-metadata";
+import { readSafeUint } from "@/lib/contract-value";
+import { getSpinReadState } from "@/lib/spin-read-state";
+import { ArcadeStatLine } from "./arcade-stat-line";
 
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
@@ -34,7 +39,7 @@ import {
 import { Plant } from "@/lib/types";
 import { cn,formatDuration,formatScore,formatTokenAmount } from "@/lib/utils";
 import Image from "next/image";
-import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { encodePacked,hexToBytes,keccak256,toHex } from "viem";
 import { useAccount,usePublicClient,useSignMessage } from "wagmi";
@@ -168,37 +173,6 @@ const GameSelector = ({
   </div>
 );
 
-type ArcadeTone = "default" | "primary" | "success" | "warning" | "danger";
-
-function getArcadeToneClassName(tone: ArcadeTone) {
-  return {
-    danger: "text-destructive",
-    default: "text-foreground",
-    primary: "text-primary",
-    success: "text-[hsl(var(--success-strong))]",
-    warning: "text-[hsl(var(--warning-strong))]",
-  }[tone];
-}
-
-function ArcadeStatLine({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: ReactNode;
-  value: ReactNode;
-  tone?: ArcadeTone;
-}) {
-  return (
-    <div className="flex min-h-8 items-center justify-between gap-3 py-1.5">
-      <span className="min-w-0 text-muted-foreground">{label}</span>
-      <span className={cn("shrink-0 text-right font-semibold tabular-nums", getArcadeToneClassName(tone))}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -220,6 +194,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   // write-only state slot, so the panel showed made-up defaults ("Ready to
   // spin", cost 1) before the reads resolved.
   const [loadingSpinMeta, setLoadingSpinMeta] = useState(false);
+  const [spinMetaError, setSpinMetaError] = useState(false);
   const [pendingSecret, setPendingSecret] = useState<Uint8Array | null>(null);
   const [spinStorageHydratedFor, setSpinStorageHydratedFor] = useState<string | null>(null);
   const [persistedSpinCommitment, setPersistedSpinCommitment] = useState<`0x${string}` | null>(null);
@@ -277,6 +252,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     setSpinStorageHydratedFor(null);
     setSpinStorageUnavailable(false);
     setSpinMeta(null);
+    setSpinMetaError(false);
   }, [spinStorageIdentity]);
 
   useEffect(() => {
@@ -444,15 +420,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimePerNFT',
             args: [BigInt(currentPlantId)],
-          }) as Promise<bigint>,
+          }),
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: BOX_GAME_ABI,
             functionName: 'boxGameGetCoolDownTimeWithStar',
             args: [BigInt(currentPlantId)],
-          }) as Promise<bigint>,
+          }),
         ]);
-        return { normal: Number(normal), star: Number(star) };
+        return { normal: readSafeUint(normal), star: readSafeUint(star) };
       };
       const next = expectActive
         ? await retryOwnerRead(readCooldown, {
@@ -519,7 +495,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         toBlock: currentBlock,
       } as const;
 
-      const isRangeTooLargeError = (err: UntypedValue) => {
+      const isRangeTooLargeError = (err: unknown) => {
         if (!err) return false;
         const maybe = err as { shortMessage?: string; message?: string } | undefined;
         const msg = (maybe?.shortMessage ?? maybe?.message ?? "").toLowerCase();
@@ -597,13 +573,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         return { pending: null, terminal: null };
       }
 
-      const commitBlock = lastCommit.blockNumber ?? BigInt("0");
-      const commitArgs = (lastCommit as UntypedValue as { args?: { player?: string; commitHash?: `0x${string}` } }).args;
-      const commitData: PendingCommit = {
-        player: (commitArgs?.player ?? address) as string,
-        commitment: (commitArgs?.commitHash ?? "0x") as `0x${string}`,
-        commitBlock: Number(commitBlock),
-      };
+      const commitData: PendingCommit = parseSpinCommit(lastCommit, address, plantId);
+      const commitBlock = BigInt(commitData.commitBlock);
 
       if (Number(commitBlock) > 0) {
         noteLastSeenBlock(Number(commitBlock));
@@ -687,6 +658,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
     let cancelled = false;
     setLoadingSpinMeta(true);
+    setSpinMetaError(false);
 
     (async () => {
       try {
@@ -695,18 +667,18 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             address: PIXOTCHI_NFT_ADDRESS,
             abi: SPIN_GAME_ABI,
             functionName: "getCoolDownTime",
-          }) as Promise<bigint>,
+          }),
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: SPIN_GAME_ABI,
             functionName: "getStarCost",
-          }) as Promise<bigint>,
+          }),
           publicClient.readContract({
             address: PIXOTCHI_NFT_ADDRESS,
             abi: SPIN_GAME_ABI,
             functionName: "spinGameV2GetCoolDownTimePerNFT",
             args: [BigInt(plantId)],
-          }) as Promise<bigint>,
+          }),
           Promise.all(
             Array.from({ length: 6 }, (_, i) =>
               publicClient.readContract({
@@ -714,7 +686,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 abi: SPIN_GAME_ABI,
                 functionName: "getReward",
                 args: [BigInt(i)],
-              }) as Promise<[bigint, bigint, bigint]>
+              })
             )
           ),
           hydratePendingState(),
@@ -722,12 +694,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
         if (cancelled) return;
 
-        const formattedRewards = rewards.map(([pointsDelta, timeExtension, leafAmount], index) => ({
-          index,
-          pointsDelta: Number(pointsDelta),
-          timeExtension: Number(timeExtension),
-          leafAmount,
-        }));
+        const metadata = parseSpinMetadata(globalCooldown, starCost, perNftCooldown, rewards);
 
         let restoredSecret: Uint8Array | null = null;
         if (hydration.stored?.secretHex) {
@@ -743,9 +710,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         setSpinStorageHydratedFor(spinStorageIdentity);
 
         const nextMeta: SpinState = {
-          cooldown: Number(perNftCooldown ?? globalCooldown),
-          starCost: Number(starCost),
-          rewards: formattedRewards,
+          ...metadata,
           pending: hydration.pending,
         };
 
@@ -761,13 +726,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           }
           return nextMeta;
         });
-        const cooldownSeconds = Number(perNftCooldown ?? globalCooldown);
+        const cooldownSeconds = metadata.cooldown;
         setCooldownDeadline(cooldownSeconds > 0 ? Date.now() + cooldownSeconds * 1000 : null);
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load SpinLeaf metadata", error);
-          toast.error("Unable to load SpinLeaf configuration");
-          setSpinMeta(null);
+          setSpinMetaError(true); // Preserve any known pending spin and its recovery controller.
         }
       } finally {
         if (!cancelled) setLoadingSpinMeta(false);
@@ -1219,8 +1183,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     && persistedSpinCommitment?.toLowerCase() === commitmentHex.toLowerCase(),
   );
 
+  const spinRead = getSpinReadState({ hasMetadata: Boolean(spinMeta), loading: loadingSpinMeta, failed: spinMetaError });
   const canCommit = Boolean(
-    spinMeta &&
+    spinRead.canStart && spinMeta &&
     !pending &&
     spinCooldown === 0 &&
     starsAvailable >= spinStarCost &&
@@ -1251,8 +1216,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             "group relative h-16 min-h-16 w-full overflow-hidden rounded-[var(--radius-panel)] p-0 sm:h-20 sm:min-h-20",
             "transition-[background-color,border-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)]",
             seed === n
-              ? "border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary shadow-[var(--shadow-glow)] ring-2 ring-primary/25"
-              : "border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)] hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[var(--shadow-control)] hover:brightness-[1.02]",
+              ? "border-primary/45 bg-primary/10 text-primary ring-2 ring-primary/25"
+              : "border-border/55 bg-card hover:border-primary/35 hover:bg-muted/50",
           )}
           aria-label={`Select box ${n}`}
           aria-pressed={seed === n}
@@ -1282,7 +1247,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const boxPlayDisabled = disabled || arcadeTransactionPending || boxReconcilePending || (withStar && starsAvailable <= 0);
   const spinPlayDisabled = pending ? !canReveal : !canCommit;
   const boxHasInsufficientStars = withStar && starsAvailable < boxStarCost;
-  const spinHasInsufficientStars = !pending && starsAvailable < spinStarCost;
+  const spinHasInsufficientStars = spinRead.canStart && !pending && starsAvailable < spinStarCost;
   const boxDisabledReason = !address
     ? "Connect a wallet before opening a box."
     : !seed
@@ -1363,7 +1328,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 <div className="text-sm font-medium">Choose a box</div>
                 {boxGrid}
 
-                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                <div className="space-y-4 rounded-[var(--radius-panel)] bg-muted/25 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-foreground">Box play</div>
@@ -1412,7 +1377,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     </div>
                   </div>
 
-                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                  <div className="divide-y divide-border/60 text-sm">
                     <ArcadeStatLine label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
                     <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
                     <ArcadeStatLine label="Stars available" value={starsAvailable} tone={boxHasInsufficientStars ? "danger" : "default"} />
@@ -1436,7 +1401,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                         )}
                         {boxResultDetails.timeAdded !== 0 && (
                           <div>
-                            TOD: <span className="font-semibold text-foreground">{`${boxResultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(boxResultDetails.timeAdded))}`}</span>
+                            Lifetime: <span className="font-semibold text-foreground">{`${boxResultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(boxResultDetails.timeAdded))}`}</span>
                           </div>
                         )}
                       </div>
@@ -1450,11 +1415,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
             {selectedGame === "spin" && (
               <div className="space-y-4">
+                {spinMetaError && <ResourceState status="error" title={spinRead.title} description={spinRead.description} onRetry={() => setSpinRefreshKey(value => value + 1)} />}
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-medium">SpinLeaf</div>
                     <p className="text-xs text-muted-foreground">
-                      Spin for PTS, TOD, and LEAF rewards.
+                      Spin for PTS, lifetime, and LEAF rewards.
                     </p>
                   </div>
                 </div>
@@ -1521,7 +1487,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   </div>
                 </div>
 
-                <div className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+                <div className="space-y-4 rounded-[var(--radius-panel)] bg-muted/25 p-4">
                   <div>
                     <div className="text-sm font-medium">Get a spin with a Star</div>
                     <p className="text-xs text-muted-foreground">
@@ -1529,23 +1495,23 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                     </p>
                   </div>
 
-                  <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs shadow-[var(--shadow-hairline)]">
+                  <div className="divide-y divide-border/60 text-sm">
                     <ArcadeStatLine
                       label="Status"
                       value={
-                        loadingSpinMeta && !spinMeta
-                          ? "Loading..."
+                        !pending && !spinRead.canStart
+                          ? spinRead.title
                           : pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"
                       }
-                      tone={loadingSpinMeta && !spinMeta ? "default" : pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
+                      tone={!spinRead.canStart ? "default" : pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
                     />
-                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={starsAvailable < spinStarCost && !pending ? "danger" : "default"} />
+                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={spinHasInsufficientStars ? "danger" : "default"} />
                     <ArcadeStatLine
                       label="Cost per spin"
                       value={(
                         <span className="inline-flex items-center justify-end gap-1">
                           <Image src="/icons/Star.svg" alt="Stars" width={14} height={14} className="h-3.5 w-3.5 shrink-0" />
-                          <span>{spinStarCost}</span>
+                          <span>{spinRead.canStart ? spinStarCost : "Unavailable"}</span>
                         </span>
                       )}
                       tone="primary"
@@ -1581,7 +1547,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   )}
                   {typeof resultDetails.timeAdded === "number" && resultDetails.timeAdded !== 0 && (
                     <li>
-                      TOD: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
+                      Lifetime: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
                     </li>
                   )}
                   {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
@@ -1602,12 +1568,12 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">
               <div className="truncate font-semibold text-foreground">
-                {selectedGame === "box" ? "Open a Box" : pending ? "Stop the Wheel" : "Ready to Spin"}
+                {selectedGame === "box" ? "Open a Box" : pending ? "Stop the Wheel" : spinRead.title}
               </div>
               <div className="truncate">
                 {selectedGame === "box"
                   ? seed ? `Box ${seed}${withStar ? " with star" : ""}` : "Choose a box to play"
-                  : pending ? canReveal ? "Ready to claim the result" : "Waiting for the result" : spinStarCost > 0 ? `${spinStarCost} star per spin` : "Ready to spin"}
+                  : pending ? canReveal ? "Ready to claim the result" : "Waiting for the result" : !spinRead.canStart ? "Cost and cooldown are not confirmed" : spinStarCost > 0 ? `${spinStarCost} star per spin` : "Ready to spin"}
               </div>
             </div>
             <SponsoredBadge show={isSponsored && isSmartWallet} />
@@ -1622,7 +1588,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               buttonClassName="w-full"
               disabled={boxPlayDisabled}
               feedbackMode="toast"
-              onStatusUpdate={(status: UntypedValue) => {
+              onStatusUpdate={(status: LifecycleStatus) => {
                 if (status?.statusName === "transactionPending") {
                   setBoxResultDetails(null);
                 }
@@ -1640,8 +1606,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               disabled={spinPlayDisabled}
               buttonClassName="w-full"
               feedbackMode="toast"
-              buttonText={spinStarCost > 0 ? `Spin Leaf (${spinStarCost}★)` : "Spin Leaf"}
-              onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
+              buttonText={!spinRead.canStart ? spinRead.title : spinStarCost > 0 ? `Spin Leaf (${spinStarCost}★)` : "Spin Leaf"}
+              onStatusUpdate={handleSpinStatus("commit")}
               onButtonClick={handleCommitButtonClick}
               onRewardConfigUpdate={handleRewardUpdate}
             />
@@ -1660,7 +1626,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 disabled
                 buttonText="Recover SpinLeaf commit"
                 feedbackMode="inline"
-                onStatusUpdate={handleSpinStatus("commit") as UntypedValue}
+                onStatusUpdate={handleSpinStatus("commit")}
               />
             </div>
           )}
@@ -1675,7 +1641,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               buttonClassName="w-full"
               feedbackMode="toast"
               buttonText="Stop Wheel"
-              onStatusUpdate={handleSpinStatus("reveal") as UntypedValue}
+              onStatusUpdate={handleSpinStatus("reveal")}
               onComplete={(result) => {
                 handleRevealSuccess();
                 finishWheelSpin(result?.rewardIndex);
@@ -1699,6 +1665,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               Not enough Stars. Balance: {starsAvailable} • Required: {boxStarCost}
             </InlineBalanceNotice>
           )}
+
+
 
           {selectedGame === "spin" && spinHasInsufficientStars && (
             <InlineBalanceNotice>

@@ -1,7 +1,13 @@
 'use client';
 
+import { SwapAmountLayout, swapAmountFontSize } from "@/components/swap-amount-layout";
+import { useSwapQuote } from '@/hooks/useSwapQuote';
+import { fetchSwapJson, parseSwapBuildStep } from '@/lib/swap/response';
+import { withMonitoringAbort as withMonitorAbort, throwIfMonitoringAborted as throwIfAborted, waitForMonitorDelay } from '@/lib/transaction-monitor';
+import { parseWalletBatchStatus, getBatchTransactionHashes } from '@/lib/wallet-batch-status';
+import { formatEditableAmount, parseInputAmount } from '@/lib/swap/amount';
+
 import {
-  startTransition,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -15,8 +21,6 @@ import { toast } from 'react-hot-toast';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import {
   encodeFunctionData,
-  formatUnits,
-  parseUnits,
   type Address,
   type Hex,
   type TransactionReceipt,
@@ -60,7 +64,6 @@ import {
 import { postMissionProgress } from '@/lib/mission-tracking';
 import {
   extractTransactionHash,
-  normalizeTransactionReceipt,
 } from '@/lib/transaction-utils';
 import {
   PendingEvmStaleError,
@@ -91,15 +94,10 @@ import {
   requestPendingEvmCoordinatorReconcile,
   type PendingEvmCoordinatorSnapshot,
 } from '@/lib/pending-evm-coordinator';
-import { cn, formatTokenAmountRounded } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { SWAP_PANEL_STRINGS as S } from './pixotchi-swap-panel.strings';
-
-type QuoteState =
-  | { status: 'idle' }
-  | { status: 'loading'; retryAttempt?: number }
-  | { status: 'ready'; quote: SwapQuoteResponse }
-  | { status: 'error'; error: string; retriable: boolean };
 
 type ExecutionStatus =
   | 'pending'
@@ -126,7 +124,7 @@ type SmartWalletBatchCall = {
 const SWAP_APPROVAL_INTENT_KEY = 'pixotchi-swap:approval:v1';
 const SWAP_EXECUTION_INTENT_KEY = 'pixotchi-swap:execution:v1';
 const EMPTY_PENDING_CALLS_DIGEST = createPendingEvmCallsDigest([]);
-const PENDING_MONITOR_RETRY_MS = 1_000;
+const waitForMonitorRetry = (signal?: AbortSignal) => waitForMonitorDelay(1_000, signal);
 
 type SwapPendingStage = 'approval' | 'swap';
 
@@ -162,47 +160,10 @@ function getSwapPendingIntentKey(stage: SwapPendingStage): string {
   return stage === 'approval' ? SWAP_APPROVAL_INTENT_KEY : SWAP_EXECUTION_INTENT_KEY;
 }
 
-function isAbortError(error: UntypedValue): boolean {
+function isAbortError(error: unknown): boolean {
   return (error as { name?: unknown })?.name === 'AbortError';
 }
 
-function throwIfAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  throw new DOMException('Transaction monitoring was handed to another controller.', 'AbortError');
-}
-
-async function waitForMonitorRetry(signal?: AbortSignal): Promise<void> {
-  throwIfAborted(signal);
-  await new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, PENDING_MONITOR_RETRY_MS);
-    const onAbort = () => {
-      window.clearTimeout(timeout);
-      reject(new DOMException('Transaction monitoring was handed to another controller.', 'AbortError'));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
-async function withMonitorAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
-  throwIfAborted(signal);
-  if (!signal) return promise;
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => {
-      reject(new DOMException('Transaction monitoring was handed to another controller.', 'AbortError'));
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    void promise.then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
-  });
-}
-
-const QUOTE_DEBOUNCE_MS = 250;
-const QUOTE_MAX_RETRIES = 2;
-const QUOTE_IDLE_REFRESH_MS = 5_000;
 const OCK_COMPAT_FONT = 'ock-compat-font';
 const SWAP_CARD_CLASS =
   'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-[var(--radius-panel)] border border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] p-4 shadow-[var(--surface-inset)]';
@@ -210,9 +171,9 @@ const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-be
 const SWAP_TOKEN_TRIGGER_CLASS =
   'flex min-h-11 min-w-[5.75rem] shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38] max-[360px]:min-w-[5.15rem] max-[360px]:gap-1.5 max-[360px]:px-2 max-[340px]:min-w-[4.75rem] max-[340px]:gap-1 max-[340px]:px-1.5';
 const SWAP_AMOUNT_INPUT_CLASS =
-  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 border-none bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
+  `${OCK_COMPAT_FONT} w-full min-w-0 border-none bg-transparent leading-none text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none`;
 const SWAP_AMOUNT_DISPLAY_CLASS =
-  `${OCK_COMPAT_FONT} mr-2 w-full min-w-0 truncate bg-transparent text-[clamp(1.85rem,10vw,2.5rem)] leading-none text-foreground max-[360px]:text-[1.55rem] max-[340px]:mr-1 max-[340px]:text-[1.4rem]`;
+  `${OCK_COMPAT_FONT} w-full min-w-0 break-all bg-transparent leading-none text-foreground`;
 const SWAP_MAX_BUTTON_CLASS =
   `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
@@ -222,15 +183,10 @@ const SWAP_PRIMARY_ACTION_CLASS =
 const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
 const SWAP_BALANCE_ROW_CLASS = 'mt-2 flex min-h-11 w-full items-center justify-between';
 
-function isTransientStatus(status: number | undefined): boolean {
-  if (status === undefined) return true;
-  return status === 429 || status >= 500;
-}
-
 // Turns wallet/viem errors into something a user can actually read.
 // Viem rejection errors include a pile of metadata (chain id, RPC url, version,
 // request args, contract selectors...) that we never want to toast verbatim.
-function humanizeSwapError(error: UntypedValue): string {
+function humanizeSwapError(error: unknown): string {
   if (!(error instanceof Error)) return 'Swap failed.';
 
   const anyErr = error as Error & {
@@ -368,16 +324,7 @@ function TokenSelector({
   );
 }
 
-function formatEditableAmount(amount: bigint, decimals: number): string {
-  const formatted = formatUnits(amount, decimals);
-  if (!formatted.includes('.')) {
-    return formatted;
-  }
 
-  const [whole, fraction] = formatted.split('.');
-  const trimmedFraction = fraction.slice(0, Math.min(decimals, 8)).replace(/0+$/, '');
-  return trimmedFraction ? `${whole}.${trimmedFraction}` : whole;
-}
 
 function formatExecutionMessage(message?: string): string | null {
   if (!message) {
@@ -391,57 +338,20 @@ function formatExecutionMessage(message?: string): string | null {
   return message;
 }
 
-function parseInputAmount(
-  amount: string,
-  tokenId: UserSwapTokenId,
-): bigint | null {
-  if (!amount.trim()) {
-    return null;
-  }
 
-  try {
-    return parseUnits(amount, SWAP_TOKEN_MAP[tokenId].decimals);
-  } catch {
-    return null;
-  }
-}
-
-async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  let json: (T & { error?: string }) | null = null;
-  try {
-    json = (await response.json()) as T & { error?: string };
-  } catch {
-    // Leave null.
-  }
-
-  if (!response.ok) {
-    const message = json?.error || `Request failed (${response.status})`;
-    const err = new Error(message) as Error & { status?: number };
-    err.status = response.status;
-    throw err;
-  }
-
-  if (!json) {
-    const err = new Error('Invalid server response') as Error & { status?: number };
-    err.status = response.status;
-    throw err;
-  }
-
-  return json;
-}
 
 async function fetchSwapStep(address: Address, step: SwapQuoteStep, amountIn: string, quoteToken: string, signal?: AbortSignal) {
-  return fetchJson<SwapBuildStepResponse>('/api/swap/build-step', {
+  const response = await fetchSwapJson('/api/swap/build-step', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ quoteToken, kind: step.kind, sellToken: step.sellToken, buyToken: step.buyToken, amountIn, sender: address, recipient: address }),
     signal,
     credentials: 'same-origin',
   });
+  return parseSwapBuildStep(response, step, amountIn);
 }
 
-export default function PixotchiSwapPanel() {
+export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVisible?: boolean }) {
   const { address, chainId, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
@@ -453,7 +363,6 @@ export default function PixotchiSwapPanel() {
   const [buyToken, setBuyToken] = useState<UserSwapTokenId>('SEED');
   const [sellAmount, setSellAmount] = useState('');
   const deferredSellAmount = useDeferredValue(sellAmount);
-  const [quoteState, setQuoteState] = useState<QuoteState>({ status: 'idle' });
   const [isExecuting, setIsExecuting] = useState(false);
   const [isSettingMax, setIsSettingMax] = useState(false);
   const maxRequestRef = useRef<AbortController | null>(null);
@@ -461,9 +370,6 @@ export default function PixotchiSwapPanel() {
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<PendingEvmRecord | null>(null);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
-  const quoteRequestRef = useRef(0);
-  const backgroundRefreshInFlightRef = useRef(false);
-  const quoteActivityAtRef = useRef(0);
   const balanceRefreshTimerRef = useRef<number | null>(null);
   const completionResetTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -480,7 +386,7 @@ export default function PixotchiSwapPanel() {
   const swapControllerId = `${panelId}:swap-execution`;
   const messageId = `pixotchi-swap-message-${panelId}`;
   const sellAmountId = `pixotchi-swap-sell-amount-${panelId}`;
-  const isVisible = isTabVisible('swap');
+  const isVisible = isTabVisible('swap') && isPanelVisible;
   const recoveryRegistryIdentity = useMemo(
     () => walletClient?.account
       ? {
@@ -562,7 +468,7 @@ export default function PixotchiSwapPanel() {
     if (!address) return '';
     if (sellBalanceLoading) return S.labels.loadingBalance;
 
-    return `${S.labels.balancePrefix}${formatTokenAmountRounded(
+    return `${S.labels.balancePrefix}${formatTokenDisplay(
       sellBalanceRaw,
       SWAP_TOKEN_MAP[sellToken].decimals,
       sellToken === 'USDC' ? 2 : 6,
@@ -572,17 +478,21 @@ export default function PixotchiSwapPanel() {
     if (!address) return '';
     if (buyBalanceLoading) return S.labels.loadingBalance;
 
-    return `${S.labels.balancePrefix}${formatTokenAmountRounded(
+    return `${S.labels.balancePrefix}${formatTokenDisplay(
       buyBalanceData?.value ?? BigInt(0),
       SWAP_TOKEN_MAP[buyToken].decimals,
       buyToken === 'USDC' ? 2 : 6,
     )}`;
   }, [address, buyBalanceData?.value, buyBalanceLoading, buyToken]);
 
+  const { quoteState, fetchQuoteOnce, refreshQuoteNow, markQuoteActivity } = useSwapQuote({
+    address, sellToken, buyToken, amountIn: parsedAmount, visible: isVisible, executing: isExecuting,
+    deferred: deferredSellAmount !== sellAmount,
+  });
   const currentQuote = quoteState.status === 'ready' ? quoteState.quote : null;
   const buyAmountDisplay =
     currentQuote && currentQuote.strategy !== 'blocked'
-      ? formatTokenAmountRounded(
+      ? formatTokenEstimate(
           BigInt(currentQuote.expectedOut),
           SWAP_TOKEN_MAP[buyToken].decimals,
           6,
@@ -598,8 +508,8 @@ export default function PixotchiSwapPanel() {
   );
   const usesSmartWalletBatch =
     isSmartWallet &&
-    typeof (walletClient as UntypedValue)?.sendCalls === 'function' &&
-    typeof (walletClient as UntypedValue)?.waitForCallsStatus === 'function';
+    typeof walletClient?.sendCalls === 'function' &&
+    typeof walletClient?.waitForCallsStatus === 'function';
   const feeQuery = useQuery({
     queryKey: ['swapFee', address, chainId, currentQuote?.quoteToken],
     queryFn: async ({ signal }) => {
@@ -638,9 +548,6 @@ export default function PixotchiSwapPanel() {
     feeUnavailable ||
     hasInsufficientGas;
 
-  const markQuoteActivity = useCallback(() => {
-    quoteActivityAtRef.current = Date.now();
-  }, []);
   const swapMessage = useMemo(() => {
     if (pendingFeedbackRecord) {
       return getPendingEvmPhase(pendingFeedbackRecord) === 'stale'
@@ -728,159 +635,7 @@ export default function PixotchiSwapPanel() {
     }
   }, [allowedTargets, buyToken]);
 
-  useEffect(() => {
-    markQuoteActivity();
-  }, [buyToken, markQuoteActivity, sellToken]);
-
-  useEffect(() => {
-    // Clear both the cached quote AND any in-flight execution steps whenever
-    // the swap parameters change, so users never see a stale quote or the
-    // status line from the previous pair.
-    setExecutionSteps(null);
-    startTransition(() => setQuoteState({ status: 'idle' }));
-  }, [sellToken, buyToken]);
-
-  // Single source of truth for hitting /api/swap/quote. The debounced effect
-  // below and the refresh-on-submit path both go through here.
-  const fetchQuoteOnce = useCallback(
-    async (amountIn: bigint, signal?: AbortSignal): Promise<SwapQuoteResponse> => {
-      return fetchJson<SwapQuoteResponse>('/api/swap/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sellToken,
-          buyToken,
-          amountIn: amountIn.toString(),
-          originAddress: address,
-        }),
-        signal,
-        credentials: 'same-origin',
-      });
-    },
-    [address, buyToken, sellToken],
-  );
-
-  useEffect(() => {
-    const amountIn = parsedAmount;
-    if (!amountIn || amountIn <= BigInt(0)) {
-      startTransition(() => setQuoteState({ status: 'idle' }));
-      return;
-    }
-
-    const requestId = ++quoteRequestRef.current;
-    const controller = new AbortController();
-    startTransition(() => setQuoteState({ status: 'loading' }));
-
-    const attemptFetch = async (attempt: number): Promise<void> => {
-      try {
-        const quote = await fetchQuoteOnce(amountIn, controller.signal);
-        if (quoteRequestRef.current !== requestId) return;
-        startTransition(() => setQuoteState({ status: 'ready', quote }));
-      } catch (error) {
-        if (controller.signal.aborted || quoteRequestRef.current !== requestId) {
-          return;
-        }
-
-        const status = (error as { status?: number })?.status;
-        const transient = isTransientStatus(status);
-
-        if (transient && attempt < QUOTE_MAX_RETRIES) {
-          startTransition(() =>
-            setQuoteState({ status: 'loading', retryAttempt: attempt + 1 }),
-          );
-          window.setTimeout(() => {
-            if (controller.signal.aborted || quoteRequestRef.current !== requestId) {
-              return;
-            }
-            void attemptFetch(attempt + 1);
-          }, 400 * Math.pow(2, attempt));
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : 'Failed to fetch swap quote';
-        startTransition(() =>
-          setQuoteState({ status: 'error', error: message, retriable: transient }),
-        );
-      }
-    };
-
-    const timer = window.setTimeout(() => {
-      void attemptFetch(0);
-    }, QUOTE_DEBOUNCE_MS);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [fetchQuoteOnce, parsedAmount]);
-
-  const refreshQuoteInBackground = useCallback(
-    async (amountIn: bigint): Promise<void> => {
-      if (backgroundRefreshInFlightRef.current) {
-        return;
-      }
-
-      backgroundRefreshInFlightRef.current = true;
-      const requestId = ++quoteRequestRef.current;
-
-      try {
-        const quote = await fetchQuoteOnce(amountIn);
-        if (quoteRequestRef.current !== requestId) return;
-        startTransition(() => setQuoteState({ status: 'ready', quote }));
-      } catch (error) {
-        if (quoteRequestRef.current !== requestId) return;
-
-        const message =
-          error instanceof Error ? error.message : 'Failed to fetch swap quote';
-        const status = (error as { status?: number })?.status;
-        startTransition(() =>
-          setQuoteState((current) =>
-            current.status === 'ready'
-              ? current
-              : { status: 'error', error: message, retriable: isTransientStatus(status) },
-          ),
-        );
-      } finally {
-        backgroundRefreshInFlightRef.current = false;
-      }
-    },
-    [fetchQuoteOnce],
-  );
-
-  useEffect(() => {
-    const amountIn = parsedAmount;
-    if (!isVisible || !amountIn || amountIn <= BigInt(0)) {
-      return;
-    }
-
-    if (isExecuting || isDeferredLagging || quoteState.status === 'loading') {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-
-      if (Date.now() - quoteActivityAtRef.current < QUOTE_IDLE_REFRESH_MS) {
-        return;
-      }
-
-      void refreshQuoteInBackground(amountIn);
-    }, QUOTE_IDLE_REFRESH_MS);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [
-    isDeferredLagging,
-    isExecuting,
-    isVisible,
-    parsedAmount,
-    quoteState.status,
-    refreshQuoteInBackground,
-  ]);
+  useEffect(() => { setExecutionSteps(null); }, [sellToken, buyToken]);
 
   const trackSwapMission = useCallback(
     async (receipt: TransactionReceipt) => {
@@ -888,7 +643,7 @@ export default function PixotchiSwapPanel() {
       const txHash = extractTransactionHash(receipt);
       if (!txHash) return;
 
-      const payload: Record<string, UntypedValue> = {
+      const payload: Record<string, unknown> = {
         address,
         taskId: 's1_make_swap',
         proof: { txHash },
@@ -1123,8 +878,9 @@ export default function PixotchiSwapPanel() {
             ),
             signal,
           );
-          const status = String(result.status ?? '').toLowerCase();
-          if (status === 'failure' || status === 'failed' || status === 'reverted') {
+          const batch = parseWalletBatchStatus(result, BASE_CHAIN_ID);
+          const status = batch.status;
+          if (status === 'failure') {
             throw new SwapTransactionRevertedError();
           }
           if (status !== 'success') {
@@ -1132,12 +888,8 @@ export default function PixotchiSwapPanel() {
             continue;
           }
 
-          const receipts = result.receipts ?? [];
-          const lastReceipt = receipts[receipts.length - 1] ?? receipts[0];
-          const normalized = normalizeTransactionReceipt(lastReceipt);
-          const transactionHash = (
-            extractTransactionHash(normalized) ?? extractTransactionHash(result)
-          ) as Hex | undefined;
+          const hashes = getBatchTransactionHashes(batch);
+          const transactionHash = hashes[hashes.length - 1];
           if (!transactionHash) {
             updateExecutionStep(stepIndex, {
               status: 'confirming',
@@ -1147,7 +899,11 @@ export default function PixotchiSwapPanel() {
             continue;
           }
 
-          return await monitorCanonicalHash(record, transactionHash, stepIndex, signal);
+          // A batch may include several receipts. Verify each before crediting the swap.
+          let receipt: TransactionReceipt | undefined;
+          for (const hash of hashes) receipt = await monitorCanonicalHash(record, hash, stepIndex, signal);
+          if (!receipt) throw new Error('Missing canonical swap receipt');
+          return receipt;
         } catch (error) {
           if (
             isAbortError(error) ||
@@ -1764,29 +1520,6 @@ export default function PixotchiSwapPanel() {
     walletClient,
   ]);
 
-  const refreshQuoteNow = useCallback(async (): Promise<SwapQuoteResponse | null> => {
-    const amountIn = parsedAmount;
-    if (!amountIn || amountIn <= BigInt(0)) return null;
-
-    const requestId = ++quoteRequestRef.current;
-    startTransition(() => setQuoteState({ status: 'loading' }));
-
-    try {
-      const quote = await fetchQuoteOnce(amountIn);
-      if (quoteRequestRef.current !== requestId) return null;
-      startTransition(() => setQuoteState({ status: 'ready', quote }));
-      return quote;
-    } catch (error) {
-      if (quoteRequestRef.current !== requestId) return null;
-      const message = error instanceof Error ? error.message : 'Failed to fetch swap quote';
-      const status = (error as { status?: number })?.status;
-      startTransition(() =>
-        setQuoteState({ status: 'error', error: message, retriable: isTransientStatus(status) }),
-      );
-      return null;
-    }
-  }, [fetchQuoteOnce, parsedAmount]);
-
   const executeQuote = useCallback(
     async (initialQuote: SwapQuoteResponse) => {
       if (executingRef.current || isRecoveryChecking || isPeerBlocked) return;
@@ -1994,10 +1727,10 @@ export default function PixotchiSwapPanel() {
   const showQuoteSummary = CLIENT_ENV.SWAP_QUOTE_SUMMARY_ENABLED;
   const quoteSummary = showQuoteSummary && currentQuote && currentQuote.strategy !== 'blocked'
     ? {
-        minReceived: formatTokenAmountRounded(
+        minReceived: formatTokenDisplay(
           BigInt(currentQuote.minOut),
           SWAP_TOKEN_MAP[buyToken].decimals,
-          6,
+          SWAP_TOKEN_MAP[buyToken].decimals,
         ),
         route: currentQuote.steps.map((step) => step.routeLabel).filter(Boolean).join(' -> '),
         slippage: `${(currentQuote.marketSlippageBps / 100).toFixed(2)}%`,
@@ -2093,13 +1826,15 @@ export default function PixotchiSwapPanel() {
             className={SWAP_CARD_CLASS}
             data-testid="ockSwapAmountInput_Container"
           >
-            <label
-              className={SWAP_LABEL_CLASS}
-              htmlFor={sellAmountId}
+            <SwapAmountLayout
+              label={<label className={SWAP_LABEL_CLASS} htmlFor={sellAmountId}>{S.labels.sell}</label>}
+              selector={<TokenSelector
+                value={sellToken}
+                options={allowedSources}
+                onSelect={handleSellTokenSelect}
+                disabled={isExecuting || isSettingMax}
+              />}
             >
-              {S.labels.sell}
-            </label>
-            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
               <input
                 id={sellAmountId}
                 value={sellAmount}
@@ -2115,14 +1850,10 @@ export default function PixotchiSwapPanel() {
                 disabled={isExecuting || isSettingMax}
                 aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
                 className={SWAP_AMOUNT_INPUT_CLASS}
+                style={{ fontSize: swapAmountFontSize(sellAmount) }}
               />
-              <TokenSelector
-                value={sellToken}
-                options={allowedSources}
-                onSelect={handleSellTokenSelect}
-                disabled={isExecuting || isSettingMax}
-              />
-            </div>
+
+            </SwapAmountLayout>
             <div className={SWAP_BALANCE_ROW_CLASS}>
               <div
                 className={cn(SWAP_STATUS_TEXT_CLASS, 'flex items-center gap-1')}
@@ -2187,12 +1918,18 @@ export default function PixotchiSwapPanel() {
             className={SWAP_CARD_CLASS}
             data-testid="ockSwapAmountInput_Container"
           >
-            <div className={SWAP_LABEL_CLASS}>
-              {S.labels.buy}
-            </div>
-            <div className="flex w-full min-w-0 items-center justify-between gap-2 max-[340px]:gap-1">
+            <SwapAmountLayout
+              label={<div className={SWAP_LABEL_CLASS}>{S.labels.buy}</div>}
+              selector={<TokenSelector
+                value={buyToken}
+                options={allowedTargets}
+                onSelect={handleBuyTokenSelect}
+                disabled={isExecuting || isSettingMax}
+              />}
+            >
               <div
                 className={SWAP_AMOUNT_DISPLAY_CLASS}
+                style={{ fontSize: swapAmountFontSize(buyAmountDisplay) }}
                 role="status"
                 aria-live="polite"
                 aria-atomic="true"
@@ -2200,13 +1937,8 @@ export default function PixotchiSwapPanel() {
               >
                 {buyAmountDisplay}
               </div>
-              <TokenSelector
-                value={buyToken}
-                options={allowedTargets}
-                onSelect={handleBuyTokenSelect}
-                disabled={isExecuting || isSettingMax}
-              />
-            </div>
+
+            </SwapAmountLayout>
             <div className={SWAP_BALANCE_ROW_CLASS}>
               <div className={SWAP_STATUS_TEXT_CLASS}>
                 {'\u00A0'}
@@ -2226,7 +1958,7 @@ export default function PixotchiSwapPanel() {
               <div className="grid gap-1.5">
                 <div className="flex items-center justify-between gap-3">
                   <span>Minimum received</span>
-                  <span className="font-semibold text-foreground">{quoteSummary.minReceived} {SWAP_TOKEN_MAP[buyToken].displaySymbol}</span>
+                  <span className="min-w-0 text-right font-semibold text-foreground [overflow-wrap:anywhere]">{quoteSummary.minReceived} {SWAP_TOKEN_MAP[buyToken].displaySymbol}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Market slippage</span>
@@ -2282,7 +2014,7 @@ export default function PixotchiSwapPanel() {
               {feeQuery.isError ? (
                 <Button type="button" variant="outline" size="sm" disabled={feeQuery.isFetching} onClick={() => void feeQuery.refetch()}>Retry fee estimate</Button>
               ) : feeQuery.data ? (
-                <span>{feeQuery.data.stage === 'approval' ? 'Approval' : 'Swap'} fee budget: {formatTokenAmountRounded(feeQuery.data.fee, 18, 8)} ETH, including a buffer.
+                <span>{feeQuery.data.stage === 'approval' ? 'Approval' : 'Swap'} fee budget: {formatTokenEstimate(feeQuery.data.fee, 18, 8)} ETH, including a buffer.
                   {feeQuery.data.stage === 'approval' ? ' The swap fee is checked after approval.' : ''}</span>
               ) : null}
             </div>

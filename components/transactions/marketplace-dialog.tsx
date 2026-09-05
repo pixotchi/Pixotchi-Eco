@@ -1,13 +1,20 @@
 "use client";
 
+import { parseAmountInput } from "@/lib/amount-input";
+import { parseMarketplaceOrder, type MarketplaceOrder } from "@/lib/marketplace-order";
+import type { TransactionProof } from "@/components/transactions/transaction-kit";
+import { MarketplaceOrderSummary } from "./marketplace-order-summary";
 import GameTransaction from "@/components/transactions/game-transaction";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { AmountField } from "@/components/ui/amount-field";
+import { formatTokenDisplay, formatTokenDisplayCompact } from "@/lib/token-display";
 import { ERC20_APPROVE_ABI,getLeafAllowanceForLand,getLeafBalance,getReadClient,getSeedAllowanceForLand,getTokenBalance,LAND_CONTRACT_ADDRESS,LEAF_CONTRACT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { onBalanceRefresh } from '@/lib/app-events';
 import {
+  buildMarketplacePriceLevels,
+  getMarketplaceRatioKey,
   computeMarketplaceAmountAsk,
   formatMarketplacePriceRatio,
   getMarketplacePriceRatio,
@@ -18,23 +25,10 @@ import { cn } from "@/lib/utils";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
-import { parseUnits } from "viem";
+import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
-type OrderView = {
-  id: bigint;
-  seller: `0x${string}`;
-  sellToken: number; // 0=SEED,1=LEAF
-  amount: bigint; // wei
-  isActive: boolean;
-  amountAsk: bigint; // wei
-};
-
-type PriceLevelRow = {
-  exactRatio: MarketplacePriceRatio;
-  price: number;
-  size: number;
-};
+type OrderView = MarketplaceOrder;
 
 const MARKETPLACE_ORDER_LIST_LIMIT = 48;
 const PRICE_LEVEL_ORDER_LIST_LIMIT = 20;
@@ -43,57 +37,7 @@ const marketplacePanelClassName =
   "chat-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]";
 const marketplacePaddedPanelClassName = `${marketplacePanelClassName} p-4`;
 
-function toNumberWei(v: bigint): number {
-  return Number(v) / 1e18;
-}
-
-function computePriceLeafPerSeed(o: OrderView): number {
-  // Guide: price displayed as LEAF per SEED
-  // sellToken=1 (Sell LEAF): price = amount / amountAsk (LEAF/SEED)
-  // sellToken=0 (Sell SEED): price = amountAsk / amount (LEAF/SEED)
-  const a = toNumberWei(o.amount);
-  const b = toNumberWei(o.amountAsk);
-  if (o.sellToken === 1) return b === 0 ? 0 : a / b;
-  return a === 0 ? 0 : b / a;
-}
-
-function fmt(n: number, dp = 6): string {
-  const s = n.toFixed(dp);
-  return s.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
-}
-
-// Compact formatter for large numbers: 1_000 -> 1K, 1_000_000 -> 1M, 1_000_000_000 -> 1B
-function formatCompact(n: number, dpSmall = 6): string {
-  if (!Number.isFinite(n)) return '—';
-  const abs = Math.abs(n);
-  if (abs >= 1e12) return `${Math.round(n / 1e12)}T`;
-  if (abs >= 1e9) return `${Math.round(n / 1e9)}B`;
-  if (abs >= 1e6) return `${Math.round(n / 1e6)}M`;
-  if (abs >= 1e3) return `${Math.round(n / 1e3)}K`;
-  if (abs >= 1) return Math.round(n).toString();
-  return fmt(n, dpSmall);
-}
-
-const marketplacePriceFormatter = new Intl.NumberFormat('en-US', {
-  maximumSignificantDigits: 6,
-  useGrouping: true,
-});
-
-function formatPrice(n: number): string {
-  if (!Number.isFinite(n)) return '—';
-  return marketplacePriceFormatter.format(n);
-}
-
-function mapOrder(o: UntypedValue): OrderView {
-  return {
-    id: BigInt(o.id),
-    seller: o.seller,
-    sellToken: Number(o.sellToken),
-    amount: BigInt(o.amount),
-    isActive: Boolean(o.isActive),
-    amountAsk: BigInt(o.amountAsk),
-  };
-}
+const mapOrder = parseMarketplaceOrder;
 
 export default function MarketplaceDialog({ open, onOpenChange, landId }: { open: boolean; onOpenChange: (v: boolean) => void; landId: bigint; }) {
   const { address } = useAccount();
@@ -105,7 +49,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [exactPriceRatio, setExactPriceRatio] = useState<MarketplacePriceRatio | null>(null);
   const [ordersLoading, setLoading] = useState<boolean>(false);
   const [focusedSide, setFocusedSide] = useState<"asks" | "bids" | null>(null);
-  const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   const [selectedSide, setSelectedSide] = useState<"asks" | "bids" | null>(null);
   const [showUserOrders, setShowUserOrders] = useState<boolean>(false);
   const [showHistory, setShowHistory] = useState<boolean>(false);
@@ -121,10 +65,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
   const [balanceOwner, setBalanceOwner] = useState<string | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const amountInputId = useId();
-  const amountBalanceId = useId();
-  const amountErrorId = useId();
   const priceInputId = useId();
-  const priceErrorId = useId();
   const balanceRequestRef = useRef(0);
   const orderRequestRef = useRef(0);
 
@@ -174,10 +115,10 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
         // Use landOverviewByOwner to get tokenIds efficiently
         const lands = await client.readContract({
           address: LAND_CONTRACT_ADDRESS,
-          abi: landAbi as UntypedValue,
+          abi: landAbi,
           functionName: 'landOverviewByOwner',
           args: [address as `0x${string}`]
-        }) as UntypedValue[];
+        });
         // lands is array of struct { tokenId, ... }
         if (!cancelled && Array.isArray(lands)) {
           setUserLandIds(lands.map(l => BigInt(l.tokenId)));
@@ -226,9 +167,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
       setOrdersError(null);
       const client = getReadClient();
       const [active, mine, activeFlag] = await Promise.all([
-        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<UntypedValue[]>,
-        address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<UntypedValue[]> : Promise.resolve([]),
-        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi as UntypedValue, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
+        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'marketPlaceGetActiveOrders', args: [] }) as Promise<unknown[]>,
+        address ? client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'marketPlaceGetUserOrders', args: [address as `0x${string}`] }) as Promise<unknown[]> : Promise.resolve([]),
+        client.readContract({ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'marketPlaceIsActive', args: [] }) as Promise<boolean>
       ]);
       if (requestId !== orderRequestRef.current) return;
       setActiveOrders((active || []).map(mapOrder));
@@ -317,45 +258,9 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     void Promise.allSettled([fetchBalances(), fetchOrders()]);
   }, [fetchBalances, fetchOrders]);
 
-  // Build order book (asks: sell LEAF; bids: sell SEED)
-  const asks = useMemo(() => {
-    // Aggregate by price (6 dp) and compute cumulative depth
-    const rows = (activeOrders || [])
-      .filter(o => o.sellToken === 1)
-      .map(o => ({ exactRatio: getMarketplacePriceRatio(o), price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
-      .filter((row): row is PriceLevelRow => row.exactRatio !== null)
-      .reduce((acc: PriceLevelRow[], cur) => {
-        const key = Number((Math.round(cur.price * 1e6) / 1e6).toFixed(6));
-        const found = acc.find(r => r.price === key);
-        if (found) found.size += cur.size; else acc.push({ exactRatio: cur.exactRatio, price: key, size: cur.size });
-        return acc;
-      }, [])
-      .sort((a, b) => a.price - b.price)
-      .slice(0, 20);
-    let cum = 0;
-    const max = rows.reduce((m, r) => Math.max(m, r.size + (m === 0 ? 0 : 0)), 0);
-    return rows.map(r => { cum += r.size; return { ...r, cum, depth: max ? Math.min(100, (cum / (rows.reduce((s, rr) => s + rr.size, 0))) * 100) : 0 }; });
-  }, [activeOrders]);
-  const bids = useMemo(() => {
-    const rows = (activeOrders || [])
-      .filter(o => o.sellToken === 0)
-      .map(o => ({ exactRatio: getMarketplacePriceRatio(o), price: computePriceLeafPerSeed(o), size: toNumberWei(o.amount) }))
-      .filter((row): row is PriceLevelRow => row.exactRatio !== null)
-      .reduce((acc: PriceLevelRow[], cur) => {
-        const key = Number((Math.round(cur.price * 1e6) / 1e6).toFixed(6));
-        const found = acc.find(r => r.price === key);
-        if (found) found.size += cur.size; else acc.push({ exactRatio: cur.exactRatio, price: key, size: cur.size });
-        return acc;
-      }, [])
-      .sort((a, b) => b.price - a.price)
-      .slice(0, 20);
-    let cum = 0;
-    const total = rows.reduce((s, r) => s + r.size, 0);
-    return rows.map(r => { cum += r.size; return { ...r, cum, depth: total ? Math.min(100, (cum / total) * 100) : 0 }; });
-  }, [activeOrders]);
-  const bestAsk = asks[0]?.price ?? 0;
-  const bestBid = bids[0]?.price ?? 0;
-  const mid = bestAsk > 0 && bestBid > 0 ? (bestAsk + bestBid) / 2 : (bestAsk || bestBid || 0);
+  // Quote currency is LEAF per SEED; order by what the taker receives.
+  const asks = useMemo(() => buildMarketplacePriceLevels(activeOrders, 1), [activeOrders]);
+  const bids = useMemo(() => buildMarketplacePriceLevels(activeOrders, 0), [activeOrders]);
 
   const hasSufficientForOrder = (o: OrderView): boolean => {
     if (!balancesCurrent) return false;
@@ -392,16 +297,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
   const parsedAmount = useMemo(() => {
     if (!amount.trim()) return null;
-    try { return parseUnits(amount.trim(), 18); } catch { return null; }
+    return parseAmountInput(amount);
   }, [amount]);
   const parsedPrice = useMemo(() => {
     if (!price.trim()) return null;
-    try { return parseUnits(price.trim(), 18); } catch { return null; }
+    return parseAmountInput(price);
   }, [price]);
   const amountInputError = amount && (parsedAmount === null || parsedAmount <= BigInt(0))
     ? 'Enter a positive amount with no more than 18 decimal places.'
     : null;
-  const priceInputError = price && (parsedPrice === null || parsedPrice <= BigInt(0))
+  const priceInputError = !exactPriceRatio && price && (parsedPrice === null || parsedPrice <= BigInt(0))
     ? 'Enter a positive price with no more than 18 decimal places.'
     : null;
 
@@ -431,15 +336,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
     const sellToken = sellSide === 'LEAF' ? 1 : 0;
     return {
       address: LAND_CONTRACT_ADDRESS as `0x${string}`,
-      abi: landAbi as UntypedValue,
+      abi: landAbi,
       functionName: 'marketPlaceCreateOrder',
-      args: [transactionLandId, BigInt(sellToken), parsedAmount, amountAskWei] as UntypedValue[],
+      args: [transactionLandId, BigInt(sellToken), parsedAmount, amountAskWei],
     };
   }, [exactPriceRatio, parsedAmount, parsedPrice, sellSide, transactionLandId]);
 
   // After successful create order, mark mission progress
-  const onOrderSuccess = (tx: UntypedValue) => {
-    const payload: Record<string, UntypedValue> = { address, taskId: 's1_place_order' };
+  const onOrderSuccess = (tx: TransactionProof) => {
+    const payload: Record<string, unknown> = { address, taskId: 's1_place_order' };
     const txHash = extractTransactionHash(tx);
     if (txHash) {
       payload.proof = { txHash };
@@ -470,17 +375,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
             {/* Top bar with mid price and quick actions */}
             <div className={cn(marketplacePaddedPanelClassName, "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between")}>
               <div>
-                <div className="text-xs text-muted-foreground">Mid (LEAF / SEED)</div>
-                <div className="max-w-full truncate text-xl font-semibold tabular-nums sm:text-2xl" title={mid ? fmt(mid, 6) : undefined}>
-                  {mid ? formatPrice(mid) : '—'}
-                </div>
+                <div className="text-base font-semibold">Community orders</div>
+                <p className="text-xs text-muted-foreground">Rates are quoted in LEAF per SEED.</p>
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   {activeOrders.length} active • {currentUserOrders.filter((order) => order.isActive).length} mine
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <Button variant="outline" size="compact" onClick={useBestBid}>Use Best Bid</Button>
-                <Button variant="outline" size="compact" onClick={useBestAsk}>Use Best Ask</Button>
+                <Button variant="outline" size="compact" onClick={useBestBid} disabled={!ordersCurrent || bids.length === 0}>Best rate to sell LEAF</Button>
+                <Button variant="outline" size="compact" onClick={useBestAsk} disabled={!ordersCurrent || asks.length === 0}>Best rate to sell SEED</Button>
                 <Button
                   variant="outline"
                   size="compact"
@@ -528,22 +431,26 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
             {/* One physical tree keeps transaction state stable across responsive resizes. */}
             <div className="grid grid-cols-1 gap-4 tablet:grid-cols-3 tablet:items-start">
+              <details className="order-last space-y-3 tablet:col-span-3">
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Browse existing offers</summary>
+                <p className="text-xs text-muted-foreground">Select a rate to inspect offers, then use Take to trade immediately. Creating a new order waits for another player.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
               {/* Asks */}
               <div className={cn(
                 marketplacePanelClassName,
-                "order-1 overflow-hidden tablet:col-start-1 tablet:row-start-1",
+                "order-1 overflow-hidden",
                 focusedSide === 'asks' && "ring-1 ring-destructive/50",
               )}>
                 <div className="max-h-60 overflow-y-auto tablet:min-h-[18rem] tablet:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between bg-destructive/10 px-3 py-2 text-sm text-destructive tablet:text-xs">
-                    <span>Asks (Sell LEAF)</span>
+                    <span>Buy LEAF · most LEAF first</span>
                     <span className="opacity-70">Price • Size</span>
                   </div>
                   {asks.length === 0 ? (
                     <div className="p-4 text-center text-sm text-muted-foreground">—</div>
                   ) : (
                     asks.map((row, idx) => {
-                      const isSelected = selectedSide === 'asks' && selectedLevel === row.price;
+                      const isSelected = selectedSide === 'asks' && selectedLevel === row.key;
                       return (
                         <button
                           key={"ask-" + idx}
@@ -556,16 +463,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             setPrice(formatMarketplacePriceRatio(row.exactRatio));
                             setExactPriceRatio(row.exactRatio);
                             setFocusedSide('asks');
-                            setSelectedLevel(row.price);
+                            setSelectedLevel(row.key);
                             setSelectedSide('asks');
                           }}
-                          aria-label={"Select price " + fmt(row.price, 6) + " LEAF per SEED"}
+                          aria-label={"Select price " + formatMarketplacePriceRatio(row.exactRatio) + " LEAF per SEED"}
                         >
                           <div className="absolute inset-0 bg-destructive/10" style={{ width: row.depth + "%" }} />
-                          <span className={cn("relative font-semibold", isSelected ? "text-primary-foreground" : "text-destructive")}>
-                            {formatPrice(row.price)}
+                          <span className={cn("relative min-w-0 break-all pr-2 font-semibold", isSelected ? "text-primary-foreground" : "text-destructive")}>
+                            {formatMarketplacePriceRatio(row.exactRatio)}
                           </span>
-                          <span className="relative">{formatCompact(row.size)} LEAF</span>
+                          <span className="relative shrink-0">{formatTokenDisplayCompact(row.amount)} LEAF</span>
                         </button>
                       );
                     })
@@ -576,19 +483,19 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               {/* Bids */}
               <div className={cn(
                 marketplacePanelClassName,
-                "order-2 overflow-hidden tablet:col-start-3 tablet:row-start-1",
+                "order-2 overflow-hidden",
                 focusedSide === 'bids' && "ring-1 ring-[hsl(var(--success)/0.5)]",
               )}>
                 <div className="max-h-60 overflow-y-auto tablet:min-h-[18rem] tablet:max-h-[22rem]">
                   <div className="sticky top-0 z-10 flex items-center justify-between bg-[hsl(var(--success)/0.12)] px-3 py-2 text-sm text-[hsl(var(--success-strong))] tablet:text-xs">
-                    <span>Bids (Sell SEED)</span>
+                    <span>Buy SEED · lowest cost first</span>
                     <span className="opacity-70">Price • Size</span>
                   </div>
                   {bids.length === 0 ? (
                     <div className="p-4 text-center text-sm text-muted-foreground">—</div>
                   ) : (
                     bids.map((row, idx) => {
-                      const isSelected = selectedSide === 'bids' && selectedLevel === row.price;
+                      const isSelected = selectedSide === 'bids' && selectedLevel === row.key;
                       return (
                         <button
                           key={"bid-" + idx}
@@ -601,16 +508,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                             setPrice(formatMarketplacePriceRatio(row.exactRatio));
                             setExactPriceRatio(row.exactRatio);
                             setFocusedSide('bids');
-                            setSelectedLevel(row.price);
+                            setSelectedLevel(row.key);
                             setSelectedSide('bids');
                           }}
-                          aria-label={"Select price " + fmt(row.price, 6) + " LEAF per SEED"}
+                          aria-label={"Select price " + formatMarketplacePriceRatio(row.exactRatio) + " LEAF per SEED"}
                         >
                           <div className="absolute inset-0 bg-[hsl(var(--success)/0.12)]" style={{ width: row.depth + "%" }} />
-                          <span className={cn("relative font-semibold", isSelected ? "text-primary-foreground" : "text-[hsl(var(--success-strong))]")}>
-                            {formatPrice(row.price)}
+                          <span className={cn("relative min-w-0 break-all pr-2 font-semibold", isSelected ? "text-primary-foreground" : "text-[hsl(var(--success-strong))]")}>
+                            {formatMarketplacePriceRatio(row.exactRatio)}
                           </span>
-                          <span className="relative">{formatCompact(row.size)} SEED</span>
+                          <span className="relative shrink-0">{formatTokenDisplayCompact(row.amount)} SEED</span>
                         </button>
                       );
                     })
@@ -618,10 +525,13 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 </div>
               </div>
 
+                </div>
+              </details>
+
               {/* Trade panel */}
               <div className={cn(
                 marketplacePaddedPanelClassName,
-                "order-3 space-y-4 tablet:col-start-2 tablet:row-start-1 tablet:min-h-[18rem] tablet:max-h-[22rem] tablet:overflow-y-auto",
+                "order-first space-y-4 tablet:col-span-3",
               )}>
                 <div className="flex items-center gap-2 text-sm">
                   <Button variant={sellSide === 'LEAF' ? 'default' : 'outline'} size="compact" onClick={() => setSellSide('LEAF')}>
@@ -633,65 +543,25 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                 </div>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm text-muted-foreground" htmlFor={amountInputId}>
-                      Amount ({sellSide})
-                    </label>
-                    <div className="relative">
-                      <Input
-                        id={amountInputId}
-                        aria-describedby={`${amountBalanceId}${amountInputError ? ` ${amountErrorId}` : ''}`}
-                        aria-invalid={Boolean(amountInputError)}
-                        value={amount}
-                        onChange={(event) => setAmount(event.target.value)}
-                        placeholder="0.0"
-                        inputMode="decimal"
-                        className="h-12 pr-20"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
-                        {sellSide}
-                      </span>
-                    </div>
-                    <div id={amountBalanceId} className="mt-1.5 text-xs text-muted-foreground">
-                      Balance: {!balancesCurrent
-                        ? (balanceError ? 'Unavailable' : 'Loading…')
-                        : sellSide === 'LEAF'
-                          ? formatCompact(toNumberWei(leafBalance)) + ' LEAF'
-                          : formatCompact(toNumberWei(seedBalance)) + ' SEED'}
-                    </div>
-                    {amountInputError && <p id={amountErrorId} role="alert" className="mt-1 text-xs text-destructive">{amountInputError}</p>}
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-muted-foreground" htmlFor={priceInputId}>
-                      Price (LEAF / SEED)
-                    </label>
-                    <div className="relative">
-                      <Input
-                        id={priceInputId}
-                        aria-describedby={priceInputError ? priceErrorId : undefined}
-                        aria-invalid={Boolean(priceInputError)}
-                        value={price}
-                        onChange={(event) => {
-                          setExactPriceRatio(null);
-                          setPrice(event.target.value);
-                        }}
-                        placeholder="0.0"
-                        inputMode="decimal"
-                        className="h-12 pr-24"
-                      />
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
-                        LEAF / SEED
-                      </span>
-                    </div>
-                    {priceInputError && <p id={priceErrorId} role="alert" className="mt-1 text-xs text-destructive">{priceInputError}</p>}
-                  </div>
+                  <AmountField id={amountInputId} label="Amount to sell" unit={sellSide} value={amount}
+                    onChange={event => setAmount(event.target.value)} placeholder="0.0" error={amountInputError || undefined}
+                    balance={!balancesCurrent ? (balanceError ? 'Unavailable' : 'Loading…') : formatTokenDisplay(sellSide === 'LEAF' ? leafBalance : seedBalance)} />
+                  <AmountField id={priceInputId} label="Price" unit="LEAF per SEED" value={price}
+                    onChange={event => { setExactPriceRatio(null); setPrice(event.target.value); }} placeholder="0.0" error={priceInputError || undefined} />
                 </div>
 
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>Tip: Tap an order to pre-fill the price.</span>
                   <Button variant="ghost" size="compact" onClick={() => setAmount('')}>Clear</Button>
                 </div>
+
+                {createOrderCall && (
+                  <div className="space-y-1 rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-sm" aria-label="Order preview">
+                    <p>You give <strong>{formatUnits(parsedAmount!, 18)} {sellSide}</strong></p>
+                    <p>You receive <strong>{formatUnits(createOrderCall.args[3] as bigint, 18)} {sellSide === 'LEAF' ? 'SEED' : 'LEAF'}</strong> if this order is filled.</p>
+                    <p className="text-xs text-muted-foreground">Creating an order does not guarantee a trade.</p>
+                  </div>
+                )}
 
                 {needsCreateApproval && (
                   <div className="flex gap-2">
@@ -701,7 +571,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         intentKey="marketplace:approve-seed"
                         calls={[{
                           address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
-                          abi: ERC20_APPROVE_ABI as UntypedValue,
+                          abi: ERC20_APPROVE_ABI,
                           functionName: 'approve',
                           args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE],
                         }]}
@@ -709,7 +579,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         buttonClassName="h-10 min-h-10 px-4"
                         hideStatus
                         onSuccess={() => {
-                          toast.success('SEED approved');
+
                           setSeedAllowance(MAX_ALLOWANCE);
                         }}
                         onError={(error) => {
@@ -724,7 +594,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         intentKey="marketplace:approve-leaf"
                         calls={[{
                           address: LEAF_CONTRACT_ADDRESS as `0x${string}`,
-                          abi: ERC20_APPROVE_ABI as UntypedValue,
+                          abi: ERC20_APPROVE_ABI,
                           functionName: 'approve',
                           args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE],
                         }]}
@@ -732,7 +602,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                         buttonClassName="h-10 min-h-10 px-4"
                         hideStatus
                         onSuccess={() => {
-                          toast.success('LEAF approved');
+
                           setLeafAllowance(MAX_ALLOWANCE);
                         }}
                         onError={(error) => {
@@ -763,7 +633,7 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                   }
                   hideStatus
                   onSuccess={(tx) => {
-                    toast.success('Order created');
+
                     setAmount('');
                     setPrice('');
                     setExactPriceRatio(null);
@@ -778,18 +648,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
               <div className={marketplacePanelClassName}>
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                   <div className="text-sm font-medium">
-                    Orders @ {fmt(selectedLevel, 6)} LEAF/SEED • {selectedSide === 'asks' ? 'Sell LEAF' : 'Sell SEED'}
+                    Orders at selected rate • {selectedSide === 'asks' ? 'Sell LEAF' : 'Sell SEED'}
                   </div>
                   <Button variant="ghost" size="compact" className="text-muted-foreground" onClick={() => { setSelectedLevel(null); setSelectedSide(null); }}>Clear</Button>
                 </div>
                 <div className="max-h-56 overflow-y-auto">
                   {(() => {
-                    const level = Number((Math.round((selectedLevel || 0) * 1e6) / 1e6).toFixed(6));
-                    const list = (activeOrders || []).filter(o => {
+                    const list = activeOrders.filter(o => {
                       const side = o.sellToken === 1 ? 'asks' : 'bids';
-                      if (side !== selectedSide) return false;
-                      const p = Number((Math.round(computePriceLeafPerSeed(o) * 1e6) / 1e6).toFixed(6));
-                      return p === level;
+                      const ratio = getMarketplacePriceRatio(o);
+                      return side === selectedSide && ratio !== null && getMarketplaceRatioKey(ratio) === selectedLevel;
                     });
                     if (list.length === 0) {
                       return <div className="text-center text-sm text-muted-foreground p-3">No orders at this price.</div>;
@@ -814,25 +682,22 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
                           return (
                             <div key={String(o.id)} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-xs [content-visibility:auto]">
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-                                <span className="font-medium">#{String(o.id)}</span>
-                                <span className="text-muted-foreground">Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
-                              </div>
+                              <MarketplaceOrderSummary order={o} />
                               {needsApproval && !isMyOrder ? (
                                 <GameTransaction
                                   effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
-                                    abi: ERC20_APPROVE_ABI as UntypedValue,
+                                    abi: ERC20_APPROVE_ABI,
                                     functionName: 'approve',
                                     args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
-                                  buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
+                                  buttonClassName="h-11 min-h-11 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
                                   hideStatus
                                   onSuccess={() => {
-                                    toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
+
                                     if (payTokenIsLeaf) setLeafAllowance(MAX_ALLOWANCE);
                                     else setSeedAllowance(MAX_ALLOWANCE);
                                   }}
@@ -841,12 +706,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <GameTransaction
                                   effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
-                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
+                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] }] : []}
                                   buttonText={disabledReason || "Take"}
-                                  buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
+                                  buttonClassName="h-11 min-h-11 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={!ordersCurrent || loadingBalances || !hasSufficientForOrder(o) || !!isMyOrder || !transactionLandId}
                                   hideStatus
-                                  onSuccess={() => { toast.success('Order filled'); }}
                                 />
                               )}
                             </div>
@@ -952,21 +816,16 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                     return (
                       <div key={String(o.id)} className="border-b border-border p-2 last:border-b-0 [content-visibility:auto]">
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-xs">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-                            <span className="font-medium">{o.sellToken === 1 ? 'Sell LEAF' : 'Sell SEED'} • #{String(o.id)}</span>
-                            <span className="text-muted-foreground">Price {formatPrice(computePriceLeafPerSeed(o))} • Size {formatCompact(toNumberWei(o.amount))} {o.sellToken === 1 ? 'LEAF' : 'SEED'} • Needs {formatCompact(toNumberWei(o.amountAsk))} {o.sellToken === 1 ? 'SEED' : 'LEAF'}</span>
-                            {!o.isActive && <span className="text-muted-foreground italic">(Inactive)</span>}
-                          </div>
+                          <MarketplaceOrderSummary order={o} />
                           {showUserOrders && isMyOrder && o.isActive && (
                             <GameTransaction
                               effects={{ domains: ["plants", "lands", "balances"] }}
                               intentKey={`marketplace:cancel-order:${transactionLandId}:${o.id}`}
-                              calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
+                              calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'marketPlaceCancelOrder', args: [transactionLandId, o.id] }] : []}
                               buttonText="Cancel"
-                              buttonClassName="h-9 min-h-9 w-auto min-w-[64px] shrink-0 px-2.5 py-0 text-xs"
+                              buttonClassName="h-11 min-h-11 w-auto min-w-[64px] shrink-0 px-2.5 py-0 text-xs"
                               disabled={!ordersCurrent || !isOrderActive(o.id)}
                               hideStatus
-                              onSuccess={() => { toast.success('Order canceled'); }}
                             />
                           )}
                           {/* Take Order Button (or Approve) */}
@@ -978,15 +837,15 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                   intentKey={`marketplace:approve-${payTokenIsLeaf ? 'leaf' : 'seed'}`}
                                   calls={[{
                                     address: (payTokenIsLeaf ? LEAF_CONTRACT_ADDRESS : PIXOTCHI_TOKEN_ADDRESS) as `0x${string}`,
-                                    abi: ERC20_APPROVE_ABI as UntypedValue,
+                                    abi: ERC20_APPROVE_ABI,
                                     functionName: 'approve',
                                     args: [LAND_CONTRACT_ADDRESS, MAX_ALLOWANCE]
                                   }]}
                                   buttonText={`Approve ${payTokenIsLeaf ? 'LEAF' : 'SEED'}`}
-                                  buttonClassName="h-9 min-h-9 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
+                                  buttonClassName="h-11 min-h-11 w-auto min-w-[72px] shrink-0 px-2.5 py-0 text-xs"
                                   hideStatus
                                   onSuccess={() => {
-                                    toast.success(`${payTokenIsLeaf ? 'LEAF' : 'SEED'} approved`);
+
                                     // Determine which setAllowance to call
                                     if (payTokenIsLeaf) setLeafAllowance(MAX_ALLOWANCE);
                                     else setSeedAllowance(MAX_ALLOWANCE);
@@ -996,12 +855,11 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
                                 <GameTransaction
                                   effects={{ domains: ["plants", "lands", "balances"] }}
                                   intentKey={`marketplace:take-order:${transactionLandId}:${o.id}`}
-                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi as UntypedValue, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] as UntypedValue[] }] : []}
+                                  calls={transactionLandId ? [{ address: LAND_CONTRACT_ADDRESS as `0x${string}`, abi: landAbi, functionName: 'marketPlaceTakeOrder', args: [transactionLandId, o.id] }] : []}
                                   buttonText={disabledReason || "Take"}
-                                  buttonClassName="h-9 min-h-9 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
+                                  buttonClassName="h-11 min-h-11 w-auto min-w-[56px] shrink-0 px-2.5 py-0 text-xs"
                                   disabled={!canTakeOrder}
                                   hideStatus
-                                  onSuccess={() => { toast.success('Order filled'); }}
                                 />
                               )}
                             </>

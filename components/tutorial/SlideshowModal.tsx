@@ -20,7 +20,7 @@ function Art({ type }: { type?: string }) {
   const map: Record<string, { src: string; alt: string }> = {
     "token-flow": { src: "/tutorial/swap.webp", alt: "Swap ETH to SEED" },
     "mint-plant": { src: "/tutorial/mint-plant.webp", alt: "Mint and feed plant" },
-    "ptstod": { src: "/tutorial/ptstod.webp", alt: "PTS and TOD" },
+    "ptstod": { src: "/tutorial/ptstod.webp", alt: "PTS and lifetime" },
     "plant-items": { src: "/tutorial/plant-items.webp", alt: "Plant Items Marketplace" },
     "attack": { src: "/tutorial/attack.webp", alt: "Attack rules" },
     "land": { src: "/tutorial/mint-land.webp", alt: "Mint land" },
@@ -89,10 +89,11 @@ export default function SlideshowModal() {
     >
       <DialogContent
         hideCloseButton
+        padding="none"
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--edge-strong))] p-0 sm:p-0 shadow-[var(--shadow-modal)]"
+        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--edge-strong))] shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >

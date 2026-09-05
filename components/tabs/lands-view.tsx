@@ -1,6 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { LandActionSummary } from '@/components/land-action-summary';
+import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
+import { ResourceState } from '@/components/ui/resource-state';
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -33,9 +36,10 @@ import { queryKeys } from "@/lib/query-keys";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
 import dynamic from "next/dynamic";
+import { PackageCheck, Route } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
-import { useAccount,useWatchBlockNumber } from "wagmi";
+import { useAccount,useBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
 import BuildingGrid from "@/components/building-grid";
 import { EditLandName } from "@/components/edit-land-name";
@@ -201,7 +205,7 @@ function UtilityBuildingTile({
               className={`font-pixel text-[1.35rem] leading-none tracking-normal ${selected ? 'text-primary' : 'text-foreground/80'}`}
               aria-hidden="true"
             >
-              {glyph}
+              {glyph === "BC" ? <PackageCheck className="h-8 w-8" /> : <Route className="h-8 w-8" />}
             </span>
           </div>
         </button>
@@ -209,14 +213,14 @@ function UtilityBuildingTile({
       <div className={`${denseLabels ? 'min-w-0 ' : ''}text-center`}>
         <div
           className={denseLabels
-            ? "min-h-[1.75rem] text-[11px] font-semibold leading-tight [overflow-wrap:anywhere]"
+            ? "min-h-[1.75rem] text-xs font-semibold leading-tight [overflow-wrap:anywhere]"
             : "text-xs font-semibold truncate"
           }
           title={label}
         >
           {label}
         </div>
-        <div className={denseLabels ? "text-[11px] leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
+        <div className={denseLabels ? "text-xs leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
           {sublabel}
         </div>
       </div>
@@ -255,12 +259,14 @@ function LandsViewContent() {
   // Building management state
   const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
+  const [buildingsError, setBuildingsError] = useState<string | null>(null);
+  const [landArtExpanded, setLandArtExpanded] = useState(false);
+  const buildingPanelRef = useRef<HTMLDivElement>(null);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
   const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
   const selectedBuildingId = selectedBuilding?.id ?? null;
   const [buildingsLoading, setBuildingsLoading] = useState(false);
-  const [currentBlock, setCurrentBlock] = useState<bigint>(BigInt(0));
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
 
@@ -302,6 +308,7 @@ function LandsViewContent() {
     setSelectedBuilding(null);
     setSelectedUtilityPanel(null);
     setBuildingsLoading(false);
+    setBuildingsError(null);
     setIsMapOpen(false);
   }, []);
 
@@ -358,6 +365,10 @@ function LandsViewContent() {
     return lands.find((land) => land.tokenId === preferredLandId) ?? lands[0];
   }, [lands, preferredLandId]);
   const selectedLandId = selectedLand?.tokenId ?? null;
+  const hasFarmerHouse = townBuildings.some(building => building.id === 7 && building.level > 0);
+  const quests = useLandQuestSlots({ owner: ownerKey, chainId: 8453, landId: selectedLandId,
+    enabled: hasFarmerHouse && !buildingsError, poll: isVisible && isDocumentVisible });
+  const refreshQuests = quests.refresh;
 
   /**
    * Merges a freshly read single land back into the owner's cached list.
@@ -490,6 +501,7 @@ function LandsViewContent() {
       setSelectedBuilding(null);
       setSelectedUtilityPanel(null);
       setBuildingsLoading(false);
+      setBuildingsError(null);
       fetchBuildingDataPendingRef.current = null;
       fetchBuildingDataQueuedRef.current = null;
       return;
@@ -522,6 +534,7 @@ function LandsViewContent() {
     fetchBuildingDataQueuedRef.current = null;
     fetchBuildingDataPendingRef.current = requestIdentity;
     setBuildingsLoading(true);
+    setBuildingsError(null);
 
     try {
       const [villageData, townData, barracksState, casinoBuilt] = await Promise.all([
@@ -665,6 +678,8 @@ function LandsViewContent() {
       ) {
         setVillageBuildings([]);
         setTownBuildings([]);
+        setSelectedBuilding(null);
+        setBuildingsError('We could not verify this land’s buildings. Retry to load its actions.');
       }
     } finally {
       const ownsPendingSlot = buildingFetchIdentityMatches(
@@ -731,6 +746,7 @@ function LandsViewContent() {
     const requestedOwner = ownerKey;
     const requestedLandId = selectedLandId;
     void fetchBuildingData();
+    if (hasFarmerHouse) void refreshQuests(false);
     (async () => {
       try {
         if (requestedLandId != null && requestedOwner) {
@@ -746,7 +762,7 @@ function LandsViewContent() {
         }
       } catch { }
     })();
-  }, [fetchBuildingData, ownerKey, patchLandInCache, selectedLandId]);
+  }, [fetchBuildingData, hasFarmerHouse, ownerKey, patchLandInCache, refreshQuests, selectedLandId]);
 
   // One mutation signal owns reconciliation. Child panels may still emit the
   // legacy buildings event while migrating; the listener below coalesces it.
@@ -884,20 +900,12 @@ function LandsViewContent() {
     writeLocalStorage(LAND_SELECTION_STORAGE_KEY, selectedLandId.toString());
   }, [selectedLandId]);
 
-  // Watch for block updates to track upgrade progress
-  // Only watch when we have buildings that are actually upgrading
+  // One shared Base block query drives both construction and quest deadlines.
   const hasUpgradingBuildings = [...villageBuildings, ...townBuildings].some(building => building.isUpgrading);
 
-  useWatchBlockNumber({
-    onBlockNumber(blockNumber) {
-      setCurrentBlock(blockNumber);
-    },
-    // Gated on the in-app tab AND document visibility: the old guard only
-    // checked for upgrading buildings, so a backgrounded webview kept polling
-    // the RPC every 3s and re-rendering this whole view.
-    enabled: hasUpgradingBuildings && isVisible && isDocumentVisible,
-    pollingInterval: 3000 // Check every 3 seconds instead of every block
-  });
+  const { data: liveBlock } = useBlockNumber({ chainId: 8453,
+    watch: (hasUpgradingBuildings || hasFarmerHouse) && isVisible && isDocumentVisible });
+  const currentBlock = liveBlock ?? BigInt(0);
 
   const handleBuildingSelect = useCallback((type: BuildingType, building: BuildingData) => {
     setSelectedUtilityPanel(null);
@@ -990,7 +998,7 @@ function LandsViewContent() {
                       <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                  <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
                     {lands.map((land) => (
                       <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setPreferredLandId(land.tokenId)}>
                         <div className="flex min-w-0 items-center space-x-2">
@@ -1004,9 +1012,13 @@ function LandsViewContent() {
               </CardContent>
             </TabCard>
           )}
+          <LandActionSummary land={selectedLand} village={villageBuildings} town={townBuildings} block={currentBlock}
+            quests={quests}
+            loading={buildingsLoading} error={buildingsError} onRetry={() => { void fetchBuildingData(); }}
+            onSelect={(type, building) => { handleBuildingSelect(type, building); requestAnimationFrame(() => buildingPanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })); }} />
           <TabCard>
             <CardContent className="space-y-3">
-              <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
+              <div className={`relative w-full ${landArtExpanded ? 'h-80' : 'h-44 sm:h-60'} xl:h-auto xl:aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised`}>
                 <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
                   <div className="flex justify-start">
@@ -1083,7 +1095,7 @@ function LandsViewContent() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate font-pixel text-lg">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
+                  <h3 className="min-w-0 break-words font-pixel text-base">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
                   <EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
@@ -1097,7 +1109,8 @@ function LandsViewContent() {
                     className="h-11 min-h-11 w-11 min-w-11 shrink-0"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">Token ID: {selectedLand.tokenId.toString()}</p>
+                {selectedLand.name && <p className="text-sm text-muted-foreground">Land #{selectedLand.tokenId.toString()}</p>}
+                <Button variant="ghost" className="mt-1 xl:hidden" aria-expanded={landArtExpanded} onClick={() => setLandArtExpanded(value => !value)}>{landArtExpanded ? 'Collapse illustration' : 'Expand illustration'}</Button>
               </div>
             </CardContent>
           </TabCard>
@@ -1132,7 +1145,7 @@ function LandsViewContent() {
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
                 {/* Building Grid */}
                 <div className="space-y-4">
-                  {buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
+                  {buildingsError ? <ResourceState status="error" title="Buildings unavailable" description={buildingsError} onRetry={() => { void fetchBuildingData(); }} /> : buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
                     <div className="text-center text-muted-foreground p-6">
                       Loading buildings...
                     </div>
@@ -1257,7 +1270,7 @@ function LandsViewContent() {
                     showWhenEmpty
                   />
                 ) : selectedBuilding && (
-                  <BuildingDetailsPanel
+                  <div ref={buildingPanelRef} className="scroll-mt-4"><BuildingDetailsPanel
                     selectedBuilding={selectedBuilding}
                     landId={selectedLand.tokenId}
                     buildingType={buildingType}
@@ -1270,7 +1283,7 @@ function LandsViewContent() {
                     warehousePoints={selectedLand.accumulatedPlantPoints}
                     warehouseLifetime={selectedLand.accumulatedPlantLifetime}
                     villageBuildings={villageBuildings}
-                  />
+                  /></div>
                 )}
               </div>
             </CardContent>

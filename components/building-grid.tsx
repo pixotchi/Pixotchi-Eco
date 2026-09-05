@@ -86,20 +86,20 @@ const BuildingItem = React.memo(({
       <div className="min-w-0 w-full text-center">
         <div
           className={denseLabels
-            ? "min-h-[1.75rem] text-[11px] font-semibold leading-tight [overflow-wrap:anywhere]"
+            ? "min-h-[1.75rem] text-xs font-semibold leading-tight [overflow-wrap:anywhere]"
             : "text-xs font-semibold truncate"
           }
           title={buildingName}
         >
           {buildingName}
         </div>
-        <div className={denseLabels ? "text-[11px] leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
+        <div className={denseLabels ? "text-xs leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
           {`Lv. ${effectiveLevel}/${building.maxLevel}`}
         </div>
 
         {/* Upgrade Status */}
         {building.isUpgrading && (
-          <div className={denseLabels ? "text-[11px] leading-tight text-primary animate-pulse" : "text-xs text-primary animate-pulse"}>
+          <div className={denseLabels ? "text-xs leading-tight text-primary animate-pulse" : "text-xs text-primary animate-pulse"}>
             Upgrading...
           </div>
         )}

@@ -8,6 +8,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, ...props }, ref) => {
     return (
       <textarea
+        data-form-control=""
         className={cn(
           "flex min-h-[96px] w-full rounded-[var(--radius-control)] border border-input bg-card px-3 py-2 text-sm leading-5 ring-offset-background transition-[border-color,background-color,box-shadow] duration-[var(--motion-quick)] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55",
           className

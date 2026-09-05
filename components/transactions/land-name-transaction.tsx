@@ -36,11 +36,12 @@ export function LandNameTransaction({
 
   return (
     <GameTransaction
+      successMessage={`Land #${landId} renamed to ${newName}`}
       effects={{ domains: ["lands"] }}
       intentKey={`set-land-name:${landId}`}
       calls={calls}
       onSuccess={onSuccess}
-      onError={onError}
+      onError={error => onError?.(error instanceof Error ? error : new Error('Land name could not be changed.'))}
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}

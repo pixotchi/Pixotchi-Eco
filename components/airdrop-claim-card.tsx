@@ -13,6 +13,7 @@ import {
     getAirdropPendingPollDelay,
 } from '@/lib/airdrop-claim-polling';
 import { invalidateOwnerResources } from '@/lib/owner-resource-invalidation';
+import { formatTokenDecimal } from '@/lib/token-display';
 
 interface AirdropStatus {
     eligible: boolean;
@@ -188,7 +189,7 @@ export function AirdropClaimCard() {
                     transactionHash: typeof data.txHash === 'string' ? data.txHash : undefined,
                 });
                 if (ownerKeyRef.current === operationOwner) {
-                    toast.success('Airdrop claimed successfully!');
+
                     setStatus(prev => prev ? {
                         ...prev,
                         claimed: true,
@@ -309,11 +310,8 @@ export function AirdropClaimCard() {
     // to fall through every comparison into NaN.toFixed(2) and render
     // "NaN SEED" on a financial CTA.
     const formatAmount = (amount: string) => {
-        const num = parseFloat(amount);
-        if (!Number.isFinite(num) || num <= 0) return null;
-        if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
-        if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
-        return num.toFixed(2);
+        const formatted = formatTokenDecimal(amount, 18, 'compact');
+        return formatted === '0' ? null : formatted;
     };
 
     const seedDisplay = formatAmount(status.seed);

@@ -6,8 +6,12 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useDialogFeedbackHostRef } from "@/components/ui/dialog-feedback-host";
+import { getDialogOpener, registerDialogEscape, routeNestedDialogEscape, trackDialogOpeners } from "@/lib/dialog-focus";
 
 const DialogOpenContext = React.createContext(false);
+const DialogOpenChangeContext = React.createContext<(open: boolean) => void>(() => {});
+type DialogLayout = "custom" | "form" | "detail" | "game";
+const DialogLayoutContext = React.createContext<DialogLayout>("custom");
 
 const Dialog = ({
   defaultOpen = false,
@@ -17,6 +21,7 @@ const Dialog = ({
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) => {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
   const resolvedOpen = open ?? uncontrolledOpen;
+  React.useEffect(trackDialogOpeners, []);
 
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
@@ -28,11 +33,13 @@ const Dialog = ({
 
   return (
     <DialogOpenContext.Provider value={resolvedOpen}>
+      <DialogOpenChangeContext.Provider value={handleOpenChange}>
       <DialogPrimitive.Root
         {...props}
         open={resolvedOpen}
         onOpenChange={handleOpenChange}
       />
+      </DialogOpenChangeContext.Provider>
     </DialogOpenContext.Provider>
   );
 };
@@ -86,9 +93,13 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     danger?: boolean;
+    padding?: "default" | "compact" | "none";
     frameClassName?: string;
     hideCloseButton?: boolean;
     layer?: DialogLayer;
+    /** form/detail: only DialogBody scrolls; game: the entire surface scrolls.
+     * custom preserves feature-owned layouts during incremental migration. */
+    layout?: DialogLayout;
     mobileMode?: DialogMobileMode;
     overlayClassName?: string;
     size?: DialogSize;
@@ -100,9 +111,11 @@ const DialogContent = React.forwardRef<
   children,
   className,
   danger = false,
+  padding = "default",
   frameClassName,
   hideCloseButton,
   layer = "default",
+  layout = "custom",
   mobileMode = "auto",
   overlayClassName,
   size = "md",
@@ -111,6 +124,7 @@ const DialogContent = React.forwardRef<
   useSafeAreaInset = true,
   onOpenAutoFocus,
   onCloseAutoFocus,
+  onEscapeKeyDown,
   style,
   ...props
 }, ref) => {
@@ -127,7 +141,22 @@ const DialogContent = React.forwardRef<
    */
   const openerRef = React.useRef<HTMLElement | null>(null);
   const dialogOpen = React.useContext(DialogOpenContext);
+  const changeDialogOpen = React.useContext(DialogOpenChangeContext);
   const feedbackHostRef = useDialogFeedbackHostRef(dialogOpen);
+  const frameRef = React.useRef<HTMLDivElement | null>(null);
+  const escapeCleanup = React.useRef<(() => void) | null>(null);
+  const escapeHandler = React.useRef<(event: KeyboardEvent) => void>(() => {});
+  escapeHandler.current = (event) => {
+    onEscapeKeyDown?.(event);
+    if (!event.defaultPrevented) changeDialogOpen(false);
+  };
+  const setFrameRef = React.useCallback((node: HTMLDivElement | null) => {
+    escapeCleanup.current?.();
+    frameRef.current = node;
+    escapeCleanup.current = node ? registerDialogEscape(node, event => escapeHandler.current(event)) : null;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
 
   return (
   <DialogPortal>
@@ -140,7 +169,7 @@ const DialogContent = React.forwardRef<
       )}
     />
     <DialogPrimitive.Content
-      ref={ref}
+      ref={setFrameRef}
       data-viewport-debug-dialog-frame=""
       data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
@@ -174,9 +203,7 @@ const DialogContent = React.forwardRef<
        */
       style={{ pointerEvents: "none", ...style }}
       onOpenAutoFocus={(event) => {
-        const active = typeof document !== "undefined" ? document.activeElement : null;
-        openerRef.current =
-          active instanceof HTMLElement && active !== document.body ? active : null;
+        openerRef.current = getDialogOpener();
         onOpenAutoFocus?.(event);
       }}
       onCloseAutoFocus={(event) => {
@@ -189,10 +216,14 @@ const DialogContent = React.forwardRef<
         event.preventDefault();
         opener.focus({ preventScroll: true });
       }}
+      onEscapeKeyDown={(event) => {
+        if (!routeNestedDialogEscape(frameRef.current, event)) onEscapeKeyDown?.(event);
+      }}
       {...props}
     >
       <div
         data-viewport-debug-dialog-surface=""
+        data-dialog-layout={layout}
         data-state={dialogOpen ? "open" : "closed"}
         className={cn(
           // Counterpart to the frame's pointer-events: none above. The second class
@@ -200,7 +231,7 @@ const DialogContent = React.forwardRef<
           // one aria-hidden, the panel must stop taking pointer events too, which the
           // frame's inline pointerEvents:none would otherwise have handled.
           "pointer-events-auto [[data-aria-hidden=true]_&]:pointer-events-none",
-          "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
+          "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-[var(--dialog-padding)] surface-shadow-modal",
           // Keep motion on the visual card. A transform on Radix Content turns the
           // full-screen focus scope into the containing block for fixed feedback,
           // which makes transaction notices appear attached to this card.
@@ -216,12 +247,14 @@ const DialogContent = React.forwardRef<
              routes that don't run it. */
           "max-h-[min(90dvh,calc(var(--visual-viewport-height,100dvh)*0.9))]",
           "rounded-[var(--radius-dialog)]",
+          padding === "none" ? "[--dialog-padding:0px]" : padding === "compact" ? "[--dialog-padding:0.75rem] sm:[--dialog-padding:1rem] md:[--dialog-padding:1.5rem]" : "[--dialog-padding:1.25rem] sm:[--dialog-padding:1.5rem]",
           dialogSizeClassName[size],
           dialogSurfaceClassName[danger ? "danger" : surface],
+          layout === "game" && "overflow-y-auto overscroll-contain [&>*]:shrink-0",
           className
         )}
       >
-        {children}
+        <DialogLayoutContext.Provider value={layout}>{children}</DialogLayoutContext.Provider>
         {!hideCloseButton && (
           <DialogPrimitive.Close
             aria-label="Close dialog"
@@ -263,7 +296,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "surface-header-divider dialog-header-surface -mx-5 -mt-5 mb-0 flex flex-col space-y-2 px-5 pb-3 pt-5 pr-16 text-left sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 sm:pr-16",
+      "surface-header-divider dialog-header-surface -mx-[var(--dialog-padding)] -mt-[var(--dialog-padding)] mb-0 flex shrink-0 flex-col space-y-2 px-[var(--dialog-padding)] pb-3 pt-[var(--dialog-padding)] pr-16 text-left",
       className
     )}
     {...props}
@@ -272,19 +305,23 @@ const DialogHeader = ({
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({
-  sticky = false,
+  sticky,
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement> & { sticky?: boolean }) => (
+}: React.HTMLAttributes<HTMLDivElement> & { sticky?: boolean }) => {
+  const layout = React.useContext(DialogLayoutContext);
+  const fixed = sticky ?? layout === "form";
+  return (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      sticky && "surface-footer-divider dialog-footer-surface sticky -bottom-5 z-10 -mx-5 -mb-5 overflow-visible px-5 pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6",
+      "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+      fixed && "surface-footer-divider dialog-footer-surface sticky -bottom-[var(--dialog-padding)] z-10 -mx-[var(--dialog-padding)] -mb-[var(--dialog-padding)] overflow-visible px-[var(--dialog-padding)] pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3",
       className
     )}
     {...props}
   />
-);
+  );
+};
 DialogFooter.displayName = "DialogFooter";
 
 const DialogBody = ({
@@ -292,7 +329,7 @@ const DialogBody = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("surface-scroll-fade -mx-1.5 min-h-0 flex-1 overflow-y-auto px-1.5 py-3", className)}
+    className={cn("surface-scroll-fade -mx-[min(0.375rem,var(--dialog-padding,0.375rem))] min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-3", className)}
     {...props}
   />
 );

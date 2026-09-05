@@ -1,11 +1,12 @@
 "use client";
 
+import { parseAmountInput } from "@/lib/amount-input";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AmountField } from "@/components/ui/amount-field";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
 import {
   buildApproveStakeCall,
@@ -16,7 +17,7 @@ import {
 import GameTransaction from "@/components/transactions/game-transaction";
 import Image from "next/image";
 import { formatTokenAmount } from "@/lib/utils";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits } from "viem";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -361,15 +362,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   };
 
   const sanitizedAmount = amount.trim();
-  const safeParseUnits = (v: string): bigint | null => {
-    if (!v) return null;
-    if (!/^\d*(?:\.\d{0,18})?$/.test(v)) return null;
-    try {
-      return parseUnits(v, 18);
-    } catch {
-      return null;
-    }
-  };
+  const safeParseUnits = parseAmountInput;
   const parsed = safeParseUnits(sanitizedAmount);
   const amountValidPositive = parsed !== null && parsed > BigInt(0);
   const stakedBal = stakeInfo?.staked ?? BigInt(0);
@@ -431,7 +424,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
+      <DialogContent layout="form" mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
@@ -549,41 +542,15 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </Alert>
           )}
 
-          <div className="space-y-2">
-            <label htmlFor="staking-amount" className="text-sm font-medium">Amount to {mode === 'stake' ? 'Stake' : 'Unstake'}</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  id="staking-amount"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.0"
-                  inputMode="decimal"
-                  className="pr-10"
-                  aria-invalid={Boolean(helperText) || undefined}
-                  aria-describedby={helperText ? "staking-amount-error" : undefined}
-                />
-                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">SEED</div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setMaxAmount(mode)}
-                disabled={(mode === 'stake' ? seedBalance : (stakeInfo?.staked ?? BigInt(0))) <= BigInt(0)}
-              >
-                Max
-              </Button>
-            </div>
-            {helperText && <div id="staking-amount-error" className="text-xs text-destructive">{helperText}</div>}
-            <div className="flex items-center justify-end text-xs text-muted-foreground">
-              <span>{mode === 'stake' ? `Wallet: ${formatToken(seedBalance)} SEED` : `Staked: ${formatToken(stakeInfo?.staked)} SEED`}</span>
-            </div>
-          </div>
+          <AmountField id="staking-amount" label={mode === 'stake' ? 'Amount to stake' : 'Amount to unstake'} unit="SEED"
+            value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0" onMax={() => setMaxAmount(mode)}
+            maxDisabled={loading || Boolean(refreshError) || (mode === 'stake' ? seedBalance : (stakeInfo?.staked ?? BigInt(0))) <= BigInt(0)}
+            error={helperText || undefined} balance={loading ? 'Loading…' : refreshError ? 'Unavailable' : mode === 'stake' ? formatToken(seedBalance) : formatToken(stakeInfo?.staked)} />
 
         </div>
         </DialogBody>
 
-      <DialogFooter sticky className="block flex-none">
+      <DialogFooter className="block">
         <div className="w-full space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>

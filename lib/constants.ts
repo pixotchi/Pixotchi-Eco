@@ -42,7 +42,7 @@ export const VILLAGE_BUILDING_NAMES = {
 
 export const TOWN_BUILDING_NAMES = {
   1: "Stake House",
-  3: "Ware House",
+  3: "Warehouse",
   5: "Marketplace",
   7: "Farmer House"
 } as const;

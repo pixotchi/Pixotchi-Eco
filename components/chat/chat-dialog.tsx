@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useAccount } from 'wagmi';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DESKTOP_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { useChat } from './chat-context';
@@ -20,10 +21,14 @@ function DesktopChatPane({
   icon,
   mode,
   title,
+  draft,
+  onDraftChange,
 }: {
   icon: string;
   mode: Extract<ChatMode, 'public' | 'ai'>;
   title: string;
+  draft: string;
+  onDraftChange: (value: string) => void;
 }) {
   const { fetchHistoryForMode, isAITypingForMode, publicChatAuthenticated } = useChat();
 
@@ -47,7 +52,7 @@ function DesktopChatPane({
       <div className="surface-footer-divider dialog-footer-surface p-3">
         <div className="space-y-2">
           {isAITypingForMode(mode) && <AITypingIndicator />}
-          <ChatInput modeOverride={mode} />
+          <ChatInput modeOverride={mode} message={draft} onMessageChange={onDraftChange} />
         </div>
       </div>
     </section>
@@ -56,6 +61,8 @@ function DesktopChatPane({
 
 function ChatDialogContent() {
   const { mode, setMode, isAITyping } = useChat();
+  const [drafts, setDrafts] = useState<Record<ChatMode, string>>({ public: '', ai: '' });
+  const updateDraft = (pane: ChatMode, value: string) => setDrafts(current => ({ ...current, [pane]: value }));
   // Real gate, not CSS hiding: the two desktop panes used to mount (and fetch
   // both histories) on every phone open, flashing the visible pane's loader.
   const isDesktopChat = useMediaQuery(DESKTOP_MEDIA_QUERY);
@@ -106,8 +113,8 @@ function ChatDialogContent() {
 
       {isDesktopChat && (
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden pt-3">
-          <DesktopChatPane mode="public" title="Public" icon="/icons/chat-icon.webp" />
-          <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" />
+          <DesktopChatPane mode="public" title="Public" icon="/icons/chat-icon.webp" draft={drafts.public} onDraftChange={value => updateDraft('public', value)} />
+          <DesktopChatPane mode="ai" title="Neural Seed" icon="/icons/neuralseed.png" draft={drafts.ai} onDraftChange={value => updateDraft('ai', value)} />
         </div>
       )}
 
@@ -115,7 +122,7 @@ function ChatDialogContent() {
         <DialogFooter sticky className="pt-3">
           <div className="w-full space-y-2">
             {isAITyping && <AITypingIndicator />}
-            <ChatInput />
+            <ChatInput modeOverride={mode} message={drafts[mode]} onMessageChange={value => updateDraft(mode, value)} />
           </div>
         </DialogFooter>
       )}
@@ -124,9 +131,10 @@ function ChatDialogContent() {
 }
 
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
+  const { address } = useAccount();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <ChatDialogContent />
+      <ChatDialogContent key={address?.toLowerCase() ?? 'disconnected'} />
     </Dialog>
   );
 }

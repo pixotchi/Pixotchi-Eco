@@ -690,14 +690,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               {/* Wallet Connection Info */}
 
               {/* Airdrop Claim Card - shown when eligible */}
-              <AirdropClaimCard />
+
 
               <div className="space-y-3">
                 <WalletSectionHeader title="Account" />
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
                   <div className={walletChromaticWhiteInnerGlowClassName}>
                     <div className="relative space-y-3 p-3">
-                      <div className="chromatic-white-surface flex items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                      <div className="chromatic-white-surface flex flex-wrap items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
                           {address ? (
                             <WalletAvatar address={address} className="h-9 w-9" />
@@ -723,13 +723,17 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             onClick={() => openExternalUrl("https://base.org/names")}
                             variant="outline"
                             size="compact"
-                            className={cn("shrink-0 px-3 text-xs", BASE_BRAND_BUTTON_CLASSNAME)}
+                            className="basis-full px-3 text-xs"
                           >
                             Get Basename
                           </Button>
                         ) : null}
                       </div>
 
+                      <BalanceCard variant="wallet-profile" />
+                      <AirdropClaimCard />
+                      <details>
+                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Connection and preferences</summary>
                       <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
                         <WalletInfoRow
                           label="Provider"
@@ -792,6 +796,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <PerformanceModeToggleRow />
                       </div>
 
+                      </details>
+
                       {debugMode && isMiniApp && fcContext && (
                         <div className="overflow-hidden rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.24)] bg-background/40 shadow-[var(--shadow-hairline)]">
                           <button
@@ -835,7 +841,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-[hsl(var(--info))] shadow-[var(--shadow-hairline)]">
                           <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           <span className="text-xs leading-relaxed text-muted-foreground">
-                            For best experience, consider using a smart wallet
+                            Smart wallets can combine approvals and purchases into one confirmation.
                           </span>
                         </div>
                       )}
@@ -924,8 +930,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
 
 
-              {/* Balances (consolidated) */}
-              <BalanceCard variant="wallet-profile" />
+
             </div>
           </DialogBody>
           <DialogFooter sticky className="grid grid-cols-2 gap-2 space-x-0 max-[380px]:grid-cols-1">
@@ -969,10 +974,10 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               </Button>
             ) : (
               <Button
-                variant="destructive"
+                variant="ghost"
                 size="default"
                 onClick={handleDisconnect}
-                className="w-full !bg-destructive !bg-[image:var(--gradient-danger)] !text-destructive-foreground shadow-[var(--shadow-control)] hover:!brightness-[1.04]"
+                className="w-full text-muted-foreground"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Disconnect Wallet

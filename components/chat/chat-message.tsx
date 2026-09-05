@@ -5,21 +5,12 @@ import { ChatMessage, AIChatMessage } from "@/lib/types";
 import { differenceInSeconds, differenceInMinutes, differenceInHours, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from "date-fns";
 import { useAccount } from "wagmi";
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
-import { Bot, User } from "lucide-react";
-import { cn, formatAddress } from "@/lib/utils";
+import { formatAddress } from "@/lib/utils";
 import { postMissionProgress } from "@/lib/mission-tracking";
-import { Button } from "@/components/ui/button";
-import dynamic from "next/dynamic";
-
-const MessageResponse = dynamic(
-  () => import("@/components/ai-elements/message").then((mod) => mod.MessageResponse),
-  {
-    loading: () => <span className="text-sm leading-6 text-current">Loading response...</span>,
-    ssr: false,
-  }
-);
+import { ChatMessageBubble } from "./chat-message-bubble";
 
 function formatRelativeShort(date: Date) {
+  if (!Number.isFinite(date.getTime())) return 'Time unavailable';
   const now = new Date();
   const totalSeconds = Math.max(0, differenceInSeconds(now, date));
 
@@ -79,7 +70,7 @@ function ChatMessageComponent({
   const { address } = useAccount();
 
   const isAIMessage = isAIMode && 'type' in message && message.type === 'assistant';
-  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || (message as UntypedValue).displayName === 'You');
+  const isUserAIMessage = isAIMode && (('type' in message && message.type === 'user') || ('displayName' in message && message.displayName === 'You'));
   const isOwnPublicMessage = !isAIMode && !!ownAddress && ownAddress.toLowerCase() === message.address.toLowerCase();
 
   const { name } = usePrimaryName(message.address);
@@ -106,99 +97,12 @@ function ChatMessageComponent({
     displayName = name || formatAddress(message.address);
   }
 
-  const alignment = isAIMessage || !isOwnPublicMessage && !isUserAIMessage ? 'justify-start' : 'justify-end';
-
-  const bgColor = isAIMessage ? 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]' :
-                  isOwnPublicMessage || isUserAIMessage ? 'border border-primary/20 bg-primary bg-[image:var(--gradient-control-active)] text-primary-foreground shadow-[var(--shadow-hairline)]' :
-                  'chat-white-surface border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
-  const bubbleSize = isAIMessage
-    ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
-    : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
-  const canOpenProfile = !isAIMessage && !isUserAIMessage && !isOwnPublicMessage && Boolean(onOpenProfile);
-  const timestampColor = isOwnPublicMessage || isUserAIMessage
-    ? 'text-primary-foreground/80'
-    : 'text-muted-foreground';
-
-  const displayNameNode = (
-    <span className="text-xs font-semibold">
-      {displayName}
-    </span>
-  );
-
-  const profileTrigger = canOpenProfile ? (
-    <Button
-      type="button"
-      onClick={() => {
-        onOpenProfile?.(message.address);
-        trackProfileVisit();
-      }}
-      variant="outline"
-      size="compact"
-      className="h-6 min-h-6 rounded-md border-primary/25 bg-primary/5 px-2 py-0 text-[10px] text-primary shadow-none hover:bg-primary/10 active:translate-y-0 active:scale-100"
-      aria-label={`Open profile for ${displayName}`}
-    >
-      Profile
-    </Button>
-  ) : null;
-
-  return (
-    <div className={cn("flex", alignment)}>
-      <div
-        className={cn(
-          "min-w-0 rounded-[var(--radius-control)] [overflow-wrap:anywhere]",
-          bubbleSize,
-          bgColor
-        )}
-        role="article"
-        aria-label={`Message from ${displayName}`}
-        aria-setsize={ariaSetsize}
-        aria-posinset={ariaPosinset}
-      >
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
-            {(isUserAIMessage || isOwnPublicMessage) && <User className="w-4 h-4" />}
-            {displayNameNode}
-            {/* No check icon next to resolved names any more: a blue check next
-                to a name reads as "verified account", but it only meant an
-                ENS/Basename lookup succeeded. */}
-            {profileTrigger}
-          </div>
-          <span className={cn("text-xs whitespace-nowrap self-start", timestampColor)}>
-            {relativeTime}
-          </span>
-        </div>
-
-        <div
-          className={cn(
-            "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",
-            !isAIMessage && "whitespace-pre-wrap"
-          )}
-        >
-          {isAIMessage ? (
-            <MessageResponse
-              className={cn(
-                "max-w-none text-sm leading-6 text-current [overflow-wrap:anywhere]",
-                "[&_*]:max-w-full",
-                "[&>p]:my-1.5 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0",
-                "[&_h1]:mb-2 [&_h1]:mt-3 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:leading-6",
-                "[&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-bold [&_h2]:leading-6",
-                "[&_h3]:mb-1.5 [&_h3]:mt-2.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:leading-5",
-                "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5",
-                "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5",
-                "[&_li]:pl-0 [&_li]:marker:text-current [&_li>p]:my-0",
-                "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-current/30 [&_blockquote]:pl-3",
-                "[&_pre]:my-2 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:p-2",
-                "[&_a]:break-words [&_code]:break-words [&_strong]:font-bold"
-              )}
-            >
-              {message.message}
-            </MessageResponse>
-          ) : message.message}
-        </div>
-      </div>
-    </div>
-  );
+  const timestamp = new Date(message.timestamp);
+  return <ChatMessageBubble content={message.message} displayName={displayName}
+    kind={isAIMessage ? 'assistant' : isOwnPublicMessage || isUserAIMessage ? 'own' : 'other'}
+    relativeTime={relativeTime} timestamp={Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : undefined}
+    ariaSetsize={ariaSetsize} ariaPosinset={ariaPosinset}
+    onOpenProfile={onOpenProfile ? () => { onOpenProfile(message.address); trackProfileVisit(); } : undefined} />;
 }
 
 export default React.memo(ChatMessageComponent);

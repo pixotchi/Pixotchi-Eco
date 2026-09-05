@@ -1,4 +1,10 @@
-import { isQuestFinalizeExpired } from './quest-ui';
+import { normalizeBarracksConfig, normalizeBarracksConfigV2, normalizeBarracksLandState, normalizeBarracksLandStateV2, normalizeBarracksRaidReport, normalizeBarracksRaidReportV2, normalizeBarracksRaidPreview, normalizeBarracksRaidPreviewV2 } from './barracks-state';
+import { readUint } from './contract-value';
+import { parseLandLeaderboard, type LandLeaderboardEntry } from "@/lib/land-ranking";
+export type { LandLeaderboardEntry } from "@/lib/land-ranking";
+import { parseBlackjackSnapshot } from './blackjack-state';
+import { getQuestSlotState, parseQuestSlots, type QuestSlot, type QuestSlotState } from './quest-slots';
+export { getQuestSlotState, type QuestSlot, type QuestSlotState } from './quest-slots';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { formatAddress } from "@/lib/format-address";
 import { stakingAbi } from '@/public/abi/staking-abi';
@@ -2081,191 +2087,6 @@ export const getTownBuildingsByLandId = async (landId: bigint): Promise<UntypedV
   });
 };
 
-const normalizeBarracksConfig = (value: UntypedValue): BarracksConfig => ({
-  initialized: Boolean(value?.initialized ?? value?.[0] ?? false),
-  enabled: Boolean(value?.enabled ?? value?.[1] ?? false),
-  buildToken: String(value?.buildToken ?? value?.[2] ?? ZERO_ADDRESS),
-  buildCost: BigInt(value?.buildCost ?? value?.[3] ?? 0),
-  buildReceiver: String(value?.buildReceiver ?? value?.[4] ?? ZERO_ADDRESS),
-  trainingToken: String(value?.trainingToken ?? value?.[5] ?? ZERO_ADDRESS),
-  trainingCost: BigInt(value?.trainingCost ?? value?.[6] ?? 0),
-  trainingReceiver: String(value?.trainingReceiver ?? value?.[7] ?? ZERO_ADDRESS),
-  trainingTimePerTroop: BigInt(value?.trainingTimePerTroop ?? value?.[8] ?? 0),
-  attackCooldown: BigInt(value?.attackCooldown ?? value?.[9] ?? 0),
-  defenseCooldown: BigInt(value?.defenseCooldown ?? value?.[10] ?? 0),
-  lootPercentageBps: Number(value?.lootPercentageBps ?? value?.[11] ?? 0),
-  casualtyScaleBps: Number(value?.casualtyScaleBps ?? value?.[12] ?? 0),
-  successfulRaidXP: BigInt(value?.successfulRaidXP ?? value?.[13] ?? 0),
-  successfulDefenseXP: BigInt(value?.successfulDefenseXP ?? value?.[14] ?? 0),
-  troopAttackStrength: BigInt(value?.troopAttackStrength ?? value?.[15] ?? 0),
-  troopDefenseStrength: BigInt(value?.troopDefenseStrength ?? value?.[16] ?? 0),
-  troopCarryPoints: BigInt(value?.troopCarryPoints ?? value?.[17] ?? 0),
-  troopCarryLifetime: BigInt(value?.troopCarryLifetime ?? value?.[18] ?? 0),
-  maxTroopsPerLand: BigInt(value?.maxTroopsPerLand ?? value?.[19] ?? 0),
-});
-
-const normalizeBarracksTroopConfigV2 = (value: UntypedValue) => ({
-  trainingToken: String(value?.trainingToken ?? value?.[0] ?? ZERO_ADDRESS),
-  trainingCost: BigInt(value?.trainingCost ?? value?.[1] ?? 0),
-  trainingReceiver: String(value?.trainingReceiver ?? value?.[2] ?? ZERO_ADDRESS),
-  trainingTimePerTroop: BigInt(value?.trainingTimePerTroop ?? value?.[3] ?? 0),
-  troopAttackStrength: BigInt(value?.troopAttackStrength ?? value?.[4] ?? 0),
-  troopDefenseStrength: BigInt(value?.troopDefenseStrength ?? value?.[5] ?? 0),
-  troopCarryPoints: BigInt(value?.troopCarryPoints ?? value?.[6] ?? 0),
-  troopCarryLifetime: BigInt(value?.troopCarryLifetime ?? value?.[7] ?? 0),
-  maxTroopsPerLand: BigInt(value?.maxTroopsPerLand ?? value?.[8] ?? 0),
-});
-
-const normalizeBarracksConfigV2 = (value: UntypedValue): BarracksConfigV2 => ({
-  initialized: Boolean(value?.initialized ?? value?.[0] ?? false),
-  enabled: Boolean(value?.enabled ?? value?.[1] ?? false),
-  buildToken: String(value?.buildToken ?? value?.[2] ?? ZERO_ADDRESS),
-  buildCost: BigInt(value?.buildCost ?? value?.[3] ?? 0),
-  buildReceiver: String(value?.buildReceiver ?? value?.[4] ?? ZERO_ADDRESS),
-  attackCooldown: BigInt(value?.attackCooldown ?? value?.[5] ?? 0),
-  defenseCooldown: BigInt(value?.defenseCooldown ?? value?.[6] ?? 0),
-  lootPercentageBps: Number(value?.lootPercentageBps ?? value?.[7] ?? 0),
-  casualtyScaleBps: Number(value?.casualtyScaleBps ?? value?.[8] ?? 0),
-  successfulRaidXP: BigInt(value?.successfulRaidXP ?? value?.[9] ?? 0),
-  successfulDefenseXP: BigInt(value?.successfulDefenseXP ?? value?.[10] ?? 0),
-  swordsman: normalizeBarracksTroopConfigV2(value?.swordsman ?? value?.[11]),
-  phalanx: normalizeBarracksTroopConfigV2(value?.phalanx ?? value?.[12]),
-});
-
-const normalizeBarracksLandState = (value: UntypedValue): BarracksLandState => ({
-  isBuilt: Boolean(value?.isBuilt ?? value?.[0] ?? false),
-  stationedTroops: BigInt(value?.stationedTroops ?? value?.[1] ?? 0),
-  trainingQueueAmount: BigInt(value?.trainingQueueAmount ?? value?.[2] ?? 0),
-  readyToClaimTroops: BigInt(value?.readyToClaimTroops ?? value?.[3] ?? 0),
-  trainingStartedAt: BigInt(value?.trainingStartedAt ?? value?.[4] ?? 0),
-  trainingEndsAt: BigInt(value?.trainingEndsAt ?? value?.[5] ?? 0),
-  nextTroopReadyAt: BigInt(value?.nextTroopReadyAt ?? value?.[6] ?? 0),
-  lastAttackAt: BigInt(value?.lastAttackAt ?? value?.[7] ?? 0),
-  lastDefendedAt: BigInt(value?.lastDefendedAt ?? value?.[8] ?? 0),
-  attackCooldownEndsAt: BigInt(value?.attackCooldownEndsAt ?? value?.[9] ?? 0),
-  defenseCooldownEndsAt: BigInt(value?.defenseCooldownEndsAt ?? value?.[10] ?? 0),
-  totalTroops: BigInt(value?.totalTroops ?? value?.[11] ?? 0),
-});
-
-const normalizeBarracksLandStateV2 = (value: UntypedValue): BarracksLandStateV2 => ({
-  isBuilt: Boolean(value?.isBuilt ?? value?.[0] ?? false),
-  stationedSwordsmanTroops: BigInt(value?.stationedSwordsmanTroops ?? value?.[1] ?? 0),
-  stationedPhalanxTroops: BigInt(value?.stationedPhalanxTroops ?? value?.[2] ?? 0),
-  trainingQueueTroopType: Number(value?.trainingQueueTroopType ?? value?.[3] ?? 0),
-  trainingQueueAmount: BigInt(value?.trainingQueueAmount ?? value?.[4] ?? 0),
-  readyToClaimSwordsmanTroops: BigInt(value?.readyToClaimSwordsmanTroops ?? value?.[5] ?? 0),
-  readyToClaimPhalanxTroops: BigInt(value?.readyToClaimPhalanxTroops ?? value?.[6] ?? 0),
-  trainingStartedAt: BigInt(value?.trainingStartedAt ?? value?.[7] ?? 0),
-  trainingEndsAt: BigInt(value?.trainingEndsAt ?? value?.[8] ?? 0),
-  nextTroopReadyAt: BigInt(value?.nextTroopReadyAt ?? value?.[9] ?? 0),
-  lastAttackAt: BigInt(value?.lastAttackAt ?? value?.[10] ?? 0),
-  lastDefendedAt: BigInt(value?.lastDefendedAt ?? value?.[11] ?? 0),
-  attackCooldownEndsAt: BigInt(value?.attackCooldownEndsAt ?? value?.[12] ?? 0),
-  defenseCooldownEndsAt: BigInt(value?.defenseCooldownEndsAt ?? value?.[13] ?? 0),
-  totalSwordsmanTroops: BigInt(value?.totalSwordsmanTroops ?? value?.[14] ?? 0),
-  totalPhalanxTroops: BigInt(value?.totalPhalanxTroops ?? value?.[15] ?? 0),
-});
-
-const normalizeBarracksRaidReport = (value: UntypedValue): BarracksRaidReport => ({
-  raidId: BigInt(value?.raidId ?? value?.[0] ?? 0),
-  timestamp: BigInt(value?.timestamp ?? value?.[1] ?? 0),
-  attackerLandId: BigInt(value?.attackerLandId ?? value?.[2] ?? 0),
-  defenderLandId: BigInt(value?.defenderLandId ?? value?.[3] ?? 0),
-  attackerWon: Boolean(value?.attackerWon ?? value?.[4] ?? false),
-  troopsSent: BigInt(value?.troopsSent ?? value?.[5] ?? 0),
-  attackerTroopsBefore: BigInt(value?.attackerTroopsBefore ?? value?.[6] ?? 0),
-  defenderTroopsBefore: BigInt(value?.defenderTroopsBefore ?? value?.[7] ?? 0),
-  attackerTroopsLost: BigInt(value?.attackerTroopsLost ?? value?.[8] ?? 0),
-  defenderTroopsLost: BigInt(value?.defenderTroopsLost ?? value?.[9] ?? 0),
-  survivingAttackers: BigInt(value?.survivingAttackers ?? value?.[10] ?? 0),
-  survivingDefenders: BigInt(value?.survivingDefenders ?? value?.[11] ?? 0),
-  attackerPower: BigInt(value?.attackerPower ?? value?.[12] ?? 0),
-  defenderPower: BigInt(value?.defenderPower ?? value?.[13] ?? 0),
-  pendingPointsSettled: BigInt(value?.pendingPointsSettled ?? value?.[14] ?? 0),
-  pendingLifetimeSettled: BigInt(value?.pendingLifetimeSettled ?? value?.[15] ?? 0),
-  pointsStolen: BigInt(value?.pointsStolen ?? value?.[16] ?? 0),
-  lifetimeStolen: BigInt(value?.lifetimeStolen ?? value?.[17] ?? 0),
-});
-
-const normalizeBarracksRaidReportV2 = (value: UntypedValue): BarracksRaidReportV2 => ({
-  raidId: BigInt(value?.raidId ?? value?.[0] ?? 0),
-  timestamp: BigInt(value?.timestamp ?? value?.[1] ?? 0),
-  attackerLandId: BigInt(value?.attackerLandId ?? value?.[2] ?? 0),
-  defenderLandId: BigInt(value?.defenderLandId ?? value?.[3] ?? 0),
-  attackerWon: Boolean(value?.attackerWon ?? value?.[4] ?? false),
-  swordsmenSent: BigInt(value?.swordsmenSent ?? value?.[5] ?? 0),
-  phalanxSent: BigInt(value?.phalanxSent ?? value?.[6] ?? 0),
-  attackerSwordsmenBefore: BigInt(value?.attackerSwordsmenBefore ?? value?.[7] ?? 0),
-  attackerPhalanxBefore: BigInt(value?.attackerPhalanxBefore ?? value?.[8] ?? 0),
-  defenderSwordsmenBefore: BigInt(value?.defenderSwordsmenBefore ?? value?.[9] ?? 0),
-  defenderPhalanxBefore: BigInt(value?.defenderPhalanxBefore ?? value?.[10] ?? 0),
-  attackerSwordsmenLost: BigInt(value?.attackerSwordsmenLost ?? value?.[11] ?? 0),
-  attackerPhalanxLost: BigInt(value?.attackerPhalanxLost ?? value?.[12] ?? 0),
-  defenderSwordsmenLost: BigInt(value?.defenderSwordsmenLost ?? value?.[13] ?? 0),
-  defenderPhalanxLost: BigInt(value?.defenderPhalanxLost ?? value?.[14] ?? 0),
-  survivingAttackerSwordsmen: BigInt(value?.survivingAttackerSwordsmen ?? value?.[15] ?? 0),
-  survivingAttackerPhalanx: BigInt(value?.survivingAttackerPhalanx ?? value?.[16] ?? 0),
-  survivingDefenderSwordsmen: BigInt(value?.survivingDefenderSwordsmen ?? value?.[17] ?? 0),
-  survivingDefenderPhalanx: BigInt(value?.survivingDefenderPhalanx ?? value?.[18] ?? 0),
-  attackerPower: BigInt(value?.attackerPower ?? value?.[19] ?? 0),
-  defenderPower: BigInt(value?.defenderPower ?? value?.[20] ?? 0),
-  pendingPointsSettled: BigInt(value?.pendingPointsSettled ?? value?.[21] ?? 0),
-  pendingLifetimeSettled: BigInt(value?.pendingLifetimeSettled ?? value?.[22] ?? 0),
-  pointsStolen: BigInt(value?.pointsStolen ?? value?.[23] ?? 0),
-  lifetimeStolen: BigInt(value?.lifetimeStolen ?? value?.[24] ?? 0),
-});
-
-const normalizeBarracksRaidPreview = (value: UntypedValue): BarracksRaidPreview => ({
-  statusCode: Number(value?.statusCode ?? value?.[0] ?? 0),
-  attackerWon: Boolean(value?.attackerWon ?? value?.[1] ?? false),
-  troopsRequested: BigInt(value?.troopsRequested ?? value?.[2] ?? 0),
-  attackerTroopsBefore: BigInt(value?.attackerTroopsBefore ?? value?.[3] ?? 0),
-  defenderTroopsBefore: BigInt(value?.defenderTroopsBefore ?? value?.[4] ?? 0),
-  attackerTroopsLost: BigInt(value?.attackerTroopsLost ?? value?.[5] ?? 0),
-  defenderTroopsLost: BigInt(value?.defenderTroopsLost ?? value?.[6] ?? 0),
-  survivingAttackers: BigInt(value?.survivingAttackers ?? value?.[7] ?? 0),
-  survivingDefenders: BigInt(value?.survivingDefenders ?? value?.[8] ?? 0),
-  attackerPower: BigInt(value?.attackerPower ?? value?.[9] ?? 0),
-  defenderPower: BigInt(value?.defenderPower ?? value?.[10] ?? 0),
-  pendingPoints: BigInt(value?.pendingPoints ?? value?.[11] ?? 0),
-  pendingLifetime: BigInt(value?.pendingLifetime ?? value?.[12] ?? 0),
-  carryPointsCap: BigInt(value?.carryPointsCap ?? value?.[13] ?? 0),
-  carryLifetimeCap: BigInt(value?.carryLifetimeCap ?? value?.[14] ?? 0),
-  estimatedPointsLoot: BigInt(value?.estimatedPointsLoot ?? value?.[15] ?? 0),
-  estimatedLifetimeLoot: BigInt(value?.estimatedLifetimeLoot ?? value?.[16] ?? 0),
-  attackerCooldownEndsAt: BigInt(value?.attackerCooldownEndsAt ?? value?.[17] ?? 0),
-  defenderCooldownEndsAt: BigInt(value?.defenderCooldownEndsAt ?? value?.[18] ?? 0),
-});
-
-const normalizeBarracksRaidPreviewV2 = (value: UntypedValue): BarracksRaidPreviewV2 => ({
-  statusCode: Number(value?.statusCode ?? value?.[0] ?? 0),
-  attackerWon: Boolean(value?.attackerWon ?? value?.[1] ?? false),
-  swordsmenRequested: BigInt(value?.swordsmenRequested ?? value?.[2] ?? 0),
-  phalanxRequested: BigInt(value?.phalanxRequested ?? value?.[3] ?? 0),
-  attackerSwordsmenBefore: BigInt(value?.attackerSwordsmenBefore ?? value?.[4] ?? 0),
-  attackerPhalanxBefore: BigInt(value?.attackerPhalanxBefore ?? value?.[5] ?? 0),
-  defenderSwordsmenBefore: BigInt(value?.defenderSwordsmenBefore ?? value?.[6] ?? 0),
-  defenderPhalanxBefore: BigInt(value?.defenderPhalanxBefore ?? value?.[7] ?? 0),
-  attackerSwordsmenLost: BigInt(value?.attackerSwordsmenLost ?? value?.[8] ?? 0),
-  attackerPhalanxLost: BigInt(value?.attackerPhalanxLost ?? value?.[9] ?? 0),
-  defenderSwordsmenLost: BigInt(value?.defenderSwordsmenLost ?? value?.[10] ?? 0),
-  defenderPhalanxLost: BigInt(value?.defenderPhalanxLost ?? value?.[11] ?? 0),
-  survivingAttackerSwordsmen: BigInt(value?.survivingAttackerSwordsmen ?? value?.[12] ?? 0),
-  survivingAttackerPhalanx: BigInt(value?.survivingAttackerPhalanx ?? value?.[13] ?? 0),
-  survivingDefenderSwordsmen: BigInt(value?.survivingDefenderSwordsmen ?? value?.[14] ?? 0),
-  survivingDefenderPhalanx: BigInt(value?.survivingDefenderPhalanx ?? value?.[15] ?? 0),
-  attackerPower: BigInt(value?.attackerPower ?? value?.[16] ?? 0),
-  defenderPower: BigInt(value?.defenderPower ?? value?.[17] ?? 0),
-  pendingPoints: BigInt(value?.pendingPoints ?? value?.[18] ?? 0),
-  pendingLifetime: BigInt(value?.pendingLifetime ?? value?.[19] ?? 0),
-  carryPointsCap: BigInt(value?.carryPointsCap ?? value?.[20] ?? 0),
-  carryLifetimeCap: BigInt(value?.carryLifetimeCap ?? value?.[21] ?? 0),
-  estimatedPointsLoot: BigInt(value?.estimatedPointsLoot ?? value?.[22] ?? 0),
-  estimatedLifetimeLoot: BigInt(value?.estimatedLifetimeLoot ?? value?.[23] ?? 0),
-  attackerCooldownEndsAt: BigInt(value?.attackerCooldownEndsAt ?? value?.[24] ?? 0),
-  defenderCooldownEndsAt: BigInt(value?.defenderCooldownEndsAt ?? value?.[25] ?? 0),
-});
-
 export const barracksGetConfig = async (): Promise<BarracksConfig | null> => {
   const readClient = getReadClient();
   try {
@@ -2349,10 +2170,11 @@ export const barracksGetEligibleAttackableLandIds = async (attackerLandId: bigin
         args: [attackerLandId],
       });
     });
-    return Array.isArray(result) ? (result as bigint[]) : [];
+    if (!Array.isArray(result)) throw new Error('Invalid Barracks target list');
+    return result.map(value => readUint(value));
   } catch (error) {
     console.warn('Failed to get eligible barracks targets:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -2521,7 +2343,7 @@ export interface LandBuildingsBatchResult {
 
 export const getLandBuildingsBatch = async (
   landIds: bigint[],
-  options: { chunkSize?: number; readClient?: PixotchiReadClient } = {},
+  options: { chunkSize?: number; readClient?: PixotchiReadClient; requireComplete?: boolean } = {},
 ): Promise<LandBuildingsBatchResult[]> => {
   if (landIds.length === 0) return [];
 
@@ -2557,6 +2379,9 @@ export const getLandBuildingsBatch = async (
       const villageEntry = chunkResults[index * 2];
       const townEntry = chunkResults[index * 2 + 1];
 
+      if (options.requireComplete && (villageEntry?.status !== 'success' || townEntry?.status !== 'success')) {
+        throw new Error('Some building reads failed. Retry before claiming production.');
+      }
       const villageBuildings = Array.isArray(villageEntry?.result)
         ? (villageEntry.result as UntypedValue[])
         : [];
@@ -2576,14 +2401,6 @@ export const getLandBuildingsBatch = async (
 };
 
 // Quest slots
-export type QuestSlot = {
-  difficulty: number;
-  startBlock: bigint;
-  endBlock: bigint;
-  pseudoRndBlock: bigint;
-  coolDownBlock: bigint;
-};
-
 export const getQuestSlotsByLandId = async (
   landId: bigint,
   readClient: PixotchiReadClient = getReadClient(),
@@ -2595,14 +2412,7 @@ export const getQuestSlotsByLandId = async (
       functionName: 'questGetByLandId',
       args: [landId],
     });
-    // Ensure array of normalized objects
-    return (slots as UntypedValue[]).map((s: UntypedValue) => ({
-      difficulty: Number(s.difficulty ?? s[0] ?? 0),
-      startBlock: BigInt(s.startBlock ?? s[1] ?? 0),
-      endBlock: BigInt(s.endBlock ?? s[2] ?? 0),
-      pseudoRndBlock: BigInt(s.pseudoRndBlock ?? s[3] ?? 0),
-      coolDownBlock: BigInt(s.coolDownBlock ?? s[4] ?? 0),
-    })) as QuestSlot[];
+    return parseQuestSlots(slots);
   });
 };
 
@@ -2684,7 +2494,7 @@ export const getLandOwner = async (landId: number): Promise<string> => {
 };
 
 // Fetch Lands leaderboard across full supply range
-export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string; owner: string };
+
 
 export const getLandLeaderboard = async (
   readClient: PixotchiReadClient = getReadClient(),
@@ -2697,19 +2507,14 @@ export const getLandLeaderboard = async (
       functionName: 'totalSupply',
     }) as bigint;
 
-    const leaderboard = await readClient.readContract({
+    const leaderboard: unknown = await readClient.readContract({
       address: LAND_CONTRACT_ADDRESS,
       abi: landAbi,
       functionName: 'getLeaderboard',
       args: [BigInt(0), totalSupply],
-    }) as UntypedValue[];
+    });
 
-    return (leaderboard || []).map((entry: UntypedValue) => ({
-      landId: Number(entry.landId ?? entry[0] ?? 0),
-      experiencePoints: BigInt(entry.experiencePoints ?? entry[1] ?? 0),
-      name: String(entry.name ?? entry[2] ?? ''),
-      owner: String(entry.owner ?? entry[3] ?? ''), // Explicitly use entry[3] as fallback if named property missing
-    }));
+    return parseLandLeaderboard(leaderboard);
   });
 };
 
@@ -3537,58 +3342,8 @@ export const blackjackGetGameSnapshot = async (landId: bigint): Promise<Blackjac
         functionName: 'blackjackGetGameSnapshot',
         args: [landId],
       });
-    }) as UntypedValue;
-
-    // Support both tuple-object and flat array decoding shapes.
-    const snapshot = Array.isArray(raw)
-      ? raw
-      : (raw?.snapshot ?? raw);
-
-    if (!snapshot) return null;
-
-    if (Array.isArray(snapshot)) {
-      return {
-        isActive: !!snapshot[0],
-        player: String(snapshot[1]),
-        phase: Number(snapshot[2]) as BlackjackPhase,
-        betAmount: BigInt(snapshot[3]),
-        activeHandCount: Number(snapshot[4]),
-        hasSplit: !!snapshot[5],
-        actionHandIndex: Number(snapshot[6]),
-        hand1Cards: Array.isArray(snapshot[7]) ? snapshot[7].map(Number) : [],
-        hand1Value: Number(snapshot[8]),
-        hand2Cards: Array.isArray(snapshot[9]) ? snapshot[9].map(Number) : [],
-        hand2Value: Number(snapshot[10]),
-        dealerCards: Array.isArray(snapshot[11]) ? snapshot[11].map(Number) : [],
-        dealerValue: Number(snapshot[12]),
-        canHit: !!snapshot[13],
-        canStand: !!snapshot[14],
-        canDouble: !!snapshot[15],
-        canSplit: !!snapshot[16],
-        canSurrender: !!snapshot[17],
-      };
-    }
-
-    return {
-      isActive: !!snapshot.isActive,
-      player: String(snapshot.player),
-      phase: Number(snapshot.phase) as BlackjackPhase,
-      betAmount: BigInt(snapshot.betAmount),
-      activeHandCount: Number(snapshot.activeHandCount),
-      hasSplit: !!snapshot.hasSplit,
-      actionHandIndex: Number(snapshot.actionHandIndex),
-      hand1Cards: Array.isArray(snapshot.hand1Cards) ? snapshot.hand1Cards.map(Number) : [],
-      hand1Value: Number(snapshot.hand1Value),
-      hand2Cards: Array.isArray(snapshot.hand2Cards) ? snapshot.hand2Cards.map(Number) : [],
-      hand2Value: Number(snapshot.hand2Value),
-      dealerCards: Array.isArray(snapshot.dealerCards) ? snapshot.dealerCards.map(Number) : [],
-      dealerValue: Number(snapshot.dealerValue),
-      canHit: !!snapshot.canHit,
-      canStand: !!snapshot.canStand,
-      canDouble: !!snapshot.canDouble,
-      canSplit: !!snapshot.canSplit,
-      canSurrender: !!snapshot.canSurrender,
-    };
+    });
+    return parseBlackjackSnapshot(raw);
   } catch (error) {
     console.warn('Failed to get blackjack game snapshot:', error);
     return null;
@@ -3991,35 +3746,11 @@ export const isQuestDifficultyId = (value: unknown): value is QuestDifficultyId 
  * which is what makes it safe to bundle a whole scan atomically without the
  * batch reverting on timing drift between simulation and inclusion.
  */
-export type QuestSlotState =
-  | 'available'
-  | 'in_progress'
-  | 'ready_to_commit'
-  | 'committed'
-  | 'expired'
-  | 'cooldown';
-
 export type QuestSlotSnapshot = QuestSlot & {
   landId: bigint;
   slotIndex: number;
   state: QuestSlotState;
 };
-
-export const getQuestSlotState = (slot: QuestSlot, currentBlock: bigint): QuestSlotState => {
-  if (slot.coolDownBlock !== BigInt(0) && currentBlock < slot.coolDownBlock) return 'cooldown';
-  if (slot.startBlock === BigInt(0)) return 'available';
-  if (slot.pseudoRndBlock !== BigInt(0)) return isQuestFinalizeExpired(slot, currentBlock) ? 'expired' : 'committed';
-  if (currentBlock <= slot.endBlock) return 'in_progress';
-  return 'ready_to_commit';
-};
-
-const normalizeQuestSlot = (raw: UntypedValue): QuestSlot => ({
-  difficulty: Number(raw?.difficulty ?? raw?.[0] ?? 0),
-  startBlock: BigInt(raw?.startBlock ?? raw?.[1] ?? 0),
-  endBlock: BigInt(raw?.endBlock ?? raw?.[2] ?? 0),
-  pseudoRndBlock: BigInt(raw?.pseudoRndBlock ?? raw?.[3] ?? 0),
-  coolDownBlock: BigInt(raw?.coolDownBlock ?? raw?.[4] ?? 0),
-});
 
 /**
  * Read every farmer slot across many lands in one multicall sweep.
@@ -4057,12 +3788,12 @@ export const getQuestSlotsBatch = async (
       // failed read is indistinguishable from "no slots" unless it is reported
       // separately. Without `ok`, one flaky multicall entry silently drops that
       // land's idle farmers out of the batch and nobody can tell.
-      const ok = entry?.status === 'success' && Array.isArray(entry.result);
-      results.push({
-        landId,
-        ok,
-        slots: ok ? (entry.result as UntypedValue[]).map(normalizeQuestSlot) : [],
-      });
+      try {
+        if (entry?.status !== 'success') throw new Error('Quest read failed');
+        results.push({ landId, ok: true, slots: parseQuestSlots(entry.result) });
+      } catch {
+        results.push({ landId, ok: false, slots: [] });
+      }
     });
   }
 

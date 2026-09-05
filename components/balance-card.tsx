@@ -9,6 +9,7 @@ import { useBalances } from "@/lib/balance-context";
 import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
 import { formatSolAmount } from "@/lib/solana-bridge-executor";
 import { cn,formatLargeNumber } from "@/lib/utils";
+import { formatTokenDisplay } from '@/lib/token-display';
 import Image from "next/image";
 import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { useAccount,useBalance } from "wagmi";
@@ -363,7 +364,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                   label: "Ethereum",
                   iconSrc: "/icons/ethlogo.svg",
                   iconAlt: "ETH",
-                  value: ethBalanceReady ? parseFloat(ethBalance.formatted).toFixed(6) : ethBalanceUnavailable ? 'Unavailable' : 'Checking…',
+                  value: ethBalanceReady ? formatTokenDisplay(ethBalance.value, ethBalance.decimals, 6) : ethBalanceUnavailable ? 'Unavailable' : 'Checking…',
                   isLoading: ethLoading,
                 })
               )}

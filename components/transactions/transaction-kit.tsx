@@ -1,5 +1,9 @@
 "use client";
 
+import { monitorSubmittedBatch, throwIfMonitoringAborted, withMonitoringAbort, waitForMonitorDelay } from "@/lib/transaction-monitor";
+import { parseWalletBatchStatus, parseWalletCallsId, getBatchTransactionHashes, hasWalletBatchResolution, type WalletBatchStatus } from "@/lib/wallet-batch-status";
+import { getErrorMessage, getErrorStatusName, getAtomicCapabilityStatus, isUnresolvedWaitError, isDefinitivePostSubmissionError, type TransactionStatusName as StatusName } from "@/lib/transaction-lifecycle";
+
 import React, {
   createContext,
   useCallback,
@@ -67,31 +71,15 @@ import {
 } from "@/lib/transaction-utils";
 import { cn } from "@/lib/utils";
 
-type TransactionReceiptLike = UntypedValue;
+import type { TransactionReceiptLike } from '@/lib/transaction-utils';
+export type { TransactionReceiptLike } from '@/lib/transaction-utils';
 
-type StatusName =
-  | "idle"
-  | "buildingTransaction"
-  | "transactionPending"
-  | "submissionAmbiguous"
-  | "transactionUnresolved"
-  | "transactionStale"
-  | "confirmedSyncing"
-  | "success"
-  | "error"
-  | "failed"
-  | "reverted"
-  | "cancelled"
-  | "canceled"
-  | "rejected"
-  | "transactionRejected"
-  | "userRejected"
-  | "buildError";
+
 
 export type LifecycleStatus = {
   statusName: StatusName;
   statusData: {
-    error?: UntypedValue;
+    error?: unknown;
     transactionHash?: Hex;
     transactionId?: string;
     atomic?: boolean;
@@ -152,11 +140,11 @@ type TransactionProps = {
     domains: OwnerResourceInvalidationRequest["domains"];
     expected?: OwnerResourceInvalidationRequest["expected"];
   };
-  onError?: (error: UntypedValue) => void;
+  onError?: (error: unknown) => void;
   onConfirmed?: (status: LifecycleStatus) => void | Promise<void>;
   onStatus?: (status: LifecycleStatus) => void;
   isSponsored?: boolean;
-  capabilities?: Record<string, UntypedValue>;
+  capabilities?: Record<string, unknown>;
   intentKey?: string;
   resetAfter?: number;
   children: React.ReactNode;
@@ -202,6 +190,7 @@ type TransactionButtonProps = {
 };
 
 type TransactionStatusProps = {
+  suppressSuccess?: boolean;
   children?: React.ReactNode;
   className?: string;
 };
@@ -215,6 +204,8 @@ type TransactionStatusLabelProps = {
 };
 
 type TransactionToastProps = {
+  suppressSuccess?: boolean;
+  successMessage?: string;
   children?: React.ReactNode;
   className?: string;
   duration?: number;
@@ -317,77 +308,11 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-function getErrorMessage(error: UntypedValue): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-  if (error && typeof error === "object") {
-    const message =
-      (error as { shortMessage?: UntypedValue; message?: UntypedValue }).shortMessage
-      ?? (error as { message?: UntypedValue }).message;
-    if (typeof message === "string" && message.trim() !== "") {
-      return message;
-    }
-  }
-  return "Transaction failed.";
-}
 
-function getErrorStatusName(error: UntypedValue): StatusName {
-  const message = getErrorMessage(error).toLowerCase();
-  const code = getNestedErrorCode(error);
 
-  if (
-    code === 4001
-    || message.includes("user rejected")
-    || message.includes("rejected the request")
-    || message.includes("transaction rejected")
-  ) {
-    return "transactionRejected";
-  }
 
-  if (message.includes("transaction cancelled") || message.includes("transaction canceled")) {
-    return "cancelled";
-  }
 
-  if (
-    message.includes("wallet not connected")
-    || message.includes("wallet client unavailable")
-    || message.includes("transaction call is missing")
-    || message.includes("no transaction calls")
-    || message.includes("failed to prepare")
-    || message.includes("provider unavailable")
-    || message.includes("atomic bundled transactions")
-  ) {
-    return "buildError";
-  }
 
-  if (code === 4100 || code === 5700 || code === 5710 || code === 5740 || code === 5760) {
-    return "buildError";
-  }
-
-  if (message.includes("revert")) {
-    return "reverted";
-  }
-
-  return "error";
-}
-
-function getNestedErrorCode(error: UntypedValue): number | null {
-  const visited = new Set<unknown>();
-  let current: unknown = error;
-  for (let depth = 0; depth < 8 && current && !visited.has(current); depth += 1) {
-    visited.add(current);
-    if (typeof current !== "object") break;
-    const typed = current as { cause?: unknown; code?: unknown };
-    const numeric = typeof typed.code === "string" ? Number(typed.code) : typed.code;
-    if (typeof numeric === "number" && Number.isFinite(numeric)) return numeric;
-    current = typed.cause;
-  }
-  return null;
-}
 
 function getPendingButtonText(idleText: string) {
   const normalized = idleText.trim().toLowerCase();
@@ -430,88 +355,23 @@ function createAtomicBundleUnsupportedError() {
   );
 }
 
-function getAtomicCapabilityStatus(
-  capabilities: UntypedValue,
-  chainId: number,
-): "supported" | "ready" | "unsupported" | null {
-  if (!capabilities || typeof capabilities !== "object") return null;
 
-  // wallet_getCapabilities normally returns a chain-id keyed map. Some wallet
-  // clients already select the requested chain and return its capability object
-  // directly, so tolerate both shapes rather than making discovery itself a
-  // compatibility requirement.
-  const byChain = (capabilities as Record<string, UntypedValue>)[String(chainId)];
-  const selected = byChain && typeof byChain === "object" ? byChain : capabilities;
-  const atomic = (selected as { atomic?: UntypedValue }).atomic;
-  const status = atomic && typeof atomic === "object"
-    ? (atomic as { status?: UntypedValue }).status
-    : null;
-  return status === "supported" || status === "ready" || status === "unsupported"
-    ? status
-    : null;
-}
 
-function isUnresolvedWaitError(error: UntypedValue) {
-  const message = getErrorMessage(error).toLowerCase();
-  return message.includes("timed out")
-    || message.includes("timeout")
-    || message.includes("not confirmed")
-    || message.includes("could not be found")
-    || message.includes("not be processed")
-    || message.includes("network")
-    || message.includes("fetch failed")
-    || message.includes("connection")
-    || message.includes("rate limit")
-    || message.includes("429")
-    || message.includes("service unavailable")
-    || message.includes("temporarily unavailable");
-}
 
-function isDefinitivePostSubmissionError(error: UntypedValue) {
-  const message = getErrorMessage(error).toLowerCase();
-  return message.includes("transaction reverted")
-    || message.includes("execution reverted")
-    || message.includes("transaction cancelled")
-    || message.includes("transaction canceled");
-}
 
-function createMonitoringAbortError() {
-  const error = new Error("Transaction monitoring transferred.");
-  error.name = "AbortError";
-  return error;
-}
 
-function throwIfMonitoringAborted(signal?: AbortSignal) {
-  if (signal?.aborted) throw createMonitoringAbortError();
-}
-
-function withMonitoringAbort<T>(promise: Promise<T>, signal?: AbortSignal) {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(createMonitoringAbortError());
-  return new Promise<T>((resolve, reject) => {
-    const handleAbort = () => reject(createMonitoringAbortError());
-    signal.addEventListener("abort", handleAbort, { once: true });
-    void promise.then(resolve, reject).finally(() => {
-      signal.removeEventListener("abort", handleAbort);
-    });
-  });
-}
 
 function waitBeforeUnresolvedRetry(attempt: number, signal?: AbortSignal) {
   const delayMs = Math.min(
     UNRESOLVED_RETRY_DELAY_MS * (2 ** attempt),
     UNRESOLVED_RETRY_MAX_DELAY_MS,
   );
-  return withMonitoringAbort(new Promise<void>((resolve) => {
-    window.setTimeout(resolve, delayMs);
-  }), signal);
+  return waitForMonitorDelay(delayMs, signal);
 }
 
 function waitForLeaseRetry(retryAt: number | null, signal?: AbortSignal) {
   const delayMs = Math.max(250, (retryAt ?? Date.now() + 5_000) - Date.now() + 50);
-  return withMonitoringAbort(new Promise<void>((resolve) => {
-    window.setTimeout(resolve, delayMs);
-  }), signal);
+  return waitForMonitorDelay(delayMs, signal);
 }
 
 function isFailedReceipt(receipt: TransactionReceiptLike) {
@@ -1207,8 +1067,8 @@ export function Transaction({
       connectorId: connector?.id ?? null,
     });
     const canBatch =
-      typeof (walletClient as UntypedValue).sendCalls === "function"
-      && typeof (walletClient as UntypedValue).waitForCallsStatus === "function";
+      typeof walletClient.sendCalls === "function"
+      && typeof walletClient.waitForCallsStatus === "function";
     const requiresAtomicBundle = normalizedCalls.length > 1;
     if (!recoveryRecord && requiresAtomicBundle && canBatch) {
       // Capability discovery is optional in EIP-5792. An unsupported response
@@ -1216,7 +1076,7 @@ export function Transaction({
       // discovery transport failure must not prevent forceAtomic from asking the
       // wallet to enforce the requirement at submission time.
       try {
-        const reportedCapabilities = await (walletClient as UntypedValue).getCapabilities?.({
+        const reportedCapabilities = await walletClient.getCapabilities?.({
           account: walletClient.account,
           chainId: chain.id,
         });
@@ -1354,7 +1214,7 @@ export function Transaction({
       return guarded.value.value;
     };
 
-    const emitUnresolvedStatus = (error: UntypedValue) => {
+    const emitUnresolvedStatus = (error: unknown) => {
       emitStatus({
         statusData: {
           error,
@@ -1559,32 +1419,34 @@ export function Transaction({
         try {
           let nextTransactionId: string;
           let pendingRecord: PendingEvmRecord;
-          if (recoveryRecord?.method === "batch") {
-            nextTransactionId = (
-              recoveryRecord.proof as Extract<typeof recoveryRecord.proof, { kind: "calls" }>
-            ).id;
+          if (recoveryRecord?.method === "batch" && recoveryRecord.proof.kind === "calls") {
+            nextTransactionId = recoveryRecord.proof.id;
             pendingRecord = recoveryRecord;
           } else {
             const submitted = await submitWithRegistryGuard("batch", async (reservation) => {
-              const batch: UntypedValue = await withPendingEvmHardDeadline(
-                (walletClient as UntypedValue).sendCalls({
+              const batch: unknown = await withPendingEvmHardDeadline(
+                walletClient.sendCalls({
                   account: walletClient.account,
                   ...(Object.keys(mergedCapabilities).length > 0 ? { capabilities: mergedCapabilities } : {}),
                   chain,
-                  calls: normalizedCalls,
+                  calls: normalizedCalls.map(call => {
+                    if (!call.to) throw new Error("Transaction call is missing a destination address.");
+                    return { ...call, to: call.to };
+                  }),
                   ...(normalizedCalls.length > 1 ? { forceAtomic: true } : {}),
                 }),
                 reservation,
               );
-              if (typeof batch?.id !== "string" || batch.id.trim() === "") {
+              const batchId = parseWalletCallsId(batch);
+              if (!batchId) {
                 throw new Error("Wallet returned no transaction id.");
               }
-              transactionIdRef.current = batch.id;
+              transactionIdRef.current = batchId;
               const pendingRecord = finalizeSubmittedProof(reservation, {
                 method: "batch",
-                transactionId: batch.id,
+                transactionId: batchId,
               });
-              return { pendingRecord, transactionId: batch.id as string };
+              return { pendingRecord, transactionId: batchId };
             });
             if (!submitted) return;
             nextTransactionId = submitted.transactionId;
@@ -1607,101 +1469,46 @@ export function Transaction({
           const requestCallsStatus = () => (
             resumePendingEvmRecord(pendingRecord, {
               waitForCallsStatus: (id) => (
-                (walletClient as UntypedValue).waitForCallsStatus({
+                walletClient.waitForCallsStatus({
                   id,
                   throwOnFailure: false,
                   timeout: CALLS_STATUS_TIMEOUT_MS,
-                }) as Promise<UntypedValue>
+                })
               ),
               waitForReceipt: async () => {
                 throw new Error("Batch transaction cannot be monitored by direct receipt.");
               },
-            }) as Promise<UntypedValue>
+            }).then(result => parseWalletBatchStatus(result, chain.id))
           );
-          const getBatchTransactionHashes = (result: UntypedValue): Hex[] => {
-            const resultReceipts = Array.isArray(result?.receipts)
-              ? result.receipts as TransactionReceiptLike[]
-              : [];
-            return [...new Set(
-              resultReceipts
-                .map((resultReceipt) => extractTransactionHash(resultReceipt) as Hex | undefined)
-                .filter((hash): hash is Hex => Boolean(hash)),
-            )];
-          };
-          const getBatchTransactionHash = (result: UntypedValue) => (
-            getBatchTransactionHashes(result)[0]
-          );
-          const hasCanonicalReceiptTarget = (result: UntypedValue) => {
-            if (result?.status !== "success" || getBatchTransactionHash(result)) return true;
+          const hasCanonicalReceiptTarget = (result: WalletBatchStatus) => {
+            if (hasWalletBatchResolution(result)) return true;
             emitUnresolvedStatus(
               new Error(
-                "Wallet reported success without a transaction hash; waiting for canonical Base receipt evidence.",
+                result.status === 'pending'
+                  ? 'Wallet is still confirming the submitted transaction.'
+                  : "Wallet reported success without a transaction hash; waiting for canonical Base receipt evidence.",
               ),
             );
             return false;
           };
-          const waitForBatchResolution = async () => {
-            let pendingStatus = requestCallsStatus();
-            let initialStatusRejected = false;
-            let needsFreshStatus = false;
-            void pendingStatus.catch(() => {
-              initialStatusRejected = true;
-            });
-            try {
-              const initialResult = await withMonitoringAbort(withPendingEvmHardDeadline(
-                withTimeout<UntypedValue>(
-                  pendingStatus,
-                  CALLS_STATUS_TIMEOUT_MS + 5_000,
-                  CALLS_STATUS_TIMEOUT_MESSAGE,
-                ),
-                  pendingRecord,
-                ), monitoringSignal);
-              if (hasCanonicalReceiptTarget(initialResult)) return initialResult;
-              needsFreshStatus = true;
-            } catch (error) {
-              if (!isUnresolvedWaitError(error)) throw error;
-              emitUnresolvedStatus(error);
-            }
-
-            // Preserve and await the original wallet status promise after our
-            // UI timeout. Retry monitoring only if its transport also times
-            // out; never call sendCalls again for this calls id.
-            let retryAttempt = 0;
-            if (initialStatusRejected || needsFreshStatus) {
-              await waitBeforeUnresolvedRetry(retryAttempt, monitoringSignal);
-              retryAttempt += 1;
-              throwIfMonitoringAborted(monitoringSignal);
-              pendingStatus = requestCallsStatus();
-            }
-            while (true) {
-              try {
-                const result = await withMonitoringAbort(
-                  withPendingEvmHardDeadline(pendingStatus, pendingRecord),
-                  monitoringSignal,
-                );
-                if (hasCanonicalReceiptTarget(result)) return result;
-                await waitBeforeUnresolvedRetry(retryAttempt, monitoringSignal);
-                retryAttempt += 1;
-                throwIfMonitoringAborted(monitoringSignal);
-                pendingStatus = requestCallsStatus();
-              } catch (error) {
-                if (!isUnresolvedWaitError(error)) throw error;
-                emitUnresolvedStatus(error);
-                await waitBeforeUnresolvedRetry(retryAttempt, monitoringSignal);
-                retryAttempt += 1;
-                throwIfMonitoringAborted(monitoringSignal);
-                pendingStatus = requestCallsStatus();
-              }
-            }
-          };
+          const waitForBatchResolution = () => monitorSubmittedBatch({
+            request: requestCallsStatus,
+            initialWait: (pending) => withMonitoringAbort(withPendingEvmHardDeadline(
+              withTimeout(pending, CALLS_STATUS_TIMEOUT_MS + 5_000, CALLS_STATUS_TIMEOUT_MESSAGE), pendingRecord,
+            ), monitoringSignal),
+            wait: (pending) => withMonitoringAbort(withPendingEvmHardDeadline(pending, pendingRecord), monitoringSignal),
+            resolved: hasCanonicalReceiptTarget,
+            retryable: isUnresolvedWaitError,
+            onUnresolved: emitUnresolvedStatus,
+            delay: (attempt) => waitBeforeUnresolvedRetry(attempt, monitoringSignal),
+            signal: monitoringSignal,
+          });
           const monitorLease = await withPendingEvmMonitorLease(
             getBrowserPendingEvmStorage(),
             pendingRecord,
             async (isLeaseCurrent) => {
           const result = await waitForBatchResolution();
-          let receipts = ((result?.receipts as TransactionReceiptLike[]) || []).map((receipt) =>
-            normalizeTransactionReceipt(receipt),
-          );
+          let receipts = result.receipts;
           const reportedHashes = getBatchTransactionHashes(result);
           let nextTransactionHash: Hex | undefined = reportedHashes[0];
           if (nextTransactionHash) {
@@ -2443,6 +2250,7 @@ export function TransactionButton({
 }
 
 export function TransactionStatus({
+  suppressSuccess = false,
   children,
   className,
 }: TransactionStatusProps) {
@@ -2456,7 +2264,7 @@ export function TransactionStatus({
     transactionId,
   });
 
-  if (!label) {
+  if (!label || (suppressSuccess && status.statusName === 'success')) {
     return null;
   }
 
@@ -2563,6 +2371,8 @@ function TransactionStatusLabel({
 }
 
 export function TransactionToast({
+  suppressSuccess = false,
+  successMessage,
   children,
   className,
   position = "auto",
@@ -2570,7 +2380,7 @@ export function TransactionToast({
   const context = useTransactionContext();
   const { dismissToast, isToastVisible, pauseToastTimer, resumeToastTimer } = context;
   const { feedback } = getToastLabelData(context);
-  const shouldShow = Boolean(isToastVisible && feedback);
+  const shouldShow = Boolean(isToastVisible && feedback && !(suppressSuccess && feedback.tone === 'success'));
   const lastVisibleContext = useRef(context);
   if (shouldShow) lastVisibleContext.current = context;
   const [renderState, setRenderState] = useState<"hidden" | "visible" | "exiting">(
@@ -2603,12 +2413,12 @@ export function TransactionToast({
 
   const displayContext = shouldShow ? context : lastVisibleContext.current;
   const displayed = getToastLabelData(displayContext).feedback;
-  if (renderState === "hidden" || !displayed) return null;
+  if (renderState === "hidden" || !displayed || (suppressSuccess && displayed.tone === 'success')) return null;
 
   return (
     <TransactionContext.Provider value={displayContext}>
       <TransactionFeedbackCard
-        feedback={displayed}
+        feedback={displayed.tone === "success" && successMessage ? { ...displayed, description: successMessage } : displayed}
         actions={<TransactionToastAction />}
         className={className}
         position={position}

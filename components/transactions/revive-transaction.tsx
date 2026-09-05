@@ -1,4 +1,6 @@
 "use client";
+import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
+
 
 import React from "react";
 import GameTransaction from "./game-transaction";
@@ -16,13 +18,13 @@ const PIXOTCHI_NFT_ABI = [
 
 interface ReviveTransactionProps {
   plantId: number;
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
+  onSuccess?: (tx: TransactionProof) => void;
+  onError?: (error: unknown) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   showToast?: boolean;
-  onStatusUpdate?: (status: UntypedValue) => void;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
 }
 
 export default function ReviveTransaction({
@@ -46,6 +48,7 @@ export default function ReviveTransaction({
 
   return (
     <GameTransaction
+      successMessage={`Plant #${plantId} revived`}
       effects={{ domains: ["plants", "balances"] }}
       intentKey={`plant:revive:${plantId}`}
       calls={calls}

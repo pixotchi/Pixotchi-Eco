@@ -393,7 +393,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
   }, [loadSelectedTokenStats]);
 
   const onBuildSuccess = useCallback(async () => {
-    toast.success("Casino built successfully!");
+
     setIsBuilt(true);
     setAllowanceWei(BigInt(0));
     await loadCasinoState(true);
@@ -403,7 +403,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
 
   const onApproveSuccess = useCallback(async () => {
     const operationIdentity = casinoIdentity;
-    toast.success("Token approved!");
+
     await refetchBuildTokenBalance();
     if (currentCasinoIdentityRef.current !== operationIdentity) return;
     await loadCasinoState(false);
@@ -537,7 +537,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
                 intentKey={`casino:build:${landId}`}
                 calls={[buildCasinoBuildCall(landId)]}
                 onSuccess={onBuildSuccess}
-                onError={(err) => setError(err.message)}
+                onError={(err) => setError(err instanceof Error ? err.message : 'Casino could not be built. Please retry.')}
                 buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
                 buttonClassName="w-full"
                 disabled={!walletClient || !buildingConfig || !hasApproval || !hasSufficientBalance}
@@ -582,7 +582,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
                 <ChevronDown className="h-4 w-4 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+            <DropdownMenuContent matchTriggerWidth className="">
               {supportedTokens.map((entry) => (
                 <DropdownMenuItem
                   key={entry.address}

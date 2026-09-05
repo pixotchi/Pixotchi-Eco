@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Copy, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
+import { ResourceState } from '@/components/ui/resource-state';
 import { getUserGameStats } from '@/lib/user-stats-service';
 import { getStakeInfo } from '@/lib/contracts';
 import { formatEthShort, formatTokenAmount, formatAddress } from '@/lib/utils';
@@ -57,6 +58,8 @@ interface PlantProfileDialogProps {
   walletAddressOverride?: string | null;
   walletNameOverride?: string | null;
   primaryPlantLoading?: boolean;
+  primaryPlantError?: string | null;
+  onRetryPrimaryPlant?: () => void;
 }
 
 const CACHE_DURATION = 120000; // 2 minutes
@@ -78,6 +81,8 @@ export default function PlantProfileDialog({
   walletAddressOverride = null,
   walletNameOverride = null,
   primaryPlantLoading = false,
+  primaryPlantError = null,
+  onRetryPrimaryPlant,
 }: PlantProfileDialogProps) {
   const [efpRefreshKey, setEfpRefreshKey] = useState(0);
 
@@ -440,7 +445,8 @@ export default function PlantProfileDialog({
         <DialogContent
           layer={nested ? "nested" : "default"}
           surface="soft"
-          className="w-[min(94vw,27.5rem)] max-w-[27.5rem] !p-0"
+          padding="none"
+          className="w-[min(94vw,27.5rem)] max-w-[27.5rem]"
         >
           <div className="surface-scroll-fade flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
             <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
@@ -484,7 +490,7 @@ export default function PlantProfileDialog({
                         height={96}
                       />
                     ) : (
-                      <div className="text-xs text-muted-foreground">No plant</div>
+                      <div className="text-xs text-muted-foreground">{primaryPlantError ? "Unavailable" : "No plant"}</div>
                     )}
                   </div>
                 </div>
@@ -509,6 +515,8 @@ export default function PlantProfileDialog({
                   )}
                 </div>
               </div>
+
+              {primaryPlantError && <ResourceState status="error" title="Plant unavailable" description={primaryPlantError} onRetry={onRetryPrimaryPlant} />}
 
               {/* Plant & Owner Stats Row */}
               <div className="mb-3 flex flex-col gap-2.5 text-sm">

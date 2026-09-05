@@ -1,4 +1,6 @@
-import { decodeEventLog, formatUnits, type Hex } from 'viem';
+import { decodeEventLog, type Hex } from 'viem';
+import { formatTokenDisplay } from './token-display';
+import { formatDurationSeconds } from './duration-display';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { CLIENT_ENV } from '@/lib/env-config';
 
@@ -72,11 +74,7 @@ export function getQuestFinalizeOutcome(proof: unknown, landId: bigint, slotInde
 }
 
 function compactAmount(amount: bigint, decimals: number): string {
-  const full = formatUnits(amount, decimals);
-  const [whole, fraction = ''] = full.split('.');
-  const digits = fraction.slice(0, 4).replace(/0+$/, '');
-  if (amount > BigInt(0) && whole === '0' && !digits) return '<0.0001';
-  return digits ? `${whole}.${digits}` : whole;
+  return formatTokenDisplay(amount, decimals, 4);
 }
 
 export function describeQuestResult(result: QuestFinalizeResult, landId: bigint): string {
@@ -87,11 +85,7 @@ export function describeQuestResult(result: QuestFinalizeResult, landId: bigint)
     case 0: return `+${compactAmount(amount, 18)} SEED → your wallet`;
     case 1: return `+${compactAmount(amount, 18)} LEAF → your wallet`;
     case 2: {
-      const hours = amount / BigInt(3600);
-      const minutes = (amount % BigInt(3600)) / BigInt(60);
-      const seconds = amount % BigInt(60);
-      const duration = [hours > 0 ? `${hours}h` : '', minutes > 0 ? `${minutes}m` : '', seconds > 0 || amount === BigInt(0) ? `${seconds}s` : ''].filter(Boolean).join(' ');
-      return `+${duration} TOD → Land #${landId} Warehouse`;
+      return `+${formatDurationSeconds(amount, 'exact')} lifetime → Land #${landId} Warehouse`;
     }
     case 3: return `+${compactAmount(amount, 12)} PTS → Land #${landId} Warehouse`;
     case 4: return `+${compactAmount(amount, 18)} XP → Land #${landId}`;

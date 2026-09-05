@@ -24,6 +24,7 @@ import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { Plant, TransactionCall } from '@/lib/types';
 import { formatTokenAmount } from '@/lib/utils';
+import { formatTokenDisplay } from '@/lib/token-display';
 import Image from 'next/image';
 import { useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -241,7 +242,6 @@ function EditPlantName({
   }, [isOpen, isSmartWallet, isEthMode, isSolana, nameChangeCostWei]);
 
   const handleSuccess = () => {
-    toast.success(`Plant name changed to "${newName.trim()}"!`);
     setIsTransactionPending(false);
 
     // Notify parent component
@@ -288,7 +288,7 @@ function EditPlantName({
         </Button>
       </DialogTrigger>
 
-      <DialogContent surface="soft" className="max-w-md">
+      <DialogContent layout="form" surface="soft" className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">Change Plant Name</DialogTitle>
           <DialogDescription>
@@ -325,7 +325,7 @@ function EditPlantName({
           </section>
         </DialogBody>
 
-        <DialogFooter sticky className="block space-y-2">
+        <DialogFooter className="block space-y-2">
           {isSolana ? (
             // Solana bridge transaction for name change
             <SolanaBridgeButton
@@ -337,7 +337,6 @@ function EditPlantName({
               onQuote={setSolanaQuote}
               disabled={!isNameValid || isTransactionPending}
               onSuccess={() => {
-                toast.success(`Plant name changed to "${newName.trim()}"!`);
                 setIsTransactionPending(false);
                 if (onNameChanged) {
                   onNameChanged(plant.id, newName.trim());
@@ -392,6 +391,7 @@ function EditPlantName({
             </Button>
           ) : (
             <ApprovalActionTransaction
+              successMessage={`Plant #${plant.id} renamed to ${newName.trim()}`}
               intentKey={`plant:rename:${plant.id}`}
               actionCalls={plantNameCalls}
               approvalSpender={PIXOTCHI_NFT_ADDRESS}
@@ -421,7 +421,7 @@ function EditPlantName({
           )}
           {isSmartWallet && isEthMode && !isSolana && ethBalanceKnown && !canAffordNameChange && ethQuote ? (
             <InlineBalanceNotice>
-              Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+              Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethQuote.ethAmountWithBuffer, 18, 18)}
             </InlineBalanceNotice>
           ) : isSmartWallet && isEthMode && !isSolana && ethBalanceUnavailable && ethQuote ? (
             <InlineBalanceNotice>

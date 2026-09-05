@@ -5,6 +5,46 @@ export type MarketplacePriceRatio = {
 
 export type MarketplaceSellSide = 'LEAF' | 'SEED';
 
+/** Exact identity and ordering: display rounding must never pick a trade. */
+export function compareMarketplacePrices(a: MarketplacePriceRatio, b: MarketplacePriceRatio): number {
+  const difference = a.leafAmount * b.seedAmount - b.leafAmount * a.seedAmount;
+  return difference < BigInt(0) ? -1 : difference > BigInt(0) ? 1 : 0;
+}
+
+export function getMarketplaceRatioKey(ratio: MarketplacePriceRatio): string {
+  let a = ratio.leafAmount;
+  let b = ratio.seedAmount;
+  while (b !== BigInt(0)) [a, b] = [b, a % b];
+  return a > BigInt(0) ? `${ratio.leafAmount / a}/${ratio.seedAmount / a}` : '';
+}
+
+export function buildMarketplacePriceLevels(
+  orders: readonly { amount: bigint; amountAsk: bigint; sellToken: number }[],
+  sellToken: 0 | 1,
+) {
+  const levels = new Map<string, { key: string; exactRatio: MarketplacePriceRatio; amount: bigint }>();
+  for (const order of orders) {
+    if (order.sellToken !== sellToken) continue;
+    const exactRatio = getMarketplacePriceRatio(order);
+    if (!exactRatio) continue;
+    const key = getMarketplaceRatioKey(exactRatio);
+    const existing = levels.get(key);
+    if (existing) existing.amount += order.amount;
+    else levels.set(key, { key, exactRatio, amount: order.amount });
+  }
+  // Buying LEAF: maximize LEAF received per SEED. Buying SEED: minimize
+  // LEAF paid per SEED. Both sides are ordered by the taker's benefit.
+  const rows = [...levels.values()].sort((a, b) =>
+    compareMarketplacePrices(a.exactRatio, b.exactRatio) * (sellToken === 1 ? -1 : 1),
+  ).slice(0, 20);
+  const total = rows.reduce((sum, row) => sum + row.amount, BigInt(0));
+  let cumulative = BigInt(0);
+  return rows.map(row => {
+    cumulative += row.amount;
+    return { ...row, depth: total ? Number(cumulative * BigInt(10_000) / total) / 100 : 0 };
+  });
+}
+
 export function getMarketplacePriceRatio(order: {
   amount: bigint;
   amountAsk: bigint;

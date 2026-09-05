@@ -190,7 +190,7 @@ export default function AboutTab() {
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-          <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md p-4 sm:p-6">
+          <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
             <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
             <DialogDescription>

@@ -1,12 +1,7 @@
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
-/*
- * Removed: the `density` prop (zero call sites — every branch resolved to the
- * regular column), the `lg` padding and `inset`/`promo`/`game` surfaces (zero
- * <Card> call sites), and the unnamed role="group" on the inner wrapper (an
- * unnamed group adds a useless node to the accessibility tree on every card).
- */
+/** Card owns padding on its root. Header and Content add no horizontal padding. */
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
   padding?: 'none' | 'sm' | 'md';
@@ -21,24 +16,23 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       md: 'p-4',
     };
     const surfaceStyles = {
-      default: 'border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface)] text-card-foreground surface-shadow backdrop-blur-md',
-      raised: 'border-[hsl(var(--border-strong)/0.4)] bg-card bg-[image:var(--gradient-surface-strong)] text-card-foreground surface-shadow-raised backdrop-blur-md',
+      default: 'border-[hsl(var(--edge-panel))] bg-card text-card-foreground',
+      raised: 'border-[hsl(var(--edge-panel))] bg-card text-card-foreground shadow-[var(--shadow-hairline)]',
     };
 
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-[var(--radius-panel)] border',
+          'flex min-w-0 flex-col rounded-[var(--radius-panel)] border',
+          paddingStyles[padding],
           surfaceStyles[surface],
           hover && 'transition-[border-color,background-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:shadow-[var(--shadow-raised)]',
           className
         )}
         {...props}
       >
-        <div className={cn('h-full w-full flex flex-col', paddingStyles[padding])}>
-          {children}
-        </div>
+        {children}
       </div>
     );
   }

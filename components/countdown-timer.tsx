@@ -25,7 +25,7 @@ export default function CountdownTimer({
 
   return (
     <div className={`${baseClasses} ${backgroundClasses} ${className}`}>
-      <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
+      <Image src="/icons/tod.svg" alt="Lifetime" width={16} height={16} className="w-4 h-4" />
       <span>{timeRemaining}</span>
     </div>
   );

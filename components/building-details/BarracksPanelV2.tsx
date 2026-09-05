@@ -1,11 +1,13 @@
 "use client";
 
+import { useBarracksSnapshot } from "@/hooks/useBarracksSnapshot";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useAccount, useBalance } from "wagmi";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AmountField } from "@/components/ui/amount-field";
+import { ResourceState } from "@/components/ui/resource-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,11 +23,7 @@ import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { useTokenSymbol } from "@/hooks/useTokenSymbol";
 import {
   LAND_CONTRACT_ADDRESS,
-  barracksGetConfigV2,
   barracksGetEligibleAttackableLandIds,
-  barracksGetLandStateV2,
-  barracksGetLastIncomingReportV2,
-  barracksGetLastOutgoingReportV2,
   barracksPreviewRaidV2,
   buildBarracksAttackCallV2,
   buildBarracksBuildCall,
@@ -36,22 +34,18 @@ import {
 import { CLIENT_ENV } from "@/lib/env-config";
 import { dispatchPostTransactionRefresh } from "@/lib/transaction-refresh";
 import type {
-  BarracksConfigV2,
-  BarracksLandStateV2,
   BarracksRaidPreviewV2,
-  BarracksRaidReportV2,
-  BarracksTroopConfigV2,
   BarracksTroopId,
   BuildingData,
   Land,
 } from "@/lib/types";
 import {
-  formatDuration,
-  formatLifetimeProduction,
   formatTokenAmount,
-  formatTokenAmountPrecise,
   getFriendlyErrorMessage,
 } from "@/lib/utils";
+import { BarracksReportCard, type ReportMode } from './barracks-report';
+import { BarracksBattleTable as BattleReportTable } from './barracks-battle-table';
+import { TROOP_OPTIONS, getTroopOption, troopIdFromNumeric, troopNumericType, getTroopConfig, parsePositiveBigInt, parseOptionalBigInt, secondsUntil, formatRemaining, formatCooldownState, formatBarracksPoints, formatBarracksLifetime, formatDurationFromBigInt, formatQueueHint, formatPercentFromBps, getHomeDefenseBonusBps, formatLandLabel, formatCoordinates, getPreviewMessage } from '@/lib/barracks-view';
 import { toast } from "react-hot-toast";
 
 interface BarracksPanelV2Props {
@@ -62,212 +56,17 @@ interface BarracksPanelV2Props {
 }
 
 type BarracksTab = "train" | "raid" | "history";
-type ReportMode = "outgoing" | "incoming";
-type BarracksSnapshotV2 = {
-  config: BarracksConfigV2 | null;
-  landState: BarracksLandStateV2 | null;
-  lastOutgoingReport: BarracksRaidReportV2 | null;
-  lastIncomingReport: BarracksRaidReportV2 | null;
-};
 
 const RAID_STATUS_OK = 0;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BIGINT = BigInt(0);
-const SECONDS_PER_MINUTE = BigInt(60);
-const SECONDS_PER_HOUR = BigInt(3600);
-const SECONDS_PER_DAY = BigInt(86400);
-const PLANT_POINTS_DECIMALS = 12;
 const BARRACKS_PREVIEW_ENABLED = CLIENT_ENV.BARRACKS_PREVIEW_ENABLED;
-const HOME_DEFENSE_MAX_BPS = 1000;
-const HIDDEN_REPORT_VALUE = "?";
 const BARRACKS_SECTION_SURFACE_CLASS =
-  "building-subpanel-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4";
+  "space-y-4 rounded-[var(--radius-panel)] bg-muted/25 p-4";
 const BARRACKS_BUBBLE_SURFACE_CLASS =
-  "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]";
+  "min-w-0 rounded-[var(--radius-control)] bg-muted/30 p-3 [overflow-wrap:anywhere]";
 const BARRACKS_COMPACT_BUBBLE_SURFACE_CLASS =
-  "chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-hairline)]";
-const BARRACKS_TABLE_SURFACE_CLASS =
-  "building-subpanel-surface overflow-hidden rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)]";
-
-const TROOP_OPTIONS = [
-  {
-    id: "swordsman" as const,
-    numericType: 0,
-    name: "Swordsman",
-    role: "Offense",
-    icon: "/icons/swordsman.png",
-  },
-  {
-    id: "phalanx" as const,
-    numericType: 1,
-    name: "Phalanx",
-    role: "Defense",
-    icon: "/icons/phalanx.png",
-  },
-] as const;
-
-function getTroopOption(type: BarracksTroopId) {
-  return TROOP_OPTIONS.find((option) => option.id === type) ?? TROOP_OPTIONS[0];
-}
-
-function troopIdFromNumeric(troopType: number): BarracksTroopId {
-  return troopType === 1 ? "phalanx" : "swordsman";
-}
-
-function troopNumericType(type: BarracksTroopId): number {
-  return getTroopOption(type).numericType;
-}
-
-function getTroopConfig(config: BarracksConfigV2 | null, troopType: BarracksTroopId): BarracksTroopConfigV2 | null {
-  if (!config) return null;
-  return troopType === "swordsman" ? config.swordsman : config.phalanx;
-}
-
-function parsePositiveBigInt(value: string): bigint | null {
-  if (!/^\d+$/.test(value.trim())) return null;
-  const parsed = BigInt(value.trim());
-  return parsed > ZERO_BIGINT ? parsed : null;
-}
-
-function parseOptionalBigInt(value: string): bigint | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return ZERO_BIGINT;
-  if (!/^\d+$/.test(trimmed)) return null;
-  return BigInt(trimmed);
-}
-
-function secondsUntil(timestamp: bigint): number {
-  if (timestamp <= ZERO_BIGINT) return 0;
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  if (timestamp <= now) return 0;
-  return Number(timestamp - now);
-}
-
-function formatRemaining(timestamp: bigint): string {
-  const remaining = secondsUntil(timestamp);
-  return remaining > 0 ? formatDuration(remaining) : "Ready";
-}
-
-function formatCooldownState(timestamp: bigint): string {
-  const remaining = secondsUntil(timestamp);
-  return remaining > 0 ? formatDuration(remaining) : "Not active";
-}
-
-function formatSigned(value: bigint): string {
-  const prefix = value > ZERO_BIGINT ? "+" : "";
-  return `${prefix}${value.toString()}`;
-}
-
-function formatBarracksPoints(value: bigint): string {
-  return formatTokenAmountPrecise(value, PLANT_POINTS_DECIMALS, 4);
-}
-
-function formatBarracksLifetime(value: bigint): string {
-  const seconds = Number(value);
-  if (seconds <= 0) return "0s";
-  if (seconds < 3600) return formatDuration(seconds);
-  return formatLifetimeProduction(value);
-}
-
-function formatDurationFromBigInt(seconds: bigint): string {
-  if (seconds <= ZERO_BIGINT) return "0s";
-
-  const days = seconds / SECONDS_PER_DAY;
-  const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR;
-  const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE;
-  const secs = seconds % SECONDS_PER_MINUTE;
-
-  let result = "";
-  if (days > 0) result += `${days.toString()}d `;
-  if (hours > 0) result += `${hours.toString()}h `;
-  if (minutes > 0 && days === ZERO_BIGINT) result += `${minutes.toString()}m `;
-  if (secs > 0 && hours === ZERO_BIGINT && days === ZERO_BIGINT) result += `${secs.toString()}s`;
-
-  return result.trim() || "0s";
-}
-
-function formatQueueHint(troopName: string, readyAt: bigint): string {
-  return secondsUntil(readyAt) > 0
-    ? `${troopName} ready in ${formatRemaining(readyAt)}`
-    : `${troopName} ready`;
-}
-
-function formatPercentFromBps(bps: number): string {
-  const percent = bps / 100;
-  if (Number.isInteger(percent)) {
-    return `${percent}%`;
-  }
-  return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
-}
-
-function isProductionBuilding(building: BuildingData): boolean {
-  return (
-    building.maxLevel > 0 &&
-    (building.productionRatePlantPointsPerDay > ZERO_BIGINT ||
-      building.productionRatePlantLifetimePerDay > ZERO_BIGINT)
-  );
-}
-
-function getHomeDefenseBonusBps(villageBuildings: BuildingData[]): number {
-  const productionBuildings = villageBuildings.filter(isProductionBuilding);
-  if (productionBuildings.length === 0) return 0;
-
-  const totalLevels = productionBuildings.reduce((sum, building) => sum + building.level, 0);
-  const totalMaxLevels = productionBuildings.reduce((sum, building) => sum + building.maxLevel, 0);
-
-  if (totalLevels === 0 || totalMaxLevels === 0) {
-    return 0;
-  }
-
-  return Math.min(
-    HOME_DEFENSE_MAX_BPS,
-    Math.floor((totalLevels * HOME_DEFENSE_MAX_BPS) / totalMaxLevels),
-  );
-}
-
-function formatLandLabel(land: Pick<Land, "tokenId" | "name">): string {
-  const trimmed = land.name?.trim();
-  return trimmed ? trimmed : `Land #${land.tokenId.toString()}`;
-}
-
-function formatCoordinates(land: Pick<Land, "coordinateX" | "coordinateY">): string {
-  return `${formatSigned(land.coordinateX)}, ${formatSigned(land.coordinateY)}`;
-}
-
-function hasReport(report: BarracksRaidReportV2 | null): report is BarracksRaidReportV2 {
-  return !!report && report.raidId > ZERO_BIGINT;
-}
-
-function getPreviewMessage(preview: BarracksRaidPreviewV2 | null): string | null {
-  if (!preview) return null;
-
-  switch (preview.statusCode) {
-    case RAID_STATUS_OK:
-      return preview.attackerWon
-        ? "Projected win. Loot stays capped by surviving troop carry."
-        : "Projected loss. Attack is still allowed, but loot is not expected.";
-    case 1:
-      return "Choose a different target land.";
-    case 2:
-      return "This land needs a built Barracks before it can attack.";
-    case 3:
-      return "The target land cannot be raided until it builds a Barracks.";
-    case 4:
-      return "You cannot attack your own land.";
-    case 5:
-      return `Attack cooldown active for ${formatRemaining(preview.attackerCooldownEndsAt)}.`;
-    case 6:
-      return `Target defense cooldown active for ${formatRemaining(preview.defenderCooldownEndsAt)}.`;
-    case 7:
-      return "Not enough troops available to send.";
-    case 8:
-      return "No raidable pending village production is available right now.";
-    case 9:
-      return "Barracks is currently disabled by admin.";
-    default:
-      return "Raid preview unavailable.";
-  }
-}
+  "min-w-0 border-t border-border/60 py-3 [overflow-wrap:anywhere]";
 
 function StatTile({
   label,
@@ -301,156 +100,12 @@ function TroopCount({
   const troop = getTroopOption(type);
   const hasAmount = typeof amount === "bigint" || amount !== "";
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 [overflow-wrap:anywhere]">
       <Image src={troop.icon} alt={troop.name} width={16} height={16} className="h-4 w-4 object-contain opacity-90" />
       {hasAmount ? <span>{typeof amount === "bigint" ? amount.toString() : amount}</span> : null}
       {withName ? <span className="text-xs font-medium text-muted-foreground">{troop.name}</span> : null}
       {withRole ? <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{troop.role}</span> : null}
     </span>
-  );
-}
-
-function BattleReportTable({
-  label,
-  landId,
-  swordsmenSent,
-  phalanxSent,
-  swordsmenLost,
-  phalanxLost,
-}: {
-  label: string;
-  landId?: bigint;
-  swordsmenSent: bigint | string;
-  phalanxSent: bigint | string;
-  swordsmenLost: bigint | string;
-  phalanxLost: bigint | string;
-}) {
-  const showSwordsmenLossHighlight = typeof swordsmenLost === "bigint" && swordsmenLost > ZERO_BIGINT;
-  const showPhalanxLossHighlight = typeof phalanxLost === "bigint" && phalanxLost > ZERO_BIGINT;
-
-  return (
-    <div className={BARRACKS_TABLE_SURFACE_CLASS}>
-      <div className="border-b border-border/50 bg-card/50 bg-[image:var(--gradient-surface)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-foreground flex justify-between items-center">
-        <span>{label}</span>
-        {landId && <span className="text-muted-foreground">Land #{landId.toString()}</span>}
-      </div>
-      <div className="w-full">
-        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 border-b border-border/40 bg-card/30 items-center">
-          <div></div>
-          <div className="flex justify-center">
-            <Image src="/icons/swordsman.png" alt="Swordsman" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
-          </div>
-          <div className="flex justify-center">
-            <Image src="/icons/phalanx.png" alt="Phalanx" width={16} height={16} className="h-4 w-4 object-contain opacity-80" />
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm items-center hover:bg-muted/5 transition-colors">
-          <div className="text-muted-foreground text-xs">Troops</div>
-          <div className="text-center font-medium">{typeof swordsmenSent === "bigint" ? swordsmenSent.toString() : swordsmenSent}</div>
-          <div className="text-center font-medium">{typeof phalanxSent === "bigint" ? phalanxSent.toString() : phalanxSent}</div>
-        </div>
-        
-        <div className="grid grid-cols-[1fr_repeat(2,minmax(3rem,auto))] gap-2 px-3 py-2 text-sm border-t border-border/40 items-center hover:bg-muted/5 transition-colors">
-          <div className="text-muted-foreground text-xs">Casualties</div>
-          <div className={`text-center font-medium ${showSwordsmenLossHighlight ? "text-destructive" : ""}`}>
-            {typeof swordsmenLost === "bigint" ? swordsmenLost.toString() : swordsmenLost}
-          </div>
-          <div className={`text-center font-medium ${showPhalanxLossHighlight ? "text-destructive" : ""}`}>
-            {typeof phalanxLost === "bigint" ? phalanxLost.toString() : phalanxLost}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReportCard({
-  report,
-  mode,
-}: {
-  report: BarracksRaidReportV2 | null;
-  mode: ReportMode;
-}) {
-  if (!hasReport(report)) {
-    return (
-      <div className={`${BARRACKS_BUBBLE_SURFACE_CLASS} space-y-2`}>
-        <div className="text-sm font-semibold">
-          {mode === "outgoing" ? "Last Attack" : "Last Defense"}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          No {mode === "outgoing" ? "attack" : "defense"} report recorded yet.
-        </p>
-      </div>
-    );
-  }
-
-  const success = mode === "outgoing" ? report.attackerWon : !report.attackerWon;
-  const opponentLabel =
-    mode === "outgoing"
-      ? `Target Land #${report.defenderLandId.toString()}`
-      : `Attacker Land #${report.attackerLandId.toString()}`;
-  const attackersReturned =
-    report.survivingAttackerSwordsmen + report.survivingAttackerPhalanx > ZERO_BIGINT;
-  const shouldHideOutgoingIntel =
-    mode === "outgoing" && !BARRACKS_PREVIEW_ENABLED && !attackersReturned;
-  const defenderDisplayValue = (value: bigint): bigint | string =>
-    shouldHideOutgoingIntel ? HIDDEN_REPORT_VALUE : value;
-
-  return (
-    <div className={`${BARRACKS_BUBBLE_SURFACE_CLASS} space-y-3`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">
-            {mode === "outgoing" ? "Last Attack" : "Last Defense"}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Raid #{report.raidId.toString()} • {opponentLabel}
-          </div>
-        </div>
-        <div className={`text-xs font-semibold ${success ? "text-[hsl(var(--success-strong))]" : "text-destructive"}`}>
-          {success ? "Won" : "Lost"}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <BattleReportTable
-          label="Attacker"
-          landId={report.attackerLandId}
-          swordsmenSent={report.swordsmenSent}
-          phalanxSent={report.phalanxSent}
-          swordsmenLost={report.attackerSwordsmenLost}
-          phalanxLost={report.attackerPhalanxLost}
-        />
-        <BattleReportTable
-          label="Defender"
-          landId={report.defenderLandId}
-          swordsmenSent={defenderDisplayValue(report.defenderSwordsmenBefore)}
-          phalanxSent={defenderDisplayValue(report.defenderPhalanxBefore)}
-          swordsmenLost={defenderDisplayValue(report.defenderSwordsmenLost)}
-          phalanxLost={defenderDisplayValue(report.defenderPhalanxLost)}
-        />
-      </div>
-
-      <div className={BARRACKS_COMPACT_BUBBLE_SURFACE_CLASS}>
-        <span className="font-semibold">Raided:</span>{" "}
-        {shouldHideOutgoingIntel ? (
-          <span>None of your troops came back.</span>
-        ) : (
-          <>
-            <span className="text-primary">{formatBarracksPoints(report.pointsStolen)} PTS</span>
-            <span className="text-muted-foreground"> / </span>
-            <span className="text-primary">{formatBarracksLifetime(report.lifetimeStolen)} TOD</span>
-          </>
-        )}
-      </div>
-
-      <div className="text-xs text-muted-foreground">
-        Settled {formatBarracksPoints(report.pendingPointsSettled)} pending PTS and{" "}
-        {formatBarracksLifetime(report.pendingLifetimeSettled)} pending TOD on{" "}
-        {new Date(Number(report.timestamp) * 1000).toLocaleString()}.
-      </div>
-    </div>
   );
 }
 
@@ -461,13 +116,9 @@ export default function BarracksPanelV2({
   villageBuildings,
 }: BarracksPanelV2Props) {
   const { address } = useAccount();
-  const [config, setConfig] = useState<BarracksConfigV2 | null>(null);
-  const [landState, setLandState] = useState<BarracksLandStateV2 | null>(null);
-  const [lastOutgoingReport, setLastOutgoingReport] = useState<BarracksRaidReportV2 | null>(null);
-  const [lastIncomingReport, setLastIncomingReport] = useState<BarracksRaidReportV2 | null>(null);
+  const { config, landState, lastOutgoingReport, lastIncomingReport, loading, loadedStateLandId, loadState } = useBarracksSnapshot({ landId, currentBlock });
   const [preview, setPreview] = useState<BarracksRaidPreviewV2 | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [targetsLoading, setTargetsLoading] = useState(false);
   const [targetsError, setTargetsError] = useState<string | null>(null);
@@ -482,7 +133,6 @@ export default function BarracksPanelV2({
   const [reportView, setReportView] = useState<ReportMode>("outgoing");
   const [eligibleTargets, setEligibleTargets] = useState<Land[]>([]);
   const [selectedTargetLandId, setSelectedTargetLandId] = useState<bigint | null>(null);
-  const [loadedStateLandId, setLoadedStateLandId] = useState<bigint | null>(null);
   const [loadedAllowanceIdentity, setLoadedAllowanceIdentity] = useState<string | null>(null);
   const trainAmountInputId = useId();
   const trainAmountHelpId = useId();
@@ -490,7 +140,6 @@ export default function BarracksPanelV2({
   const attackPhalanxInputId = useId();
   const normalizedAddress = address?.toLowerCase() ?? "disconnected";
   const currentLandIdRef = useRef(landId);
-  const stateRequestRef = useRef(0);
   const allowanceRequestRef = useRef(0);
   const targetsRequestRef = useRef(0);
   currentLandIdRef.current = landId;
@@ -579,68 +228,6 @@ export default function BarracksPanelV2({
     ],
   );
 
-  const applySnapshot = useCallback((snapshot: BarracksSnapshotV2) => {
-    setConfig(snapshot.config);
-    setLandState(snapshot.landState);
-    setLastOutgoingReport(snapshot.lastOutgoingReport);
-    setLastIncomingReport(snapshot.lastIncomingReport);
-  }, []);
-
-  const readSnapshot = useCallback(async (): Promise<BarracksSnapshotV2> => {
-    const [nextConfig, nextLandState, nextOutgoing, nextIncoming] = await Promise.all([
-      barracksGetConfigV2(),
-      barracksGetLandStateV2(landId),
-      barracksGetLastOutgoingReportV2(landId),
-      barracksGetLastIncomingReportV2(landId),
-    ]);
-
-    return {
-      config: nextConfig,
-      landState: nextLandState,
-      lastOutgoingReport: nextOutgoing,
-      lastIncomingReport: nextIncoming,
-    };
-  }, [landId]);
-
-  const loadState = useCallback(async (showLoading = true) => {
-    const requestLandId = landId;
-    if (currentLandIdRef.current !== requestLandId) return null;
-    const requestId = ++stateRequestRef.current;
-    try {
-      if (showLoading) {
-        setLoading(true);
-      }
-
-      const snapshot = await readSnapshot();
-      if (
-        requestId !== stateRequestRef.current
-        || currentLandIdRef.current !== requestLandId
-      ) return null;
-      applySnapshot(snapshot);
-      setLoadedStateLandId(requestLandId);
-      return snapshot;
-    } catch (error) {
-      console.error("Failed to load barracks V2 state:", error);
-      if (
-        requestId !== stateRequestRef.current
-        || currentLandIdRef.current !== requestLandId
-      ) return null;
-      setConfig(null);
-      setLandState(null);
-      setLastOutgoingReport(null);
-      setLastIncomingReport(null);
-      setLoadedStateLandId(requestLandId);
-      return null;
-    } finally {
-      if (
-        requestId === stateRequestRef.current
-        && currentLandIdRef.current === requestLandId
-      ) {
-        setLoading(false);
-      }
-    }
-  }, [applySnapshot, landId, readSnapshot]);
-
   const loadAllowances = useCallback(async () => {
     const requestIdentity = allowanceIdentity;
     if (currentAllowanceIdentityRef.current !== requestIdentity) {
@@ -727,13 +314,7 @@ export default function BarracksPanelV2({
   }, [config?.enabled, landId, landState?.isBuilt]);
 
   useEffect(() => {
-    stateRequestRef.current += 1;
     targetsRequestRef.current += 1;
-    setLoadedStateLandId(null);
-    setConfig(null);
-    setLandState(null);
-    setLastOutgoingReport(null);
-    setLastIncomingReport(null);
     setEligibleTargets([]);
     setSelectedTargetLandId(null);
     setTargetsError(null);
@@ -743,17 +324,12 @@ export default function BarracksPanelV2({
     setPreviewLoading(false);
     setAttackSwordsmen("");
     setAttackPhalanx("");
-    setLoading(true);
 
     return () => {
-      stateRequestRef.current += 1;
       targetsRequestRef.current += 1;
     };
   }, [landId]);
 
-  useEffect(() => {
-    void loadState();
-  }, [currentBlock, loadState]);
 
   useEffect(() => {
     allowanceRequestRef.current += 1;
@@ -979,9 +555,7 @@ export default function BarracksPanelV2({
 
   if (!config || !landState) {
     return (
-      <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-dashed border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">
-        Barracks data is unavailable.
-      </div>
+      <ResourceState status="error" title="Barracks data is unavailable" description="Try loading your troops and reports again." onRetry={() => { void loadState(); }} />
     );
   }
 
@@ -1038,7 +612,7 @@ export default function BarracksPanelV2({
                 buttonText={`Approve ${buildTokenSymbol} to Build`}
                 buttonClassName="w-full"
                 onSuccess={async () => {
-                  toast.success(`${buildTokenSymbol} approved`);
+
                   await refreshAfterApproval("build");
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1059,7 +633,7 @@ export default function BarracksPanelV2({
                 buttonClassName="w-full"
                 disabled={!config.enabled}
                 onSuccess={async () => {
-                  toast.success("Barracks built");
+
                   await refreshAfterSuccess();
                 }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1143,33 +717,25 @@ export default function BarracksPanelV2({
             getButtonClassName={() => "flex-1 justify-center"}
           />
 
-          <div className="relative">
-            <label htmlFor={trainAmountInputId} className="sr-only">Number of troops to train</label>
-            <Input
+            <AmountField
               id={trainAmountInputId}
+              label="Number to train"
+              unit="troops"
               value={trainAmount}
               onChange={(event) => setTrainAmount(event.target.value)}
-              placeholder="Troops"
               inputMode="numeric"
               aria-describedby={trainAmountHelpId}
-              className="h-10 pr-24"
+              hint={trainDurationDisplay ? `Training time: ${trainDurationDisplay}` : undefined}
+              error={trainAmount && !parsedTrainAmount ? 'Enter a positive whole number of troops.' : undefined}
             />
-            {trainDurationDisplay ? (
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-muted-foreground">
-                {trainDurationDisplay}
-              </div>
-            ) : null}
-          </div>
 
-          <div id={trainAmountHelpId} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <TroopCount type={selectedTrainTroop} amount="" withName withRole />
-            </span>
-            <span>Costs {trainingCostDisplay} {trainingTokenSymbol}</span>
+          <div id={trainAmountHelpId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <TroopCount type={selectedTrainTroop} amount="" withName withRole />
+            <span className="[overflow-wrap:anywhere]">Costs {trainingCostDisplay} {trainingTokenSymbol}</span>
           </div>
 
           {address && (
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
               <span className="text-muted-foreground">Your Balance</span>
               <span className={hasTrainingBalance ? "font-medium" : "font-medium text-destructive"}>
                 {trainingTokenBalance
@@ -1191,7 +757,7 @@ export default function BarracksPanelV2({
               buttonText={`Approve ${trainingTokenSymbol}`}
               buttonClassName="w-full"
               onSuccess={async () => {
-                toast.success(`${trainingTokenSymbol} approved`);
+
                 await refreshAfterApproval("training");
               }}
               onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1214,7 +780,7 @@ export default function BarracksPanelV2({
               buttonText={`Train ${parsedTrainAmount.toString()} ${selectedTroopOption.name}`}
               buttonClassName="w-full"
               onSuccess={async () => {
-                toast.success("Training started");
+
                 await refreshAfterSuccess();
               }}
               onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -1274,7 +840,7 @@ export default function BarracksPanelV2({
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-72 overflow-y-auto">
+              <DropdownMenuContent matchTriggerWidth className=" max-h-72 overflow-y-auto">
                 {eligibleTargets.map((target) => {
                   const selected = selectedTargetLandId === target.tokenId;
                   return (
@@ -1304,61 +870,32 @@ export default function BarracksPanelV2({
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="space-y-2">
-              <div className="relative">
-                <label htmlFor={attackSwordsmenInputId} className="sr-only">Swordsmen to send</label>
-                <Input
+                <AmountField
                   id={attackSwordsmenInputId}
+                  label="Swordsmen to send"
+                  unit="troops"
                   value={attackSwordsmen}
                   onChange={(event) => setAttackSwordsmen(event.target.value)}
-                  placeholder="Swordsmen"
                   inputMode="numeric"
-                  className="h-11 pr-20"
+                  balance={availableSwordsmenToSend.toString()}
+                  onMax={() => setAttackSwordsmen(availableSwordsmenToSend.toString())}
+                  maxLabel="Use all available swordsmen"
+                  maxDisabled={availableSwordsmenToSend === BigInt(0)}
+                  error={parsedAttackSwordsmen === null ? 'Enter a whole number of troops.' : parsedAttackSwordsmen > availableSwordsmenToSend ? 'Not enough swordsmen available.' : undefined}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="default"
-                  onClick={() => setAttackSwordsmen(availableSwordsmenToSend.toString())}
-                  className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
-                >
-                  Max
-                </Button>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                  <TroopCount type="swordsman" amount={availableSwordsmenToSend} withName />
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="relative">
-                <label htmlFor={attackPhalanxInputId} className="sr-only">Phalanx troops to send</label>
-                <Input
+                <AmountField
                   id={attackPhalanxInputId}
+                  label="Phalanx to send"
+                  unit="troops"
                   value={attackPhalanx}
                   onChange={(event) => setAttackPhalanx(event.target.value)}
-                  placeholder="Phalanx"
                   inputMode="numeric"
-                  className="h-11 pr-20"
+                  balance={availablePhalanxToSend.toString()}
+                  onMax={() => setAttackPhalanx(availablePhalanxToSend.toString())}
+                  maxLabel="Use all available phalanx"
+                  maxDisabled={availablePhalanxToSend === BigInt(0)}
+                  error={parsedAttackPhalanx === null ? 'Enter a whole number of troops.' : parsedAttackPhalanx > availablePhalanxToSend ? 'Not enough phalanx available.' : undefined}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="default"
-                  onClick={() => setAttackPhalanx(availablePhalanxToSend.toString())}
-                  className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
-                >
-                  Max
-                </Button>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                  <TroopCount type="phalanx" amount={availablePhalanxToSend} withName />
-                </span>
-              </div>
-            </div>
           </div>
 
           {BARRACKS_PREVIEW_ENABLED ? (
@@ -1413,7 +950,7 @@ export default function BarracksPanelV2({
                         <span className="font-semibold">Estimated Loot:</span>{" "}
                         <span className="text-primary">{formatBarracksPoints(preview.estimatedPointsLoot)} PTS</span>
                         <span className="text-muted-foreground"> / </span>
-                        <span className="text-primary">{formatBarracksLifetime(preview.estimatedLifetimeLoot)} TOD</span>
+                        <span className="text-primary">{formatBarracksLifetime(preview.estimatedLifetimeLoot)} lifetime</span>
                       </div>
                       <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span>Power: {preview.attackerPower.toString()} vs {preview.defenderPower.toString()}</span>
@@ -1445,7 +982,7 @@ export default function BarracksPanelV2({
               buttonText={`Raid Land #${selectedTargetLandId.toString()}`}
               buttonClassName="w-full"
               onSuccess={async () => {
-                toast.success("Raid resolved");
+
                 setAttackSwordsmen("");
                 setAttackPhalanx("");
                 await refreshAfterRaidSuccess();
@@ -1472,7 +1009,9 @@ export default function BarracksPanelV2({
             getButtonClassName={() => "flex-1 justify-center"}
           />
 
-          <ReportCard
+          <BarracksReportCard
+            previewEnabled={BARRACKS_PREVIEW_ENABLED}
+            onRetry={() => { void loadState(false); }}
             report={reportView === "outgoing" ? lastOutgoingReport : lastIncomingReport}
             mode={reportView}
           />

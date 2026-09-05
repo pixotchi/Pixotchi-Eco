@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogBody,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AssetMultiSelect } from '@/components/ui/asset-multi-select';
+import { ApprovalState } from '@/components/ui/approval-state';
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import GlobalTransactionToast from "@/components/transactions/global-transaction-toast";
@@ -27,7 +28,6 @@ invalidateOwnerResources,
 onOwnerResourceInvalidation,
 ownerInvalidationMatches,
 } from "@/lib/owner-resource-invalidation";
-import { ChevronDown } from "lucide-react";
 import { useCallback,useEffect,useId,useLayoutEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
 import { getAddress,isAddress } from "viem";
@@ -205,7 +205,6 @@ const getTransferStepIntentKey = (plan: TransferPlan, step: TransferPlanStep) =>
   return `transfer-assets:v1:router:${target}:plants=${step.plantIds.join(",")}:lands=${step.landIds.join(",")}`;
 };
 
-const formatSelectedLabel = (count: number) => `${count} selected`;
 
 export default function TransferAssetsDialog({ open, onOpenChange }: TransferAssetsDialogProps) {
   const { address } = useAccount();
@@ -393,12 +392,10 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           } else {
             setPlanOwnershipVerified(false);
           }
-          setSelectedPlantIds((current) => confirmStep
-            ? current.filter((id) => availablePlantIds.has(id))
-            : plants.map((plant) => plant.id));
-          setSelectedLandIds((current) => confirmStep
-            ? current.filter((id) => availableLandIds.has(id))
-            : lands.map((land) => land.tokenId.toString()));
+          // A refresh may remove assets that left the wallet, but must never
+          // broaden the player's selection. Select All is an explicit action.
+          setSelectedPlantIds((current) => current.filter((id) => availablePlantIds.has(id)));
+          setSelectedLandIds((current) => current.filter((id) => availableLandIds.has(id)));
           // Check router approvals when available
           if (routerAvailable) {
             const [plantsApproval, landsApproval] = await Promise.allSettled([
@@ -490,8 +487,6 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   const selectedPlantsCount = selectedPlantIds.length;
   const selectedLandsCount = selectedLandIds.length;
   const hasSelectedAnything = selectedPlantsCount + selectedLandsCount > 0;
-  const allPlantsSelected = plantsList.length > 0 && selectedPlantsCount === plantsList.length;
-  const allLandsSelected = landsList.length > 0 && selectedLandsCount === landsList.length;
 
   // If router is configured, require approvals for any collection that has items
   const needsApprovals = useMemo(() => {
@@ -661,26 +656,6 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     } finally {
       if (ownerKeyRef.current === operationOwner) setLoading(false);
     }
-  };
-
-  const setPlantSelected = (plantId: number, selected: boolean) => {
-    setSelectedPlantIds((prev) => {
-      if (selected) {
-        if (prev.includes(plantId)) return prev;
-        return [...prev, plantId];
-      }
-      return prev.filter((id) => id !== plantId);
-    });
-  };
-
-  const setLandSelected = (landId: string, selected: boolean) => {
-    setSelectedLandIds((prev) => {
-      if (selected) {
-        if (prev.includes(landId)) return prev;
-        return [...prev, landId];
-      }
-      return prev.filter((id) => id !== landId);
-    });
   };
 
   const plantApprovalCall = useMemo(() => (
@@ -934,7 +909,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       }
       onOpenChange(nextOpen);
     }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent layout="detail" className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{confirmStep ? 'Confirm Transfer' : 'Transfer Assets'}</DialogTitle>
           <DialogDescription>
@@ -1020,188 +995,46 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           )}
 
           {(plantsList.length > 0 || landsList.length > 0) && (
-            <div className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
-              <p className="text-xs text-muted-foreground">Choose which assets to send.</p>
-              {plantsList.length > 0 && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>Plants selected</span>
-                    <span className="text-xs text-muted-foreground">{selectedPlantsCount}/{plantsList.length}</span>
-                  </div>
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-14 w-full justify-between px-4 text-base font-semibold"
-                      >
-                        <span>{formatSelectedLabel(selectedPlantsCount)}</span>
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-1 p-1">
-                        <DropdownMenuItem
-                          className="justify-center"
-                          disabled={allPlantsSelected}
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setSelectedPlantIds(plantsList.map((plant) => plant.id));
-                          }}
-                        >
-                          Select all
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="justify-center"
-                          disabled={selectedPlantsCount === 0}
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setSelectedPlantIds([]);
-                          }}
-                        >
-                          Clear
-                        </DropdownMenuItem>
-                      </div>
-                      <DropdownMenuSeparator />
-                      {plantsList.map((plant) => {
-                        const checked = selectedPlantIds.includes(plant.id);
-                        return (
-                          <DropdownMenuCheckboxItem
-                            key={plant.id}
-                            checked={checked}
-                            onCheckedChange={(nextChecked) => setPlantSelected(plant.id, nextChecked === true)}
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <span className="min-w-0 flex-1 truncate font-pixel">{plant.name || `Plant #${plant.id}`}</span>
-                            {plant.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{plant.id}</span>}
-                          </DropdownMenuCheckboxItem>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
-
-              {landsList.length > 0 && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>Lands selected</span>
-                    <span className="text-xs text-muted-foreground">{selectedLandsCount}/{landsList.length}</span>
-                  </div>
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-14 w-full justify-between px-4 text-base font-semibold"
-                      >
-                        <span>{formatSelectedLabel(selectedLandsCount)}</span>
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="z-[var(--z-modal-nested)] w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-1 p-1">
-                        <DropdownMenuItem
-                          className="justify-center"
-                          disabled={allLandsSelected}
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setSelectedLandIds(landsList.map((land) => land.tokenId.toString()));
-                          }}
-                        >
-                          Select all
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="justify-center"
-                          disabled={selectedLandsCount === 0}
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setSelectedLandIds([]);
-                          }}
-                        >
-                          Clear
-                        </DropdownMenuItem>
-                      </div>
-                      <DropdownMenuSeparator />
-                      {landsList.map((land) => {
-                        const id = land.tokenId.toString();
-                        const checked = selectedLandIds.includes(id);
-                        return (
-                          <DropdownMenuCheckboxItem
-                            key={id}
-                            checked={checked}
-                            onCheckedChange={(nextChecked) => setLandSelected(id, nextChecked === true)}
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <span className="min-w-0 flex-1 truncate font-pixel">{land.name || `Land #${id}`}</span>
-                            {land.name && <span className="ml-2 shrink-0 text-xs text-muted-foreground">#{id}</span>}
-                          </DropdownMenuCheckboxItem>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Choose which assets to send.</p>
+              {plantsList.length > 0 && <AssetMultiSelect label="Plants selected" assetLabel="Plant" items={plantsList} selectedIds={selectedPlantIds} onChange={setSelectedPlantIds} />}
+              {landsList.length > 0 && <AssetMultiSelect label="Lands selected" assetLabel="Land" items={landsList.map(land => ({ id: land.tokenId.toString(), name: land.name }))} selectedIds={selectedLandIds} onChange={setSelectedLandIds} />}
             </div>
           )}
 
           {routerAvailable && (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">
-                Using batch router to transfer multiple NFTs in one tx.
+                Selected NFTs can be sent together in one transaction.
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="min-w-0 space-y-1">
-                  {approvals.plants ? (
-                    <Button className="w-full" variant="outline" disabled>
-                      Plants Approved
-                    </Button>
-                  ) : approvalLoadErrors.plants ? (
-                    <Button className="h-auto min-h-11 w-full whitespace-normal text-xs" variant="outline" disabled>
-                      Approval status unavailable — retry check
-                    </Button>
-                  ) : !approvalStatusLoaded.plants || !plantApprovalCall ? (
-                    <Button className="w-full" variant="outline" disabled>
-                      Checking approval…
-                    </Button>
-                  ) : (
+                  <ApprovalState label="Plants" state={approvalLoadErrors.plants ? 'error' : !approvalStatusLoaded.plants || !plantApprovalCall ? 'loading' : approvals.plants ? 'approved' : 'required'}>
                     <Transaction
-                      calls={[plantApprovalCall]}
+                      calls={plantApprovalCall ? [plantApprovalCall] : []}
                       effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${PIXOTCHI_NFT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
                       onStatus={(status) => onApprovalStatus("plants", ownerKey, operationChainId, status)}
                     >
                       <TransactionButton disabled={loading} text="Approve Plants" />
-                      <TransactionStatus className="mt-1 text-xs" />
-                      <GlobalTransactionToast />
+                      <TransactionStatus suppressSuccess className="mt-1 text-xs" />
+                      <GlobalTransactionToast suppressSuccess />
                     </Transaction>
-                  )}
+                  </ApprovalState>
                 </div>
                 <div className="min-w-0 space-y-1">
-                  {approvals.lands ? (
-                    <Button className="w-full" variant="outline" disabled>
-                      Lands Approved
-                    </Button>
-                  ) : approvalLoadErrors.lands ? (
-                    <Button className="h-auto min-h-11 w-full whitespace-normal text-xs" variant="outline" disabled>
-                      Approval status unavailable — retry check
-                    </Button>
-                  ) : !approvalStatusLoaded.lands || !landApprovalCall ? (
-                    <Button className="w-full" variant="outline" disabled>
-                      Checking approval…
-                    </Button>
-                  ) : (
+                  <ApprovalState label="Lands" state={approvalLoadErrors.lands ? 'error' : !approvalStatusLoaded.lands || !landApprovalCall ? 'loading' : approvals.lands ? 'approved' : 'required'}>
                     <Transaction
-                      calls={[landApprovalCall]}
+                      calls={landApprovalCall ? [landApprovalCall] : []}
                       effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
                       onStatus={(status) => onApprovalStatus("lands", ownerKey, operationChainId, status)}
                     >
                       <TransactionButton disabled={loading} text="Approve Lands" />
-                      <TransactionStatus className="mt-1 text-xs" />
-                      <GlobalTransactionToast />
+                      <TransactionStatus suppressSuccess className="mt-1 text-xs" />
+                      <GlobalTransactionToast suppressSuccess />
                     </Transaction>
-                  )}
+                  </ApprovalState>
                 </div>
               </div>
             </div>
@@ -1360,7 +1193,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
             )}
           </div>
           {activePlan && activeStepCall && activeStepIntentKey && (
-            <TransactionStatus className="text-xs" />
+            <TransactionStatus suppressSuccess className="text-xs" />
           )}
         </div>
         )}
@@ -1379,7 +1212,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           onStatus={(status) => onApprovalStatus("plants", ownerKey, operationChainId, status)}
           resetAfter={0}
         >
-          <GlobalTransactionToast />
+          <GlobalTransactionToast suppressSuccess />
         </Transaction>
       )}
       {!approvals.lands && landApprovalCall && BATCH_ROUTER_ADDRESS && (
@@ -1390,7 +1223,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           onStatus={(status) => onApprovalStatus("lands", ownerKey, operationChainId, status)}
           resetAfter={0}
         >
-          <GlobalTransactionToast />
+          <GlobalTransactionToast suppressSuccess />
         </Transaction>
       )}
     </>
@@ -1419,7 +1252,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       resetAfter={0}
     >
       {dialog}
-      <GlobalTransactionToast />
+      <GlobalTransactionToast suppressSuccess />
     </Transaction>
   );
 }

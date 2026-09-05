@@ -1,5 +1,7 @@
 "use client";
 
+import { parsePublicChatHistory, parseAIChatHistory, parseChatMessage, mergePublicHistory } from "@/lib/chat-history";
+import { asRecord } from "@/lib/transaction-utils";
 import React, {
   createContext,
   ReactNode,
@@ -808,15 +810,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to fetch messages');
         }
         const data = await response.json();
-        const next: AnyChatMessage[] = data.messages || [];
-        // Preserve any optimistic bubbles the server hasn't echoed yet — a poll
-        // landing mid-send used to wipe the user's in-flight message and make it
-        // reappear seconds later.
-        const serverIds = new Set(next.map((message) => message.id));
-        const pendingOptimistic = (messageCacheRef.current.public || []).filter(
-          (message) => String(message.id).startsWith('optimistic-') && !serverIds.has(message.id),
-        );
-        updatePublicMessages(pendingOptimistic.length ? [...next, ...pendingOptimistic] : next);
+        const next = parsePublicChatHistory(data);
+        updatePublicMessages(mergePublicHistory<AnyChatMessage>(next, messageCacheRef.current.public || []));
       } else if (requestedMode === 'ai') {
         if (!publicChatAuthenticated) {
           setConversationId(null);
@@ -851,8 +846,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           throw new Error('Failed to fetch AI messages');
         }
 
-        const data = await response.json();
-        const next = data.messages || [];
+        const data = parseAIChatHistory(await response.json());
+        const next = data.messages;
         setAIChatMessages(next.map(storedAIMessageToUIMessage));
         writeModeMessages('ai', next);
         if (typeof data.conversationId === 'string' && data.conversationId !== conversationId) {
@@ -1408,12 +1403,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           },
         );
         return true;
-      } catch (err: UntypedValue) {
-        if (/401|unauthorized/i.test(String(err?.message || ''))) {
+      } catch (err) {
+        if (/401|unauthorized/i.test(String(asRecord(err)?.message || ''))) {
           await handleChatAuthFailure();
         }
 
-        const friendlyMessage = err?.message || 'AI chat failed to stream a response.';
+        const friendlyMessage = err instanceof Error ? err.message : 'AI chat failed to stream a response.';
         setError(friendlyMessage);
         toast.error(friendlyMessage);
         return false;
@@ -1482,19 +1477,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         const data = await response.json();
 
-        const newMessage = data.message;
+        const newMessage = parseChatMessage(asRecord(data)?.message);
         const next = [
           ...(messageCacheRef.current.public || []).filter((message) => message.id !== optimisticId),
           newMessage,
         ];
         writeModeMessages('public', next);
         return true;
-    } catch (err: UntypedValue) {
+    } catch (err) {
       const next = (messageCacheRef.current[targetMode] || []).filter((message) => message.id !== optimisticId);
-      if (err.name === 'AbortError') {
+      if (asRecord(err)?.name === 'AbortError') {
         writeModeMessages(targetMode, next);
       } else {
-        const friendlyMessage = err.message || 'An unexpected error occurred.';
+        const friendlyMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
         setError(friendlyMessage);
         toast.error(friendlyMessage);
         writeModeMessages(targetMode, next);

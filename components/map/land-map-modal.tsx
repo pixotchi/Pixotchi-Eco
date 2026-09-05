@@ -231,7 +231,8 @@ export function LandMapModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-[440px] h-[85dvh] p-0 sm:p-0 overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
+        padding="none"
+        className="max-w-[min(94vw,64rem)] h-[85dvh] overflow-hidden bg-card bg-[image:var(--gradient-dialog)] border-border/65 flex flex-col gap-0 focus:outline-none"
         hideCloseButton
       >
         <DialogTitle className="sr-only">World Map</DialogTitle>
@@ -246,7 +247,7 @@ export function LandMapModal({
               <Compass className="w-4 h-4 text-primary" />
               World Map
             </h2>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {totalSupply.toLocaleString()} Plots Discovered
             </p>
           </div>

@@ -51,7 +51,7 @@ export const slides: TutorialSlide[] = [
       <div className="space-y-2 text-sm">
         <p>Use Farm and Marketplace items to increase your plant&apos;s stats:</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li><strong>TOD (Time of Death):</strong> Keeps your plant alive.</li>
+          <li><strong>Lifetime:</strong> Time remaining before your plant dies. Older game screens and contracts call this TOD (Time of Death).</li>
           <li><strong>PTS (Points):</strong> Determines your share of future ETH rewards.</li>
         </ul>
       </div>
@@ -81,7 +81,7 @@ export const slides: TutorialSlide[] = [
       <div className="space-y-2 text-sm">
         <p>Mint a Land for long-term growth.</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li>Resource buildings produce <strong>free PTS and TOD</strong> daily for your plants.</li>
+          <li>Resource buildings produce <strong>PTS and lifetime</strong> daily for your plants.</li>
           <li>Tap your land image to view the map and nearby players.</li>
         </ul>
       </div>
@@ -143,7 +143,7 @@ export const slides: TutorialSlide[] = [
         <p>Maximize your gains with daily activities:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Complete tasks, maintain daily streaks, and collect <strong>Rocks</strong> for monthly rewards.</li>
-          <li>Play <strong>Arcade games</strong> for extra PTS, TOD, and other rewards.</li>
+          <li>Play <strong>Arcade games</strong> for extra PTS, lifetime, and other rewards.</li>
         </ul>
       </div>
     ),

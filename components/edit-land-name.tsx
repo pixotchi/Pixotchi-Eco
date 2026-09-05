@@ -69,7 +69,6 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 	const canSubmit = isNameValid && !isTransactionPending; // free action
 
 	const handleSuccess = () => {
-		toast.success(`Land name changed to "${trimmedName}"!`);
 		setIsTransactionPending(false);
 		onNameChanged?.(land.tokenId, trimmedName);
 		if (autoCloseTimerRef.current !== null) {
@@ -106,7 +105,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 				</Button>
 			</DialogTrigger>
 
-			<DialogContent surface="soft" className="max-w-md">
+			<DialogContent layout="form" surface="soft" className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="text-lg font-semibold">Change Land Name</DialogTitle>
 					<DialogDescription>Set a new onchain name for your land.</DialogDescription>
@@ -129,7 +128,7 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 						</section>
 				</DialogBody>
 
-				<DialogFooter sticky className="block space-y-2">
+				<DialogFooter className="block space-y-2">
 					{canSubmit ? (
 						<LandNameTransaction
 							landId={land.tokenId}

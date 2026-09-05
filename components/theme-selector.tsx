@@ -35,7 +35,7 @@ const themes: Array<{ name: Theme; label: string; color: string }> = [
   { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
 ];
 
-const themeMenuButtonClass = "h-8 min-h-8 w-8 min-w-8 !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
+const themeMenuButtonClass = "h-11 min-h-11 w-11 min-w-11 !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
 /* The hairline border keeps the swatch legible when its colour matches the
    surface behind it (the Light swatch on the light header button, and the Dark
    swatch in dark theme, both used to read as a blank/broken button). */

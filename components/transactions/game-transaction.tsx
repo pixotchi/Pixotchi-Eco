@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { useAccount } from "wagmi";
 
@@ -21,6 +21,7 @@ import {
   TransactionButton,
   TransactionStatus,
   type LifecycleStatus,
+  type TransactionProof,
   type TransactionFeedbackMode,
 } from "./transaction-kit";
 
@@ -48,10 +49,13 @@ export type GameTransactionProps = {
   hideStatus?: boolean;
   intentKey: string;
   onButtonClick?: () => void;
-  onError?: (error: UntypedValue) => void;
+  onError?: (error: unknown) => void;
   onStatusUpdate?: (status: LifecycleStatus) => void;
-  onSuccess?: (proof: UntypedValue) => void | Promise<void>;
+  onSuccess?: (proof: TransactionProof) => void | Promise<void>;
   showToast?: boolean;
+  successMessage?: string;
+  /** A receipt-derived result panel or feature notice owns success, but pending/errors stay shared. */
+  successFeedback?: 'shared' | 'feature';
   sponsorship?: "none" | "prefer";
   trackStreak?: boolean;
 };
@@ -72,12 +76,15 @@ export default function GameTransaction({
   onStatusUpdate,
   onSuccess,
   showToast = true,
+  successMessage,
+  successFeedback = 'shared',
   sponsorship = "prefer",
   trackStreak = true,
 }: GameTransactionProps) {
   const { address } = useAccount();
   const { isSponsored: paymasterEnabled } = usePaymaster();
   const successHandledRef = useRef(false);
+  const [outcome, setOutcome] = useState(successMessage ?? `${buttonText} completed`);
   const resolvedAtomicity = atomicity ?? (calls.length > 1 ? "required" : "single");
   const intent = useMemo<GameTransactionIntent>(() => ({
     atomicity: resolvedAtomicity,
@@ -97,11 +104,11 @@ export default function GameTransaction({
   }
 
   const transformedCalls = useMemo(
-    () => transformCallsWithBuilderCode(intent.calls as UntypedValue[]) as TransactionCall[],
+    () => transformCallsWithBuilderCode([...intent.calls]) as TransactionCall[],
     [intent.calls],
   );
 
-  const handleError = useCallback((error: UntypedValue) => {
+  const handleError = useCallback((error: unknown) => {
     if (!successHandledRef.current) onError?.(error);
   }, [onError]);
 
@@ -171,6 +178,7 @@ export default function GameTransaction({
     } catch {
       // UI observers cannot alter transaction state.
     }
+    if (status.statusName === "buildingTransaction") setOutcome(successMessage ?? `${buttonText} completed`);
     if (status.statusName === "transactionPending") successHandledRef.current = false;
     if (status.statusName === "success" && !successHandledRef.current) {
       successHandledRef.current = true;
@@ -178,7 +186,7 @@ export default function GameTransaction({
         console.warn("Post-transaction reconciliation callback failed", error);
       });
     }
-  }, [handleSuccess, onStatusUpdate]);
+  }, [buttonText, handleSuccess, onStatusUpdate, successMessage]);
 
   const resolvedFeedbackMode = feedbackMode ?? "toast";
   // Commit/reveal and similarly prepared actions render before their calldata
@@ -207,8 +215,8 @@ export default function GameTransaction({
         onClick={onButtonClick}
         text={buttonText}
       />
-      {showInlineStatus && <TransactionStatus />}
-      {showGlobalToast && <GlobalTransactionToast />}
+      {showInlineStatus && <TransactionStatus suppressSuccess={successFeedback === 'feature'} />}
+      {showGlobalToast && <GlobalTransactionToast successMessage={outcome} suppressSuccess={successFeedback === 'feature'} />}
     </Transaction>
   );
 }

@@ -1,3 +1,4 @@
+import { parseAmountInput } from "./amount-input";
 import { formatUnits, parseUnits } from "viem";
 
 const COMPACT_SUFFIX_DECIMALS: Record<string, number> = {
@@ -59,7 +60,9 @@ export function expandCasinoAmountInput(value: string): string | null {
 export function parseCasinoAmountInput(value: string, decimals: number): bigint {
   const expanded = expandCasinoAmountInput(value);
   if (!expanded) throw new Error("Invalid casino amount");
-  return parseUnits(expanded, decimals);
+  const amount = parseAmountInput(expanded, decimals);
+  if (amount === null) throw new Error("Amount exceeds token precision");
+  return amount;
 }
 
 export function getCasinoUiMinBet(

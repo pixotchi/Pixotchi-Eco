@@ -520,24 +520,7 @@ export default function SwapTab() {
   const isVisible = isTabVisible('swap');
   // See the 30s freshness guard on the visibility refetch effect below.
   const lastVisibleFetchRef = useRef(0);
-  const isChartView = swapView === 'chart';
-  const isInfoView = swapView === 'info';
-  /*
-   * Render one layout, not both.
-   *
-   * The four TabCards below all mounted and CSS hid three of them. At 390px that meant
-   * a second PixotchiSwapPanel (with its own wagmi balance observers) plus a
-   * TradingView iframe — a third-party embed, ~1.6s to load — that nobody could see.
-   * 165 of 212 nodes in this tab had a zero-size box.
-   *
-   * The tablet classes on the cards are deliberately kept: for the frame between
-   * a resize crossing 54rem and the matchMedia change event landing, they stop both
-   * layouts painting at once.
-   *
-   * Lazy initialiser rather than useState(false): tab modules are dynamic(..., {ssr:false}),
-   * so there is no hydration mismatch to avoid, and starting false would mount a whole
-   * swap panel on every desktop first paint just to tear it down a frame later.
-   */
+  // One form/controller remains mounted across view and layout changes.
   const isDesktopSwapLayout = useMediaQuery(TABLET_MEDIA_QUERY);
   const { data: seedTotalSupply } = useReadContract({
     address: SEED_ADDRESS,
@@ -587,98 +570,34 @@ export default function SwapTab() {
     );
   }
 
+  const formVisible = isDesktopSwapLayout || swapView === 'swap';
   return (
-    <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-stretch tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(520px,1fr)]">
-      {!isDesktopSwapLayout && (
-      <TabCard
-        className={`${isChartView ? 'flex flex-col' : ''} tablet:hidden`}
-        padding={isChartView ? 'none' : 'md'}
-      >
-        <CardHeader className={isChartView ? 'pb-3 px-4 pt-4 flex-shrink-0' : ''}>
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle>{isChartView ? 'Chart' : isInfoView ? 'Token Info' : 'Swap'}</CardTitle>
-            <ToggleGroup
-              ariaLabel="Swap panel view"
-              value={swapView}
-              onValueChange={(v) => setSwapView(v as SwapView)}
-              options={[
-                { value: 'swap', label: 'Swap' },
-                { value: 'chart', label: 'Chart' },
-                { value: 'info', label: 'Token Info' },
-              ]}
-              getButtonClassName={(value) =>
-                isSwapModuleDisabled && value === 'swap' ? 'opacity-60' : ''
-              }
-            />
-          </div>
-        </CardHeader>
-        <CardContent className={isChartView ? 'flex flex-col p-4' : 'space-y-4'}>
-          {swapView === 'swap' ? (
-            isSwapModuleDisabled ? (
-              <SwapLockedState message={swapDisabledMessage} />
-            ) : (
-              <ErrorBoundary variant="inline" showErrorDetails>
-                <PixotchiSwapPanel />
-              </ErrorBoundary>
-            )
-          ) : swapView === 'chart' ? (
-            <SeedChartPanel marketData={seedMarketData} />
-          ) : (
-            <TokenInfoPanel
-              activeToken={activeInfoToken}
-              currentBurnedSupplyLabel={currentBurnedSupplyLabel}
-              isMiniApp={isMiniApp}
-              rewardsData={seedMarketData}
-              setActiveToken={setActiveInfoToken}
-            />
-          )}
-        </CardContent>
-      </TabCard>
-      )}
-
-      {isDesktopSwapLayout && (
-      <>
-      <TabCard className="hidden tablet:flex tablet:h-full tablet:flex-col">
-        <CardHeader>
-          <CardTitle>Swap</CardTitle>
-        </CardHeader>
+    <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-start tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(0,1fr)]">
+      <div className="tablet:hidden">
+        <ToggleGroup ariaLabel="Swap panel view" value={swapView} onValueChange={v => setSwapView(v as SwapView)} options={[
+          { value: 'swap', label: 'Swap' }, { value: 'chart', label: 'Chart' }, { value: 'info', label: 'Token Info' },
+        ]} />
+      </div>
+      <TabCard className={formVisible ? 'min-w-0' : 'hidden'}>
+        <CardHeader><CardTitle>Swap</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          {isSwapModuleDisabled ? (
-            <SwapLockedState message={swapDisabledMessage} />
-          ) : (
-            <ErrorBoundary variant="inline" showErrorDetails>
-              <PixotchiSwapPanel />
-            </ErrorBoundary>
+          {isSwapModuleDisabled ? <SwapLockedState message={swapDisabledMessage} /> : (
+            <ErrorBoundary variant="inline" showErrorDetails><PixotchiSwapPanel isPanelVisible={formVisible} /></ErrorBoundary>
           )}
-          <SeedMarketStats marketData={seedMarketData} />
+          {isDesktopSwapLayout && <SeedMarketStats marketData={seedMarketData} />}
         </CardContent>
       </TabCard>
-
-      <TabCard className="hidden tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col" padding="none">
-        <CardHeader className="px-4 pt-4 pb-3">
-          <CardTitle>Chart</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-hidden p-4">
-          <SeedChartPanel marketData={seedMarketData} showStats={false} />
-        </CardContent>
-      </TabCard>
-
-      {/* Token Info Section */}
-      <TabCard className="hidden tablet:block tablet:col-span-2 tablet:h-fit">
-        <CardHeader>
-          <CardTitle>Token Info</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TokenInfoPanel
-            activeToken={activeInfoToken}
-            currentBurnedSupplyLabel={currentBurnedSupplyLabel}
-            isMiniApp={isMiniApp}
-            rewardsData={seedMarketData}
-            setActiveToken={setActiveInfoToken}
-          />
-        </CardContent>
-      </TabCard>
-      </>
+      {(isDesktopSwapLayout || swapView === 'chart') && (
+        <TabCard className="flex min-h-0 min-w-0 flex-col" padding="none">
+          <CardHeader className="px-4 pt-4"><CardTitle>Chart</CardTitle></CardHeader>
+          <CardContent className="min-w-0 flex-1 overflow-hidden p-4"><SeedChartPanel marketData={seedMarketData} showStats={!isDesktopSwapLayout} /></CardContent>
+        </TabCard>
+      )}
+      {(isDesktopSwapLayout || swapView === 'info') && (
+        <TabCard className="tablet:col-span-2">
+          <CardHeader><CardTitle>Token Info</CardTitle></CardHeader>
+          <CardContent><TokenInfoPanel activeToken={activeInfoToken} currentBurnedSupplyLabel={currentBurnedSupplyLabel} isMiniApp={isMiniApp} rewardsData={seedMarketData} setActiveToken={setActiveInfoToken} /></CardContent>
+        </TabCard>
       )}
     </div>
   );

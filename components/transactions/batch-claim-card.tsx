@@ -2,6 +2,7 @@
 
 import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ResourceState } from "@/components/ui/resource-state";
 import { useBalances } from '@/lib/balance-context';
 import { getLandBuildingsBatch,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
@@ -12,9 +13,10 @@ import { cn,formatLifetimeProduction,formatScore } from '@/lib/utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { AlertTriangle,Loader2,Lock } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect,useMemo,useState } from 'react';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { erc20Abi,formatUnits,parseUnits } from 'viem';
+import { erc20Abi,parseUnits } from 'viem';
+import { TokenAmount } from '@/components/ui/token-amount';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
 
@@ -82,6 +84,8 @@ export default function BatchClaimCard({
   className
 }: BatchClaimCardProps) {
   const [loading, setLoading] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanGeneration = useRef(0);
   const [claimableItems, setClaimableItems] = useState<ClaimableItem[]>([]);
   const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
   // Track total claimed across batches for progress display
@@ -98,7 +102,6 @@ export default function BatchClaimCard({
   const { address } = useAccount();
 
   const pixotchiBalanceKnown = pixotchiBalanceStatus === 'ready';
-  const pixotchiBalanceNum = pixotchiBalanceKnown ? parseFloat(formatUnits(pixotchiBalance, 18)) : null;
   const burnAmountWei = parseUnits(BURN_AMOUNT_TOKENS.toString(), 18);
   const hasEnoughTokens = pixotchiBalanceKnown && pixotchiBalance >= burnAmountWei;
   const retryBalance = () => { void refreshBalances(); };
@@ -112,13 +115,19 @@ export default function BatchClaimCard({
     [lands]
   );
 
-  const scanLands = async () => {
+  const scanIdentity = (address?.toLowerCase() ?? '') + ':' + landIdsHash;
+  const identityRef = useRef(scanIdentity);
+  identityRef.current = scanIdentity;
+  const scanLands = useCallback(async () => {
     if (lands.length === 0) return;
 
+    const generation = ++scanGeneration.current;
     setLoading(true);
+    setScanError(null);
     try {
       const landIds = lands.map(l => l.tokenId);
-      const results = await getLandBuildingsBatch(landIds);
+      const results = await getLandBuildingsBatch(landIds, { requireComplete: true });
+      if (generation !== scanGeneration.current || identityRef.current !== scanIdentity) return;
 
       const items: ClaimableItem[] = [];
 
@@ -148,32 +157,40 @@ export default function BatchClaimCard({
       });
 
       setClaimableItems(items);
-      setLastScannedLandIds(landIdsHash);
+      setLastScannedLandIds(scanIdentity);
     } catch (error) {
+      if (generation !== scanGeneration.current || identityRef.current !== scanIdentity) return;
       console.error("Failed to batch scan lands:", error);
-      setLastScannedLandIds(landIdsHash);
+      setScanError("Production could not be checked. Retry to see what is ready to collect.");
+      setClaimableItems([]);
+      setLastScannedLandIds(scanIdentity);
     } finally {
-      setLoading(false);
+      if (generation === scanGeneration.current && identityRef.current === scanIdentity) setLoading(false);
     }
-  };
+  }, [lands, scanIdentity]);
 
   useEffect(() => {
-    // Only scan if land list has changed
-    if (landIdsHash !== lastScannedLandIds) {
+    const generationRef = scanGeneration;
+    if (scanIdentity === lastScannedLandIds) return;
+    ++scanGeneration.current;
+    setClaimableItems([]);
+    setScanError(null);
+    setLoading(false);
+    // Scan when ownership or the land list changes.
+    if (scanIdentity !== lastScannedLandIds) {
       scanLands();
       setTotalClaimedThisSession(0); // Reset progress for new session
       setTxKey(0); // Reset transaction component key
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landIdsHash]);
+    return () => { ++generationRef.current; };
+  }, [scanIdentity, lastScannedLandIds, scanLands]);
 
   // Listen for global building refresh events to re-scan
   useEffect(() => {
     const handler = () => scanLands();
     window.addEventListener('buildings:refresh', handler);
     return () => window.removeEventListener('buildings:refresh', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lands]); // Re-bind if lands change, but scanLands uses current props/state
+  }, [scanLands]);
 
   // Calculate batch info
   const totalBatches = Math.ceil(claimableItems.length / MAX_BATCH_SIZE);
@@ -236,7 +253,7 @@ export default function BatchClaimCard({
     return `batch-claim:${pairs}`;
   }, [currentBatchItems]);
 
-  const scanPending = lands.length > 0 && landIdsHash !== lastScannedLandIds;
+  const scanPending = lands.length > 0 && scanIdentity !== lastScannedLandIds;
 
   if ((loading || (showWhenEmpty && scanPending)) && claimableItems.length === 0) {
     const loadingContent = (
@@ -262,6 +279,8 @@ export default function BatchClaimCard({
       </Card>
     );
   }
+
+  if (scanError) return <ResourceState status="error" title="Production unavailable" description={scanError} onRetry={() => void scanLands()} className={className} />;
 
   // Hide if nothing to claim
   if (claimableItems.length === 0) {
@@ -296,7 +315,7 @@ export default function BatchClaimCard({
 
       return (
         <Card className={cn("border-primary/20", className)}>
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="space-y-3">
             {emptyContent}
           </CardContent>
         </Card>
@@ -331,9 +350,9 @@ export default function BatchClaimCard({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Image src="/icons/tod.svg" alt="Time of Death" width={16} height={16} className="w-4 h-4" />
+            <Image src="/icons/tod.svg" alt="Lifetime" width={16} height={16} className="w-4 h-4" />
             <span className="font-semibold text-primary">
-              +{formatLifetimeProduction(totalLifetime)} TOD
+              +{formatLifetimeProduction(totalLifetime)} lifetime
             </span>
           </div>
         </div>
@@ -383,7 +402,7 @@ export default function BatchClaimCard({
               Insufficient PIXOTCHI Balance
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
-              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: {pixotchiBalanceNum?.toFixed(2)}
+              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: <TokenAmount amount={pixotchiBalance} unit="PIXOTCHI" />
             </div>
           </div>
         ) : (
@@ -395,6 +414,7 @@ export default function BatchClaimCard({
               </span>
             </div>
             <SmartWalletTransaction
+              successFeedback="feature"
               effects={{ domains: ["plants", "balances", "rewards"] }}
               key={txKey} // Force re-mount to reset button state after each batch
               intentKey={batchClaimIntentKey}
@@ -446,7 +466,7 @@ export default function BatchClaimCard({
 
   return (
     <Card className={cn("border-primary/20", className)}>
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="space-y-3">
         {content}
       </CardContent>
     </Card>

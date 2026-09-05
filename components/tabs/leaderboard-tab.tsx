@@ -1,4 +1,17 @@
 "use client";
+import { getAttackOutcome } from "@/lib/ranking-outcome";
+import { isTransactionActionPending } from "@/lib/transaction-lifecycle";
+import { parseTransactionHash, type TransactionReceiptLike } from "@/lib/transaction-utils";
+import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
+import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
+import { useStakeLeaderboard, useRocksLeaderboard } from "@/hooks/useApiLeaderboards";
+import type { StakeLeaderboardEntry, RocksLeaderboardEntry } from "@/lib/ranking-response";
+import { useLandLeaderboard } from "@/hooks/useLandLeaderboard";
+import type { LandLeaderboardRow } from "@/lib/land-ranking";
+import { ResourceState } from "@/components/ui/resource-state";
+import { RankingPlantSummary } from "@/components/ranking-plant-summary";
+import { RankingColumns } from "@/components/ranking-columns";
+import { getTotalPages, getBoundedPage, getPageRows, DESKTOP_ITEMS_PER_PAGE, type RankedRow } from "@/lib/ranking-pagination";
 
 import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -28,7 +41,7 @@ import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
-import { getAliveTokenIds,getKillCooldown,getLandLeaderboard,getPlantsByOwner,getPlantsInfoExtended,getRevivePrice,getTokenBalance } from "@/lib/contracts";
+import { getAliveTokenIds,getKillCooldown,getPlantsByOwner,getPlantsInfoExtended,getRevivePrice,getTokenBalance } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
@@ -38,13 +51,11 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
-import PixotchiNFT from "@/public/abi/PixotchiNFT.json";
 import { ChevronDown,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
-import { decodeEventLog } from "viem";
 import { useAccount } from "wagmi";
 
 // Dynamic (matching plants-view): a static import dragged @solana/web3.js into
@@ -59,79 +70,21 @@ type LeaderboardPlant = Plant & {
   isDead: boolean;
 };
 
-type StakeLeaderboardEntry = {
-  rank: number;
-  address: string;
-  stakedAmount: bigint;
-  ensName?: string;
-};
-
-type RocksLeaderboardEntry = {
-  rank: number;
-  address: string;
-  rocks: number;
-  name?: string | null;
-};
-
-type LandLeaderboardRow = {
-  rank: number;
-  landId: number;
-  name: string;
-  exp: number;
-};
-
-type RankedRow = {
-  rank: number;
-};
-
 const ITEMS_PER_PAGE = 12;
-const DESKTOP_ITEMS_PER_PAGE = 20;
-const DESKTOP_COLUMN_SIZE = 10;
 
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
-const STAKE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-const ROCKS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const LAND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
 const RANKING_ACTION_BUTTON_CLASS =
-  "flex h-9 min-h-9 w-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] transition-[border-color,background-color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-glow)] hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]";
+  "flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-transparent p-0 text-foreground shadow-none hover:bg-muted hover:text-primary";
 const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
-
-function getTotalPages(itemCount: number, pageSize: number) {
-  return Math.ceil(itemCount / pageSize) || 1;
-}
 
 function formatAttackScoreDelta(score: number, direction: "gain" | "loss") {
   const formatted = formatScoreShort(score);
   if (score <= 0 || formatted === "0") return formatted;
   return `${direction === "gain" ? "+" : "-"}${formatted}`;
-}
-
-function getBoundedPage(page: number, itemCount: number, pageSize: number) {
-  return Math.min(Math.max(page, 1), getTotalPages(itemCount, pageSize));
-}
-
-function getPageRows<T>(rows: T[], page: number, pageSize: number) {
-  const activePage = getBoundedPage(page, rows.length, pageSize);
-  const start = (activePage - 1) * pageSize;
-  return rows.slice(start, start + pageSize);
-}
-
-function splitDesktopRows<T>(rows: T[]) {
-  return [
-    rows.slice(0, DESKTOP_COLUMN_SIZE),
-    rows.slice(DESKTOP_COLUMN_SIZE, DESKTOP_ITEMS_PER_PAGE),
-  ];
-}
-
-function getRankRangeLabel(rows: RankedRow[]) {
-  if (rows.length === 0) return "No entries";
-  const firstRank = rows[0]?.rank;
-  const lastRank = rows[rows.length - 1]?.rank;
-  return firstRank === lastRank ? `Rank #${firstRank}` : `Ranks #${firstRank}-${lastRank}`;
 }
 
 function hasActiveFence(plant: LeaderboardPlant) {
@@ -170,18 +123,8 @@ export default function LeaderboardTab() {
     return isSolana && twinAddress ? twinAddress as `0x${string}` : evmAddress;
   }, [isSolana, twinAddress, evmAddress]);
   const [plants, setPlants] = useState<LeaderboardPlant[]>([]);
-  const [landRows, setLandRows] = useState<LandLeaderboardRow[]>([]);
-  const [stakeRows, setStakeRows] = useState<StakeLeaderboardEntry[]>([]);
-  const [rocksRows, setRocksRows] = useState<RocksLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [stakeLoading, setStakeLoading] = useState(false);
-  const [rocksLoading, setRocksLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stakeError, setStakeError] = useState<string | null>(null);
-  const [rocksError, setRocksError] = useState<string | null>(null);
-  const [rocksDisabledNotice, setRocksDisabledNotice] = useState<string | null>(
-    gamificationDisabled ? gamificationDisabledMessage : null,
-  );
   // Render one layout, not both. renderResponsiveRows used to emit the 12-row
   // mobile list AND the 20-row desktop grid (plus two paginations) and let CSS hide
   // one, so every page change built 32 rows to paint at most 20. Each row is ~240
@@ -283,6 +226,13 @@ export default function LeaderboardTab() {
         : null,
     serialize: (value) => (value === 'plants' ? null : value),
   });
+  const stakeRanking = useStakeLeaderboard({ enabled: boardType === 'stake' && isVisible });
+  const rocksRanking = useRocksLeaderboard({ enabled: boardType === 'rocks' && showRocksBoard && isVisible,
+    disabledMessage: gamificationDisabled ? gamificationDisabledMessage : undefined });
+  const { rows: stakeRows, loading: stakeLoading, error: stakeError, refresh: fetchStakeLeaderboard } = stakeRanking;
+  const { rows: rocksRows, loading: rocksLoading, error: rocksError, disabledNotice: rocksDisabledNotice, refresh: fetchRocksLeaderboard } = rocksRanking;
+  const landRanking = useLandLeaderboard({ enabled: boardType === "lands" });
+  const landRows = landRanking.rows;
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
   const handleAttackDialogFrameRef = useCallback((node: HTMLDivElement | null) => {
@@ -311,76 +261,23 @@ export default function LeaderboardTab() {
     return () => clearInterval(interval);
   }, [killCooldown.remainingSeconds]);
 
-  // Client-side cache for stake data to avoid re-fetches on tab toggles
-  const stakeDataCacheRef = useRef<{
-    data: StakeLeaderboardEntry[] | null;
-    timestamp: number;
-  }>({ data: null, timestamp: 0 });
-
-  const rocksDataCacheRef = useRef<{
-    data: RocksLeaderboardEntry[] | null;
-    timestamp: number;
-  }>({ data: null, timestamp: 0 });
-
-  // Cache for land leaderboard data (5 minutes)
-  const landDataCacheRef = useRef<{
-    data: LandLeaderboardRow[] | null;
-    timestamp: number;
-  }>({ data: null, timestamp: 0 });
-
   // Request deduplication refs to prevent multiple simultaneous calls
   const fetchLeaderboardDataPendingRef = useRef<boolean>(false);
-  const fetchStakeLeaderboardPendingRef = useRef<boolean>(false);
-  const fetchRocksLeaderboardPendingRef = useRef<boolean>(false);
   const fetchMyPlantsPendingRef = useRef<string | null>(null);
   const leaderboardDataLoadedRef = useRef(false);
-  const stakeDataLoadedRef = useRef(false);
 
-  const showAttackOutcomeFromHash = useCallback(async (hash?: string | null): Promise<boolean> => {
-    if (!hash) return false;
-    try {
-      const receipt = await getBaseTransactionReceipt(hash as `0x${string}`);
-      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
-      for (const log of receipt.logs) {
-        try {
-          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
-          if (decoded.eventName === 'Attack') {
-            const attacker = Number(decoded.args.attacker);
-            const winner = Number(decoded.args.winner);
-            const scoresWon = Number(decoded.args.scoresWon) / 1e12;
-            const didWin = attacker === winner;
-            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
-            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
-            return true;
-          }
-        } catch { }
-      }
-      return false;
-    } catch {
-      return false;
-    }
+  const showAttackOutcomeFromLogs = useCallback((logs: NonNullable<TransactionReceiptLike['logs']>) => {
+    const outcome = getAttackOutcome(logs, PIXOTCHI_NFT_ADDRESS);
+    if (!outcome) return false;
+    (outcome.didWin ? toast.success : toast.error)(outcome.message, { id: 'attack-result' });
+    return true;
   }, []);
-
-  const showAttackOutcomeFromLogs = (logs: UntypedValue[]) => {
-    try {
-      const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
-      for (const log of logs) {
-        try {
-          const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
-          if (decoded.eventName === 'Attack') {
-            const attacker = Number(decoded.args.attacker);
-            const winner = Number(decoded.args.winner);
-            const scoresWon = Number(decoded.args.scoresWon) / 1e12;
-            const didWin = attacker === winner;
-            const message = `${didWin ? 'WON' : 'LOST'} ${scoresWon.toLocaleString(undefined, { maximumFractionDigits: 2 })} PTS`;
-            (didWin ? toast.success : toast.error)(message, { id: 'attack-result' });
-            return true;
-          }
-        } catch { }
-      }
-    } catch { }
-    return false;
-  };
+  const showAttackOutcomeFromHash = useCallback(async (value?: string | null) => {
+    const hash = parseTransactionHash(value);
+    if (!hash) return false;
+    try { return showAttackOutcomeFromLogs((await getBaseTransactionReceipt(hash)).logs); }
+    catch { return false; }
+  }, [showAttackOutcomeFromLogs]);
 
   const fetchLeaderboardData = useCallback(async () => {
     // Prevent duplicate simultaneous calls
@@ -414,27 +311,6 @@ export default function LeaderboardTab() {
 
       setPlants(sortedPlants);
       leaderboardDataLoadedRef.current = true;
-      // Fetch lands leaderboard as well (with caching)
-      try {
-        const now = Date.now();
-        const cacheAge = now - landDataCacheRef.current.timestamp;
-
-        if (landDataCacheRef.current.data && cacheAge < LAND_CACHE_DURATION) {
-          setLandRows(landDataCacheRef.current.data);
-        } else {
-          const lands = await getLandLeaderboard();
-          const sortedLands = [...lands]
-            .sort((a, b) => Number(b.experiencePoints - a.experiencePoints))
-            .map((l, idx) => ({
-              rank: idx + 1,
-              landId: Number((l as UntypedValue).landId ?? 0),
-              name: (l as UntypedValue).name || `Land #${Number((l as UntypedValue).landId ?? 0)}`,
-              exp: Number((l as UntypedValue).experiencePoints ?? 0) / 1e18,
-            }));
-          landDataCacheRef.current = { data: sortedLands, timestamp: now };
-          setLandRows(sortedLands);
-        }
-      } catch { }
 
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
@@ -448,147 +324,6 @@ export default function LeaderboardTab() {
   useEffect(() => {
     fetchLeaderboardData();
   }, [fetchLeaderboardData]);
-
-  // Fetch stake leaderboard separately when stake tab is selected
-  const fetchStakeLeaderboard = useCallback(async () => {
-    if (fetchStakeLeaderboardPendingRef.current) {
-      return;
-    }
-
-    const now = Date.now();
-    const cacheAge = now - stakeDataCacheRef.current.timestamp;
-
-    // ✅ Return cached data if still valid (within 24-hour window since cron runs once at midnight)
-    if (
-      stakeDataCacheRef.current.data &&
-      cacheAge < STAKE_CACHE_DURATION
-    ) {
-      setStakeRows(stakeDataCacheRef.current.data);
-      stakeDataLoadedRef.current = true;
-      setStakeError(null);
-      return;
-    }
-
-    // Fetch fresh data if cache expired or first load
-    // Only show loading spinner if we have no existing data
-    fetchStakeLeaderboardPendingRef.current = true;
-    if (!stakeDataLoadedRef.current) {
-      setStakeLoading(true);
-    }
-    setStakeError(null);
-    try {
-      const stakeResponse = await fetch('/api/leaderboard/stake');
-      if (!stakeResponse.ok) {
-        throw new Error(`Failed to fetch stake leaderboard (${stakeResponse.status})`);
-      }
-      if (stakeResponse.ok) {
-        const stakeData = await stakeResponse.json();
-        const entries = Array.isArray(stakeData.leaderboard) ? stakeData.leaderboard : [];
-        const sortedStakes = entries.map((entry: UntypedValue, index: number) => ({
-          rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
-          address: entry.address,
-          stakedAmount: BigInt(entry.stakedAmount ?? 0),
-          ensName: entry.ensName || undefined
-        }));
-
-        // ✅ Update cache with fresh data
-        stakeDataCacheRef.current = {
-          data: sortedStakes,
-          timestamp: now
-        };
-
-        setStakeRows(sortedStakes);
-        stakeDataLoadedRef.current = true;
-      }
-    } catch (error) {
-      setStakeError('Failed to load Stake leaderboard. Please try again.');
-      console.error('❌ [Stake] Error fetching stake leaderboard:', error);
-    } finally {
-      setStakeLoading(false);
-      fetchStakeLeaderboardPendingRef.current = false;
-    }
-  }, []);
-
-  const fetchRocksLeaderboard = useCallback(async () => {
-    if (!showRocksBoard) {
-      setRocksDisabledNotice(null);
-      setRocksRows([]);
-      setRocksError(null);
-      setRocksLoading(false);
-      return;
-    }
-
-    if (gamificationDisabled) {
-      setRocksDisabledNotice(gamificationDisabledMessage);
-      setRocksRows([]);
-      setRocksError(null);
-      setRocksLoading(false);
-      return;
-    }
-
-    const now = Date.now();
-    const cacheAge = now - rocksDataCacheRef.current.timestamp;
-
-    if (rocksDataCacheRef.current.data && cacheAge < ROCKS_CACHE_DURATION) {
-      setRocksRows(rocksDataCacheRef.current.data);
-      setRocksDisabledNotice(null);
-      setRocksError(null);
-      return;
-    }
-
-    if (fetchRocksLeaderboardPendingRef.current) {
-      return;
-    }
-
-    // Only show loading spinner if we have no existing data
-    fetchRocksLeaderboardPendingRef.current = true;
-    if (!rocksDataCacheRef.current.data) {
-      setRocksLoading(true);
-    }
-    setRocksDisabledNotice(null);
-    setRocksError(null);
-    try {
-      const res = await fetch('/api/leaderboard/rocks');
-      if (!res.ok) {
-        throw new Error(`Failed to fetch rocks leaderboard (${res.status})`);
-      }
-      const payload = await res.json();
-      if (payload?.disabled) {
-        const message = typeof payload?.message === 'string' && payload.message.trim().length > 0
-          ? payload.message
-          : gamificationDisabledMessage;
-        setRocksDisabledNotice(message);
-        setRocksRows([]);
-        rocksDataCacheRef.current = { data: [], timestamp: now };
-        return;
-      }
-      const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
-      const mapped: RocksLeaderboardEntry[] = entries.map((entry: UntypedValue, index: number) => ({
-        rank: typeof entry.rank === 'number' ? entry.rank : index + 1,
-        address: entry.address,
-        rocks: Number(entry.rocks) || 0,
-        name: entry.name ?? null,
-      }));
-      rocksDataCacheRef.current = { data: mapped, timestamp: now };
-      setRocksRows(mapped);
-    } catch (fetchError) {
-      console.error('❌ [Rocks] Error fetching rocks leaderboard:', fetchError);
-      setRocksDisabledNotice(null);
-      setRocksError('Failed to load Rocks leaderboard. Please try again.');
-    } finally {
-      setRocksLoading(false);
-      fetchRocksLeaderboardPendingRef.current = false;
-    }
-  }, [gamificationDisabled, gamificationDisabledMessage, showRocksBoard]);
-
-  // Fetch stake data when switching to stake tab
-  useEffect(() => {
-    if (boardType === 'stake') {
-      fetchStakeLeaderboard();
-    } else if (boardType === 'rocks') {
-      fetchRocksLeaderboard();
-    }
-  }, [boardType, fetchStakeLeaderboard, fetchRocksLeaderboard]);
 
   useEffect(() => {
     if (showRocksBoard || boardType !== 'rocks') return;
@@ -660,13 +395,9 @@ export default function LeaderboardTab() {
       lastVisibleFetchRef.current = Date.now();
       fetchLeaderboardData();
       void fetchMyPlants();
-      if (boardType === 'stake') {
-        fetchStakeLeaderboard();
-      } else if (boardType === 'rocks') {
-        fetchRocksLeaderboard();
-      }
+
     }
-  }, [isVisible, fetchLeaderboardData, fetchMyPlants, fetchStakeLeaderboard, fetchRocksLeaderboard, boardType]);
+  }, [isVisible, fetchLeaderboardData, fetchMyPlants]);
 
   // Refresh SEED balance when opening revive dialog
   useEffect(() => {
@@ -885,44 +616,6 @@ export default function LeaderboardTab() {
     );
   }
 
-  function renderDesktopColumns<T extends RankedRow>(
-    rows: T[],
-    renderRow: (row: T, compact?: boolean) => React.ReactNode,
-  ) {
-    const columns = splitDesktopRows(rows);
-
-    // A desktop page is always DESKTOP_ITEMS_PER_PAGE rows split across two
-    // columns, so the content height is bounded and known. These columns used
-    // to be stretched to the viewport (`flex-1`) with an inner scroller, which
-    // on any tall window left a band of dead space under the last row inside
-    // each card and pushed the pagination to the bottom of the screen. Sizing
-    // them to their rows removes the gap; the two columns still match each
-    // other's height because grid items stretch by default.
-    return (
-      <div className="hidden tablet:grid tablet:grid-cols-2 tablet:gap-4">
-        {columns.map((column, columnIndex) => (
-          <div
-            key={columnIndex}
-            className="tablet:flex tablet:flex-col tablet:rounded-[var(--radius-panel)] tablet:border tablet:border-[hsl(var(--edge-panel))] tablet:bg-[image:var(--gradient-scroll-surface)] tablet:px-3 tablet:py-2 tablet:shadow-[inset_0_1px_0_hsl(var(--card)/0.24)]"
-          >
-            <div className="flex h-8 flex-none items-center justify-between border-b border-[hsl(var(--divider)/0.66)] text-xs font-semibold text-muted-foreground">
-              <span>{getRankRangeLabel(column)}</span>
-            </div>
-            <div className="divide-y divide-[hsl(var(--divider)/0.62)] overflow-visible">
-              {column.length > 0 ? (
-                column.map((row) => renderRow(row, true))
-              ) : (
-                <div className="flex min-h-[160px] items-center justify-center text-sm text-muted-foreground">
-                  No more entries
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   function renderResponsiveRows<T extends RankedRow>(
     mobileRows: T[],
     desktopRows: T[],
@@ -954,7 +647,7 @@ export default function LeaderboardTab() {
           </div>
         )}
 
-        {isDesktopBoard && renderDesktopColumns(desktopRows, renderRow)}
+        {isDesktopBoard && <RankingColumns rows={desktopRows} renderRow={renderRow} />}
 
         {!isDesktopBoard && renderPagination(mobilePageCount, "tablet:hidden")}
         {isDesktopBoard && renderPagination(desktopPageCount, "hidden tablet:flex")}
@@ -999,7 +692,7 @@ export default function LeaderboardTab() {
         className={cn(
           compact ? "py-0.5" : "py-3",
           isMine && "bg-primary/5 rounded-[var(--radius-control)] px-2 tablet:px-3",
-          plant.isDead && "opacity-60"
+          plant.isDead && "text-muted-foreground"
         )}
       >
         <div className={cn("flex items-center space-x-2", compact && "min-h-11")}>
@@ -1057,15 +750,8 @@ export default function LeaderboardTab() {
             )}
           >
             {compact ? (
-              <div className="min-w-0">
-                <h4 className="truncate font-pixel text-sm">
-                  {plant.name || `Plant #${plant.id}`}
-                  {isMine && <span className="ml-1 text-xs text-primary font-medium">(You)</span>}
-                </h4>
-                <span className="mt-0.5 block text-[11px] leading-none text-muted-foreground">
-                  LvL {plant.level}
-                </span>
-              </div>
+              <RankingPlantSummary name={plant.name || `Plant #${plant.id}`} level={plant.level} isMine={isMine}
+                points={formatScoreShort(plant.score)} stars={plant.stars} rewards={formatEthShort(plant.rewards)} />
             ) : (
               <>
                 <div className="min-w-0 min-[520px]:flex-1">
@@ -1128,24 +814,8 @@ export default function LeaderboardTab() {
             )}
           </div>
 
-          {(compact || canShowAttack || canShowKill || canShowRevive) && (
+          {(canShowAttack || canShowKill || canShowRevive) && (
           <div className="flex items-center space-x-2 text-right">
-            {compact && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1 text-foreground">
-                  <Image src="/icons/pts.svg" alt="Points" width={12} height={12} />
-                  <span className="text-sm font-bold">{formatScoreShort(plant.score)}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Image src="/icons/Star.svg" alt="Stars" width={11} height={11} />
-                  <span>{plant.stars}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={11} height={11} />
-                  <span>{formatEthShort(plant.rewards)}</span>
-                </div>
-              </div>
-            )}
             {canShowAttack && (
               <Button
                 type="button"
@@ -1409,11 +1079,7 @@ export default function LeaderboardTab() {
 
     if (error) {
       return renderRankingState(
-        <Alert variant="destructive" className="w-full">
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <ResourceState status="error" title="Ranking unavailable" description={error} onRetry={() => { void fetchLeaderboardData(); }} className="w-full" />
       );
     }
 
@@ -1542,7 +1208,7 @@ export default function LeaderboardTab() {
                 value={filterMode}
                 onValueChange={(v) => {
                   setCurrentPage(1);
-                  setFilterMode(v as UntypedValue);
+                  if (v === 'all' || v === 'attackable' || v === 'dead') setFilterMode(v);
                   // Auto-uncheck "My Plants" when switching to attackable or dead
                   if (v === 'attackable' || v === 'dead') {
                     setShowOnlyMyPlants(false);
@@ -1575,12 +1241,14 @@ export default function LeaderboardTab() {
           {boardType === 'plants' ? (
             renderContent()
           ) : boardType === 'lands' ? (
-            loading && totalLandItems === 0 ? (
+            landRanking.loading && totalLandItems === 0 ? (
               renderRankingState(
                 <div className="text-center">
                   <BaseExpandedLoadingPageLoader text="Loading lands leaderboard..." />
                 </div>
               )
+            ) : landRanking.error ? (
+              renderRankingState(<ResourceState status="error" title="Land ranking unavailable" description={landRanking.error} onRetry={() => { void landRanking.refresh(); }} />)
             ) : totalLandItems === 0 ? (
               renderRankingState(
                 <EmptyState
@@ -1601,11 +1269,7 @@ export default function LeaderboardTab() {
               )
             ) : stakeError && totalStakeItems === 0 ? (
               renderRankingState(
-                <Alert variant="destructive" className="w-full">
-                  <Terminal className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{stakeError}</AlertDescription>
-                </Alert>
+                <ResourceState status="error" title="Stake ranking unavailable" description={stakeError} onRetry={() => { void fetchStakeLeaderboard(); }} className="w-full" />
               )
             ) : totalStakeItems === 0 ? (
               renderRankingState(
@@ -1635,11 +1299,7 @@ export default function LeaderboardTab() {
               )
             ) : rocksError ? (
               renderRankingState(
-                <Alert variant="destructive" className="w-full">
-                  <Terminal className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{rocksError}</AlertDescription>
-                </Alert>
+                <ResourceState status="error" title="Rocks ranking unavailable" description={rocksError} onRetry={() => { void fetchRocksLeaderboard(); }} className="w-full" />
               )
             ) : totalRockItems === 0 ? (
               renderRankingState(
@@ -1664,9 +1324,9 @@ export default function LeaderboardTab() {
 
           <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
-              <div className="chat-white-surface flex items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-card/95 bg-[image:var(--gradient-surface)] p-3">
+              <div className="flex items-center justify-between gap-3 rounded-[var(--radius-panel)] bg-muted/30 p-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                  <PlantImage selectedPlant={targetPlant} width={34} height={34} />
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Target
@@ -1680,21 +1340,21 @@ export default function LeaderboardTab() {
                 {attackOutcomePreview && (
                   <div className="ml-auto shrink-0 space-y-1 text-right">
                     <div className="rounded-[var(--radius-control)] border border-primary/25 bg-primary/10 px-2 py-1">
-                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                      <div className="text-xs font-semibold uppercase leading-none tracking-wide text-muted-foreground">
                         If you win
                       </div>
                       <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-primary">
                         <span>{formatAttackScoreDelta(attackOutcomePreview.winScore, "gain")}</span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                        <span className="text-xs font-semibold text-muted-foreground">PTS</span>
                       </div>
                     </div>
                     <div className="rounded-[var(--radius-control)] border border-destructive/25 bg-destructive/10 px-2 py-1">
-                      <div className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                      <div className="text-xs font-semibold uppercase leading-none tracking-wide text-muted-foreground">
                         If you lose
                       </div>
                       <div className="mt-0.5 flex items-center justify-end gap-1 text-xs font-bold text-destructive">
                         <span>{formatAttackScoreDelta(attackOutcomePreview.loseScore, "loss")}</span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">PTS</span>
+                        <span className="text-xs font-semibold text-muted-foreground">PTS</span>
                       </div>
                     </div>
                   </div>
@@ -1740,7 +1400,7 @@ export default function LeaderboardTab() {
                     >
                       {selectedAttacker ? (
                         <div className="flex min-w-0 items-center gap-2">
-                          <PlantImage selectedPlant={selectedAttacker as UntypedValue} width={30} height={30} />
+                          <PlantImage selectedPlant={selectedAttacker} width={30} height={30} />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
                               {selectedAttacker.name || `Plant #${selectedAttacker.id}`}
@@ -1773,7 +1433,7 @@ export default function LeaderboardTab() {
                         >
                           <div className="flex w-full min-w-0 items-center justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-2">
-                              <PlantImage selectedPlant={attacker as UntypedValue} width={28} height={28} />
+                              <PlantImage selectedPlant={attacker} width={28} height={28} />
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium">
                                   {attacker.name || `Plant #${attacker.id}`}
@@ -1821,7 +1481,6 @@ export default function LeaderboardTab() {
                         setSelectedAttackerId(null);
                         fetchLeaderboardData();
                         void fetchMyPlants();
-                        toast.success('Attack submitted via bridge!');
                       }}
                       onError={() => {
                         setIsSubmitting(false);
@@ -1844,11 +1503,12 @@ export default function LeaderboardTab() {
                       buttonText={isSubmitting ? "Attacking..." : "Confirm Attack"}
                       buttonClassName="w-full"
                       disabled={isSubmitting || !eligible}
-                      onStatusUpdate={(status: UntypedValue) => {
-                        if (status.statusName === 'pending' || status.statusName === 'transactionPending') {
+                      onStatusUpdate={(status: LifecycleStatus) => {
+                        setIsSubmitting(isTransactionActionPending(status.statusName));
+                        if (isTransactionActionPending(status.statusName)) {
                           setIsSubmitting(true);
                           try {
-                            const h = status.statusData?.transactionHash || status.statusData?.transactionReceipts?.[0]?.transactionHash || status.statusData?.transactions?.[0]?.hash;
+                            const h = status.statusData?.transactionHash || status.statusData?.transactionReceipts?.[0]?.transactionHash;
                             if (h) setPendingHash(h);
                           } catch { }
                         }
@@ -1872,11 +1532,6 @@ export default function LeaderboardTab() {
                           // After a successful attack, refresh lists
                           fetchLeaderboardData();
                           void fetchMyPlants();
-                        }
-                        if (status.statusName === 'error') {
-                          setIsSubmitting(false);
-                          setPendingHash(null);
-                          toast.error('Attack failed');
                         }
                       }}
                     />
@@ -1905,7 +1560,7 @@ export default function LeaderboardTab() {
           <DialogBody className="space-y-4 pb-4 pr-1">
             {targetPlant && (
               <div className="flex items-center gap-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/60 p-3">
-                <PlantImage selectedPlant={targetPlant as UntypedValue} width={34} height={34} />
+                <PlantImage selectedPlant={targetPlant} width={34} height={34} />
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Dead target
@@ -1953,7 +1608,7 @@ export default function LeaderboardTab() {
                     >
                       {selectedKillerPlant ? (
                         <div className="flex min-w-0 items-center gap-2">
-                          <PlantImage selectedPlant={selectedKillerPlant as UntypedValue} width={30} height={30} />
+                          <PlantImage selectedPlant={selectedKillerPlant} width={30} height={30} />
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">
                               {selectedKillerPlant.name || `Plant #${selectedKillerPlant.id}`}
@@ -1986,7 +1641,7 @@ export default function LeaderboardTab() {
                         >
                           <div className="flex w-full min-w-0 items-center justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-2">
-                              <PlantImage selectedPlant={plant as UntypedValue} width={28} height={28} />
+                              <PlantImage selectedPlant={plant} width={28} height={28} />
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium">
                                   {plant.name || `Plant #${plant.id}`}
@@ -2023,14 +1678,6 @@ export default function LeaderboardTab() {
                   tokenId={selectedKillerId}
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
-                  onStatusUpdate={(status: UntypedValue) => {
-                    if (status.statusName === 'success') {
-                      toast.success('Kill successful! You earned 1 star.');
-                    }
-                    if (status.statusName === 'error') {
-                      toast.error('Kill failed');
-                    }
-                  }}
                   onSuccess={() => {
                     // Close kill dialog and show cooldown dialog
                     setKillDialogOpen(false);
@@ -2084,17 +1731,6 @@ export default function LeaderboardTab() {
                       buttonClassName="w-full"
                       showToast={true}
                       disabled={!targetPlant || !hasEnough}
-                      onStatusUpdate={(status: UntypedValue) => {
-                        if (status.statusName === 'pending') {
-                          toast.loading('Submitting revive...', { id: 'revive-tx' });
-                        }
-                        if (status.statusName === 'success') {
-                          toast.success('You revived your plant.', { id: 'revive-tx' });
-                        }
-                        if (status.statusName === 'error') {
-                          toast.error('Revive failed', { id: 'revive-tx' });
-                        }
-                      }}
                       onSuccess={() => {
                         setReviveDialogOpen(false);
                         fetchLeaderboardData();

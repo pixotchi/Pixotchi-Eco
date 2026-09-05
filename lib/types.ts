@@ -681,7 +681,7 @@ export type AIToolCallTrace = {
     cache?: string;
     fetchedAt?: string;
   };
-  input?: UntypedValue;
+  input?: unknown;
   source?: string;
   status: 'ok' | 'error' | 'unknown';
   toolName: string;
@@ -734,9 +734,9 @@ export type AIUsageStats = {
 // Transaction types - consolidated from multiple transaction component files
 export interface TransactionCall {
   address: `0x${string}`;
-  abi: UntypedValue;
+  abi: import("viem").Abi;
   functionName: string;
-  args: UntypedValue[];
+  args: readonly unknown[];
   value?: bigint;
 }
 

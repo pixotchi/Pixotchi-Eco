@@ -228,7 +228,7 @@ export async function proxy(request: NextRequest) {
     connect-src 'self' https://auth.privy.io https://*.privy.io https://privy.pixotchi.tech wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://cca-lite.coinbase.com https://*.base.org https: wss:;
     worker-src 'self';
     manifest-src 'self';
-    upgrade-insecure-requests;
+    ${process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests;' : ''}
   `.replace(/\s{2,}/g, ' ').trim();
   
   response.headers.set('Content-Security-Policy', cspHeader);

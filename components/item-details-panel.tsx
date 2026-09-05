@@ -25,11 +25,14 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
-import { formatDuration,formatTokenAmount,formatTokenAmountRounded,getFriendlyErrorMessage } from '@/lib/utils';
+import { formatDuration,getFriendlyErrorMessage } from '@/lib/utils';
+import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import Image from 'next/image';
 import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
+
+const formatExactSeed = (amount: bigint) => formatTokenDisplay(amount, 18, 18);
 
 const parseFenceDaysInput = (value: string): number | null => {
   if (!/^\d+$/.test(value)) return null;
@@ -340,23 +343,13 @@ export default function ItemDetailsPanel({
   // Early return AFTER all hooks have been called
   if (!selectedItem || !selectedPlant) {
     return (
-      <Card className="marketplace-detail-card">
-        <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
-          <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
-            <span className="text-2xl">🛍️</span>
-          </div>
-          <p className="text-base font-semibold text-foreground mb-1">No Item Selected</p>
-          <p className="text-sm text-muted-foreground">
-            Select an item to see details and purchase options
-          </p>
-        </CardContent>
-      </Card>
+      <p className="py-2 text-sm leading-relaxed text-muted-foreground">Choose a care item below to review its effect, cost and purchase options.</p>
     );
   }
 
   const disabledMessage = (() => {
     if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';
-    if (isFenceItem && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant TOD';
+    if (isFenceItem && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant lifetime';
     if (isFenceItem && fenceV2InputInvalid) {
       if (fenceV2DaysInput.trim() === '') return 'Enter fence duration';
       if (fenceV2Bounds.min === fenceV2Bounds.max) return `Use ${fenceV2Bounds.min} day${fenceV2Bounds.min === 1 ? '' : 's'}`;
@@ -413,9 +406,9 @@ export default function ItemDetailsPanel({
       const points = Number(gardenItem.points) / 1e12 * quantity;
       const hours = Math.floor(Number(gardenItem.timeExtension) / 3600) * quantity;
 
-      if (points > 0 && hours > 0) return `+${points} PTS & +${hours}h TOD`;
+      if (points > 0 && hours > 0) return `+${points} PTS & +${hours}h lifetime`;
       if (points > 0) return `+${points} PTS`;
-      if (hours > 0) return `+${hours}h TOD`;
+      if (hours > 0) return `+${hours}h lifetime`;
       return 'Item effect';
     }
   };
@@ -474,13 +467,13 @@ export default function ItemDetailsPanel({
   };
 
   return (
-    <Card className="marketplace-detail-card">
+    <Card className="bg-muted/30">
       <CardHeader>
         <CardTitle>{headerTitle}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <div className="flex justify-between items-center text-sm">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-sm">
             <span className="text-muted-foreground">
               {isFenceItem
                 ? 'Estimated Cost:'
@@ -488,13 +481,13 @@ export default function ItemDetailsPanel({
                   ? 'Total Cost:'
                   : 'Cost:'}
             </span>
-            <div className="font-semibold text-destructive flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right font-semibold tabular-nums [overflow-wrap:anywhere]">
               {/* ETH Mode: show ETH price for smart wallet users */}
               {isSmartWallet && isEthMode && !isSolana && ethQuote ? (
                 <>
                   <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
                   <span>
-                    {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)} ETH
+                    {formatTokenEstimate(ethQuote.ethAmountWithBuffer)} ETH
                     {itemType === 'garden' && quantity === 0 ? ' each' : ''}
                   </span>
                 </>
@@ -519,14 +512,14 @@ export default function ItemDetailsPanel({
                 ) : fenceV2Quote === null ? (
                   <span className="text-muted-foreground" title="Fence quote unavailable">—</span>
                 ) : (
-                  `${formatTokenAmount(fenceV2Quote)} SEED`
+                  `${formatExactSeed(fenceV2Quote)} SEED`
                 )
               ) : itemType === 'shop' ? (
-                `${formatTokenAmount(selectedItem.price)} SEED`
+                `${formatExactSeed(selectedItem.price)} SEED`
               ) : quantity === 0 ? (
-                `${formatTokenAmount(selectedItem.price)} SEED each`
+                `${formatExactSeed(selectedItem.price)} SEED each`
               ) : (
-                `${formatTokenAmount(totalCost)} SEED`
+                `${formatExactSeed(totalCost)} SEED`
               )}
             </div>
           </div>
@@ -639,7 +632,7 @@ export default function ItemDetailsPanel({
               disabled={!selectedPlant || !selectedItem || selectedPlant.status === 4 || (itemType === 'garden' && !hasQuantitySelected)}
               onSuccess={() => {
                 onPurchaseSuccess();
-                toast.success('Purchase submitted via bridge!');
+
               }}
               onError={(error) => {
                 const message = error instanceof Error ? error.message : String(error);
@@ -658,7 +651,7 @@ export default function ItemDetailsPanel({
                   minSeedOut={fenceV2Quote ?? BigInt(0)}
                   onSuccess={() => {
                     onPurchaseSuccess();
-                    toast.success('Fence purchased with ETH!');
+
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
@@ -680,7 +673,7 @@ export default function ItemDetailsPanel({
                   minSeedOut={totalCost}
                   onSuccess={() => {
                     onPurchaseSuccess();
-                    toast.success('Purchase with ETH successful!');
+
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
@@ -696,7 +689,7 @@ export default function ItemDetailsPanel({
               )}
               {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <InlineBalanceNotice className="mt-0">
-                  Not enough ETH. Balance: {(Number(ethBalance) / 1e18).toFixed(6)} • Required: {(Number(ethQuote.ethAmountWithBuffer) / 1e18).toFixed(6)}
+                  Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethQuote.ethAmountWithBuffer, 18, 18)}
                 </InlineBalanceNotice>
               )}
             </div>
@@ -731,13 +724,13 @@ export default function ItemDetailsPanel({
                 approvalSpender={PIXOTCHI_NFT_ADDRESS}
                 needsApproval={needsSeedApproval}
                 onApprovalSuccess={() => {
-                  toast.success('SEED approval successful!');
+
                   if (address) {
                     checkTokenApproval(address).then(setSeedAllowance);
                   }
                 }}
                 onSuccess={(tx) => {
-                  toast.success(isSmartWallet ? 'Approved and purchased successfully!' : 'Purchase successful!');
+
                   if (address) {
                     checkTokenApproval(address).then(setSeedAllowance);
                   }
@@ -865,7 +858,7 @@ export default function ItemDetailsPanel({
 
           {hasInsufficientFunds && !isEthMode && (
             <InlineBalanceNotice>
-              Not enough SEED. Balance: {formatTokenAmountRounded(userSeedBalance)} • Required: {formatTokenAmount(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
+              Not enough SEED. Balance: {formatExactSeed(userSeedBalance)} • Required: {formatExactSeed(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
             </InlineBalanceNotice>
           )}
 
@@ -878,7 +871,7 @@ export default function ItemDetailsPanel({
               ? 'Fence protection keeps your PTS safe from attacks while it is active.'
               : itemType === 'shop'
                 ? 'Protection items provide ongoing defensive effects.'
-                : 'Garden items give immediate points and/or TOD.'
+                : 'Care items add points, lifetime, or both immediately.'
             }
           </p>
         </div>

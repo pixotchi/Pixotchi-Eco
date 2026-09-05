@@ -17,18 +17,20 @@ const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 type DropdownMenuContentProps =
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
     portalContainer?: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Portal>["container"];
+    matchTriggerWidth?: boolean;
   };
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   DropdownMenuContentProps
->(({ className, sideOffset = 4, portalContainer, ...props }, ref) => (
+>(({ className, sideOffset = 4, portalContainer, matchTriggerWidth = false, ...props }, ref) => (
   <DropdownMenuPortal container={portalContainer}>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
         "z-[var(--z-dropdown)] min-w-[8rem] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-strong))] !bg-popover bg-[image:var(--gradient-dialog)] p-1 text-popover-foreground shadow-[var(--shadow-raised)] [transform-origin:var(--radix-dropdown-menu-content-transform-origin)] [animation-duration:var(--motion-quick)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        matchTriggerWidth && 'w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)]',
         className
       )}
       {...props}

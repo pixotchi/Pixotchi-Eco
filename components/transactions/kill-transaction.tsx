@@ -1,4 +1,6 @@
 "use client";
+import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
+
 
 import React from "react";
 import GameTransaction from "./game-transaction";
@@ -24,14 +26,14 @@ const PIXOTCHI_NFT_ABI = [
 interface KillTransactionProps {
   deadId: number; // target dead plant id
   tokenId: number; // your alive plant id
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
+  onSuccess?: (tx: TransactionProof) => void;
+  onError?: (error: unknown) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: UntypedValue) => void;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
 }
 
 export default function KillTransaction({
@@ -56,7 +58,7 @@ export default function KillTransaction({
     },
   ];
 
-  const handleSuccess = (tx: UntypedValue) => {
+  const handleSuccess = (tx: TransactionProof) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
@@ -74,6 +76,7 @@ export default function KillTransaction({
 
   return (
     <GameTransaction
+      successMessage={`Collected a star from plant #${deadId}`}
       effects={{ domains: ["plants", "balances"] }}
       intentKey={`plant:kill:${deadId}:${tokenId}`}
       calls={calls}

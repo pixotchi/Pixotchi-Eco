@@ -32,6 +32,7 @@ import { AppToaster } from "@/components/ui/app-toaster";
 import { PerformanceModeController } from "@/components/ui/performance-mode";
 import { ScrollFadeController } from "@/components/ui/scroll-fade-controller";
 import { SlideshowProvider, useSlideshow } from "@/components/tutorial/SlideshowProvider";
+import { StakingProvider } from '@/components/staking/staking-provider';
 import { onTasksDialogOpen, openTasksDialog } from "@/lib/app-events";
 import { Button } from "@/components/ui/button";
 import {
@@ -809,6 +810,7 @@ function ProvidersContent({
           <EthModeProvider>
             <SolanaWalletProvider>
               <BalanceProvider>
+                <StakingProvider>
                   <ChatProvider>
                     <SlideshowProvider>
                       <AppToaster />
@@ -821,6 +823,7 @@ function ProvidersContent({
                     <SecretGardenListener />
                     <DeferredSnowEffect />
                   </ChatProvider>
+                </StakingProvider>
               </BalanceProvider>
             </SolanaWalletProvider>
           </EthModeProvider>

@@ -1,11 +1,12 @@
 "use client";
 
 import GameTransaction from '@/components/transactions/game-transaction';
-import { useDocumentVisible } from "@/hooks/useDocumentVisible";
+import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { ToggleGroup } from '@/components/ui/toggle-group';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
-import { getQuestSlotState, getQuestSlotsByLandId, LAND_CONTRACT_ADDRESS, type QuestSlot } from '@/lib/contracts';
+import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { getQuestSlotState, getUnlockedQuestSlots, type QuestSlot } from '@/lib/quest-slots';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -23,27 +24,21 @@ interface FarmerHousePanelProps {
   onQuestUpdate: () => void;
 }
 
-const QUEST_SLOT_SURFACE_CLASS = 'chromatic-white-surface flex flex-col gap-2 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]';
-const QUEST_START_SURFACE_CLASS = 'building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2';
-const QUEST_STATUS_PILL_CLASS = 'chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]';
+const QUEST_SLOT_SURFACE_CLASS = 'flex flex-col gap-3 rounded-[var(--radius-panel)] border border-border bg-card p-3';
+const QUEST_START_SURFACE_CLASS = 'pt-1';
+const QUEST_STATUS_PILL_CLASS = 'rounded-[var(--radius-control)] bg-muted px-2 py-1 text-xs text-muted-foreground';
 const QUEST_RECONCILE_DELAYS_MS = [500, 1_000, 1_500, 2_500, 4_000, 6_000] as const;
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
   const { address } = useAccount();
   const { isTabVisible } = useTabVisibility();
   const isDashboardVisible = isTabVisible('dashboard');
-  const [slots, setSlots] = React.useState<import('@/lib/contracts').QuestSlot[]>([]);
   const scope = questResultScope(address, landId);
   const currentScopeRef = React.useRef(scope);
   currentScopeRef.current = scope;
-  const [slotsScope, setSlotsScope] = React.useState<string | null>(null);
   const [recentResults, setRecentResults] = React.useState<{ scope: string; slots: Record<number, QuestFinalizeResult> }>({ scope, slots: {} });
-  const [loading, setLoading] = React.useState<boolean>(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [currentBlock, setCurrentBlock] = React.useState<bigint>(BigInt(0));
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
   const currentLandIdRef = React.useRef(landId);
-  const slotsRequestRef = React.useRef(0);
   currentLandIdRef.current = landId;
   // Resolved from diamond storage, not env: setQuestRewardsWallet can rotate the
   // payer, and the NEXT_PUBLIC_QUEST_* vars silently point at the pre-rotation
@@ -52,44 +47,11 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     useQuestRewardsAvailability(isDashboardVisible);
   const questActionsBlocked = isRewardsUnavailable || !isRewardsReady;
 
-  const fetchSlots = React.useCallback(async () => {
-    const requestLandId = landId;
-    if (currentLandIdRef.current !== requestLandId || currentScopeRef.current !== scope) return null;
-    const requestId = ++slotsRequestRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getQuestSlotsByLandId(requestLandId);
-      if (
-        requestId !== slotsRequestRef.current
-        || currentLandIdRef.current !== requestLandId || currentScopeRef.current !== scope
-      ) return null;
-      setSlots(data);
-      setSlotsScope(scope);
-      return data;
-    } catch {
-      if (
-        requestId !== slotsRequestRef.current
-        || currentLandIdRef.current !== requestLandId || currentScopeRef.current !== scope
-      ) return null;
-      setSlots([]);
-      setSlotsScope(null);
-      setError('Failed to load quests');
-      return null;
-    } finally {
-      if (
-        requestId === slotsRequestRef.current
-        && currentLandIdRef.current === requestLandId && currentScopeRef.current === scope
-      ) setLoading(false);
-    }
-  }, [landId, scope]);
+  const { slots: currentSlots, loading, error, refresh: fetchSlots } = useLandQuestSlots({
+    owner: address, chainId: 8453, landId, enabled: farmerHouseLevel > 0,
+  });
 
   React.useEffect(() => {
-    slotsRequestRef.current += 1;
-    setSlots([]);
-    setSlotsScope(null);
-    setError(null);
-    setLoading(true);
     setDifficulty({});
     const stored: Record<number, QuestFinalizeResult> = {};
     try {
@@ -99,42 +61,11 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
       }
     } catch { /* Session storage may be disabled. */ }
     setRecentResults({ scope, slots: stored });
-    void fetchSlots();
-    return () => {
-      slotsRequestRef.current += 1;
-    };
-  }, [fetchSlots, landId, scope]);
+  }, [scope]);
 
-  const currentSlots = slotsScope === scope ? slots : [];
-
-  // Initialize and watch the current block number immediately to avoid transient wrong UI.
-  // ONE poller: `watch` alone drives viem's watchBlockNumber at the wagmi
-  // config's pollingInterval — the extra refetchInterval used to run a second,
-  // overlapping eth_blockNumber poll on the same query. Also gated on document
-  // visibility so a backgrounded webview stops hitting the RPC.
-  const isDocumentVisible = useDocumentVisible();
-  const { data: liveBlock } = useBlockNumber({
-    watch: isDashboardVisible && isDocumentVisible,
-  });
-  React.useEffect(() => {
-    if (typeof liveBlock === 'bigint' && liveBlock > BigInt(0)) setCurrentBlock(liveBlock);
-  }, [liveBlock]);
-
-  React.useEffect(() => {
-    const refresh = () => { if (document.visibilityState !== 'hidden') void fetchSlots(); };
-    window.addEventListener('online', refresh);
-    window.addEventListener('buildings:refresh', refresh);
-    return () => {
-      window.removeEventListener('online', refresh);
-      window.removeEventListener('buildings:refresh', refresh);
-    };
-  }, [fetchSlots]);
-  const wasVisibleRef = React.useRef(isDashboardVisible && isDocumentVisible);
-  React.useEffect(() => {
-    const visible = isDashboardVisible && isDocumentVisible;
-    if (visible && !wasVisibleRef.current) void fetchSlots();
-    wasVisibleRef.current = visible;
-  }, [fetchSlots, isDashboardVisible, isDocumentVisible]);
+  // The land overview owns the watcher; this observer shares its Base block.
+  const { data: liveBlock } = useBlockNumber({ chainId: 8453, watch: false });
+  const currentBlock = liveBlock ?? BigInt(0);
 
   const statusOf = (s: QuestSlot): string => {
     // Until we know the current block, avoid guessing to prevent huge time estimates
@@ -218,7 +149,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
             </div>
           )}
           <div className="grid grid-cols-1 gap-2">
-            {currentSlots.slice(0, Math.min(farmerHouseLevel ?? 3, 3)).map((s, idx) => (
+            {getUnlockedQuestSlots(currentSlots, farmerHouseLevel).map((s, idx) => (
               <div key={idx} className={QUEST_SLOT_SURFACE_CLASS}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 text-sm">
@@ -244,6 +175,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                         <span className="text-xs text-muted-foreground">Loot bag ready</span>
                         <GameTransaction
+                          successFeedback="feature"
                           effects={{ domains: ["balances"] }}
                           intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
@@ -259,6 +191,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                       <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                         <span className="text-xs text-amber-700">Loot bag expired; reset required</span>
                         <GameTransaction
+                          successFeedback="feature"
                           effects={{ domains: ["balances"] }}
                           intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
@@ -300,7 +233,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
                         <ToggleGroup
-                          ariaLabel="Quest difficulty"
+                          ariaLabel={`Quest ${idx + 1} difficulty`}
                           value={String(difficulty[idx] ?? 0)}
                           onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
                           options={[
@@ -308,12 +241,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                             { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
                             { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
                           ]}
-                          className="bg-muted/50 border-primary/20"
-                          getButtonClassName={(val, selected) => (
-                            val === '0' ? (selected ? 'bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success-strong))]' : 'text-[hsl(var(--success-strong))]') :
-                              val === '1' ? (selected ? 'bg-[hsl(var(--warning)/0.18)] text-[hsl(var(--warning))]' : 'text-[hsl(var(--warning))]') :
-                                (selected ? 'bg-destructive/15 text-destructive' : 'text-destructive')
-                          )}
+                          className="w-full"
+                          getButtonClassName={() => 'flex-1'}
                         />
                       </div>
                       <GameTransaction
@@ -353,7 +282,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
               </div>
             ))}
             {currentSlots.length === 0 && (
-              <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 text-center text-sm text-muted-foreground shadow-[var(--shadow-hairline)]">No quest slots available.</div>
+              <div className="p-3 text-center text-sm text-muted-foreground">No quest slots available.</div>
             )}
           </div>
         </>

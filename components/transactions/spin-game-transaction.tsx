@@ -151,7 +151,7 @@ export default function SpinGameTransaction({
           parts.push(
             `${revealResult.timeAdded! > 0 ? "+" : ""}${formatDuration(
               Math.abs(revealResult.timeAdded!),
-            )} TOD`,
+            )} lifetime`,
           );
         }
         if ((revealResult.leafAmount ?? BigInt(0)) !== BigInt(0)) {
@@ -197,6 +197,7 @@ export default function SpinGameTransaction({
 
   return (
     <GameTransaction
+      successFeedback="feature"
       effects={{ domains: ["arcade", "balances"] }}
       calls={calls as UntypedValue}
       intentKey={intentKey}

@@ -182,8 +182,8 @@ assert.match(
 const farmerHouse = projectFile('components/building-details/FarmerHousePanel.tsx');
 assert.match(
   farmerHouse,
-  /requestId !== slotsRequestRef\.current[\s\S]*currentLandIdRef\.current !== requestLandId \|\| currentScopeRef\.current !== scope/,
-  'Farmer House quest slots must reject superseded reads and previous land or wallet identities',
+  /useLandQuestSlots\(\{[\s\S]*owner: address,[\s\S]*chainId: 8453,[\s\S]*landId,/,
+  'Farmer House must observe quests under the current owner, read chain and land',
 );
 assert.match(
   farmerHouse,
@@ -191,9 +191,9 @@ assert.match(
   'Farmer House snapshot identity must include the wallet and selected land',
 );
 assert.match(
-  farmerHouse,
-  /const currentSlots = slotsScope === scope \? slots : \[\];/,
-  'Farmer House must hide slots not stamped for the selected wallet and land',
+  projectFile('hooks/useLandQuestSlots.ts'),
+  /queryKey: queryKeys\.questsByLand\(owner, chainId, landId\)/,
+  'The shared quest cache must isolate wallet, chain and land reads; browser fixtures exercise late responses',
 );
 assert.match(
   farmerHouse,
@@ -215,8 +215,8 @@ assert.match(
 
 const barracksPanel = projectFile('components/building-details/BarracksPanelV2.tsx');
 assert.match(
-  barracksPanel,
-  /requestId !== stateRequestRef\.current[\s\S]*currentLandIdRef\.current !== requestLandId/,
+  projectFile('hooks/useBarracksSnapshot.ts'),
+  /currentLand\.current !== landId \|\| request\.current !== id/,
   'barracks snapshots must reject stale land reads',
 );
 assert.match(

@@ -15,6 +15,8 @@ interface SmartWalletTransactionProps {
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
+  successFeedback?: 'shared' | 'feature';
+  successMessage?: string;
   intentKey: string;
   effects: GameTransactionEffects;
 }

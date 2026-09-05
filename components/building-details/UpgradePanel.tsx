@@ -91,9 +91,9 @@ export default function UpgradePanel({
 
   return (
     <div className="border-t border-border/55 pt-4">
-      <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+      <div className="space-y-4">
         {building.isUpgrading && (
-          <div className="chromatic-white-surface space-y-2 rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+          <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Upgrade Progress:</span>
               <span className="font-semibold">{upgradeProgress.toFixed(1)}%</span>
@@ -147,7 +147,7 @@ export default function UpgradePanel({
                   spenderAddress={LAND_CONTRACT_ADDRESS}
                   tokenAddress={CREATOR_TOKEN_ADDRESS} // PIXOTCHI token
                   onSuccess={() => {
-                    toast.success('PIXOTCHI approval successful!');
+
                     onSeedApprovalSuccess();
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
@@ -163,7 +163,7 @@ export default function UpgradePanel({
                 landId={landId}
                 buildingType={buildingType}
                 onSuccess={() => {
-                  toast.success('Building upgrade sped up!', { id: `speedup-${landId}-${building.id}` });
+
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}
@@ -181,7 +181,7 @@ export default function UpgradePanel({
             <div className="space-y-2">
               <div className="text-sm text-center text-muted-foreground">Step 1: Approve LEAF spending</div>
               <LeafApproveTransaction
-                onSuccess={() => { toast.success('LEAF approval successful!'); onLeafApprovalSuccess(); }}
+                onSuccess={() => {  onLeafApprovalSuccess(); }}
                 onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText="Approve LEAF"
                 buttonClassName="w-full"
@@ -196,7 +196,7 @@ export default function UpgradePanel({
                 landId={landId}
                 buildingType={buildingType}
                 onSuccess={() => {
-                  toast.success('Building upgrade started!', { id: `upgrade-${landId}-${building.id}` });
+
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}

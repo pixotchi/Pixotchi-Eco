@@ -1,10 +1,10 @@
 "use client";
 
+import { getBoxResult, type BoxResult } from "@/lib/box-result";
+import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
 import React from 'react';
 import GameTransaction from './game-transaction';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
-import PixotchiNFT from '@/public/abi/PixotchiNFT.json';
-import { decodeEventLog } from 'viem';
 import { toast } from 'react-hot-toast';
 import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
@@ -59,15 +59,15 @@ interface BoxGameTransactionProps {
   plantId: number;
   seed: number;
   withStar: boolean;
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
+  onSuccess?: (tx: TransactionProof) => void;
+  onError?: (error: unknown) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: UntypedValue) => void;
-  onResult?: (result: { pointsDelta: number; timeAdded: number }) => void;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
+  onResult?: (result: BoxResult | null) => void;
 }
 
 export default function BoxGameTransaction({
@@ -93,7 +93,7 @@ export default function BoxGameTransaction({
     args: [BigInt(plantId), BigInt(seed)],
   }];
 
-  const handleSuccess = (tx: UntypedValue) => {
+  const handleSuccess = (tx: TransactionProof) => {
     const txHash = extractTransactionHash(tx);
     if (address && txHash) {
       try {
@@ -111,9 +111,10 @@ export default function BoxGameTransaction({
 
   return (
     <GameTransaction
+      successFeedback="feature"
       effects={{ domains: ["arcade", "balances"] }}
       intentKey={`box:${plantId}`}
-      calls={calls as UntypedValue}
+      calls={calls}
       onSuccess={handleSuccess}
       onError={onError}
       buttonText={buttonText}
@@ -121,42 +122,17 @@ export default function BoxGameTransaction({
       disabled={disabled}
       feedbackMode={feedbackMode}
       showToast={showToast}
-      onStatusUpdate={(status: UntypedValue) => {
+      onStatusUpdate={(status: LifecycleStatus) => {
         try { onStatusUpdate?.(status); } catch {}
-        if (status?.statusName === 'success') {
-          try {
-            const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
-            const abi = (PixotchiNFT as UntypedValue).abi || PixotchiNFT;
-            let shown = false;
-            for (const r of receipts) {
-              const logs = r?.logs || [];
-              for (const log of logs) {
-                try {
-                  const decoded: UntypedValue = decodeEventLog({ abi, data: log.data as `0x${string}`, topics: log.topics as UntypedValue });
-                  if (decoded.eventName === 'Played' || decoded.eventName === 'PlayedV2') {
-                    const rawPoints = Number(decoded.args.points ?? decoded.args.pointsAdjustment ?? 0);
-                    const rawTime = Number(decoded.args.timeExtension ?? decoded.args.timeAdjustment ?? 0);
-                    onResult?.({ pointsDelta: rawPoints, timeAdded: rawTime });
-                    const ptsText = formatScore(rawPoints);
-                    const timeText = rawTime !== 0 ? `${rawTime > 0 ? '+' : '-'}${formatDuration(Math.abs(rawTime))} TOD` : '';
-                    const msg = timeText ? `You got +${ptsText} PTS and ${timeText}` : `You got +${ptsText} PTS`;
-                    if (!onResult) {
-                      toast.success(msg, { id: 'box-result' });
-                    }
-                    shown = true;
-                    break;
-                  }
-                } catch {}
-              }
-              if (shown) break;
-            }
-            if (!shown) {
-              onResult?.({ pointsDelta: 0, timeAdded: 0 });
-              if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
-            }
-          } catch {
-            onResult?.({ pointsDelta: 0, timeAdded: 0 });
-            if (!onResult) toast.success('Play confirmed!', { id: 'box-result' });
+        if (status.statusName === 'success') {
+          const result = getBoxResult(status.statusData.transactionReceipts, plantId, PIXOTCHI_NFT_ADDRESS);
+          onResult?.(result);
+          if (!result) {
+            toast('Play confirmed. Check Activity for the reward.', { id: 'box-result' });
+          } else if (!onResult) {
+            const points = formatScore(Math.abs(result.pointsDelta));
+            const lifetime = result.timeAdded ? ' and ' + (result.timeAdded > 0 ? '+' : '-') + formatDuration(Math.abs(result.timeAdded)) + ' lifetime' : '';
+            toast.success('You got ' + (result.pointsDelta < 0 ? '-' : '+') + points + ' PTS' + lifetime, { id: 'box-result' });
           }
         }
       }}

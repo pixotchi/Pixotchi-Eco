@@ -8,7 +8,9 @@ import { queryKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SponsoredBadge } from "@/components/paymaster-toggle";
-import QuantitySelector from "@/components/quantity-selector";
+import { FirstCareGuide } from "@/components/first-care-guide";
+import { completeFirstCareStep } from '@/lib/first-care-progress';
+import { PlantCareCatalog } from "@/components/plant-care-catalog";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -26,7 +28,7 @@ import { StandardContainer } from "@/components/ui/pixel-container";
 import { InlineBalanceNotice } from "@/components/ui/premium";
 import { useItemCatalogs } from "@/hooks/useItemCatalogs";
 import { useOwnerResourceList } from "@/hooks/useOwnerResourceList";
-import { ITEM_ICONS } from "@/lib/constants";
+
 import {
 getPlantsByOwner,
 checkTokenApproval,
@@ -42,14 +44,14 @@ type OwnerResourceInvalidationDetail,
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { GardenItem,Plant,ShopItem,TransactionCall } from "@/lib/types";
-import { cn,formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
+import { formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
 import {
 ChevronDown,
 Flower2
 } from "lucide-react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useCallback,useEffect,useId,useLayoutEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useId,useMemo,useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
@@ -90,67 +92,10 @@ type AllowanceState = {
 };
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
-const REWARD_VALUE_MAX_FONT_SIZE = 13;
-const REWARD_VALUE_MIN_FONT_SIZE = 8;
-
-type MarketplaceItemOption = {
-  item: GardenItem | ShopItem;
-  itemType: "garden" | "shop";
-};
-
-function isFenceShopItem(item: ShopItem) {
-  const name = item.name.toLowerCase();
-  return name.includes("fence") || name.includes("shield");
-}
-
 function FittedEthRewardValue({ amount }: { amount: string }) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const valueRef = useRef<HTMLSpanElement | null>(null);
-  const [fontSize, setFontSize] = useState(REWARD_VALUE_MAX_FONT_SIZE);
-
-  useLayoutEffect(() => {
-    const frame = frameRef.current;
-    const value = valueRef.current;
-    if (!frame || !value) return;
-
-    let frameId = 0;
-    const measure = () => {
-      const currentFontSize = Number.parseFloat(window.getComputedStyle(value).fontSize) || REWARD_VALUE_MAX_FONT_SIZE;
-      const naturalWidth = value.scrollWidth * (REWARD_VALUE_MAX_FONT_SIZE / currentFontSize);
-      const availableWidth = Math.max(0, frame.clientWidth - 8);
-      const nextFontSize = Math.max(
-        REWARD_VALUE_MIN_FONT_SIZE,
-        Math.min(REWARD_VALUE_MAX_FONT_SIZE, (availableWidth / Math.max(naturalWidth, 1)) * REWARD_VALUE_MAX_FONT_SIZE)
-      );
-      setFontSize(Math.floor(nextFontSize * 10) / 10);
-    };
-    const scheduleMeasure = () => {
-      cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(measure);
-    };
-
-    scheduleMeasure();
-    const observer = new ResizeObserver(scheduleMeasure);
-    observer.observe(frame);
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      observer.disconnect();
-    };
-  }, [amount]);
-
-  return (
-    <div ref={frameRef} className="w-full min-w-0 overflow-hidden text-center" title={`${amount} ETH`}>
-      <span
-        ref={valueRef}
-        style={{ fontSize }}
-        className="inline-flex max-w-full items-center justify-center gap-0.5 whitespace-nowrap font-bold leading-none tabular-nums"
-      >
-        <Image src="/icons/ethlogo.svg" alt="" aria-hidden="true" width={14} height={14} className="h-[1em] w-[1em] shrink-0" />
-        <span>{amount} ETH</span>
-      </span>
-    </div>
-  );
+  const compact = amount.replace(/(\.\d{0,6})\d+$/, '$1').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  const display = Number(amount) > 0 && Number(compact) === 0 ? '<0.000001' : compact;
+  return <span className="block min-w-0 break-words text-center text-xs font-bold tabular-nums" title={amount + ' ETH'} aria-label={amount + ' ETH'}>{display} ETH</span>;
 }
 
 type PlantInvariant = (plants: Plant[]) => boolean;
@@ -310,21 +255,6 @@ export default function PlantsView() {
     return itemQuantities[itemId] || defaultQuantity;
   }, [isSmartWallet, smartWalletLoading, itemType, itemQuantities]);
 
-  // Set default selected item when catalogs are loaded
-  useEffect(() => {
-    if (!selectedItem) {
-      if (gardenItems.length > 0) {
-        setSelectedItem(gardenItems[0]);
-        setItemType('garden');
-      } else {
-        const fenceItem = shopItems.find(isFenceShopItem);
-        if (!fenceItem) return;
-        setSelectedItem(fenceItem);
-        setItemType('shop');
-      }
-    }
-  }, [selectedItem, gardenItems, shopItems]);
-
   useEffect(() => {
     if (!selectedPlantId || selectedPlantStatus !== 4) {
       setReviveDataLoading(false);
@@ -368,7 +298,8 @@ export default function PlantsView() {
   }, [address, selectedPlantId, selectedPlantStatus]);
 
   const onPurchaseSuccess = useCallback(() => {
-    toast.success("Purchase successful! Updating plant data...");
+    completeFirstCareStep(ownerKey, 'care');
+
     const baseline = selectedPlant;
     const quantity = selectedItem ? getItemQuantity(selectedItem.id) : 1;
     const gardenItem = itemType === "garden" ? selectedItem as GardenItem | null : null;
@@ -394,11 +325,11 @@ export default function PlantsView() {
     void reconcilePlants({ force: true, until });
   }, [getItemQuantity, itemType, ownerKey, reconcilePlants, selectedItem, selectedPlant]);
 
-  const reconcileClaimSuccess = useCallback((message: string) => {
+  const reconcileClaimSuccess = useCallback(() => {
     const baseline = selectedPlant;
     setClaimOpen(false);
     setClaimConfirmationText("");
-    toast.success(message);
+
     invalidateOwnerResources({
       address: ownerKey,
       domains: ["plants", "balances"],
@@ -421,7 +352,7 @@ export default function PlantsView() {
 
   const reconcileReviveSuccess = useCallback(() => {
     const revivedPlantId = selectedPlant?.id;
-    toast.success("You revived your plant.");
+
     invalidateOwnerResources({
       address: ownerKey,
       domains: ["plants", "balances"],
@@ -454,12 +385,12 @@ export default function PlantsView() {
     && reviveAllowance.value < revivePrice;
 
   const renderNoPlantsView = () => (
-    <EmptyState
+    <div className="space-y-4"><FirstCareGuide hasPlant={false} owner={ownerKey} /><EmptyState
       className="min-h-[60dvh]"
       icon={Flower2}
       title="No Plants Yet!"
-      description="Go to the Mint tab to grow your first plant."
-    />
+      description="Choose a strain and review its cost to begin."
+    /></div>
   );
 
   // Only block render if we have NO plants data at all
@@ -530,7 +461,7 @@ export default function PlantsView() {
                       <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+                  <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
                     {plants.map((plant) => (
                       <DropdownMenuItem key={plant.id} onSelect={() => setPreferredPlantId(plant.id)}>
                         <div className="flex min-w-0 items-center space-x-2">
@@ -544,20 +475,21 @@ export default function PlantsView() {
               </CardContent>
             </TabCard>
           )}
+          {(selectedPlant.level <= 1 || selectedPlant.status >= 2) && <FirstCareGuide hasPlant owner={ownerKey} urgent={selectedPlant.status >= 2} />}
           {/* Plant "Screen" Display */}
           <TabCard>
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="space-y-3">
               {/* Main image container with stats overlay */}
               <div className="relative w-full aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
                 <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
 
                 {/* Top corners: points and stars */}
                 <div className="absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2 text-[11px] font-bold text-foreground/80 sm:text-sm">
-                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                  <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                     <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{formatScore(selectedPlant.score)} PTS</span>
+                    <span className="break-words text-xs">{formatScore(selectedPlant.score)} PTS</span>
                   </div>
-                  <div className="flex min-h-7 max-w-[48%] items-center gap-1 whitespace-nowrap rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
+                  <div className="flex min-h-7 items-center gap-1 rounded-[calc(var(--radius-control)-0.25rem)] border border-border/35 bg-card/75 px-2 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md">
                     <Image src="/icons/Star.svg" alt="Stars" width={16} height={16} className="h-4 w-4 shrink-0" />
                     <span className="truncate">{selectedPlant.stars}</span>
                   </div>
@@ -646,7 +578,7 @@ export default function PlantsView() {
               <div className="text-center">
                 <div className="inline-flex max-w-full items-center justify-center gap-1">
                   <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 truncate font-pixel text-lg">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
+                  <h3 className="min-w-0 break-words font-pixel text-base leading-relaxed">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
                   <EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
@@ -777,7 +709,7 @@ export default function PlantsView() {
                         buttonClassName="w-full"
                         disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                         onSuccess={() => {
-                          reconcileClaimSuccess("Rewards claimed via bridge!");
+                          reconcileClaimSuccess();
                         }}
                         onError={() => {
                           toast.error('Claim failed');
@@ -791,7 +723,7 @@ export default function PlantsView() {
                         disabled={Number(selectedPlant.rewards) <= 0 || claimConfirmationText !== "CONFIRM"}
                         minimal
                         onSuccess={() => {
-                          reconcileClaimSuccess("Rewards claimed!");
+                          reconcileClaimSuccess();
                         }}
                         onError={() => {
                           toast.error('Claim failed');
@@ -918,121 +850,20 @@ export default function PlantsView() {
               </CardContent>
             </TabCard>
           ) : (
-            <TabCard className="tablet:h-fit tablet:w-full">
+            <TabCard className="@container tablet:h-fit tablet:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle>Marketplace</CardTitle>
+                  <CardTitle>Plant care</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 tablet:grid-cols-[minmax(220px,260px)_minmax(0,340px)] tablet:items-start tablet:justify-center">
-                  {/* Item Selection with Quantity - Grouped by category */}
-                  <div className="space-y-2">
-                    {(() => {
-                      const todItems: MarketplaceItemOption[] = gardenItems
-                        .filter((item: GardenItem) => Number(item.timeExtension) > 0 && Number(item.points) === 0)
-                        .map((item) => ({ item, itemType: "garden" as const }));
-                      const ptsItems: MarketplaceItemOption[] = gardenItems
-                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) === 0)
-                        .map((item) => ({ item, itemType: "garden" as const }));
-                      const hybridItems: MarketplaceItemOption[] = gardenItems
-                        .filter((item: GardenItem) => Number(item.points) > 0 && Number(item.timeExtension) > 0)
-                        .map((item) => ({ item, itemType: "garden" as const }));
-                      const fenceItem = shopItems.find(isFenceShopItem);
-
-                      if (fenceItem) {
-                        hybridItems.splice(Math.min(2, hybridItems.length), 0, {
-                          item: fenceItem,
-                          itemType: "shop" as const,
-                        });
-                      }
-
-                      const renderItemGroup = (items: MarketplaceItemOption[], label: string) => {
-                        if (items.length === 0) return null;
-                        return (
-                          <div key={label} className="space-y-1.5">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="h-px w-14 shrink-0 bg-border/50" />
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-                              <div className="h-px w-14 shrink-0 bg-border/50" />
-                            </div>
-                            <div className={items.length === 4 ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-2"}>
-                              {items.map(({ item, itemType: optionItemType }) => {
-                                const quantity = getItemQuantity(item.id);
-                                const isSelected = selectedItem?.id === item.id && itemType === optionItemType;
-                                return (
-                                  <div key={`${optionItemType}-${item.id}`} className="space-y-1">
-                                    <div className="flex justify-center">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setSelectedItem(item);
-                                          setItemType(optionItemType);
-                                        }}
-                                        className={cn(
-                                          "h-14 min-h-14 w-14 min-w-14 rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow]",
-                                          isSelected
-                                            ? "border-primary bg-primary/10 shadow-[0_0_0_2px_hsl(var(--primary)/0.14)]"
-                                            : "border-border/45 bg-card/70 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]"
-                                        )}
-                                        aria-label={`Select ${item.name}`}
-                                        aria-pressed={isSelected}
-                                      >
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
-                                          <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt={item.name} width={32} height={32} />
-                                        </div>
-                                      </Button>
-                                    </div>
-                                    {optionItemType === "garden" && isSmartWallet && (
-                                      <div className="flex justify-center">
-                                        <QuantitySelector
-                                          quantity={quantity}
-                                          onQuantityChange={(newQuantity) => {
-                                            handleQuantityChange(item.id, newQuantity);
-                                            setSelectedItem(item);
-                                            setItemType("garden");
-                                          }}
-                                          max={80}
-                                          min={0}
-                                          size={items.length === 4 ? "xs" : "sm"}
-                                        />
-                                      </div>
-                                    )}
-                                    {optionItemType === "garden" && !smartWalletLoading && !isSmartWallet && (
-                                      <div className="flex justify-center">
-                                        <div className="text-xs text-muted-foreground px-2 py-1">
-                                          Qty: 1
-                                        </div>
-                                      </div>
-                                    )}
-                                    {optionItemType === "shop" && (
-                                      <div className="flex justify-center">
-                                        <div className="max-w-16 truncate px-2 py-1 text-center text-xs font-medium text-muted-foreground">
-                                          {item.name}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      };
-
-                      return (
-                        <div className="space-y-2">
-                          {renderItemGroup(todItems, 'Lifetime Hours (TOD)')}
-                          {renderItemGroup(ptsItems, 'Points (PTS)')}
-                          {renderItemGroup(hybridItems, 'Hybrid')}
-                        </div>
-                      );
-                    })()}
-                  </div>
+                <div className="grid grid-cols-1 gap-4 @min-[36rem]:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)] @min-[36rem]:items-start">
+                  <PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
+                    isSmartWallet={isSmartWallet} getQuantity={getItemQuantity} onQuantityChange={handleQuantityChange}
+                    onSelect={({ item, itemType: nextType }) => { setSelectedItem(item); setItemType(nextType); }} />
 
                   {/* Item Details and Purchase */}
+                  <div className="order-first @min-[36rem]:order-none">
                   <ItemDetailsPanel
                     selectedItem={selectedItem}
                     selectedPlant={selectedPlant}
@@ -1040,6 +871,7 @@ export default function PlantsView() {
                     onPurchaseSuccess={onPurchaseSuccess}
                     quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
                   />
+                  </div>
                 </div>
               </CardContent>
             </TabCard>

@@ -79,7 +79,8 @@ export default function WarehouseApplyTransaction({
       calls={calls}
       onSuccess={onSuccess}
       onError={onError}
-      buttonText={buttonText || (mode === "points" ? "Apply PTS" : "Apply TOD")}
+      successMessage={mode === "points" ? `${amount} PTS added to plant #${plantId}` : `${amount} minutes added to plant #${plantId}`}
+      buttonText={buttonText || (mode === "points" ? "Apply PTS" : "Add lifetime")}
       buttonClassName={buttonClassName}
       disabled={disabled || !parsedAmount || parsedAmount <= BigInt(0)}
     />

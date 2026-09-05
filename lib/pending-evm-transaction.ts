@@ -1,5 +1,5 @@
 import { keccak256, stringToHex, type Hex } from "viem";
-import type { OwnerResourceInvalidationRequest } from "@/lib/owner-resource-invalidation";
+import { isPendingEvmEffects, normalizePendingEffects, type PendingEvmEffects } from "@/lib/pending-evm-effects";
 
 export type PendingEvmExecutionMethod = "batch" | "direct";
 export type PendingEvmPhase = "hard" | "stale";
@@ -38,10 +38,7 @@ export type PendingEvmRecord = {
   callsDigest: Hex;
   chainId: number;
   connectorId?: string;
-  effects?: "none" | {
-    domains: OwnerResourceInvalidationRequest["domains"];
-    expected?: OwnerResourceInvalidationRequest["expected"];
-  };
+  effects?: PendingEvmEffects;
   intentDigest: Hex;
   method: PendingEvmExecutionMethod;
   proof: PendingEvmProof;
@@ -49,66 +46,6 @@ export type PendingEvmRecord = {
   submittedAt: number;
   version: 2;
 };
-
-const PENDING_EFFECT_DOMAINS = new Set([
-  "allowances",
-  "arcade",
-  "balances",
-  "buildings",
-  "lands",
-  "plants",
-  "rewards",
-]);
-
-function normalizePendingEffects(
-  effects: NonNullable<PendingEvmRecord["effects"]>,
-): NonNullable<PendingEvmRecord["effects"]> {
-  if (effects === "none") return effects;
-  const expected = effects.expected
-    ? Object.fromEntries(Object.entries(effects.expected).map(([key, value]) => [
-      key,
-      Array.isArray(value)
-        ? value.map((item) => typeof item === "bigint" ? item.toString() : item)
-        : value,
-    ])) as NonNullable<PendingEvmRecord["effects"]> extends infer T
-      ? T extends { expected?: infer E } ? E : never
-      : never
-    : undefined;
-  return {
-    domains: [...new Set(effects.domains)],
-    ...(expected ? { expected } : {}),
-  };
-}
-
-function hasValidPendingEffects(effects: PendingEvmRecord["effects"]): boolean {
-  if (effects === undefined || effects === "none") return true;
-  if (!effects || typeof effects !== "object" || !Array.isArray(effects.domains)) return false;
-  if (
-    effects.domains.length > PENDING_EFFECT_DOMAINS.size
-    || effects.domains.some((domain) => !PENDING_EFFECT_DOMAINS.has(domain))
-  ) return false;
-  if (effects.expected === undefined) return true;
-  if (!effects.expected || typeof effects.expected !== "object" || Array.isArray(effects.expected)) {
-    return false;
-  }
-  const allowedExpectedKeys = new Set([
-    "landCountAtLeast",
-    "landIdsAbsent",
-    "landIdsPresent",
-    "plantCountAtLeast",
-    "plantIdsAbsent",
-    "plantIdsPresent",
-  ]);
-  return Object.entries(effects.expected).every(([key, value]) => (
-    allowedExpectedKeys.has(key)
-    && (
-      typeof value === "number"
-      || (Array.isArray(value) && value.every((item) => (
-        typeof item === "number" || typeof item === "string"
-      )))
-    )
-  ));
-}
 
 export type PendingEvmChange = {
   attemptId?: string;
@@ -407,7 +344,7 @@ export function getPendingEvmStorageKey(
   ].join(":");
 }
 
-function getPendingEvmRecordStorageKey(record: PendingEvmRecord) {
+function getPendingEvmRecordStorageKey(record: Pick<PendingEvmRecord, 'accountAddress' | 'chainId' | 'intentDigest' | 'attemptId'>) {
   return `${getPendingEvmStorageKey(record)}:attempt:${keccak256(stringToHex(record.attemptId))}`;
 }
 
@@ -845,23 +782,25 @@ export function getPendingEvmPhase(
 function isStructurallyValidRecord(
   value: unknown,
   registry: PendingEvmRegistryIdentity,
-): value is PendingEvmRecord {
-  if (!value || typeof value !== "object" || !isRegistryIdentity(registry)) return false;
-  const record = value as Partial<PendingEvmRecord>;
-  const validProof = record.proof?.kind === "reservation"
+): value is Omit<PendingEvmRecord, "effects"> & { effects?: unknown } {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !isRegistryIdentity(registry)) return false;
+  const record = value as Record<string, unknown>;
+  if (!record.proof || typeof record.proof !== "object" || Array.isArray(record.proof)) return false;
+  const proof = record.proof as Record<string, unknown>;
+  const validProof = proof.kind === "reservation"
     ? (
       typeof record.reservationPadding === "string"
       && record.reservationPadding.length <= PENDING_EVM_MAX_RECORD_SIZE
       && (record.method === "direct" || typeof record.connectorId === "string")
     )
     : record.method === "direct"
-      ? record.proof?.kind === "hash" && isHex32(record.proof.hash)
+      ? proof.kind === "hash" && isHex32(proof.hash)
       : record.method === "batch"
-      && record.proof?.kind === "calls"
-      && typeof record.proof.id === "string"
-      && record.proof.id.trim() !== ""
-      && record.proof.id.length <= 512
-      && (record.proof.hash === undefined || isHex32(record.proof.hash))
+      && proof.kind === "calls"
+      && typeof proof.id === "string"
+      && proof.id.trim() !== ""
+      && proof.id.length <= 512
+      && (proof.hash === undefined || isHex32(proof.hash))
       && typeof record.connectorId === "string"
       && record.connectorId.trim() !== ""
       && record.connectorId.length <= 128;
@@ -875,7 +814,8 @@ function isStructurallyValidRecord(
     && /^[A-Za-z0-9._-]+$/.test(record.attemptId)
     && isHex32(record.intentDigest)
     && isHex32(record.callsDigest)
-    && hasValidPendingEffects(record.effects)
+    && (record.connectorId === undefined || (typeof record.connectorId === 'string' && record.connectorId.trim() !== '' && record.connectorId.length <= 128))
+    && (record.reservationPadding === undefined || (typeof record.reservationPadding === 'string' && record.reservationPadding.length <= PENDING_EVM_MAX_RECORD_SIZE))
     && (record.method === "batch" || record.method === "direct")
     && typeof record.submittedAt === "number"
     && Number.isFinite(record.submittedAt)
@@ -990,7 +930,10 @@ function parseStoredRecord(
       return null;
     }
     pendingMemoryRecords.set(key, rawRecord);
-    return record;
+    // Invalid optional refresh metadata must never discard a valid submission
+    // proof or unlock a possibly submitted transaction. Undefined requests the
+    // existing conservative owner-resource refresh after confirmation.
+    return { ...record, effects: isPendingEvmEffects(record.effects) ? record.effects : undefined };
   } catch {
     if (readState) readState.authoritative = false;
     deleteRecordKey(storage, key, "prune", undefined, rawRecord);
@@ -1212,7 +1155,10 @@ export function replacePendingEvmProof(
   ) return null;
 
   const key = getPendingEvmRecordStorageKey(current);
-  const currentRaw = JSON.stringify(current);
+  const currentRaw = readStoredValue(storage, key);
+  if (!currentRaw) return null;
+  const stored = parseStoredRecord(storage, key, current, undefined, currentRaw);
+  if (!stored || JSON.stringify(stored) !== JSON.stringify(current)) return null;
   if (readStoredValue(storage, key) !== currentRaw) return null;
 
   const replacement: PendingEvmRecord = { ...current, proof };
@@ -1237,12 +1183,9 @@ export function replacePendingEvmProof(
 }
 
 function proofsMatch(left: PendingEvmProof, right: PendingEvmProof) {
-  return left.kind === right.kind
-    && (left.kind === "hash"
-      ? left.hash === (right as Extract<PendingEvmProof, { kind: "hash" }>).hash
-      : left.kind === "calls"
-        ? left.id === (right as Extract<PendingEvmProof, { kind: "calls" }>).id
-        : true);
+  if (left.kind === "hash" && right.kind === "hash") return left.hash === right.hash;
+  if (left.kind === "calls" && right.kind === "calls") return left.id === right.id;
+  return left.kind === "reservation" && right.kind === "reservation";
 }
 
 function compareAndDeletePendingEvmRecord(

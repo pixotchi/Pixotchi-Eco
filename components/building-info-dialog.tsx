@@ -111,11 +111,11 @@ const buildingInfo = {
   },
   "town-3": { // Warehouse (Town)
     name: "Warehouse",
-    description: "Stores production claimed from Village buildings so you can decide which plant receives the PTS or TOD later.",
+    description: "Stores production claimed from Village buildings so you can decide which plant receives the PTS or lifetime later.",
     features: [
-      "Collect generated PTS and TOD from Village buildings into a land-level reserve.",
+      "Collect generated PTS and lifetime from Village buildings into a land-level reserve.",
       "Apply stored PTS to a selected plant when you want direct score growth.",
-      "Apply stored TOD in minutes to extend a plant's remaining lifetime.",
+      "Apply stored lifetime in minutes to keep a plant alive longer.",
       "Best used for saving production until a plant needs help or you are ready for a leaderboard push."
     ]
   },
@@ -252,7 +252,7 @@ function BarracksTroopTile({
             }
           />
           <InfoRow
-            label="Can Carry PTS/TOD"
+            label="Can carry PTS/lifetime"
             value={`${formatBarracksPoints(troop.troopCarryPoints)}/${formatDuration(Number(troop.troopCarryLifetime))}`}
           />
         </InfoRows>
@@ -359,7 +359,7 @@ function BarracksInfoContent({ open }: { open: boolean }) {
         <ul className="space-y-1.5 text-sm text-muted-foreground">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
-            <span>When a raid wins, the defender&apos;s unclaimed productions claim to Warehouse first. The attacker steals up to {effectiveLootShare}, capped by surviving troop carry ability. Stolen PTS and TOD are added to the attacker&apos;s Warehouse.</span>
+            <span>When a raid wins, the defender&apos;s unclaimed production is collected into Warehouse first. The attacker steals up to {effectiveLootShare}, capped by surviving troop carry ability. Stolen PTS and lifetime are added to the attacker&apos;s Warehouse.</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-0.5">•</span>
@@ -413,7 +413,7 @@ export default function BuildingInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isBarracks || isCasino ? 'max-w-md' : 'max-w-sm'}>
+      <DialogContent layout="detail" className={isBarracks || isCasino ? 'max-w-md' : 'max-w-sm'}>
         <DialogHeader className="pb-4">
           <DialogTitle>{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -562,7 +562,7 @@ export default function BuildingInfoDialog({
                   )}
                   {building.productionRatePlantLifetimePerDay > BigInt(0) && (
                     <InfoRow
-                      label="TOD / day"
+                      label="Lifetime per day"
                       value={formatLifetimeProduction(building.productionRatePlantLifetimePerDay)}
                       valueClassName="text-primary"
                     />

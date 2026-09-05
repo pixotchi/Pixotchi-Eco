@@ -51,7 +51,7 @@ assert.equal(getQuestFinalizeResult({ logs: [{ address: CLIENT_ENV.LAND_CONTRACT
 assert.match(describeQuestResult(getQuestFinalizeResult({ logs: [resetLog] }, BigInt("42"), 1), BigInt("42")), /No reward/);
 assert.equal(describeQuestResult({ outcome: 'finalized', rewardType: 0, amount: BigInt("1250000000000000000") }, BigInt("712")), '+1.25 SEED → your wallet');
 assert.equal(describeQuestResult({ outcome: 'finalized', rewardType: 1, amount: BigInt("1") }, BigInt("712")), '+<0.0001 LEAF → your wallet');
-assert.equal(describeQuestResult({ outcome: 'finalized', rewardType: 2, amount: BigInt("3661") }, BigInt("712")), '+1h 1m 1s TOD → Land #712 Warehouse');
+assert.equal(describeQuestResult({ outcome: 'finalized', rewardType: 2, amount: BigInt("3661") }, BigInt("712")), '+1h 1m 1s lifetime → Land #712 Warehouse');
 assert.equal(describeQuestResult({ outcome: 'finalized', rewardType: 4, amount: BigInt("42000000000000000000") }, BigInt("712")), '+42 XP → Land #712');
 
 const stored = new Map<string, string>();
@@ -68,5 +68,8 @@ assert.doesNotThrow(() => saveQuestResult({ getItem: () => null, setItem: () => 
 assert.equal(loadQuestResult({ getItem: () => 'corrupt', setItem: () => {} }, scope, 0), null);
 
 assert.equal(calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt("43200") }, BigInt("0")), '1d 0h 0m');
+assert.equal(calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt(43200 * 400) }, BigInt(0)), '400d 0h 0m');
+assert.equal(calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt(1) }, BigInt(0)), '<1m');
+assert.equal(calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt(1) }, BigInt(1)), 'Complete');
 assert.equal(calculateUpgradeProgress({ isUpgrading: true, blockHeightUpgradeInitiated: BigInt("100"), blockHeightUntilUpgradeDone: BigInt("100") }, BigInt("100")), 100);
 console.log('Quest UI smoke passed');

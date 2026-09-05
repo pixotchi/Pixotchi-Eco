@@ -29,6 +29,8 @@ export default function ChatProfileDialog({
   const cacheRef = useRef<Map<string, PlantCache>>(new Map());
   const [plant, setPlant] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
 
   // Request deduplication ref to prevent multiple simultaneous calls
   const fetchPendingRef = useRef<string | null>(null);
@@ -42,6 +44,7 @@ export default function ChatProfileDialog({
     }
 
     let cancelled = false;
+    setLoadError(null);
     const cacheKey = normalisedAddress;
     const cached = cacheRef.current.get(cacheKey);
     const now = Date.now();
@@ -85,6 +88,7 @@ export default function ChatProfileDialog({
         // address on failure.
         if (fetchPendingRef.current === cacheKey) {
           setPlant(null);
+          setLoadError("This player’s plant could not be loaded.");
         }
       })
       .finally(() => {
@@ -103,7 +107,7 @@ export default function ChatProfileDialog({
         fetchPendingRef.current = null;
       }
     };
-  }, [open, normalisedAddress]);
+  }, [open, normalisedAddress, retryRevision]);
 
   return (
     <EfpTransactionBoundary open={open} onTransactionOpen={onTransactionOpen}>
@@ -117,6 +121,8 @@ export default function ChatProfileDialog({
         nested
         walletAddressOverride={normalisedAddress}
         primaryPlantLoading={loading}
+        primaryPlantError={loadError}
+        onRetryPrimaryPlant={() => setRetryRevision(value => value + 1)}
         walletNameOverride={null}
       />
     </EfpTransactionBoundary>

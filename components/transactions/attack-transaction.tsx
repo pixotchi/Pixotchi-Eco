@@ -1,4 +1,6 @@
 "use client";
+import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
+
 
 import React from 'react';
 import GameTransaction from './game-transaction';
@@ -21,14 +23,14 @@ const PIXOTCHI_NFT_ABI = [
 interface AttackTransactionProps {
   attackerId: number;
   targetId: number;
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
+  onSuccess?: (tx: TransactionProof) => void;
+  onError?: (error: unknown) => void;
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
-  onStatusUpdate?: (status: UntypedValue) => void;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
 }
 
 export default function AttackTransaction({

@@ -127,9 +127,9 @@ export function appendBuilderSuffix(encodedData: `0x${string}`): `0x${string}` {
 export function transformCallsWithBuilderCode<T extends {
   address?: `0x${string}`;
   to?: `0x${string}`;
-  abi?: UntypedValue;
+  abi?: import("viem").Abi;
   functionName?: string;
-  args?: UntypedValue[];
+  args?: readonly unknown[];
   data?: `0x${string}`;
   value?: bigint;
 }>(calls: T[]): T[] {

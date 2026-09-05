@@ -36,7 +36,8 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, Lock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { erc20Abi, formatUnits, parseUnits } from "viem";
+import { erc20Abi, parseUnits } from "viem";
+import { TokenAmount } from '@/components/ui/token-amount';
 import { useAccount } from "wagmi";
 import SmartWalletTransaction from "./smart-wallet-transaction";
 import type { LifecycleStatus } from "./transaction-kit";
@@ -178,7 +179,6 @@ export default function BatchQuestStartCard({
     setDifficulty(loadBatchQuestDifficulty());
   }, []);
 
-  const pixotchiBalanceNum = parseFloat(formatUnits(pixotchiBalance, 18));
   const burnAmountWei = useMemo(() => parseUnits(BURN_AMOUNT_TOKENS.toString(), 18), []);
   const shouldBurn = !runPaid;
   const hasEnoughTokens = !shouldBurn
@@ -618,6 +618,7 @@ export default function BatchQuestStartCard({
                 Fee transaction submitted. Confirming it before sending another batch.
               </div>
               <SmartWalletTransaction
+                successFeedback="feature"
                 effects={{ domains: ["balances"] }}
                 key={txKey}
                 intentKey={batchQuestIntentKey}
@@ -648,7 +649,7 @@ export default function BatchQuestStartCard({
               </div>
               <div className="font-mono text-[10px] text-muted-foreground">
                 Required: {BURN_AMOUNT_TOKENS.toLocaleString()} to burn | Balance:{" "}
-                {pixotchiBalanceNum.toFixed(2)}
+                <TokenAmount amount={pixotchiBalance} unit="PIXOTCHI" />
               </div>
             </div>
           ) : (
@@ -666,6 +667,7 @@ export default function BatchQuestStartCard({
                 )}
               </div>
               <SmartWalletTransaction
+                successFeedback="feature"
                 effects={{ domains: ["balances"] }}
                 key={txKey}
                 intentKey={batchQuestIntentKey}
@@ -694,7 +696,7 @@ export default function BatchQuestStartCard({
 
   return (
     <Card className={cn("border-primary/20", className)}>
-      <CardContent className="space-y-3 p-4">{content}</CardContent>
+      <CardContent className="space-y-3">{content}</CardContent>
     </Card>
   );
 }

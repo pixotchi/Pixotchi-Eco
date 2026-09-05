@@ -289,6 +289,7 @@ export default function CasinoTransaction({
 
     return (
         <GameTransaction
+            successFeedback="feature"
           effects={{ domains: ["arcade", "balances"] }}
             intentKey={`roulette:${landId}`}
             calls={calls as UntypedValue}

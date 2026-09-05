@@ -41,6 +41,7 @@ type ApprovalActionTransactionProps = {
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
+  successMessage?: string;
   resetKey?: string | number;
 };
 
@@ -62,6 +63,7 @@ export default function ApprovalActionTransaction({
   disabled = false,
   feedbackMode = 'toast',
   showToast = true,
+  successMessage,
   resetKey,
 }: ApprovalActionTransactionProps) {
   const { isSmartWallet } = useSmartWallet();
@@ -90,6 +92,7 @@ export default function ApprovalActionTransaction({
   if (pendingApproval && isSmartWallet) {
     return (
       <SmartWalletTransaction
+        successMessage={successMessage}
         effects={{ domains: ["allowances", "balances", "plants", "lands", "buildings"] }}
         intentKey={intentKey}
         calls={[approvalCall, ...actionCalls]}
@@ -128,6 +131,7 @@ export default function ApprovalActionTransaction({
 
   return (
     <GameTransaction
+      successMessage={successMessage}
       effects={{ domains: ["allowances", "balances", "plants", "lands", "buildings"] }}
       intentKey={intentKey}
       calls={actionCalls}

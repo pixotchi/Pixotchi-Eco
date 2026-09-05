@@ -128,7 +128,7 @@ const EventIcon = React.memo(({
           const buildingName = getBuildingName(event.buildingId, true);
           const buildingIcons: { [key: string]: string } = {
             "Stake House": "/icons/stake-house.png",
-            "Ware House": "/icons/ware-house.png",
+            "Warehouse": "/icons/ware-house.png",
             "Marketplace": "/icons/marketplace.png",
             "Farmer House": "/icons/farmer-house.png"
           };
@@ -343,7 +343,7 @@ export const PlayedEventRenderer = ({ event, perspective, shopItemMap, gardenIte
   if (timeBonusSeconds !== 0) {
     rewardChips.push(
       <span key="tod" className="font-semibold text-value">
-        {`${timeBonusSeconds > 0 ? '+' : '-'}${formatDuration(Math.abs(timeBonusSeconds))} TOD`}
+        {`${timeBonusSeconds > 0 ? '+' : '-'}${formatDuration(Math.abs(timeBonusSeconds))} lifetime`}
       </span>
     );
   }

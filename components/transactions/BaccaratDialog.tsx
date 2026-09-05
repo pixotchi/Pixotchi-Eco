@@ -1,9 +1,10 @@
 "use client";
+import { GameDialogHeading } from './game-dialog-heading';
 
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription } from "@/components/ui/dialog";
+import { AmountField } from '@/components/ui/amount-field';
 import PlayingCard from "@/components/ui/PlayingCard";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { loadBetPreference, storeBetPreference } from "@/lib/casino-bet-preferences";
@@ -28,7 +29,7 @@ import {
   getBaccaratOutcomeLabel,
   getBaccaratPayoutLabel,
 } from "@/public/abi/baccarat-abi";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Image from "next/image";
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
@@ -247,10 +248,6 @@ export default function BaccaratDialog({
     () => tokenConfig ? formatCasinoLimitForToken(offeredMaxBet, tokenDecimals, effectiveToken, "max") : "0",
     [effectiveToken, offeredMaxBet, tokenConfig, tokenDecimals]
   );
-  const betInputWidth = useMemo(() => {
-    const visibleChars = Math.max(betAmount.length, formattedMinBet.length, 4);
-    return `calc(${Math.min(visibleChars + 1, 18)}ch + 1.25rem)`;
-  }, [betAmount, formattedMinBet]);
 
   const { data: balanceData, refetch: refetchBalance } = useBalance({
     address,
@@ -573,7 +570,6 @@ export default function BaccaratDialog({
 
   const handleApproveSuccess = useCallback(async () => {
     if (!address || !effectiveToken || refreshScopeRef.current !== refreshScopeKey) return;
-    toast.success(`${tokenSymbol} approved for Baccarat`);
 
     const allowanceGeneration = allowanceGenerationRef.current + 1;
     allowanceGenerationRef.current = allowanceGeneration;
@@ -591,7 +587,7 @@ export default function BaccaratDialog({
       setAllowanceWei(approval);
       if (approval >= betWei) break;
     }
-  }, [address, betWei, effectiveToken, refreshScopeKey, tokenSymbol]);
+  }, [address, betWei, effectiveToken, refreshScopeKey]);
 
   const handleBetAmountChange = useCallback((value: string) => {
     if (!isPotentialCasinoAmountInput(value)) return;
@@ -679,7 +675,8 @@ export default function BaccaratDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : handleClose())}>
       <DialogContent
-        className="blackjack-dialog-surface max-h-full w-[min(96vw,34rem)] overflow-hidden border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat !p-0 text-white"
+        padding="none"
+        className="blackjack-dialog-surface w-[min(96vw,34rem)] border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat text-white"
         mobileMode="center"
         surface="game"
         size="full"
@@ -691,23 +688,13 @@ export default function BaccaratDialog({
           if (walletTxPending || hasPendingGame) event.preventDefault();
         }}
       >
-        <DialogTitle className="sr-only">Baccarat</DialogTitle>
+        <GameDialogHeading title="Baccarat" onClose={handleClose} />
         <DialogDescription className="sr-only">
           Punto Banco Baccarat with Player, Banker, and Tie bets.
         </DialogDescription>
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {baccaratAnnouncement}
         </p>
-        <Button
-          type="button"
-          variant="headerIcon"
-          size="icon"
-          onClick={handleClose}
-          aria-label="Close Baccarat dialog"
-          className="absolute right-3 top-3 z-50"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
 
         <div className="flex min-h-0 flex-1 flex-col bg-black/50 text-white">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-4 sm:px-4 sm:pt-5">
@@ -842,26 +829,7 @@ export default function BaccaratDialog({
 
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                       <div className="min-w-0">
-                        <label htmlFor={betAmountInputId} className="text-xs font-semibold uppercase text-white/60">
-                          Bet Amount
-                        </label>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Input
-                            id={betAmountInputId}
-                            inputMode="text"
-                            placeholder={formattedMinBet}
-                            value={betAmount}
-                            disabled={bettingLocked}
-                            onChange={(event) => handleBetAmountChange(event.target.value)}
-                            className="h-11 min-w-[4.5rem] border-white/20 bg-black/55 text-center text-white placeholder:text-white/45 caret-white selection:bg-white/20 selection:text-white focus:!border-white/45 focus:!bg-black/70 focus:!text-white focus:!outline-none focus-visible:!border-white/45 focus-visible:!bg-black/70 focus-visible:!text-white focus-visible:!ring-1 focus-visible:!ring-white/35 focus-visible:!ring-offset-0"
-                            style={{ width: betInputWidth }}
-                            aria-label="Baccarat bet amount"
-                          />
-                          <span className="inline-flex items-center gap-1 text-sm font-medium text-white/85">
-                            <Image src={tokenLogo} alt={tokenSymbol} width={16} height={16} className="h-4 w-4 rounded-full" />
-                            {tokenSymbol}
-                          </span>
-                        </div>
+                        <AmountField id={betAmountInputId} label="Bet amount" unit={tokenSymbol} surface="game" placeholder={formattedMinBet} aria-label="Baccarat bet amount" value={betAmount} onChange={e => handleBetAmountChange(e.target.value)} disabled={bettingLocked} />
                         <div className="mt-2 text-xs text-white/60">
                           Min {formattedMinBet} • Max {formattedMaxBet}
                         </div>

@@ -5,7 +5,8 @@ import PlantImage from '@/components/PlantImage';
 import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply-transaction';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { AmountField } from '@/components/ui/amount-field';
+import { ResourceState } from '@/components/ui/resource-state';
 import { getPlantsByOwner } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -30,6 +31,8 @@ export default function WarehousePanel({
   onApplySuccess
 }: WarehousePanelProps) {
   const { address } = useAccount();
+  const [plantsLoading, setPlantsLoading] = useState(false);
+  const [plantsError, setPlantsError] = useState<string | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantsOwner, setPlantsOwner] = useState<string | null>(null);
   const [selectedPlantId, setSelectedPlantId] = useState<number | null>(null);
@@ -37,9 +40,7 @@ export default function WarehousePanel({
   const [applyTodMinutes, setApplyTodMinutes] = useState<string>("");
   const availableDescriptionId = useId();
   const pointsInputId = useId();
-  const pointsErrorId = useId();
   const lifetimeInputId = useId();
-  const lifetimeErrorId = useId();
   const normalizedOwner = address?.toLowerCase() ?? null;
   const currentOwnerRef = useRef<string | null>(normalizedOwner);
   const plantsRequestRef = useRef(0);
@@ -49,6 +50,8 @@ export default function WarehousePanel({
     const requestOwner = normalizedOwner;
     const requestId = ++plantsRequestRef.current;
     if (!address || !requestOwner) return;
+    setPlantsLoading(true);
+    setPlantsError(null);
     try {
       const list = await getPlantsByOwner(address);
       if (
@@ -70,6 +73,9 @@ export default function WarehousePanel({
       setPlants([]);
       setPlantsOwner(null);
       setSelectedPlantId(null);
+      setPlantsError('Your plants could not be loaded. Retry before applying resources.');
+    } finally {
+      if (requestId === plantsRequestRef.current && currentOwnerRef.current === requestOwner) setPlantsLoading(false);
     }
   }, [address, normalizedOwner]);
 
@@ -80,6 +86,8 @@ export default function WarehousePanel({
     setPlants([]);
     setPlantsOwner(null);
     setSelectedPlantId(null);
+    setPlantsLoading(false);
+    setPlantsError(null);
     setApplyPts('');
     setApplyTodMinutes('');
     if (normalizedOwner) void loadPlants();
@@ -92,6 +100,7 @@ export default function WarehousePanel({
   const plantsAreCurrent = normalizedOwner !== null && plantsOwner === normalizedOwner;
   const currentPlants = plantsAreCurrent ? plants : [];
   const currentSelectedPlantId = plantsAreCurrent ? selectedPlantId : null;
+  const selectedPlant = currentPlants.find(plant => plant.id === currentSelectedPlantId);
 
   const availablePtsHuman = useMemo(() => {
     const v = typeof warehousePoints === 'bigint' ? warehousePoints : BigInt(0);
@@ -143,19 +152,23 @@ export default function WarehousePanel({
   return (
     <div className="space-y-3 pt-4 border-t border-border">
       <h4 className="font-semibold text-sm text-center">Apply Warehouse to Plant</h4>
-      <p id={availableDescriptionId} className="text-xs text-muted-foreground text-center">Available: {availablePtsHuman} PTS • {availableMinutes} min TOD</p>
+      <p id={availableDescriptionId} className="text-xs text-muted-foreground text-center">Available: {availablePtsHuman} PTS • {availableMinutes} min lifetime</p>
+
+      {plantsError ? <ResourceState status="error" title="Plants unavailable" description={plantsError} onRetry={() => void loadPlants()} />
+        : plantsLoading ? <ResourceState status="loading" title="Loading your plants…" />
+        : plantsAreCurrent && currentPlants.length === 0 ? <ResourceState status="empty" title="No plants in this wallet" description="Mint a plant to use your warehouse resources." /> : null}
 
       {/* Plant Selector */}
       <div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between h-12 text-sm">
-              {currentSelectedPlantId ? (
+            <Button variant="outline" disabled={!plantsAreCurrent || currentPlants.length === 0} className="w-full justify-between h-12 text-sm">
+              {selectedPlant ? (
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <PlantImage selectedPlant={{ id: currentSelectedPlantId, name: '', level: 0, score: 0, status: 0, rewards: 0, stars: 0, strain: 1, timeUntilStarving: 0, timePlantBorn: '0', lastAttackUsed: '0', lastAttacked: '0', statusStr: '', owner: address || '0x', extensions: [] }} width={20} height={20} />
+                  <PlantImage selectedPlant={selectedPlant} width={28} height={28} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{currentPlants.find(pl => pl.id === currentSelectedPlantId)?.name || `Plant #${currentSelectedPlantId}`}</div>
-                    <div className="text-xs text-muted-foreground">#{currentSelectedPlantId}</div>
+                    <div className="font-medium truncate">{selectedPlant.name || `Plant #${selectedPlant.id}`}</div>
+                    {selectedPlant.name && <div className="text-xs text-muted-foreground">#{selectedPlant.id}</div>}
                   </div>
                   <div className="flex-shrink-0">
                     <CountdownTimer 
@@ -170,14 +183,14 @@ export default function WarehousePanel({
               <ChevronDown className="w-4 h-4 flex-shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] max-h-60 overflow-y-auto">
+          <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
             {currentPlants.map(p => (
               <DropdownMenuItem key={p.id} onSelect={() => setSelectedPlantId(p.id)} className="h-16">
                 <div className="flex items-center gap-2 w-full">
                   <PlantImage selectedPlant={p} width={20} height={20} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{p.name || `Plant #${p.id}`}</div>
-                    <div className="text-xs text-muted-foreground">#{p.id}</div>
+                    {p.name && <div className="text-xs text-muted-foreground">#{p.id}</div>}
                   </div>
                   <div className="flex-shrink-0">
                     <CountdownTimer 
@@ -195,44 +208,17 @@ export default function WarehousePanel({
       </div>
 
       {/* Apply PTS */}
-      <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
-        <div className="relative">
-          <label htmlFor={pointsInputId} className="sr-only">Warehouse points amount</label>
-          <Input
-            id={pointsInputId}
-            value={applyPts}
-            onChange={(e) => setApplyPts(e.target.value)}
-            placeholder="Amount"
-            inputMode="decimal"
-            aria-invalid={ptsTooHigh || ptsInvalid}
-            aria-describedby={ptsTooHigh || ptsInvalid ? `${availableDescriptionId} ${pointsErrorId}` : availableDescriptionId}
-            className={`h-11 text-sm pr-20 border-border ${ptsTooHigh || ptsInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="default"
-            onClick={() => setApplyPts(availablePtsHuman)}
-            className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
-          >
-            Max
-          </Button>
-        </div>
-        {(ptsTooHigh || ptsInvalid) && (
-          <div id={pointsErrorId} role="alert" className="col-span-2 -mt-1 text-xs text-destructive">
-            {ptsTooHigh ? 'Amount exceeds available PTS.' : 'Enter a positive PTS amount with up to 4 decimal places.'}
-          </div>
-        )}
+      <div className="space-y-3">
+        <AmountField id={pointsInputId} label="Points to add" unit="PTS" value={applyPts} onChange={e => setApplyPts(e.target.value)} onMax={() => setApplyPts(availablePtsHuman)} balance={availablePtsHuman} error={ptsTooHigh ? 'Amount exceeds available PTS.' : ptsInvalid ? 'Enter a positive amount with up to 4 decimal places.' : undefined} />
         <WarehouseApplyTransaction
           landId={landId}
           plantId={currentSelectedPlantId || 0}
           amount={applyPts}
           mode="points"
-          buttonText="Apply"
-          buttonClassName="h-11 min-h-11 px-4 text-sm"
+          buttonText="Apply PTS"
+          buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyPts || ptsTooHigh || ptsInvalid}
           onSuccess={(tx: UntypedValue) => {
-            toast.success('PTS applied');
             setApplyPts('');
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
@@ -250,44 +236,17 @@ export default function WarehousePanel({
       </div>
 
       {/* Apply TOD (minutes) */}
-      <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
-        <div className="relative">
-          <label htmlFor={lifetimeInputId} className="sr-only">Warehouse lifetime in minutes</label>
-          <Input
-            id={lifetimeInputId}
-            value={applyTodMinutes}
-            onChange={(e) => setApplyTodMinutes(e.target.value)}
-            placeholder="Minutes"
-            inputMode="numeric"
-            aria-invalid={minutesTooHigh || minutesInvalid}
-            aria-describedby={minutesTooHigh || minutesInvalid ? `${availableDescriptionId} ${lifetimeErrorId}` : availableDescriptionId}
-            className={`h-11 text-sm pr-20 border-border ${minutesTooHigh || minutesInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="default"
-            onClick={() => setApplyTodMinutes(availableMinutes)}
-            className="absolute right-0 top-0 h-11 min-h-11 rounded-l-none px-3 text-xs"
-          >
-            Max
-          </Button>
-        </div>
-        {(minutesTooHigh || minutesInvalid) && (
-          <div id={lifetimeErrorId} role="alert" className="col-span-2 -mt-1 text-xs text-destructive">
-            {minutesTooHigh ? 'Minutes exceed available TOD.' : 'Enter a positive whole number of minutes.'}
-          </div>
-        )}
+      <div className="space-y-3">
+        <AmountField id={lifetimeInputId} label="Lifetime to add" unit="minutes" value={applyTodMinutes} onChange={e => setApplyTodMinutes(e.target.value)} inputMode="numeric" onMax={() => setApplyTodMinutes(availableMinutes)} balance={availableMinutes} error={minutesTooHigh ? 'Amount exceeds available lifetime.' : minutesInvalid ? 'Enter a positive whole number of minutes.' : undefined} />
         <WarehouseApplyTransaction
           landId={landId}
           plantId={currentSelectedPlantId || 0}
           amount={applyTodMinutes}
           mode="lifetime"
-          buttonText="Apply"
-          buttonClassName="h-11 min-h-11 px-4 text-sm"
+          buttonText="Add time"
+          buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyTodMinutes || minutesTooHigh || minutesInvalid}
           onSuccess={(tx: UntypedValue) => {
-            toast.success('TOD applied');
             setApplyTodMinutes('');
             onApplySuccess();
             try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
@@ -303,7 +262,7 @@ export default function WarehousePanel({
           onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
-      <p className="text-xs text-muted-foreground text-center">PTS up to 4 decimals. TOD input is minutes; converted to seconds onchain.</p>
+      <p className="text-xs text-muted-foreground text-center">Add points with up to 4 decimal places, or lifetime in whole minutes.</p>
     </div>
   );
 }

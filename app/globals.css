@@ -944,7 +944,7 @@
     background-color: hsl(var(--chromatic-layer-surface)) !important;
     background-image: linear-gradient(180deg, hsl(var(--chromatic-layer-highlight)) 0%, hsl(var(--chromatic-layer-surface)) 100%) !important;
     border-color: hsl(var(--edge-panel));
-    box-shadow: var(--surface-highlight), var(--shadow-raised);
+    box-shadow: var(--shadow-hairline);
   }
 
   /*
@@ -1086,7 +1086,7 @@
     max-width: 28rem;
   }
 
-  @media (min-width: 54rem) {
+  @media (min-width: 40rem) {
     .app-shell-inner[data-connected="true"] {
       max-width: min(100vw, 56rem);
     }
@@ -1899,3 +1899,8 @@ button.profile-follow-button.follow-button p {
 }
 .motion-off .transaction-feedback-card { transform: none !important; }
 .performance-mode .transaction-feedback-card { transition: none; transform: none !important; box-shadow: 0 2px 10px rgb(0 0 0 / 0.16); }
+
+/* Keep phone fields readable and prevent iOS focus zoom, including caller density overrides. */
+@media (max-width: 53.999rem), (pointer: coarse) {
+  [data-form-control] { font-size: 1rem; }
+}

@@ -334,7 +334,7 @@ assert.deepEqual(legacySpinResult, {
 });
 
 const leaderboard = projectFile('components/tabs/leaderboard-tab.tsx');
-assert.match(leaderboard, /\(didWin \? toast\.success : toast\.error\)/);
+assert.match(leaderboard, /\(outcome\.didWin \? toast\.success : toast\.error\)/);
 assert.doesNotMatch(leaderboard, /toast\.success\('Attack confirmed!'/);
 assert.match(leaderboard, /Attack confirmed\. Check Activity for the result\./);
 
@@ -346,7 +346,8 @@ assert.doesNotMatch(arcade, /showToast=\{false\}/);
 assert.match(arcade, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
 
 const dialogUi = projectFile('components/ui/dialog.tsx');
-assert.match(dialogUi, /sticky && "surface-footer-divider dialog-footer-surface sticky[\s\S]*pt-3/);
+assert.match(dialogUi, /const fixed = sticky \?\? layout === "form"/);
+assert.match(dialogUi, /fixed && "surface-footer-divider dialog-footer-surface sticky[\s\S]*pt-3/);
 assert.match(dialogUi, /surface-scroll-fade[\s\S]*min-h-0[\s\S]*flex-1[\s\S]*overflow-y-auto[\s\S]*py-3/);
 
 const tasksInfoDialog = projectFile('components/tasks/TasksInfoDialog.tsx');
@@ -367,17 +368,17 @@ assert.doesNotMatch(premiumUi, /ActionBar/);
 
 const marketplaceDialog = projectFile('components/transactions/marketplace-dialog.tsx');
 assert.match(marketplaceDialog, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
-assert.equal((marketplaceDialog.match(/<Input\b/g) || []).length, 2);
+assert.equal((marketplaceDialog.match(/<AmountField\b/g) || []).length, 2);
 assert.equal((marketplaceDialog.match(/buttonText="Create Order"/g) || []).length, 1);
-assert.match(marketplaceDialog, /htmlFor=\{amountInputId\}/);
-assert.match(marketplaceDialog, /htmlFor=\{priceInputId\}/);
+assert.match(marketplaceDialog, /<AmountField id=\{amountInputId\}/);
+assert.match(marketplaceDialog, /<AmountField id=\{priceInputId\}/);
 assert.match(marketplaceDialog, /onBalanceRefresh/);
 assert.doesNotMatch(marketplaceDialog, /refreshBalancesAndAllowances/);
 assert.doesNotMatch(marketplaceDialog, /addEventListener\(['"]balances:refresh/);
 assert.doesNotMatch(marketplaceDialog, /setTimeout\(\(\) => fetchBalances/);
 assert.match(marketplaceDialog, /setExactPriceRatio\(row\.exactRatio\)/);
 assert.match(marketplaceDialog, /computeMarketplaceAmountAsk\(sellSide, parsedAmount, exactPriceRatio\)/);
-assert.match(marketplaceDialog, /onChange=\{\(event\) => \{\s*setExactPriceRatio\(null\);\s*setPrice\(event\.target\.value\);/);
+assert.match(marketplaceDialog, /onChange=\{\(?event\)? => \{\s*setExactPriceRatio\(null\);\s*setPrice\(event\.target\.value\);/);
 
 // Active order #1792: 29 LEAF for 10,000,000 SEED is exactly 0.0000029.
 // The old six-decimal preset produced 30 LEAF; the selected raw ratio must
@@ -678,10 +679,8 @@ assert.match(transferDialog, /Promise\.allSettled\(\[/);
 assert.match(transferDialog, /Retry asset loading/);
 assert.match(transferDialog, /Retry approval check/);
 assert.match(transferDialog, /!fetchingCounts && !assetLoadError && !hasAnythingToTransfer/);
-assert.equal(
-  (transferDialog.match(/Approval status unavailable — retry check/g) || []).length,
-  2,
-);
+assert.equal((transferDialog.match(/<ApprovalState label=/g) || []).length, 2);
+assert.match(projectFile('components/ui/approval-state.tsx'), /state === 'required'[\s\S]*return <>\{children\}<\/>/);
 assert.match(transferDialog, /!approvalStatusLoaded\.plants \|\| !plantApprovalCall/);
 assert.match(transferDialog, /!approvalStatusLoaded\.lands \|\| !landApprovalCall/);
 assert.match(transferDialog, /plants: plantsApproval\.status === "fulfilled"/);
@@ -766,7 +765,8 @@ const transactionKit = projectFile('components/transactions/transaction-kit.tsx'
 assert.match(transactionKit, /statusName: "transactionUnresolved"/);
 assert.match(transactionKit, /hasSubmittedProof && !isDefinitivePostSubmissionError\(error\)/);
 assert.match(transactionKit, /pendingReceipt = requestCanonicalReceipt\(\)/);
-assert.match(transactionKit, /pendingStatus = requestCallsStatus\(\)/);
+assert.match(transactionKit, /monitorSubmittedBatch\([\s\S]*request: requestCallsStatus/);
+assert.match(projectFile('lib/transaction-monitor.ts'), /pending = request\(\)/);
 assert.match(transactionKit, /activeCallsRef\.current \?\? stableCallsRef\.current/);
 assert.match(transactionKit, /activeCallsRef\.current = \{[\s\S]*digest: pendingCallsDigest/);
 const callsSnapshotIndex = transactionKit.indexOf('Capture this before the first await.');
@@ -1460,8 +1460,7 @@ const blackjackDialog = projectFile('components/transactions/BlackjackDialog.tsx
 assert.match(blackjackDialog, /mobileMode="center"/);
 assert.doesNotMatch(blackjackDialog, /mobileMode="sheet"/);
 assert.match(blackjackDialog, /hideCloseButton/);
-assert.match(blackjackDialog, /<DialogTitle className="sr-only">Blackjack<\/DialogTitle>/);
-assert.match(blackjackDialog, /Close Blackjack dialog/);
+assert.match(blackjackDialog, /<GameDialogHeading title="Blackjack" onClose=\{handleClose\}/);
 assert.doesNotMatch(blackjackDialog, /<DialogHeader/);
 assert.match(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS/);
 assert.match(blackjackDialog, /data-blackjack-action-footer/);
@@ -1473,13 +1472,12 @@ const casinoDialog = projectFile('components/transactions/CasinoDialog.tsx');
 assert.match(casinoDialog, /mobileMode="center"/);
 assert.doesNotMatch(casinoDialog, /mobileMode="sheet"/);
 assert.match(casinoDialog, /hideCloseButton/);
-assert.match(casinoDialog, /<DialogTitle className="sr-only">Roulette<\/DialogTitle>/);
-assert.match(casinoDialog, /Close Roulette dialog/);
+assert.match(casinoDialog, /<GameDialogHeading title="Roulette" onClose=\{\(\) => handleClose\(false\)\}/);
 assert.doesNotMatch(casinoDialog, /<DialogHeader/);
 assert.match(casinoDialog, /showRoundResult = !!result && !isSpinning && !wheelSpinning/);
 assert.match(casinoDialog, /No win this spin/);
 assert.doesNotMatch(casinoDialog, /<span className="font-bold">No win<\/span>/);
-assert.match(casinoDialog, /bg-\[linear-gradient\(180deg,rgb\(0,0,0\)_0%,rgb\(0,0,0\)_42%,rgb\(0,0,0\)_100%\)\]/);
+assert.match(casinoDialog, /<DialogFooter sticky className="[^"]*bg-black bg-none/);
 assert.doesNotMatch(casinoDialog, /<DialogFooter sticky className="[^"]*bg-black\/75/);
 
 const gameTransaction = projectFile('components/transactions/game-transaction.tsx');
@@ -1547,7 +1545,7 @@ const smartWalletTransaction = projectFile('components/transactions/smart-wallet
 assert.match(smartWalletTransaction, /<GameTransaction \{\.\.\.props\}/);
 
 const blackjackTransaction = projectFile('components/transactions/blackjack-transaction.tsx');
-assert.match(blackjackTransaction, /<GlobalTransactionToast \/>/);
+assert.match(blackjackTransaction, /<GlobalTransactionToast suppressSuccess \/>/);
 assert.doesNotMatch(blackjackTransaction, /<TransactionStatus \/>/);
 
 const claimRewardsTransaction = projectFile('components/transactions/claim-rewards-transaction.tsx');

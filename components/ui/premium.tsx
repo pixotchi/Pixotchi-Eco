@@ -28,9 +28,7 @@ export function StatusChip({
   return (
     <Badge
       variant={STATUS_CHIP_TONE_TO_VARIANT[tone]}
-      /* Preserve StatusChip's original 24px density (Badge's default is 28px)
-         while keeping Badge as the single visual source. */
-      className={cn("min-h-6 px-2 py-0.5", className)}
+      className={className}
     >
       {children}
     </Badge>
@@ -57,7 +55,7 @@ export function InlineBalanceNotice({
       aria-live="polite"
     >
       <Info className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
-      {children}
+      <div className="min-w-0 [overflow-wrap:anywhere]">{children}</div>
     </div>
   );
 }
