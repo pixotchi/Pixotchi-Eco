@@ -6,6 +6,7 @@ import { DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuI
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import GlobalTransactionToast from "@/components/transactions/global-transaction-toast";
+import { TransactionRecoveryOptions } from "@/components/transactions/transaction-recovery-options";
 import { Transaction,TransactionButton,TransactionStatus,type LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { useDebounce } from "@/hooks/useDebounce";
 import { getBaseReadClient } from "@/lib/base-rpc";
@@ -639,7 +640,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         version: 1,
       };
       if (!writeTransferPlan(plan, null)) {
-        toast.error("Safe transfers require browser storage. Enable site storage, then try again.");
+        toast.error("We need browser storage to keep your transfer safe. Enable site storage and try again.");
         return;
       }
 
@@ -850,7 +851,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       setUncertainPlanStep(true);
       toast.error(
         succeeded
-          ? "Transfer confirmed, but local progress could not be saved. Do not resend it."
+          ? "Transfer confirmed, but we couldn't save your progress. Please don't send it again."
           : "Transfer result recorded onchain, but local progress could not be saved.",
       );
       return;
@@ -900,7 +901,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     const plan = activePlanRef.current;
     if (!plan || plan.phase !== "ready") return;
     if (!removeTransferPlan(plan)) {
-      toast.error("Could not safely cancel the stored transfer plan");
+      toast.error("We couldn't safely cancel this transfer.");
       return;
     }
     activePlanRef.current = null;
@@ -916,7 +917,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     if (!plan || plan.phase !== "submission-started") return;
     const retryPlan: TransferPlan = { ...plan, phase: "ready" };
     if (!writeTransferPlan(retryPlan, plan)) {
-      toast.error("Could not safely update the stored transfer plan");
+      toast.error("We couldn't safely update this transfer.");
       return;
     }
     activePlanRef.current = retryPlan;
@@ -1242,22 +1243,22 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
           </div>
           {activePlan && activePlan.steps.length > 1 && (
             <div className="rounded-[var(--radius-control)] border border-border/60 bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-              Fallback mode sends one NFT per confirmed transaction. Step {activePlan.nextStepIndex + 1} of {activePlan.steps.length}.
+              This transfer will send one NFT at a time. Step {activePlan.nextStepIndex + 1} of {activePlan.steps.length}.
             </div>
           )}
           {uncertainPlanStep && (
             <div className="rounded-[var(--radius-control)] border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100" role="alert">
-              This transfer may already have reached your wallet. It will not be resent automatically. Check wallet activity before allowing a retry.
+              Confirmation is delayed. Your transfer may still complete.
             </div>
           )}
           {activePlan && !activeStepCall && (
             <div className="rounded-[var(--radius-control)] border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
-              This stored transfer cannot be reconstructed safely. It has been blocked to prevent an accidental resend.
+              We couldn&apos;t safely resume this transfer. It is paused to prevent sending the same assets twice.
             </div>
           )}
           {activePlan?.phase === "ready" && !planOwnershipVerified && (
             <p className="text-xs text-muted-foreground" role="status">
-              Verifying that the selected assets are still in this wallet…
+              Checking that these assets are still in your wallet…
             </p>
           )}
           <label className="flex min-h-11 items-center gap-3 rounded-[var(--radius-control)] border border-border/60 bg-card/70 px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
@@ -1294,14 +1295,11 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                   const isCheckOnly = statusName === "transactionUnresolved" || statusName === "transactionStale";
                   if (uncertainPlanStep && statusName === "idle") {
                     return (
-                      <Button
-                        className="h-auto min-h-11 whitespace-normal text-xs"
-                        onClick={acknowledgeUnsubmittedPlan}
+                      <TransactionRecoveryOptions
+                        onContinue={acknowledgeUnsubmittedPlan}
+                        description="Only continue if your wallet confirms this transfer was not sent. If it was sent, wait for confirmation."
                         disabled={context.isExecuting || context.isSubmissionLocked}
-                        variant="secondary"
-                      >
-                        I verified it was not submitted
-                      </Button>
+                      />
                     );
                   }
 
@@ -1310,7 +1308,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                     : isCheckOnly
                       ? "Check transaction"
                       : statusName === "submissionAmbiguous"
-                        ? "Check wallet activity"
+                        ? "Confirmation delayed"
                         : status === "error"
                           ? "Try again"
                           : context.isExecuting

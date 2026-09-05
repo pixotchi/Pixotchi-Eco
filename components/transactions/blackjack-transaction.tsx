@@ -639,14 +639,13 @@ export default function BlackjackTransaction({
                 calls={transformedCalls}
                 isSponsored={isSponsored}
                 capabilities={builderCapabilities}
-                resetAfter={2000}
             >
                 <div className="space-y-2">
                     <TransactionButton
-                        text={phase === "ready" ? "Confirm Transaction" : getButtonText()}
+                        text={phase === "ready" ? resolvedButtonText : getButtonText()}
                         className={activeClassName}
                         disabled={phase !== "ready"}
-                        ariaLabel={`${resolvedButtonAriaLabel}. Confirm transaction`}
+                        ariaLabel={`${resolvedButtonAriaLabel}. Confirm this action`}
                     />
                 </div>
                 <GlobalTransactionToast />

@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { DisabledReason, StatusChip } from '@/components/ui/premium';
+import { TransactionRecoveryOptions } from '@/components/transactions/transaction-recovery-options';
 import { ERC20_TOKEN_ABI } from '@/lib/swap/base-swap-abi';
 import {
   BASE_CHAIN_ID,
@@ -60,7 +61,6 @@ import {
   normalizeTransactionReceipt,
 } from '@/lib/transaction-utils';
 import {
-  PENDING_EVM_STALE_MESSAGE,
   PendingEvmStaleError,
   acknowledgePendingEvmRecord,
   canDurablyPersistPendingEvmTransactions,
@@ -142,7 +142,7 @@ type TrackedSwapSubmission<T> = {
 };
 
 class SwapSubmissionBlockedError extends Error {
-  constructor(message = 'Another wallet transaction is already in progress.') {
+  constructor(message = 'Another action is still in progress. Please wait for it to finish.') {
     super(message);
     this.name = 'SwapSubmissionBlockedError';
   }
@@ -150,7 +150,7 @@ class SwapSubmissionBlockedError extends Error {
 
 class SwapSubmissionAmbiguousError extends Error {
   constructor() {
-    super('Wallet submission may still be pending. Check your wallet activity before trying again.');
+    super('Confirmation delayed. Your swap may still complete.');
     this.name = 'SwapSubmissionAmbiguousError';
   }
 }
@@ -627,14 +627,14 @@ export default function PixotchiSwapPanel() {
   const swapMessage = useMemo(() => {
     if (pendingFeedbackRecord) {
       return getPendingEvmPhase(pendingFeedbackRecord) === 'stale'
-        ? PENDING_EVM_STALE_MESSAGE
+        ? 'Confirmation delayed.'
         : pendingFeedbackRecord.proof.kind === 'reservation'
-          ? 'Wallet submission may still be pending. Check wallet activity before trying again.'
-          : 'An existing wallet transaction is still awaiting confirmation.';
+          ? 'Confirmation delayed.'
+          : 'A previous action is still being confirmed.';
     }
 
     if (isPeerBlocked) {
-      return 'Another wallet transaction is already in progress.';
+      return 'Another action is still in progress. Please wait for it to finish.';
     }
 
     if (currentQuote?.strategy === 'blocked') {
@@ -979,7 +979,7 @@ export default function PixotchiSwapPanel() {
       const storage = getBrowserPendingEvmStorage();
       if (!canDurablyPersistPendingEvmTransactions(storage)) {
         throw new Error(
-          'Safe transaction tracking requires browser storage. Enable site storage, then try again.',
+          'We need browser storage to keep your transaction safe. Enable site storage and try again.',
         );
       }
 
@@ -1005,7 +1005,7 @@ export default function PixotchiSwapPanel() {
           releasePendingEvmCoordinatorAttempt(registry, reservation, controllerId);
           activePendingRecordRef.current = null;
           throw new Error(
-            'Safe transaction tracking requires browser storage. Enable site storage, then try again.',
+            'We need browser storage to keep your transaction safe. Enable site storage and try again.',
           );
         }
 
@@ -1089,7 +1089,7 @@ export default function PixotchiSwapPanel() {
             txHash: hash,
             message: retryAttempt === 0
               ? S.execution.transactionPending
-              : 'Confirmation is delayed. Still checking the same transaction…',
+              : 'Confirmation is taking a little longer. Still checking your transaction…',
           });
           retryAttempt += 1;
           await waitForMonitorRetry(signal);
@@ -1157,7 +1157,7 @@ export default function PixotchiSwapPanel() {
           }
           updateExecutionStep(stepIndex, {
             status: 'confirming',
-            message: 'Confirmation is delayed. Still checking the same wallet batch…',
+            message: 'Confirmation is taking a little longer. Still checking your transaction…',
           });
           await waitForMonitorRetry(signal);
         }
@@ -1641,7 +1641,7 @@ export default function PixotchiSwapPanel() {
           label: stage === 'approval' ? 'Token approval' : 'Swap',
           status: 'confirming',
           txHash: record.proof.kind === 'hash' ? record.proof.hash : undefined,
-          message: 'Resuming confirmation for the existing wallet transaction…',
+          message: 'Resuming confirmation for your previous action…',
         }]);
       }
 
@@ -1669,7 +1669,7 @@ export default function PixotchiSwapPanel() {
         if (stage === 'swap') {
           await finalizeSwapSuccess(monitored.receipt);
         } else {
-          toast.success('Token approval confirmed. Review your swap and submit again.');
+          toast.success('Token approval confirmed. Review your swap, then confirm it.');
           completionResetTimerRef.current = window.setTimeout(() => {
             completionResetTimerRef.current = null;
             setExecutionSteps(null);
@@ -1678,7 +1678,7 @@ export default function PixotchiSwapPanel() {
       } catch (error) {
         if (isAbortError(error)) return;
         const message = error instanceof PendingEvmStaleError
-          ? PENDING_EVM_STALE_MESSAGE
+          ? 'Confirmation delayed.'
           : humanizeSwapError(error);
         updateExecutionStep(0, { status: 'error', message });
         if (!(error instanceof PendingEvmStaleError)) toast.error(message);
@@ -1864,7 +1864,7 @@ export default function PixotchiSwapPanel() {
                   ...step,
                   status: isUnresolved ? 'confirming' : 'error',
                   message: error instanceof PendingEvmStaleError
-                    ? PENDING_EVM_STALE_MESSAGE
+          ? 'Confirmation delayed.'
                     : message,
                 }
               : step,
@@ -1988,11 +1988,11 @@ export default function PixotchiSwapPanel() {
     : null;
   const disabledReason = useMemo(() => {
     if (isExecuting) return null;
-    if (isRecoveryChecking) return 'Checking existing wallet activity.';
+    if (isRecoveryChecking) return 'Confirmation delayed.';
     if (isPeerBlocked) {
       return pendingFeedbackRecord && getPendingEvmPhase(pendingFeedbackRecord) === 'stale'
-        ? PENDING_EVM_STALE_MESSAGE
-        : 'Another wallet transaction is already in progress.';
+        ? 'Confirmation delayed.'
+        : 'Another action is still in progress. Please wait for it to finish.';
     }
     if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
     if (!walletClient?.account) return S.errors.walletClientUnavailable;
@@ -2248,15 +2248,10 @@ export default function PixotchiSwapPanel() {
             </DisabledReason>
           ) : null}
           {pendingFeedbackRecord && getPendingEvmPhase(pendingFeedbackRecord) === 'stale' ? (
-            <Button
-              type="button"
-              variant="outline"
-              fullWidth
-              className="mt-2 h-auto min-h-11 whitespace-normal py-2 leading-snug"
-              onClick={handleAcknowledgeStaleTransaction}
-            >
-              I checked my wallet — allow another transaction
-            </Button>
+            <TransactionRecoveryOptions
+              className="mt-2"
+              onContinue={handleAcknowledgeStaleTransaction}
+            />
           ) : null}
           <div
             id={messageId}

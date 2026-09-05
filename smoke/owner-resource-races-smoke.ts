@@ -182,13 +182,23 @@ assert.match(
 const farmerHouse = projectFile('components/building-details/FarmerHousePanel.tsx');
 assert.match(
   farmerHouse,
-  /requestId !== slotsRequestRef\.current[\s\S]*currentLandIdRef\.current !== requestLandId/,
-  'Farmer House quest slots must reject previous-land reads',
+  /requestId !== slotsRequestRef\.current[\s\S]*currentLandIdRef\.current !== requestLandId \|\| currentScopeRef\.current !== scope/,
+  'Farmer House quest slots must reject superseded reads and previous land or wallet identities',
 );
 assert.match(
   farmerHouse,
-  /const currentSlots = slotsLandId === landId \? slots : \[\];/,
-  'Farmer House must hide slots not stamped for the selected land',
+  /const scope = questResultScope\(address, landId\);/,
+  'Farmer House snapshot identity must include the wallet and selected land',
+);
+assert.match(
+  farmerHouse,
+  /const currentSlots = slotsScope === scope \? slots : \[\];/,
+  'Farmer House must hide slots not stamped for the selected wallet and land',
+);
+assert.match(
+  farmerHouse,
+  /if \(currentScopeRef\.current !== scope\) return;[\s\S]*setRecentResults/,
+  'a late quest receipt cannot publish a result into another wallet or land panel',
 );
 
 const casinoPanel = projectFile('components/building-details/CasinoPanel.tsx');

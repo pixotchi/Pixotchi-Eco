@@ -199,7 +199,7 @@ export default function GameTransaction({
       onConfirmed={handleConfirmed}
       onError={handleError}
       onStatus={handleStatus}
-      resetAfter={2000}
+      resetAfter={5000}
     >
       <TransactionButton
         className={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}

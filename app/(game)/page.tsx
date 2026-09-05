@@ -9,6 +9,7 @@ import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { BasePageLoader } from "@/components/ui/loading";
+import { usePerformanceMode } from "@/components/ui/performance-mode";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { LoginHero, LoginIntro } from "@/components/login-hero";
 
@@ -627,6 +628,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
 
 export default function App() {
   const { theme } = useTheme();
+  const { enabled: performanceModeEnabled } = usePerformanceMode();
   const { startIfFirstVisit } = useSlideshow();
   const {
     address,
@@ -737,13 +739,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected || performanceModeEnabled) {
       return;
     }
 
-    // Stop the cycle entirely for reduced-motion users. The CSS escape hatch only
-    // removes the cross-fade — leaving the timer running would swap the palette in a
-    // hard cut every 4s, which is worse than the fade it was meant to soften.
+    // Stop the cycle entirely for reduced-motion users and Performance Mode. The CSS
+    // escape hatch only removes the cross-fade — leaving the timer running would swap
+    // the palette in a hard cut every 4s, which is worse than the fade it was meant to soften.
     const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const advanceLoginTheme = () => {
       setLoginThemeState(({ activeLayer, current }) => ({
@@ -790,7 +792,7 @@ export default function App() {
         motionQuery.removeListener(handleMotionPreferenceChange);
       }
     };
-  }, [isConnected]);
+  }, [isConnected, performanceModeEnabled]);
 
   useEffect(() => {
     if (isMiniApp || typeof window === "undefined") {

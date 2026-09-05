@@ -672,8 +672,8 @@ assert.match(transferDialog, /intentKey=\{activeStepIntentKey\}/);
 assert.match(transferDialog, /key=\{`\$\{activePlan\.planId\}:\$\{activePlan\.nextStepIndex\}`\}/);
 assert.match(transferDialog, /status\.statusName !== "success" && status\.statusName !== "reverted"/);
 assert.match(transferDialog, /eventId: proof \? `transfer-assets:\$\{proof\.toLowerCase\(\)\}`/);
-assert.match(transferDialog, /Fallback mode sends one NFT per confirmed transaction/);
-assert.match(transferDialog, /It will not be resent automatically/);
+assert.match(transferDialog, /This transfer will send one NFT at a time/);
+assert.match(transferDialog, /Confirmation is delayed\. Your transfer may still complete\./);
 assert.match(transferDialog, /Promise\.allSettled\(\[/);
 assert.match(transferDialog, /Retry asset loading/);
 assert.match(transferDialog, /Retry approval check/);
@@ -789,7 +789,6 @@ assert.match(
   'a replaced batch receipt must retain its calls id while persisting the replacement hash',
 );
 assert.match(transactionKit, /if \(isSuccessful \|\| isCheckOnly\)/);
-assert.match(transactionKit, /return "Check transaction"/);
 assert.equal((transactionKit.match(/\.sendCalls\(\{/g) || []).length, 1);
 assert.equal((transactionKit.match(/\.sendTransaction\(\{/g) || []).length, 1);
 assert.match(transactionKit, /registerPendingEvmController/);
@@ -809,9 +808,7 @@ assert.match(
 );
 assert.match(transactionKit, /statusName: "confirmedSyncing"/);
 assert.match(transactionKit, /await completeConfirmedTransaction/);
-assert.match(transactionKit, /return "Retry sync"/);
 assert.match(transactionKit, /Wallet reported success without a transaction hash; waiting for canonical Base receipt evidence/);
-assert.match(transactionKit, /I checked my wallet — allow another transaction/);
 assert.match(transactionKit, /size="touchCompact"/);
 assert.doesNotMatch(transactionKit, /subscribePendingEvmChanges/);
 const unsupportedFallbackSource = transactionKit.slice(
@@ -828,6 +825,11 @@ assert.match(pendingCoordinator, /feedbackRecord: registration\.controllerId ===
 const terminalStatuses = transactionKit.match(/const TERMINAL_STATUSES[\s\S]*?\]\);/)?.[0] ?? '';
 assert.doesNotMatch(terminalStatuses, /transactionUnresolved/);
 assert.doesNotMatch(terminalStatuses, /transactionStale/);
+const transactionFeedback = projectFile('lib/transaction-feedback.ts');
+assert.match(transactionFeedback, /case 'confirmedSyncing'/);
+assert.match(transactionFeedback, /Refresh your game to see the result/);
+const transactionFeedbackCard = projectFile('components/transactions/transaction-feedback-card.tsx');
+assert.match(transactionFeedbackCard, /data-testid="ockToast"/);
 
 const pendingStorage = new MemoryStorage();
 const pendingAccount = '0x000000000000000000000000000000000000c0de';
@@ -1516,14 +1518,15 @@ const farmerHousePanel = projectFile('components/building-details/FarmerHousePan
 assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:start:/);
 assert.match(farmerHousePanel, /effects="none"\s*intentKey={`quest:commit:/);
 assert.match(farmerHousePanel, /onSuccess=\{async \(tx: UntypedValue\) => \{\s*await handleSuccess/);
-assert.match(farmerHousePanel, /QUEST_FINALIZE_EXPIRY_BLOCKS = BigInt\(256\)/);
-assert.match(farmerHousePanel, /currentBlock > slot\.pseudoRndBlock \+ QUEST_FINALIZE_EXPIRY_BLOCKS/);
+const questUiHelpers = projectFile('lib/quest-ui.ts');
+assert.match(questUiHelpers, /QUEST_FINALIZE_EXPIRY_BLOCKS = BigInt\(256\)/);
+assert.match(questUiHelpers, /currentBlock > slot\.pseudoRndBlock \+ QUEST_FINALIZE_EXPIRY_BLOCKS/);
 assert.match(farmerHousePanel, /QUEST_EXPIRED_STATUS/);
-assert.match(farmerHousePanel, /decodeEventLog/);
-assert.match(farmerHousePanel, /decoded\.eventName === 'QuestFinalized'/);
-assert.match(farmerHousePanel, /decoded\.eventName !== 'QuestFinalized' && decoded\.eventName !== 'QuestReset'/);
+assert.match(questUiHelpers, /decodeEventLog/);
+assert.match(questUiHelpers, /decoded\.eventName !== 'QuestFinalized' && decoded\.eventName !== 'QuestReset'/);
 assert.match(farmerHousePanel, /Loot bag expired; reset required/);
-assert.match(farmerHousePanel, /onSuccess=\{async \(tx: UntypedValue\) => \{\s*const outcome = getQuestFinalizeOutcome/);
+assert.match(farmerHousePanel, /getQuestFinalizeResult\(proof, landId, slotIndex\)/);
+assert.match(farmerHousePanel, /describeQuestResult\(result, landId\)/);
 
 assert.equal(
   calculateTimeLeft({ blockHeightUntilUpgradeDone: BigInt(43_200) }, BigInt(0)),

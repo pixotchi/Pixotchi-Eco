@@ -22,6 +22,9 @@ import {
   type OwnerResourceInvalidationRequest,
 } from "@/lib/owner-resource-invalidation";
 import { Button } from "@/components/ui/button";
+import { getTransactionFeedback } from "@/lib/transaction-feedback";
+import { TransactionFeedbackCard, TransactionFeedbackIcon, type TransactionFeedbackPosition } from './transaction-feedback-card';
+import { TransactionRecoveryOptions } from './transaction-recovery-options';
 import {
   canDurablyPersistPendingEvmTransactions,
   PendingEvmStaleError,
@@ -36,6 +39,7 @@ import {
   getBrowserPendingEvmStorage,
   isDefinitivePendingEvmPreSubmissionError,
   isDefinitiveUnsupportedEvmBatchError,
+  listPendingEvmRecords,
   readPendingEvmRecord,
   removePendingEvmRecord,
   replacePendingEvmProof,
@@ -162,6 +166,8 @@ type TransactionContextValue = {
   acknowledgeStale: () => void;
   chainId: number | null;
   dismissToast: () => void;
+  pauseToastTimer: () => void;
+  resumeToastTimer: () => void;
   errorMessage: string | null;
   explorerHref: string | null;
   isExecuting: boolean;
@@ -212,7 +218,7 @@ type TransactionToastProps = {
   children?: React.ReactNode;
   className?: string;
   duration?: number;
-  position?: "bottom-center" | "bottom-right" | "top-center" | "top-right";
+  position?: TransactionFeedbackPosition;
 };
 
 export type TransactionFeedbackMode = "inline" | "toast" | "both" | "none";
@@ -264,14 +270,11 @@ const TEXT_HEADLINE = "ock-compat-font font-semibold";
 const TEXT_LABEL1 = "ock-compat-font text-sm font-semibold";
 const TEXT_LABEL2 = "ock-compat-font text-sm";
 const TEXT_DEFAULT = "text-[var(--ock-compat-foreground)]";
-const TEXT_MUTED = "text-[var(--ock-compat-foreground-muted)]";
 const TEXT_INVERSE = "text-primary-foreground";
 const TEXT_PRIMARY = "text-[var(--ock-compat-primary)]";
 const TEXT_ERROR = "text-[var(--ock-compat-error)]";
-const BG_SURFACE = "chat-white-surface bg-card bg-[image:var(--gradient-surface)]";
-const TOAST_SHADOW = "shadow-[var(--shadow-hairline)]";
 const TOAST_ACTION_LAYOUT =
-  "relative -ml-2.5 px-2.5 after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']";
+  "min-h-11 rounded-lg px-2.5 text-xs font-semibold shadow-none";
 const unsupportedSendCallsKeys = new Set<string>();
 /**
  * Terminal success requires canonical onchain receipt evidence. A calls id is
@@ -311,63 +314,6 @@ function Spinner({ className }: { className?: string }) {
         )}
       />
     </div>
-  );
-}
-
-function SuccessSvg({ className = "fill-[hsl(var(--success))]" }: { className?: string }) {
-  return (
-    <svg
-      aria-label="ock-successSvg"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      data-testid="ock-successSvg"
-    >
-      <title>Success SVG</title>
-      <path
-        d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM6.72667 11.5333L3.73333 8.54L4.67333 7.6L6.72667 9.65333L11.44 4.94L12.38 5.88L6.72667 11.5333Z"
-        className={className}
-      />
-    </svg>
-  );
-}
-
-function ErrorSvg({ className = "fill-[hsl(var(--destructive))]" }: { className?: string }) {
-  return (
-    <svg
-      aria-label="ock-errorSvg"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      data-testid="ock-errorSvg"
-    >
-      <title>Error</title>
-      <path
-        d="M8 16C12.4183 16 16 12.4183 16 8C16 3.58171 12.4183 0 8 0C3.58172 0 0 3.58171 0 8C0 12.4183 3.58172 16 8 16ZM11.7576 5.0909L8.84853 8L11.7576 10.9091L10.9091 11.7576L8 8.84851L5.09093 11.7576L4.2424 10.9091L7.15147 8L4.2424 5.0909L5.09093 4.24239L8 7.15145L10.9091 4.24239L11.7576 5.0909Z"
-        className={className}
-      />
-    </svg>
-  );
-}
-
-function CloseSvg({ className = TEXT_DEFAULT }: { className?: string }) {
-  return (
-    <svg
-      aria-label="ock-closeSvg"
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <title>Close</title>
-      <path d="M2.14921 1L1 2.1492L6.8508 8L1 13.8508L2.1492 15L8 9.1492L13.8508 15L15 13.8508L9.14921 8L15 2.1492L13.8508 1L8 6.8508L2.14921 1Z" />
-    </svg>
   );
 }
 
@@ -441,40 +387,6 @@ function getNestedErrorCode(error: UntypedValue): number | null {
     current = typed.cause;
   }
   return null;
-}
-
-function getFriendlyTransactionMessage(message: string) {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("user rejected") || normalized.includes("rejected the request")) {
-    return "Transaction cancelled. You can try again when ready.";
-  }
-
-  if (normalized.includes("wallet client unavailable") || normalized.includes("wallet not connected")) {
-    return "Connect your wallet, then try again.";
-  }
-
-  if (normalized.includes("atomic execution") || normalized.includes("atomic bundled transactions")) {
-    return "This wallet cannot safely complete the required atomic action.";
-  }
-
-  if (normalized.includes("insufficient") && normalized.includes("balance")) {
-    return "Not enough balance for this action.";
-  }
-
-  if (normalized.includes("revert")) {
-    return "Transaction reverted. Check the requirements and try again.";
-  }
-
-  if (normalized.includes("timed out") || normalized.includes("not confirmed")) {
-    return RECEIPT_TIMEOUT_MESSAGE;
-  }
-
-  if (!message || message === "Transaction failed.") {
-    return "Transaction failed. Check the details and try again.";
-  }
-
-  return message.length > 96 ? "Transaction failed. Check the details and try again." : message;
 }
 
 function getPendingButtonText(idleText: string) {
@@ -634,116 +546,35 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   }) as Promise<T>;
 }
 
-function getStatusLabelData({
-  errorMessage,
-  isExecuting,
-  status,
-  transactionHash,
-  transactionId,
-}: {
+type FeedbackInput = {
   errorMessage: string | null;
   isExecuting: boolean;
   status: LifecycleStatus;
   transactionHash?: Hex;
   transactionId: string | null;
-}) {
-  let label = "";
-  let labelClassName = TEXT_MUTED;
+};
 
-  if (status.statusName === "buildingTransaction") {
-    label = "Building transaction...";
-  }
-
-  if (status.statusName === "transactionPending" && !transactionHash && !transactionId) {
-    label = "Confirm in wallet.";
-  }
-
-  if (transactionHash || transactionId || (isExecuting && status.statusName === "buildingTransaction")) {
-    label = "Transaction in progress...";
-  }
-
-  if (status.statusName === "transactionUnresolved") {
-    label = "Confirmation delayed. Check transaction.";
-  }
-
-  if (status.statusName === "submissionAmbiguous") {
-    label = "Wallet confirmation may still be pending — check your wallet activity. You can unlock this shortly.";
-  }
-
-  if (status.statusName === "transactionStale") {
-    label = "Still unconfirmed. Check your wallet, then allow a new transaction.";
-  }
-
-  if (status.statusName === "confirmedSyncing") {
-    label = status.statusData.error
-      ? "Transaction confirmed; state refresh delayed."
-      : "Transaction confirmed; syncing game state...";
-  }
-
-  if (status.statusName === "success") {
-    label = "Successful";
-  }
-
-  if (errorMessage) {
-    label = getFriendlyTransactionMessage(errorMessage);
-    labelClassName = TEXT_ERROR;
-  }
-
-  return { label, labelClassName };
+function getToastLabelData(input: FeedbackInput) {
+  const feedback = getTransactionFeedback({
+    statusName: input.status.statusName,
+    hasProof: Boolean(input.transactionHash || input.transactionId),
+    errorMessage: input.errorMessage,
+    syncDelayed: Boolean(input.status.statusData.error),
+  });
+  return {
+    ...feedback,
+    feedback,
+    label: feedback?.title ?? "",
+    labelClassName: feedback?.tone === "error" ? TEXT_ERROR : TEXT_DEFAULT,
+  };
 }
 
-function getToastLabelData({
-  errorMessage,
-  isExecuting,
-  status,
-  transactionHash,
-  transactionId,
-}: {
-  errorMessage: string | null;
-  isExecuting: boolean;
-  status: LifecycleStatus;
-  transactionHash?: Hex;
-  transactionId: string | null;
-}) {
-  let label = "";
-  let labelClassName = TEXT_MUTED;
-
-  if (status.statusName === "buildingTransaction") {
-    label = "Building transaction";
-  }
-
-  if (isExecuting || transactionHash || transactionId) {
-    label = "Transaction in progress";
-  }
-
-  if (status.statusName === "transactionUnresolved") {
-    label = "Confirmation delayed. Check transaction";
-  }
-
-  if (status.statusName === "submissionAmbiguous") {
-    label = "Wallet confirmation may still be pending — check your wallet activity";
-  }
-
-  if (status.statusName === "transactionStale") {
-    label = "Still unconfirmed. Check wallet before allowing a new transaction";
-  }
-
-  if (status.statusName === "confirmedSyncing") {
-    label = status.statusData.error
-      ? "Transaction confirmed; state refresh delayed"
-      : "Transaction confirmed; syncing game state";
-  }
-
-  if (status.statusName === "success") {
-    label = "Successful";
-  }
-
-  if (errorMessage) {
-    label = getFriendlyTransactionMessage(errorMessage);
-    labelClassName = TEXT_ERROR;
-  }
-
-  return { label, labelClassName };
+function getStatusLabelData(input: FeedbackInput) {
+  const feedback = getToastLabelData(input);
+  return {
+    label: [feedback.label, feedback.description].filter(Boolean).join('. '),
+    labelClassName: feedback.labelClassName,
+  };
 }
 
 function useTransactionContext() {
@@ -763,7 +594,7 @@ export function Transaction({
   isSponsored = false,
   capabilities,
   intentKey = "",
-  resetAfter = 2000,
+  resetAfter = 5000,
   children,
 }: TransactionProps) {
   const { address: connectedAccountAddress, connector } = useAccount();
@@ -786,8 +617,14 @@ export function Transaction({
   const [transactionHash, setTransactionHash] = useState<Hex | undefined>(undefined);
 
   const mountedRef = useRef(true);
+  const statusRef = useRef<LifecycleStatus>(IDLE_STATUS);
   const executingRef = useRef(false);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetDeadlineRef = useRef<number | null>(null);
+  const resetRemainingRef = useRef<number | null>(null);
+  const resetPauseCountRef = useRef(0);
+  const dismissedFeedbackKeyRef = useRef<string | null>(null);
+  const reopenedFeedbackKeysRef = useRef(new Set<string>());
   const transactionIdRef = useRef<string | null>(null);
   const transactionHashRef = useRef<Hex | undefined>(undefined);
   const confirmedFallbackRecordRef = useRef<PendingEvmRecord | null>(null);
@@ -795,6 +632,8 @@ export function Transaction({
   const lastTelemetryKeyRef = useRef<string | null>(null);
   const beforeSubmitRef = useRef<(() => void) | undefined>(undefined);
   const activePendingRecordRef = useRef<PendingEvmRecord | null>(null);
+  const activeRecoverySignalRef = useRef<AbortSignal | null>(null);
+  const registeredRecoveryIdentityRef = useRef<string | null>(null);
   const notifyStatusCallbacksRef = useRef(true);
   const blockerStaleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const capabilitiesRef = useRef(capabilities);
@@ -807,6 +646,10 @@ export function Transaction({
   onConfirmedRef.current = onConfirmed;
   onErrorRef.current = onError;
   onStatusRef.current = onStatus;
+  const updateStatus = useCallback((nextStatus: LifecycleStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
 
   /*
    * Most game callers build `calls={[...]}` inline. Panels that watch Base's
@@ -895,6 +738,7 @@ export function Transaction({
       clearTimeout(resetTimeoutRef.current);
       resetTimeoutRef.current = null;
     }
+    resetDeadlineRef.current = null;
   }, []);
 
   const clearTransactionArtifacts = useCallback(() => {
@@ -928,19 +772,71 @@ export function Transaction({
     };
   }, [clearResetTimer]);
 
-  const scheduleReset = useCallback(() => {
+  const runResetTimer = useCallback((delayMs: number) => {
+    if (!mountedRef.current) return;
     clearResetTimer();
-    if (!resetAfter || resetAfter <= 0) {
-      return;
-    }
-
+    resetRemainingRef.current = delayMs;
+    resetDeadlineRef.current = Date.now() + delayMs;
     resetTimeoutRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
+      resetDeadlineRef.current = null;
+      resetRemainingRef.current = null;
       clearTransactionArtifacts();
       setIsToastVisible(false);
-      setStatus(IDLE_STATUS);
-    }, resetAfter);
-  }, [clearResetTimer, clearTransactionArtifacts, resetAfter]);
+      updateStatus(IDLE_STATUS);
+    }, delayMs);
+  }, [clearResetTimer, clearTransactionArtifacts, updateStatus]);
+
+  const scheduleReset = useCallback(() => {
+    clearResetTimer();
+    resetRemainingRef.current = null;
+    if (!resetAfter || resetAfter <= 0) return;
+    resetRemainingRef.current = resetAfter;
+    if (resetPauseCountRef.current === 0) runResetTimer(resetAfter);
+  }, [clearResetTimer, resetAfter, runResetTimer]);
+
+  const pauseToastTimer = useCallback(() => {
+    resetPauseCountRef.current += 1;
+    if (resetTimeoutRef.current && resetDeadlineRef.current !== null) {
+      resetRemainingRef.current = Math.max(0, resetDeadlineRef.current - Date.now());
+      clearResetTimer();
+    }
+  }, [clearResetTimer]);
+
+  const resumeToastTimer = useCallback(() => {
+    resetPauseCountRef.current = Math.max(0, resetPauseCountRef.current - 1);
+    if (!mountedRef.current) return;
+    if (
+      resetPauseCountRef.current === 0
+      && resetRemainingRef.current !== null
+      && resetTimeoutRef.current === null
+    ) {
+      runResetTimer(resetRemainingRef.current);
+    }
+  }, [runResetTimer]);
+
+  useEffect(() => {
+    let visibilityPaused = false;
+    const handleVisibilityChange = () => {
+      if (document.hidden && !visibilityPaused) {
+        visibilityPaused = true;
+        pauseToastTimer();
+      } else if (!document.hidden && visibilityPaused) {
+        visibilityPaused = false;
+        resumeToastTimer();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    handleVisibilityChange();
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // The provider's mount cleanup clears its timer. Balance only our own
+      // pause here so unmounting while hidden cannot schedule a fresh timer.
+      if (visibilityPaused) {
+        resetPauseCountRef.current = Math.max(0, resetPauseCountRef.current - 1);
+      }
+    };
+  }, [pauseToastTimer, resumeToastTimer]);
 
   const emitStatus = useCallback(
     (nextStatus: LifecycleStatus) => {
@@ -952,7 +848,35 @@ export function Transaction({
       }
       const isTerminal = TERMINAL_STATUSES.has(nextStatus.statusName);
       if (!mountedRef.current && !isTerminal) return false;
-      if (mountedRef.current) setStatus(nextStatus);
+      if (mountedRef.current) {
+        updateStatus(nextStatus);
+        const feedbackAttempt = activeRecord?.attemptId
+          ?? nextStatus.statusData.correlationId
+          ?? nextStatus.statusData.transactionHash
+          ?? nextStatus.statusData.transactionId
+          ?? "current";
+        const feedbackStatusKey = nextStatus.statusName === "confirmedSyncing"
+          && Boolean(nextStatus.statusData.error)
+          ? "confirmedSyncing:delayed"
+          : nextStatus.statusName;
+        const feedbackKey = `${feedbackAttempt}:${feedbackStatusKey}`;
+        const shouldReopen = (
+          nextStatus.statusName === "success"
+          || nextStatus.statusName === "transactionStale"
+          || (nextStatus.statusName === "confirmedSyncing" && Boolean(nextStatus.statusData.error))
+          || (isTerminal && nextStatus.statusName !== "confirmedSyncing")
+        );
+        if (
+          shouldReopen
+          && dismissedFeedbackKeyRef.current !== null
+          && dismissedFeedbackKeyRef.current !== feedbackKey
+          && !reopenedFeedbackKeysRef.current.has(feedbackKey)
+        ) {
+          reopenedFeedbackKeysRef.current.add(feedbackKey);
+          dismissedFeedbackKeyRef.current = null;
+          setIsToastVisible(true);
+        }
+      }
 
       const phase = getTransactionPhase(nextStatus);
       const correlationId = nextStatus.statusData.correlationId ?? activeRecord?.attemptId;
@@ -991,7 +915,7 @@ export function Transaction({
       }
       return shouldNotifyCallbacks;
     },
-    [clearPersistedPendingRecord, scheduleReset, walletType],
+    [clearPersistedPendingRecord, scheduleReset, updateStatus, walletType],
   );
 
   const runConfirmedReconciliation = useCallback(async (
@@ -1073,10 +997,18 @@ export function Transaction({
     notifyStatusCallbacksRef.current = false;
     setTransactionHash(nextHash);
     setTransactionId(nextId);
-    setIsToastVisible(true);
     setIsRecoveryChecking(false);
 
     const phase = getPendingEvmPhase(record);
+    const statusName = phase === "stale"
+      ? "transactionStale"
+      : record.proof.kind === "reservation"
+        ? "submissionAmbiguous"
+        : "transactionUnresolved";
+    const feedbackKey = `${record.attemptId}:${statusName}`;
+    if (dismissedFeedbackKeyRef.current !== feedbackKey) {
+      setIsToastVisible(true);
+    }
     emitStatus({
       statusData: {
         error: new Error(
@@ -1088,11 +1020,7 @@ export function Transaction({
         ...(nextId ? { transactionId: nextId } : {}),
         transactionReceipts: [],
       },
-      statusName: phase === "stale"
-        ? "transactionStale"
-        : record.proof.kind === "reservation"
-          ? "submissionAmbiguous"
-          : "transactionUnresolved",
+      statusName,
     });
 
     if (phase === "hard") {
@@ -1134,11 +1062,16 @@ export function Transaction({
     let recoveryCallsMatch = true;
 
     clearResetTimer();
+    resetRemainingRef.current = null;
     if (!recoveryRecord) {
       clearTransactionArtifacts();
     }
     notifyStatusCallbacksRef.current = notifyCallbacks;
-    if (!recoveryRecord) setIsToastVisible(true);
+    if (!recoveryRecord) {
+      dismissedFeedbackKeyRef.current = null;
+      reopenedFeedbackKeysRef.current.clear();
+      setIsToastVisible(true);
+    }
 
     if (!walletClient?.account) {
       const error = new Error("Wallet client unavailable.");
@@ -1180,29 +1113,44 @@ export function Transaction({
     };
     let coordinatedPendingRecord: PendingEvmRecord | null = recoveryRecord ?? null;
     if (recoveryRecord) {
+      const requestedRecoveryRecord = recoveryRecord;
       const recoveryIdentity: PendingEvmIntentIdentity = {
         accountAddress: walletClient.account.address.toLowerCase(),
         chainId: chain.id,
         intentKey: resolvedIntentKey,
       };
-      const storedRecord = readPendingEvmRecord(
-        getBrowserPendingEvmStorage(),
-        recoveryIdentity,
-      );
-      const compatibility = getPendingEvmCompatibility(recoveryRecord, {
+      const pendingStorage = getBrowserPendingEvmStorage();
+      const storedRecord = fallbackRecovery
+        ? listPendingEvmRecords(pendingStorage, transactionRegistry).find((candidate) => (
+            candidate.attemptId === requestedRecoveryRecord.attemptId
+            && candidate.intentDigest === requestedRecoveryRecord.intentDigest
+          )) ?? null
+        : readPendingEvmRecord(pendingStorage, recoveryIdentity);
+      const compatibility = getPendingEvmCompatibility(requestedRecoveryRecord, {
         callsDigest: pendingCallsDigest,
         connectorId: currentConnectorId,
       });
       recoveryCallsMatch = compatibility.callsMatch;
       if (
         !storedRecord
-        || storedRecord.attemptId !== recoveryRecord.attemptId
-        || getPendingEvmPhase(recoveryRecord) !== "hard"
+        || storedRecord.attemptId !== requestedRecoveryRecord.attemptId
+        || storedRecord.intentDigest !== requestedRecoveryRecord.intentDigest
+        || storedRecord.callsDigest !== requestedRecoveryRecord.callsDigest
+        || storedRecord.method !== requestedRecoveryRecord.method
+        || storedRecord.connectorId !== requestedRecoveryRecord.connectorId
+        || storedRecord.submittedAt !== requestedRecoveryRecord.submittedAt
+        || JSON.stringify(storedRecord.proof) !== JSON.stringify(requestedRecoveryRecord.proof)
+        || getPendingEvmPhase(storedRecord) !== "hard"
         || !compatibility.canResume
       ) {
         requestPendingEvmCoordinatorReconcile(transactionRegistry);
         return;
       }
+
+      // Fallback recovery is status-only and may be hosted by an unrelated
+      // mounted intent. Continue with the validated immutable stored record,
+      // never the caller's current transaction payload.
+      recoveryRecord = storedRecord;
 
       activePendingRecordRef.current = recoveryRecord;
       setIsPeerBlocked(false);
@@ -1224,6 +1172,10 @@ export function Transaction({
         digest: pendingCallsDigest,
         normalizedCalls,
       };
+    }
+    const ownedRecoverySignal = recoverySignal ?? null;
+    if (ownedRecoverySignal) {
+      activeRecoverySignalRef.current = ownedRecoverySignal;
     }
     executingRef.current = true;
     if (mountedRef.current) {
@@ -1389,7 +1341,7 @@ export function Transaction({
         setIsPeerBlocked(true);
         setIsRecoveryChecking(false);
         setIsToastVisible(false);
-        setStatus(IDLE_STATUS);
+        updateStatus(IDLE_STATUS);
         requestPendingEvmCoordinatorReconcile(transactionRegistry);
         return null;
       }
@@ -1965,6 +1917,9 @@ export function Transaction({
       if (shouldNotifyError) onErrorRef.current?.(error);
     } finally {
       executingRef.current = false;
+      if (activeRecoverySignalRef.current === ownedRecoverySignal) {
+        activeRecoverySignalRef.current = null;
+      }
       if (coordinatedPendingRecord) {
         releasePendingEvmCoordinatorAttempt(
           transactionRegistry,
@@ -1988,6 +1943,7 @@ export function Transaction({
     clearTransactionArtifacts,
     completeConfirmedTransaction,
     emitStatus,
+    updateStatus,
     connector?.id,
     currentConnectorId,
     isSmartWallet,
@@ -2001,30 +1957,45 @@ export function Transaction({
     walletRoutingIdentity,
   ]);
 
-  const clearDisplayedPendingBlocker = useCallback(() => {
-    if (executingRef.current) return;
+  const clearDisplayedPendingBlocker = useCallback((force = false) => {
+    if (executingRef.current && !force) return;
+    if (!force && TERMINAL_STATUSES.has(statusRef.current.statusName)) {
+      return;
+    }
     if (blockerStaleTimerRef.current) {
       clearTimeout(blockerStaleTimerRef.current);
       blockerStaleTimerRef.current = null;
     }
     activePendingRecordRef.current = null;
     activeCallsRef.current = null;
+    clearResetTimer();
+    resetRemainingRef.current = null;
+    dismissedFeedbackKeyRef.current = null;
+    reopenedFeedbackKeysRef.current.clear();
     setIsPeerBlocked(false);
     notifyStatusCallbacksRef.current = true;
     clearTransactionArtifacts();
     setIsToastVisible(false);
     setIsRecoveryChecking(false);
-    setStatus(IDLE_STATUS);
-  }, [clearTransactionArtifacts]);
+    updateStatus(IDLE_STATUS);
+  }, [clearResetTimer, clearTransactionArtifacts, updateStatus]);
 
   useEffect(() => {
+    const nextRecoveryIdentity = recoveryRegistryIdentity
+      ? `${recoveryRegistryIdentity.chainId}:${recoveryRegistryIdentity.accountAddress.toLowerCase()}`
+      : null;
+    const recoveryIdentityChanged = registeredRecoveryIdentityRef.current !== nextRecoveryIdentity;
+    registeredRecoveryIdentityRef.current = nextRecoveryIdentity;
     if (!recoveryRegistryIdentity) {
       setIsRecoveryChecking(false);
-      clearDisplayedPendingBlocker();
+      clearDisplayedPendingBlocker(true);
       return;
     }
+    if (recoveryIdentityChanged) {
+      clearDisplayedPendingBlocker(true);
+    }
     setIsRecoveryChecking(true);
-    return registerPendingEvmController(recoveryRegistryIdentity, {
+    const unregister = registerPendingEvmController(recoveryRegistryIdentity, {
       callsDigest: pendingCallsDigest,
       connectorId: currentConnectorId,
       controllerId: transactionControllerId,
@@ -2054,6 +2025,23 @@ export function Transaction({
       ),
       recoverFallback: (record, signal) => execute(record, false, signal, true),
     });
+    return () => {
+      const activeRecoverySignal = activeRecoverySignalRef.current;
+      const wasAlreadyAborted = activeRecoverySignal?.aborted ?? false;
+      unregister();
+      if (
+        mountedRef.current
+        && activeRecoverySignal
+        && !wasAlreadyAborted
+        && activeRecoverySignal.aborted
+        && !TERMINAL_STATUSES.has(statusRef.current.statusName)
+      ) {
+        // This registration will receive no later coordinator snapshot. Retire
+        // only its local progress notice; the immutable proof, status, and
+        // wallet-wide lock remain owned by the coordinator and recovery task.
+        setIsToastVisible(false);
+      }
+    };
   }, [
     clearDisplayedPendingBlocker,
     currentConnectorId,
@@ -2156,12 +2144,13 @@ export function Transaction({
     clearTransactionArtifacts();
     setIsExecuting(false);
     setIsToastVisible(false);
-    setStatus(IDLE_STATUS);
+    updateStatus(IDLE_STATUS);
   }, [
     clearTransactionArtifacts,
     recoveryRegistryIdentity,
     status.statusName,
     transactionControllerId,
+    updateStatus,
   ]);
 
   const explorerChain = walletClient?.chain ?? base;
@@ -2199,16 +2188,30 @@ export function Transaction({
     () => ({
       acknowledgeStale,
       chainId: walletClient?.chain?.id ?? accountChainId ?? null,
-      dismissToast: () => setIsToastVisible(false),
+      dismissToast: () => {
+        const feedbackAttempt = activePendingRecordRef.current?.attemptId
+          ?? status.statusData.correlationId
+          ?? status.statusData.transactionHash
+          ?? status.statusData.transactionId
+          ?? "current";
+        const feedbackStatusKey = status.statusName === "confirmedSyncing"
+          && Boolean(status.statusData.error)
+          ? "confirmedSyncing:delayed"
+          : status.statusName;
+        dismissedFeedbackKeyRef.current = `${feedbackAttempt}:${feedbackStatusKey}`;
+        setIsToastVisible(false);
+      },
       errorMessage,
       explorerHref,
       isExecuting: effectiveIsExecuting,
       isSubmissionLocked: recoveryGateActive || status.statusName === "submissionAmbiguous",
       submissionLockMessage: walletRoutingLockMessage,
       isToastVisible,
+      pauseToastTimer,
       receipt,
       retrySync,
       retryWalletRouting,
+      resumeToastTimer,
       setIsToastVisible,
       status,
       submit,
@@ -2224,9 +2227,11 @@ export function Transaction({
       recoveryGateActive,
       walletRoutingLockMessage,
       isToastVisible,
+      pauseToastTimer,
       receipt,
       retrySync,
       retryWalletRouting,
+      resumeToastTimer,
       status,
       submit,
       transactionHash,
@@ -2323,13 +2328,13 @@ export function TransactionButton({
       return "View transaction";
     }
     if (isConfirmedSyncing) {
-      return "Retry sync";
+      return "Refresh game";
     }
     if (isCheckOnly) {
-      return "Check transaction";
+      return "View transaction";
     }
     if (isSubmissionAmbiguous) {
-      return "Check wallet activity";
+      return "Confirmation delayed";
     }
     if (submissionLockMessage) {
       return submissionLockMessage;
@@ -2394,9 +2399,9 @@ export function TransactionButton({
     ?? (isSuccessful
       ? "View transaction"
       : isConfirmedSyncing
-        ? "Retry state sync"
+        ? "Refresh game"
       : isCheckOnly
-        ? "Check transaction"
+        ? "View transaction"
         : submissionLockMessage
           ? submissionLockMessage
           : errorMessage
@@ -2528,17 +2533,7 @@ function TransactionStatusAction({
   return (
     <div className={cn(TEXT_LABEL2, "flex min-w-[70px] max-w-full flex-wrap justify-end gap-2", className)}>
       {actionElement}
-      {isStale && (
-        <Button
-          className="h-auto min-h-11 max-w-full whitespace-normal py-2 text-center leading-tight"
-          onClick={acknowledgeStale}
-          size="touchCompact"
-          type="button"
-          variant="warning"
-        >
-          I checked my wallet — allow another transaction
-        </Button>
-      )}
+      {isStale && <TransactionRecoveryOptions onContinue={acknowledgeStale} />}
     </div>
   );
 }
@@ -2570,155 +2565,82 @@ function TransactionStatusLabel({
 export function TransactionToast({
   children,
   className,
-  position = "bottom-center",
+  position = "auto",
 }: TransactionToastProps) {
-  const { dismissToast, errorMessage, isExecuting, isToastVisible, status, transactionHash, transactionId } =
-    useTransactionContext();
-
-  const { label } = getToastLabelData({
-    errorMessage,
-    isExecuting,
-    status,
-    transactionHash,
-    transactionId,
-  });
-
-  // Symmetric exit: the toast used to unmount on the very next commit after
-  // dismiss, so its 500ms slide-in was paired with a 0ms disappearance. Keep it
-  // mounted through a short animate-out pass before removal.
-  const shouldShow = Boolean(isToastVisible && label);
-  const [renderState, setRenderState] = React.useState<"hidden" | "visible" | "exiting">(
+  const context = useTransactionContext();
+  const { dismissToast, isToastVisible, pauseToastTimer, resumeToastTimer } = context;
+  const { feedback } = getToastLabelData(context);
+  const shouldShow = Boolean(isToastVisible && feedback);
+  const lastVisibleContext = useRef(context);
+  if (shouldShow) lastVisibleContext.current = context;
+  const [renderState, setRenderState] = useState<"hidden" | "visible" | "exiting">(
     shouldShow ? "visible" : "hidden",
   );
-  React.useEffect(() => {
+  const paused = useRef({ pointer: false, focus: false });
+  const setPaused = (source: 'pointer' | 'focus', value: boolean) => {
+    if (paused.current[source] === value) return;
+    paused.current[source] = value;
+    if (value) pauseToastTimer();
+    else resumeToastTimer();
+  };
+  useEffect(() => () => {
+    if (paused.current.pointer) resumeToastTimer();
+    if (paused.current.focus) resumeToastTimer();
+    paused.current = { pointer: false, focus: false };
+  }, [resumeToastTimer]);
+  useEffect(() => {
     if (shouldShow) {
       setRenderState("visible");
       return;
     }
-    setRenderState((previous) => (previous === "visible" ? "exiting" : previous));
-    const timer = window.setTimeout(() => setRenderState("hidden"), 220);
+    if (paused.current.pointer) resumeToastTimer();
+    if (paused.current.focus) resumeToastTimer();
+    paused.current = { pointer: false, focus: false };
+    setRenderState((previous) => previous === "visible" ? "exiting" : previous);
+    const timer = window.setTimeout(() => setRenderState("hidden"), 180);
     return () => window.clearTimeout(timer);
-  }, [shouldShow]);
+  }, [shouldShow, resumeToastTimer]);
 
-  if (renderState === "hidden") {
-    return null;
-  }
-  const isExiting = renderState === "exiting";
-
-  const positionClassName = {
-        "bottom-center": "bottom-20 left-1/2 -translate-x-1/2 xl:bottom-4",
-        "bottom-right": "bottom-20 right-4 xl:bottom-4",
-        "top-center": "top-4 left-1/2 -translate-x-1/2",
-        "top-right": "top-4 right-4",
-  }[position];
-
-  const animationClassName = isExiting
-    ? {
-        "bottom-center": "animate-out fade-out-0 slide-out-to-bottom-8 duration-[var(--motion-standard)] fill-mode-forwards",
-        "bottom-right": "animate-out fade-out-0 slide-out-to-right-8 duration-[var(--motion-standard)] fill-mode-forwards",
-        "top-center": "animate-out fade-out-0 slide-out-to-top-8 duration-[var(--motion-standard)] fill-mode-forwards",
-        "top-right": "animate-out fade-out-0 slide-out-to-right-8 duration-[var(--motion-standard)] fill-mode-forwards",
-      }[position]
-    : {
-        "bottom-center": "animate-in fade-in-0 slide-in-from-bottom-8 duration-[var(--motion-modal)]",
-        "bottom-right": "animate-in fade-in-0 slide-in-from-right-8 duration-[var(--motion-modal)]",
-        "top-center": "animate-in fade-in-0 slide-in-from-top-8 duration-[var(--motion-modal)]",
-        "top-right": "animate-in fade-in-0 slide-in-from-right-8 duration-[var(--motion-modal)]",
-      }[position];
+  const displayContext = shouldShow ? context : lastVisibleContext.current;
+  const displayed = getToastLabelData(displayContext).feedback;
+  if (renderState === "hidden" || !displayed) return null;
 
   return (
-    <div
-      aria-live="polite"
-      className={cn(
-        "fixed z-[var(--z-toast)] w-[calc(100vw-2rem)] max-w-[28rem] rounded-[var(--radius-control)] border border-border/60 px-4 py-3 pr-12",
-        BG_SURFACE,
-        TEXT_DEFAULT,
-        TOAST_SHADOW,
-        animationClassName,
-        "motion-reduce:animate-none",
-        positionClassName,
-        className,
-      )}
-      role="status"
-      data-testid="ockToast"
-    >
-      <div
-        className={cn(
-          "min-w-0",
-          children
-            ? "flex flex-wrap items-center gap-2"
-            : "grid grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-3 gap-y-0.5",
-        )}
+    <TransactionContext.Provider value={displayContext}>
+      <TransactionFeedbackCard
+        feedback={displayed}
+        actions={<TransactionToastAction />}
+        className={className}
+        position={position}
+        exiting={!shouldShow || renderState === "exiting"}
+        onDismiss={dismissToast}
+        onPointerEnter={(event) => { if (event.pointerType === 'mouse') setPaused('pointer', true); }}
+        onPointerLeave={() => setPaused('pointer', false)}
+        onFocusCapture={() => setPaused('focus', true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused('focus', false);
+        }}
       >
-        {children ?? (
-          <>
-            <TransactionToastIcon className="col-start-1 row-start-1 flex h-5 w-5 items-center justify-center text-primary" />
-            <TransactionToastLabel className="col-start-2 row-start-1 max-w-none pr-1 leading-5" />
-            <TransactionToastAction className="col-start-2 row-start-2" />
-          </>
-        )}
-      </div>
-      <button
-        className="absolute right-1.5 top-1.5 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors duration-[var(--motion-quick)] hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        onClick={dismissToast}
-        type="button"
-        data-testid="ockCloseButton"
-        aria-label="Dismiss transaction status"
-      >
-        <CloseSvg className="h-4 w-4 text-current" />
-      </button>
-    </div>
+        {children}
+      </TransactionFeedbackCard>
+    </TransactionContext.Provider>
   );
 }
 
 export function TransactionToastIcon({ className }: TransactionToastIconProps) {
-  const { errorMessage, isExecuting, receipt, transactionHash, transactionId } =
-    useTransactionContext();
-
-  const isInProgress = isExecuting || !!transactionId || !!transactionHash;
-
-  const icon = useMemo(() => {
-    if (receipt) {
-      return <SuccessSvg />;
-    }
-    if (errorMessage) {
-      return <ErrorSvg />;
-    }
-    if (isInProgress) {
-      return <Spinner className="h-4 w-4" />;
-    }
-    return null;
-  }, [errorMessage, isInProgress, receipt]);
-
-  if (!icon) {
-    return null;
-  }
-
-  return <div className={cn(TEXT_LABEL2, className)}>{icon}</div>;
+  const context = useTransactionContext();
+  const { feedback } = getToastLabelData(context);
+  return feedback ? <TransactionFeedbackIcon feedback={feedback} className={className} /> : null;
 }
 
-export function TransactionToastLabel({
-  className,
-}: TransactionToastLabelProps) {
-  const { errorMessage, isExecuting, status, transactionHash, transactionId } =
-    useTransactionContext();
-  const { label, labelClassName } = getToastLabelData({
-    errorMessage,
-    isExecuting,
-    status,
-    transactionHash,
-    transactionId,
-  });
-
-  if (!label) {
-    return null;
-  }
-
+export function TransactionToastLabel({ className }: TransactionToastLabelProps) {
+  const context = useTransactionContext();
+  const { feedback } = getToastLabelData(context);
+  if (!feedback) return null;
   return (
-    <div className={cn(TEXT_LABEL1, "min-w-0 max-w-[16rem]", className)}>
-      <p className={labelClassName === TEXT_ERROR ? labelClassName : TEXT_DEFAULT}>
-        {label}
-      </p>
+    <div className={cn("min-w-0", className)}>
+      <p className="text-sm font-semibold leading-5 text-foreground">{feedback.title}</p>
+      {feedback.description && <p className="mt-1 text-[13px] leading-[1.45] text-muted-foreground">{feedback.description}</p>}
     </div>
   );
 }
@@ -2734,12 +2656,22 @@ export function TransactionToastAction({
     status,
     transactionHash,
     transactionId,
+    retrySync,
+    isExecuting,
   } =
     useTransactionContext();
   const { showCallsStatus } = useShowCallsStatus();
   const isStale = status.statusName === "transactionStale";
+  const isSyncDelayed = status.statusName === "confirmedSyncing" && Boolean(status.statusData.error);
 
   const actionElement = useMemo(() => {
+    if (isSyncDelayed) {
+      return (
+        <Button size="touchCompact" variant="ghost" className={TOAST_ACTION_LAYOUT} onClick={retrySync} disabled={isExecuting}>
+          Refresh game
+        </Button>
+      );
+    }
     if (transactionHash) {
       const viewHref =
         explorerHref || getExplorerHref(transactionHash, base.blockExplorers?.default.url) || undefined;
@@ -2793,26 +2725,16 @@ export function TransactionToastAction({
     }
 
     return null;
-  }, [errorMessage, explorerHref, showCallsStatus, submit, transactionHash, transactionId]);
+  }, [errorMessage, explorerHref, isExecuting, isSyncDelayed, retrySync, showCallsStatus, submit, transactionHash, transactionId]);
 
   if (!actionElement && !isStale) {
     return null;
   }
 
   return (
-    <div className={cn(TEXT_LABEL1, "flex min-w-0 flex-wrap items-center justify-start gap-2", className)}>
+    <div className={cn("-ml-2.5 mt-2 flex min-w-0 flex-wrap items-center justify-start gap-x-1 gap-y-0.5", className)}>
       {actionElement}
-      {isStale && (
-        <Button
-          className="h-auto min-h-11 max-w-full whitespace-normal py-2 text-center leading-tight"
-          onClick={acknowledgeStale}
-          size="touchCompact"
-          type="button"
-          variant="warning"
-        >
-          I checked my wallet — allow another transaction
-        </Button>
-      )}
+      {isStale && <TransactionRecoveryOptions onContinue={acknowledgeStale} />}
     </div>
   );
 }

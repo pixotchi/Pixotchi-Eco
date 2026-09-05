@@ -4,30 +4,23 @@ import { redis, redisGetJSON, redisSetJSON } from './redis';
 import { fetchIndexerGraphQL } from './indexer-client';
 import { fetchBaseNotificationUsers } from './notifications/base-api';
 import { getNotificationProviderLabel } from './notifications/provider';
+import {
+  parseStatusSnapshot,
+  type StatusLevel,
+  type StatusService,
+  type StatusSnapshot,
+} from './status-snapshot';
 
-type StatusLevel = 'operational' | 'degraded' | 'outage' | 'unknown';
-
-export interface StatusService {
-  id: string;
-  label: string;
-  status: StatusLevel;
-  latencyMs?: number;
-  details?: string;
-  metrics?: Record<string, UntypedValue>;
-}
-
-export interface StatusSnapshot {
-  generatedAt: string;
-  overall: StatusLevel;
-  services: StatusService[];
-}
+export type { StatusLevel, StatusService, StatusSnapshot } from './status-snapshot';
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.STATUS_CHECK_TIMEOUT_MS || 6000);
 const APP_HEALTH_PATH = '/api/health';
 const MINIAPP_HEALTH_URL = process.env.STATUS_MINIAPP_HEALTH_URL || '';
 const STAKE_APP_URL = process.env.STATUS_STAKE_APP_URL || 'https://stake.pixotchi.tech';
 const BASE_STATUS_URL = process.env.STATUS_BASE_STATUS_URL || 'https://status.base.org/api/v2/summary.json';
-const STATUS_CACHE_KEY = `status:checks:snapshot:${SERVER_ENV.NOTIFICATION_PROVIDER}:v1`;
+// Bump this whenever the stored schema or redaction boundary changes. A new key
+// prevents an older deployment's payload from being trusted after rollout.
+const STATUS_CACHE_KEY = `status:checks:snapshot:${SERVER_ENV.NOTIFICATION_PROVIDER}:v2`;
 // The Vercel cron refreshes every 15 minutes. Keep the default snapshot just
 // beyond that cadence so public cache-only reads remain available between runs.
 const DEFAULT_STATUS_CACHE_TTL_SECONDS = Number(process.env.STATUS_SNAPSHOT_TTL_SECONDS || 960);
@@ -515,7 +508,7 @@ export async function getStoredStatusSnapshot(): Promise<StatusSnapshot | null> 
     return memorySnapshot;
   }
 
-  const cached = await redisGetJSON<StatusSnapshot>(STATUS_CACHE_KEY);
+  const cached = parseStatusSnapshot(await redisGetJSON<unknown>(STATUS_CACHE_KEY));
   if (cached && snapshotMatchesCurrentNotificationProvider(cached)) {
     rememberSnapshot(cached);
     return cached;
@@ -558,5 +551,3 @@ export async function getCachedStatusSnapshot(forceRefresh: boolean = false): Pr
     inFlightSnapshot = null;
   }
 }
-
-export type { StatusLevel };

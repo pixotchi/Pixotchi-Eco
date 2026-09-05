@@ -93,6 +93,7 @@ const CENSUS_ROWS: Array<{ state: QuestSlotState; label: string; alwaysShow?: bo
   { state: "in_progress", label: "On adventure" },
   { state: "ready_to_commit", label: "Returning" },
   { state: "committed", label: "Loot bags" },
+  { state: "expired", label: "Expired — reset required" },
   { state: "cooldown", label: "Resting" },
 ];
 
@@ -269,6 +270,7 @@ export default function BatchQuestStartCard({
     const tally: Record<QuestSlotState, number> = {
       available: 0,
       committed: 0,
+      expired: 0,
       cooldown: 0,
       in_progress: 0,
       ready_to_commit: 0,
@@ -514,7 +516,7 @@ export default function BatchQuestStartCard({
             </div>
           )}
 
-          {(counts.ready_to_commit > 0 || counts.committed > 0) && (
+          {(counts.ready_to_commit > 0 || counts.committed > 0 || counts.expired > 0) && (
             <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-2 text-xs text-muted-foreground">
               Recalling farmers and opening loot bags stays per-land in the Farmer
               House, so every quest keeps its own reward roll.

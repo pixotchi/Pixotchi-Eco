@@ -5,8 +5,38 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useDialogFeedbackHostRef } from "@/components/ui/dialog-feedback-host";
 
-const Dialog = DialogPrimitive.Root;
+const DialogOpenContext = React.createContext(false);
+
+const Dialog = ({
+  defaultOpen = false,
+  onOpenChange,
+  open,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) => {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
+  const resolvedOpen = open ?? uncontrolledOpen;
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (open === undefined) setUncontrolledOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange, open]
+  );
+
+  return (
+    <DialogOpenContext.Provider value={resolvedOpen}>
+      <DialogPrimitive.Root
+        {...props}
+        open={resolvedOpen}
+        onOpenChange={handleOpenChange}
+      />
+    </DialogOpenContext.Provider>
+  );
+};
+Dialog.displayName = DialogPrimitive.Root.displayName;
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
@@ -96,6 +126,8 @@ const DialogContent = React.forwardRef<
    * is still the opener at that point.
    */
   const openerRef = React.useRef<HTMLElement | null>(null);
+  const dialogOpen = React.useContext(DialogOpenContext);
+  const feedbackHostRef = useDialogFeedbackHostRef(dialogOpen);
 
   return (
   <DialogPortal>
@@ -112,17 +144,15 @@ const DialogContent = React.forwardRef<
       data-viewport-debug-dialog-frame=""
       data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
-        "fixed inset-0 flex justify-center",
+        // Radix Presence observes this node, so it needs its own exit animation.
+        // This is opacity-only: unlike a transform, it does not change the
+        // containing block for viewport-fixed feedback hosted beneath it.
+        "dialog-feedback-frame-motion fixed inset-0 flex justify-center",
         layer === "nested"
           ? "z-[var(--z-modal-nested)]"
           : "z-[var(--z-modal)]",
         mobileMode === "sheet" ? "items-end sm:items-center" : "items-center",
         useSafeAreaInset && "safe-area-inset",
-        "[animation-duration:var(--motion-modal)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        mobileMode === "sheet"
-          ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
-          : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         frameClassName
       )}
       /*
@@ -163,6 +193,7 @@ const DialogContent = React.forwardRef<
     >
       <div
         data-viewport-debug-dialog-surface=""
+        data-state={dialogOpen ? "open" : "closed"}
         className={cn(
           // Counterpart to the frame's pointer-events: none above. The second class
           // restores Radix's nested-layer inertness: when an inner dialog marks this
@@ -170,6 +201,13 @@ const DialogContent = React.forwardRef<
           // frame's inline pointerEvents:none would otherwise have handled.
           "pointer-events-auto [[data-aria-hidden=true]_&]:pointer-events-none",
           "relative flex w-[min(94vw,100%)] flex-col overflow-hidden border p-5 surface-shadow-modal sm:p-6",
+          // Keep motion on the visual card. A transform on Radix Content turns the
+          // full-screen focus scope into the containing block for fixed feedback,
+          // which makes transaction notices appear attached to this card.
+          "[animation-duration:var(--motion-modal)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
+          mobileMode === "sheet"
+            ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+            : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           /* Cap against the KEYBOARD-INCLUSIVE visual viewport, not just dvh:
              dvh ignores the on-screen keyboard on iOS, so a 90dvh panel kept its
              full height while the keyboard halved the screen and the sticky
@@ -208,6 +246,11 @@ const DialogContent = React.forwardRef<
           </DialogPrimitive.Close>
         )}
       </div>
+      <div
+        ref={feedbackHostRef}
+        data-dialog-feedback-host=""
+        className="pointer-events-auto [[data-aria-hidden=true]_&]:pointer-events-none"
+      />
     </DialogPrimitive.Content>
   </DialogPortal>
   );

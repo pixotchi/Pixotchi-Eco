@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { getCachedStatusSnapshot } from '@/lib/status-checks';
+import { toPublicStatusSnapshot } from '@/lib/status-snapshot';
 import { StatusPageClient } from '@/components/status/StatusPageClient';
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
 export default async function StatusPage() {
-  const snapshot = await getCachedStatusSnapshot();
+  const snapshot = toPublicStatusSnapshot(await getCachedStatusSnapshot());
   const refreshMinutes = CLIENT_ENV.STATUS_REFRESH_MINUTES || 15;
   const showManualRefresh = CLIENT_ENV.STATUS_SHOW_REFRESH_BUTTON;
   return (

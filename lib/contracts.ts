@@ -1,14 +1,20 @@
+import { isQuestFinalizeExpired } from './quest-ui';
 import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { formatAddress } from "@/lib/format-address";
 import { stakingAbi } from '@/public/abi/staking-abi';
 import UniswapAbi from '@/public/abi/Uniswap.json';
-import { encodeFunctionData,formatUnits,getAddress,keccak256,parseUnits,toBytes,toHex } from 'viem';
+import { encodeFunctionData,formatUnits,getAddress,parseUnits } from 'viem';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { BaseRpcError,getBaseReadClient } from './base-rpc';
 import { appendBuilderSuffix } from './builder-code';
 import { CLIENT_ENV } from './env-config';
 import { PIXOTCHI_SOLANA_CONFIG, SOLANA_TWIN_ADAPTER_ABI } from './solana-constants';
+import {
+getPaymentStorageSlot,
+LEAF_REWARD_ADDRESS_SLOT_OFFSET,
+SEED_REWARD_ADDRESS_SLOT_OFFSET,
+} from './quest-reward-storage';
 import {
 BarracksConfig,
 BarracksConfigV2,
@@ -3990,6 +3996,7 @@ export type QuestSlotState =
   | 'in_progress'
   | 'ready_to_commit'
   | 'committed'
+  | 'expired'
   | 'cooldown';
 
 export type QuestSlotSnapshot = QuestSlot & {
@@ -4001,7 +4008,7 @@ export type QuestSlotSnapshot = QuestSlot & {
 export const getQuestSlotState = (slot: QuestSlot, currentBlock: bigint): QuestSlotState => {
   if (slot.coolDownBlock !== BigInt(0) && currentBlock < slot.coolDownBlock) return 'cooldown';
   if (slot.startBlock === BigInt(0)) return 'available';
-  if (slot.pseudoRndBlock !== BigInt(0)) return 'committed';
+  if (slot.pseudoRndBlock !== BigInt(0)) return isQuestFinalizeExpired(slot, currentBlock) ? 'expired' : 'committed';
   if (currentBlock <= slot.endBlock) return 'in_progress';
   return 'ready_to_commit';
 };
@@ -4121,10 +4128,6 @@ export const QUEST_REWARD_FALLBACK_ADDRESS = getAddress('0xd528071FB9dC9715ea8da
  * its own slot. Diamond storage structs are append-only by convention, which is
  * what keeps these offsets stable across facet upgrades.
  */
-const PAYMENT_STORAGE_BASE_SLOT = keccak256(toBytes('eth.pixotchi.land.payment.storage'));
-const SEED_REWARD_ADDRESS_SLOT_OFFSET = BigInt(4);
-const LEAF_REWARD_ADDRESS_SLOT_OFFSET = BigInt(5);
-
 export type QuestRewardSources = {
   seed: `0x${string}`;
   leaf: `0x${string}`;
@@ -4132,8 +4135,7 @@ export type QuestRewardSources = {
   resolvedOnchain: boolean;
 };
 
-export const getPaymentStorageSlot = (offset: bigint): `0x${string}` =>
-  toHex(BigInt(PAYMENT_STORAGE_BASE_SLOT) + offset, { size: 32 });
+export { getPaymentStorageSlot } from './quest-reward-storage';
 
 export const storageWordToAddress = (word: string | null | undefined): `0x${string}` | null => {
   if (!word || word.length < 42) return null;

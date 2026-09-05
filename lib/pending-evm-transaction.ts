@@ -144,7 +144,7 @@ export const PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS = 5 * 60 * 1_000;
 export const PENDING_EVM_PROXY_NOT_FORWARDED_MARKER = "PIXOTCHI_PROXY_NOT_FORWARDED";
 export const PENDING_EVM_MAX_RECORD_SIZE = 4_096;
 export const PENDING_EVM_STALE_MESSAGE =
-  "This transaction is still unconfirmed. Check your wallet before allowing a new transaction.";
+  "We still can't confirm the last action. Check your wallet first to avoid doing it twice.";
 
 const PENDING_EVM_STORAGE_PREFIX = "pixotchi:pending-evm:v2";
 const PENDING_EVM_RECORD_PREFIX = `${PENDING_EVM_STORAGE_PREFIX}:record`;
@@ -171,7 +171,7 @@ export class PendingEvmStaleError extends Error {
 export class PendingEvmStorageUnavailableError extends Error {
   constructor() {
     super(
-      "Safe transaction tracking requires browser storage. Enable site storage, then try again.",
+      "We need browser storage to keep your transaction safe. Enable site storage and try again.",
     );
     this.name = "PendingEvmStorageUnavailableError";
   }

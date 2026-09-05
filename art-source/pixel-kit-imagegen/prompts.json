@@ -1,0 +1,201 @@
+{
+  "mode": "built-in imagegen",
+  "referenceImages": [
+    "public/pixel-kit-imagegen/icons/health.png",
+    "public/pixel-kit-imagegen/icons/swordsman.png"
+  ],
+  "assets": [
+    {
+      "id": "health",
+      "label": "Plant health",
+      "group": "status",
+      "legacy": [
+        "/icons/HEART.svg"
+      ],
+      "review": "Balanced paired lobes and centred notch/tip; geometric symmetry judged visually, not guaranteed mathematically.",
+      "prompt": "Use case: stylized-concept\nAsset type: finished transparent pixel-art game UI icon for Pixotchi, a collectible plant garden game.\nPrimary request: create ONE beautifully proportioned red health HEART icon, entirely new artwork. This is a production icon, no sheet, no presentation card.\nStyle: authentic, clean 16-bit RPG inventory pixel art, like a carefully hand-drawn 32x32 logical-pixel sprite enlarged cleanly. Crisp square pixel clusters on one consistent grid, stepped contours, limited flat colour ramps, a dark plum-charcoal outline about one logical pixel thick. Warm, appealing, rich but restrained, suited to simple pixel NFT plants in terracotta pots. No vector appearance, smooth gradients, brush texture, anti-aliased illustration or 3D.\nCritical geometry: the HEART SILHOUETTE must have exact bilateral mirror symmetry around the vertical centre axis. Equal-width equal-height rounded lobes; identical stair steps on the left and right; centred notch and bottom point. Broad pleasant upper lobes, clean taper, no drooping or smaller side. Shading may be asymmetric, geometry may not.\nColour: rich ruby and tomato-red body, darker crimson lower-right facets, small coherent coral and pale warm-pink upper-left highlight. The highlight is a restrained flat pixel cluster, not scattered dots. Approximately 7-9 colours including the near-black plum outline.\nComposition: only a single heart, upright front view, centred in a square image, silhouette occupies about 72% of canvas width and 70% height. Equal transparent margins left/right. No rotation, no perspective, no drop shadow, no sparkles, no face, no outlines around a background card, no lettering.\nBackground: genuinely transparent alpha, not black, white or a checkerboard pattern. Preserve transparency around the entire icon.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-7ca15c81-3191-4047-9950-1e4c9fb7a5c7.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "swordsman",
+      "label": "Swordsman",
+      "group": "combat",
+      "legacy": [
+        "/icons/swordsman.png"
+      ],
+      "review": "Blade, grip, crossguard midpoint and pommel share a visually coherent diagonal axis.",
+      "prompt": "Use case: stylized-concept\nAsset type: one finished transparent pixel-art SWORD icon for Pixotchi's plant battle UI.\nPrimary request: a beautiful balanced short fantasy sword, pointing diagonally from bottom-left to top-right at precisely 45 degrees. This is one production icon, not a sheet.\nStyle: polished 16-bit RPG inventory pixel art, hand-placed square clusters on a consistent approximately 40x40 logical pixel grid. Crisp stepped dark plum-charcoal outline, clean material colour ramps, controlled light from upper left. Matches a charming pixel NFT garden: organic green accents, warm gold and jewel-lilac weapon.\nCRITICAL CONSTRUCTION: blade tip, the blade's central ridge, crossguard's exact midpoint, grip centre and pommel centre must all lie on ONE straight diagonal axis. The handle continues the blade's centreline with no sideways offset or kink. The two sides of the blade have equal width and matching contour steps about that axis. Crossguard is perpendicular to the axis and extends equally on both sides. Pommel is centred. Geometrically precise, elegant and visually balanced.\nSubject: straight double-edged lilac-steel blade with a pale lavender central ridge and violet shadow edge, simple symmetrical warm-gold crossguard, short dark forest-green wrapped grip, small gold pommel. Recognisable sword proportions: blade about 64% of length, grip plus pommel about 22%, rest guard/neck. No decorative extra blades, wings, faces or attachments.\nComposition: one sword only, full tip and pommel visible, centred in a square with balanced transparent margin on all sides, occupies about 76% of square diagonal. Face of weapon visible; orthographic icon, no foreshortening.\nBackground: genuine transparent alpha. No checkerboard, background colour, floor, shadow, text, label, frame or watermark.\nRendering: precise square pixels and flat colour clusters, no painterly texture, no bevelled 3D, no blurred gradient glow, no stray sparkle dots.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-8f56d056-fca4-400d-9d90-b21d3902d950.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "pts",
+      "label": "PTS",
+      "group": "status",
+      "legacy": [
+        "/icons/pts.svg"
+      ],
+      "subject": "Subject: one bold golden-yellow LIGHTNING BOLT for plant PTS. A crisp classic lightning zigzag, top half broad, lower tip pointed, elegant proportional steps, warm amber shadow and pale buttery highlight. The bolt is a single solid gold object with a dark plum outline. No sparkle satellites, blue accents, face, text, or medallion.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: one bold golden-yellow LIGHTNING BOLT for plant PTS. A crisp classic lightning zigzag, top half broad, lower tip pointed, elegant proportional steps, warm amber shadow and pale buttery highlight. The bolt is a single solid gold object with a dark plum outline. No sparkle satellites, blue accents, face, text, or medallion.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-2ee64a9a-3850-465c-9cb4-cdb5ed8c2212.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "tod",
+      "label": "TOD",
+      "group": "status",
+      "legacy": [
+        "/icons/tod.svg"
+      ],
+      "subject": "Subject: one upright HOURGLASS for a plant's time until death. Perfectly mirror-symmetric outer silhouette with equal-length straight top and bottom wooden caps, centred narrow waist, equal glass chambers. Warm terracotta/golden-brown caps, pale icy-blue glass, rich golden sand in a neat centred lower mound and a small upper sand triangle joined by a thin straight sand stream. Symmetry and readable strong construction matter. No skewed base or perspective. Plain simple object.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: one upright HOURGLASS for a plant's time until death. Perfectly mirror-symmetric outer silhouette with equal-length straight top and bottom wooden caps, centred narrow waist, equal glass chambers. Warm terracotta/golden-brown caps, pale icy-blue glass, rich golden sand in a neat centred lower mound and a small upper sand triangle joined by a thin straight sand stream. Symmetry and readable strong construction matter. No skewed base or perspective. Plain simple object.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-61b34896-3c78-4726-bcab-5756636e1f97.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "star",
+      "label": "Stars",
+      "group": "status",
+      "legacy": [
+        "/icons/Star.svg"
+      ],
+      "subject": "Subject: one thick golden FIVE-POINT STAR for collected stars. Classic five-point star with one upward tip, mirror-symmetric about the vertical axis. Equal left/right upper points, equal left/right lower points and evenly spaced inner valleys. Rich gold body, warm amber lower-right edge, small pale-yellow upper-left glint integrated into the shape. A solid reward symbol with a clean outline, no face, border medallion or floating sparkles.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: one thick golden FIVE-POINT STAR for collected stars. Classic five-point star with one upward tip, mirror-symmetric about the vertical axis. Equal left/right upper points, equal left/right lower points and evenly spaced inner valleys. Rich gold body, warm amber lower-right edge, small pale-yellow upper-left glint integrated into the shape. A solid reward symbol with a clean outline, no face, border medallion or floating sparkles.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-ff42923a-9037-4f5f-8ffa-bb501920838c.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "shield",
+      "label": "Protection",
+      "group": "combat",
+      "legacy": [
+        "/icons/Shield.png"
+      ],
+      "subject": "Subject: one upright kite-shaped PROTECTIVE SHIELD. EXACTLY mirror-symmetric silhouette around vertical centre, equal shoulders, straight centred top crest, lower point exactly below centre. Sturdy silver-blue metal rim, blue-teal inset face with a small simple lighter central crest. Clean tiered pixel rim following both sides evenly, attractive rich but restrained shading. Upper-left highlight can differ from shadow side, but silhouette must be symmetric. No weapon behind it, no lettering.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: one upright kite-shaped PROTECTIVE SHIELD. EXACTLY mirror-symmetric silhouette around vertical centre, equal shoulders, straight centred top crest, lower point exactly below centre. Sturdy silver-blue metal rim, blue-teal inset face with a small simple lighter central crest. Clean tiered pixel rim following both sides evenly, attractive rich but restrained shading. Upper-left highlight can differ from shadow side, but silhouette must be symmetric. No weapon behind it, no lettering.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-ab8cccd2-56eb-4911-8eb1-7d44f07a8756.png",
+      "correctionPrompt": "Edit target: the attached generated shield. Change ONLY the background: remove the entire baked white/light-grey checkerboard and replace it with genuinely transparent alpha. Preserve the complete shield exactly, including symmetrical silhouette, pixel outlines, blue-teal face, silver rim, centred emblem, scale, orientation, colours and shading. No repainting of the shield, no cropping, no checkerboard, no solid background, no shadow. The outside of the shield must be clear transparency, not a picture of transparency."
+    },
+    {
+      "id": "magic-soil",
+      "label": "Magic soil",
+      "group": "items",
+      "legacy": [
+        "/icons/SOIL.png"
+      ],
+      "subject": "Subject: MAGIC SOIL, a broad small mound of rich earthy brown soil with a few lilac mineral chunks and one delicate but sturdy green sprout growing from the centre. Tiered attractive soil pixels, warm ochre highlights, plum shadows, two green leaves with natural balanced placement. One tiny magic glint is enough. Soil is the main subject, no bag, pot, floating island or building.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: MAGIC SOIL, a broad small mound of rich earthy brown soil with a few lilac mineral chunks and one delicate but sturdy green sprout growing from the centre. Tiered attractive soil pixels, warm ochre highlights, plum shadows, two green leaves with natural balanced placement. One tiny magic glint is enough. Soil is the main subject, no bag, pot, floating island or building.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-e962e45c-373b-4370-88d3-14d439bd632f.png",
+      "correctionPrompt": "Use case: background-extraction. Edit target: the attached magic-soil inventory icon. Remove ONLY the baked white/light-grey checkerboard background and replace it with genuine transparent alpha, including any background visible inside openings such as the fertilizer handle. Keep the full object, its silhouette, proportions, pixel edges, colours, highlights and small attached details exactly as shown. Do not redesign, crop or rescale the icon. Outside the subject must be true alpha transparency, not a pattern, solid colour or shadow."
+    },
+    {
+      "id": "sunlight",
+      "label": "Sunlight",
+      "group": "items",
+      "legacy": [
+        "/icons/SUN.png"
+      ],
+      "subject": "Subject: SUNLIGHT, a radiant little golden sun medallion with eight clean evenly spaced rays. Circular stepped central disc, perfectly balanced symmetric radial construction, large cardinal rays and shorter diagonal rays separated from disc by small regular gaps. Rich gold, warm amber shadow, buttery yellow highlight. No face, no celestial scene, no scattered particles.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: SUNLIGHT, a radiant little golden sun medallion with eight clean evenly spaced rays. Circular stepped central disc, perfectly balanced symmetric radial construction, large cardinal rays and shorter diagonal rays separated from disc by small regular gaps. Rich gold, warm amber shadow, buttery yellow highlight. No face, no celestial scene, no scattered particles.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-65a46630-457b-4730-b6e6-d94c130c3029.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "water",
+      "label": "Water",
+      "group": "items",
+      "legacy": [
+        "/icons/WATERDROPS.png"
+      ],
+      "subject": "Subject: WATER, one beautiful turquoise water droplet hovering immediately above a small matching pixel ripple. Exact bilateral symmetry in the drop outline, centre tip directly above centre base, equally full sides. Rich cyan and blue with one large icy-white upper-left highlight. Small ripple is symmetric and restrained, no surrounding loose droplets or splash spray. Water should feel fresh and valuable, broad simple silhouette.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: WATER, one beautiful turquoise water droplet hovering immediately above a small matching pixel ripple. Exact bilateral symmetry in the drop outline, centre tip directly above centre base, equally full sides. Rich cyan and blue with one large icy-white upper-left highlight. Small ripple is symmetric and restrained, no surrounding loose droplets or splash spray. Water should feel fresh and valuable, broad simple silhouette.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-dbdacbc4-65c3-4f00-b646-d98c3e887feb.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "fertilizer",
+      "label": "Fertilizer",
+      "group": "items",
+      "legacy": [
+        "/icons/FERTILIZER.png"
+      ],
+      "subject": "Subject: FERTILIZER, an attractive small rounded bucket of enchanted blue fertilizer granules. Sturdy dark-violet bucket with silver-lilac rim and a simple curved silver handle centred overhead, rich cyan/blue granules visible at the top, a small pale green sprout emblem centred on the front. Equal-width bucket sides, handle attaches at corresponding left/right points, believable centred construction. Jewel-like garden inventory item, no text, no floating particles.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: FERTILIZER, an attractive small rounded bucket of enchanted blue fertilizer granules. Sturdy dark-violet bucket with silver-lilac rim and a simple curved silver handle centred overhead, rich cyan/blue granules visible at the top, a small pale green sprout emblem centred on the front. Equal-width bucket sides, handle attaches at corresponding left/right points, believable centred construction. Jewel-like garden inventory item, no text, no floating particles.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-0d471577-44d2-477a-9ee5-78b15881bd3a.png",
+      "correctionPrompt": "Use case: background-extraction. Edit target: the attached fertilizer inventory icon. Remove ONLY the baked white/light-grey checkerboard background and replace it with genuine transparent alpha, including any background visible inside openings such as the fertilizer handle. Keep the full object, its silhouette, proportions, pixel edges, colours, highlights and small attached details exactly as shown. Do not redesign, crop or rescale the icon. Outside the subject must be true alpha transparency, not a pattern, solid colour or shadow."
+    },
+    {
+      "id": "dream-dew",
+      "label": "Dream dew",
+      "group": "items",
+      "legacy": [
+        "/icons/DREAMDEW.png"
+      ],
+      "subject": "Subject: DREAM DEW, a small exquisite glass potion bottle of magical violet-pink dew. Short centred cork, narrow centred neck, symmetrical rounded teardrop body, silver-lilac rim, glowing pale lavender liquid with a simple little golden crescent moon on the front. Maintain identical left/right vessel proportions; liquid is level. Dark plum outline, jewel-like purple facets, one icy highlight. No text or extra bottles, no airborne particle cloud. Garden magic, not ominous poison.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: DREAM DEW, a small exquisite glass potion bottle of magical violet-pink dew. Short centred cork, narrow centred neck, symmetrical rounded teardrop body, silver-lilac rim, glowing pale lavender liquid with a simple little golden crescent moon on the front. Maintain identical left/right vessel proportions; liquid is level. Dark plum outline, jewel-like purple facets, one icy highlight. No text or extra bottles, no airborne particle cloud. Garden magic, not ominous poison.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-1a09416f-43ce-48b3-8510-60ea075aa96b.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "pollinator",
+      "label": "Pollinator",
+      "group": "items",
+      "legacy": [
+        "/icons/BEE.png"
+      ],
+      "subject": "Subject: POLLINATOR, one friendly little golden BEE in a three-quarter side view facing right. Rounded striped gold-and-dark-brown body, one clearly readable dark eye and small antennae, two pale icy-lavender wings attached correctly to the upper thorax, tiny tucked legs. Wings may overlap naturally in this three-quarter view. Anatomically coherent connected body, elegant warm-gold pixel highlights. Cute and charming with minimal facial detail, no human face, not a wasp. No flower, frame, spray of particles or environment.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: POLLINATOR, one friendly little golden BEE in a three-quarter side view facing right. Rounded striped gold-and-dark-brown body, one clearly readable dark eye and small antennae, two pale icy-lavender wings attached correctly to the upper thorax, tiny tucked legs. Wings may overlap naturally in this three-quarter view. Anatomically coherent connected body, elegant warm-gold pixel highlights. Cute and charming with minimal facial detail, no human face, not a wasp. No flower, frame, spray of particles or environment.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-aee3d98d-5305-44bb-9255-35262409b7e7.png",
+      "correctionPrompt": "Use case: background-extraction. Edit target: the attached pollinator inventory icon. Remove ONLY the baked white/light-grey checkerboard background and replace it with genuine transparent alpha, including any background visible inside openings such as the fertilizer handle. Keep the full object, its silhouette, proportions, pixel edges, colours, highlights and small attached details exactly as shown. Do not redesign, crop or rescale the icon. Outside the subject must be true alpha transparency, not a pattern, solid colour or shadow."
+    },
+    {
+      "id": "fence",
+      "label": "Fence",
+      "group": "items",
+      "legacy": [
+        "/icons/Fence.png"
+      ],
+      "subject": "Subject: protective FENCE inventory item, three finely crafted upright warm-brown wooden pickets and two horizontal rails, front-on orthographic view. All three pickets equal width, matching tapered tips, regular even spacing and straight shared baseline; rails connect structurally at consistent heights. A small simple teal-green vine or leaf at the base signals garden protection. Rich warm wood pixel facets and dark plum contour, charming but sturdy. Fence item only, no scene, land tile or building, no ground shadow.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: protective FENCE inventory item, three finely crafted upright warm-brown wooden pickets and two horizontal rails, front-on orthographic view. All three pickets equal width, matching tapered tips, regular even spacing and straight shared baseline; rails connect structurally at consistent heights. A small simple teal-green vine or leaf at the base signals garden protection. Rich warm wood pixel facets and dark plum contour, charming but sturdy. Fence item only, no scene, land tile or building, no ground shadow.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-93e25308-e140-4d03-a95b-e34852d76fbf.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "botano",
+      "label": "Botano",
+      "group": "items",
+      "legacy": [
+        "/icons/botano.svg"
+      ],
+      "subject": "Subject: BOTANO, a single strong cyan-blue LIGHTNING BOLT magic plant booster. Classic coherent zigzag silhouette, broad top and pointed bottom, polished turquoise facets, deep saturated blue right edge and icy-aqua upper-left highlight. Shape communicates a sudden burst of growth power; visually distinct from amber PTS by its blue palette. One simple large bolt with crisp dark outline. No medallion, potion, fire, face, tiny particles or text.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: BOTANO, a single strong cyan-blue LIGHTNING BOLT magic plant booster. Classic coherent zigzag silhouette, broad top and pointed bottom, polished turquoise facets, deep saturated blue right edge and icy-aqua upper-left highlight. Shape communicates a sudden burst of growth power; visually distinct from amber PTS by its blue palette. One simple large bolt with crisp dark outline. No medallion, potion, fire, face, tiny particles or text.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-549af592-2412-47ea-92c5-513f1956269b.png",
+      "correctionPrompt": null
+    },
+    {
+      "id": "moonlight",
+      "label": "Moonlight",
+      "group": "items",
+      "legacy": [
+        "/icons/moonlight.png"
+      ],
+      "subject": "Subject: MOONLIGHT, one beautiful silver-lilac FULL MOON inventory icon. A round pixel-stepped disc with a rigorously balanced circular silhouette, pale silver highlights, cool lilac-grey shadows. Three or four broad simple lunar crater clusters placed tastefully inside the disc, no excessive surface noise. A tiny restrained golden four-pixel glint near upper right is allowed. The full round moon stays clearly recognisable at small sizes. No face, starscape, crescent silhouette, frame or scene.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: MOONLIGHT, one beautiful silver-lilac FULL MOON inventory icon. A round pixel-stepped disc with a rigorously balanced circular silhouette, pale silver highlights, cool lilac-grey shadows. Three or four broad simple lunar crater clusters placed tastefully inside the disc, no excessive surface noise. A tiny restrained golden four-pixel glint near upper right is allowed. The full round moon stays clearly recognisable at small sizes. No face, starscape, crescent silhouette, frame or scene.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-6d3b9dd3-a980-4873-a1e7-da11defd5bbf.png",
+      "correctionPrompt": "Use case: background-extraction\nAsset type: transparent PNG game inventory icon\nInput image 1: edit target, the selected Pixotchi moonlight icon.\nPrimary request: Remove the painted white and gray checkerboard background completely and replace it with actual alpha transparency. This is background extraction only. Preserve the entire circular pixel-art full moon, stepped dark plum outline, lavender craters, white highlights and the little gold glint exactly as shown. Keep the same framing and subject size. All empty pixels outside the silhouette must be transparent, including the corners. Do not repaint, rotate, crop, rescale, add a background, cast shadow, glow, border or text. Output a PNG with a genuine alpha channel; no checkerboard pattern rendered into the image."
+    },
+    {
+      "id": "nitro",
+      "label": "Nitro",
+      "group": "items",
+      "legacy": [
+        "/icons/Nitro.png"
+      ],
+      "subject": "Subject: NITRO, a small polished SPEEDOMETER boost gauge, front-on view. Balanced symmetric arched silver body on a straight dark base. The dial's left zone is leafy green, middle gold, right orange-red. One crisp needle points upward-right into the orange zone, rotating from a single clearly centred circular hub at the lower-middle of the dial. Exactly aligned hub, equal left/right gauge sides, coherent proportions. Bold forms, clean pixel clusters, no letters, numbers, texture noise or loose particles.",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent game inventory/HUD icon for Pixotchi, a playful collectible pixel-plant garden.\nReference images: Image 1 (heart) and Image 2 (sword) are STYLE REFERENCES ONLY, not edit targets. Generate a new individual icon. Match their dark plum outlines, coherent pixel clusters, jewel-colour materials and light direction while keeping the new icon simple enough for a small HUD.\nStyle: polished 16-bit RPG pixel art, crisp uniform square clusters, approximately 40x40 logical sprite enlarged cleanly. Clear silhouette with an approximately one-pixel dark outline, 6-10 deliberate colour shades, upper-left highlights and bottom-right shadow facets. Avoid thin fragile details. Flat pixel-colour clusters, not a vector illustration, not a photoreal render.\nLayout: single icon centred on a square canvas, balanced margin, object fills roughly 74% of image. Genuinely transparent alpha background, no floor, shadows, frame, scene, lettering or watermark. No baked checkerboard.\nSubject: NITRO, a small polished SPEEDOMETER boost gauge, front-on view. Balanced symmetric arched silver body on a straight dark base. The dial's left zone is leafy green, middle gold, right orange-red. One crisp needle points upward-right into the orange zone, rotating from a single clearly centred circular hub at the lower-middle of the dial. Exactly aligned hub, equal left/right gauge sides, coherent proportions. Bold forms, clean pixel clusters, no letters, numbers, texture noise or loose particles.",
+      "sourcePath": "C:\\Users\\Goat\\.codex\\generated_images\\01a06e1a-f01d-7a62-ba6c-eec062841f16\\exec-7c4f9a42-8797-48e6-9610-5dee5aa62c19.png",
+      "correctionPrompt": null
+    }
+  ]
+}

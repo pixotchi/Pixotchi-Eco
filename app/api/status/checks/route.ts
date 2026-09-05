@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedStatusSnapshot, getStoredStatusSnapshot } from '@/lib/status-checks';
 import { verifyVercelCron } from '@/lib/notifications/cron-auth';
+import { toPublicStatusSnapshot } from '@/lib/status-snapshot';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(snapshot, {
+    return NextResponse.json(toPublicStatusSnapshot(snapshot), {
       headers: {
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
       },

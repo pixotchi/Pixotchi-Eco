@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getBaseLogClient, getBaseReadClient, getBaseReceiptClient } from '@/lib/base-rpc';
 import { BASE_RPC_MAX_BATCH_SIZE, BASE_RPC_MAX_BODY_BYTES } from '@/lib/base-rpc-policy';
 import { ChatAuthError, getChatSessionOrQuickAuthFromRequest } from '@/lib/chat-auth';
+import { CLIENT_ENV } from '@/lib/env-config';
+import { isLatestQuestRewardStorageRead } from '@/lib/quest-reward-storage';
 import { redisExpire, redisIncrBy } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
@@ -53,9 +55,9 @@ const ALLOWED_READ_METHODS = new Set([
 
 /**
  * Wallet connection and first-login flows need these read-only calls before a
- * session exists. Storage access deliberately requires an authenticated
- * identity; bounded log queries remain available but carry a much higher cost.
- * Keep this list narrower than ALLOWED_READ_METHODS.
+ * session exists. Bounded log queries remain available but carry a much higher
+ * cost. The request-level policy below separately admits only the two Farmer
+ * House storage slots; keep this method list narrower than ALLOWED_READ_METHODS.
  */
 const ANONYMOUS_READ_METHODS = new Set([
   'eth_blockNumber',
@@ -78,6 +80,18 @@ const ANONYMOUS_READ_METHODS = new Set([
 
 export function isAnonymousBaseRpcMethodAllowed(method: string): boolean {
   return ANONYMOUS_READ_METHODS.has(method);
+}
+
+export function isAnonymousBaseRpcRequestAllowed(
+  payload: JsonRpcRequest,
+  allowDevelopmentWrites: boolean = false,
+): boolean {
+  const method = payload.method;
+  if (typeof method !== 'string') return false;
+  if (isAnonymousBaseRpcMethodAllowed(method)) return true;
+  if (allowDevelopmentWrites && DEVELOPMENT_WRITE_METHODS.has(method)) return true;
+  return method === 'eth_getStorageAt'
+    && isLatestQuestRewardStorageRead(payload.params, CLIENT_ENV.LAND_CONTRACT_ADDRESS);
 }
 
 const DEVELOPMENT_WRITE_METHODS = new Set([
@@ -422,10 +436,7 @@ function validateAnonymousTier(
   const id = (payload?.id ?? null) as JsonRpcId;
   const method = payload.method as string;
 
-  if (
-    !isAnonymousBaseRpcMethodAllowed(method)
-    && !(allowDevelopmentWrites && DEVELOPMENT_WRITE_METHODS.has(method))
-  ) {
+  if (!isAnonymousBaseRpcRequestAllowed(payload, allowDevelopmentWrites)) {
     return notForwardedError(
       id,
       METHOD_NOT_FOUND,
