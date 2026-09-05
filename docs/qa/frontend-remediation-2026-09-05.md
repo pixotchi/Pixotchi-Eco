@@ -2,7 +2,20 @@
 
 Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-Eco/docs/qa/frontend-audit-2026-09-05.md), against the working tree based on `6f7ddf0` (app 1.8.30).
 
-The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The frontend changes are prepared as two local commits; pushing remains separate.
+The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
+
+## Visual corrections after player screenshot review
+
+The user's screenshots exposed layout problems that the earlier fixture coverage missed. These corrections supersede the earlier notes about a collapsible illustration and a split care panel.
+
+- The connected app widens at the actual 864px tablet layout boundary again. Plant and land presentation columns are capped at 420px, so an intermediate-width window cannot inflate the square scene around fixed-size art.
+- The care catalog keeps the full panel width before and after selection. Its single mounted purchase review sits below the catalog; selecting a different item scrolls and focuses that review. Quantity changes keep the same selection key and do not move focus. A geometry assertion now covers both states.
+- Land artwork is always expanded, with no expand/collapse control. It precedes the overview. Warehouse totals use the game's PTS and lifetime icons; production rows use their building artwork and show the resources available. The farmer row combines its navigation and quest status instead of repeating a separate button and heading.
+- Easy, Med and Hard have green, amber and red text/selection treatments, with leaf, flame and crossed-sword icons. Durations stay visible, and the shared radio group retains arrow-key navigation and its 40px control density.
+- Validation: **42 targeted browser cases passed** across the 14 existing Chromium/WebKit contexts, covering care geometry/focus, land read recovery/navigation and difficulty color/keyboard selection. Focused lint, TypeScript, the production build, four frontend smoke suites and production fixture isolation passed. One earlier run timed out waiting for fixture hydration while a production build ran concurrently; the final complete 42-case rerun passed after that build finished. The previous 451-case full run below predates this follow-up.
+- Live dark-theme review: plant scenes fit at 320/390/640/800/864/1024/1440px; expanded land scenes fit at 320/390/800/864/1440px, with no collapse control or document overflow. Quest selectors were checked at 320/390/864/1440px. The final full-width care review was checked at 390/864/1440px, with focus arriving on the review and no document overflow. No purchase or quest was submitted.
+
+Final captures: [desktop care](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/feedback-care-final-1440.png), [800px farm](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/feedback-farm-800.png), [land overview](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/feedback-land-summary-390.png) and [quest difficulty](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/feedback-quests-390.png).
 
 ## Final pass: controller boundaries and push readiness
 

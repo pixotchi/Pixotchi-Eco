@@ -260,7 +260,6 @@ function LandsViewContent() {
   const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
   const [buildingsError, setBuildingsError] = useState<string | null>(null);
-  const [landArtExpanded, setLandArtExpanded] = useState(false);
   const buildingPanelRef = useRef<HTMLDivElement>(null);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
@@ -981,7 +980,7 @@ function LandsViewContent() {
     <div className="space-y-4 tablet:mx-auto tablet:max-w-[44rem] xl:max-w-none">
       {selectedLand && (
         <div className="space-y-4 xl:mx-auto xl:grid xl:w-full xl:max-w-[1368px] xl:items-start xl:justify-center xl:gap-5 xl:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(760px,928px)]">
-          <div className="space-y-4 xl:sticky xl:top-0">
+          <div className="mx-auto w-full max-w-[420px] space-y-4 xl:sticky xl:top-0">
           {lands.length > 1 && (
             <TabCard>
               <CardHeader><CardTitle>Select Land</CardTitle></CardHeader>
@@ -1012,13 +1011,9 @@ function LandsViewContent() {
               </CardContent>
             </TabCard>
           )}
-          <LandActionSummary land={selectedLand} village={villageBuildings} town={townBuildings} block={currentBlock}
-            quests={quests}
-            loading={buildingsLoading} error={buildingsError} onRetry={() => { void fetchBuildingData(); }}
-            onSelect={(type, building) => { handleBuildingSelect(type, building); requestAnimationFrame(() => buildingPanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })); }} />
           <TabCard>
             <CardContent className="space-y-3">
-              <div className={`relative w-full ${landArtExpanded ? 'h-80' : 'h-44 sm:h-60'} xl:h-auto xl:aspect-square overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised`}>
+              <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-panel)] border border-border/45 bg-card bg-[image:var(--gradient-creature-stage)] surface-shadow-raised">
                 <div className="pointer-events-none absolute inset-x-8 bottom-8 h-10 rounded-[50%] bg-[hsl(var(--scene-floor)/0.46)] blur-xl" />
                 <div className="absolute top-3 left-3 right-3 grid grid-cols-2 gap-2 text-sm font-bold text-foreground/80 z-20">
                   <div className="flex justify-start">
@@ -1110,11 +1105,14 @@ function LandsViewContent() {
                   />
                 </div>
                 {selectedLand.name && <p className="text-sm text-muted-foreground">Land #{selectedLand.tokenId.toString()}</p>}
-                <Button variant="ghost" className="mt-1 xl:hidden" aria-expanded={landArtExpanded} onClick={() => setLandArtExpanded(value => !value)}>{landArtExpanded ? 'Collapse illustration' : 'Expand illustration'}</Button>
               </div>
             </CardContent>
           </TabCard>
 
+          <LandActionSummary land={selectedLand} village={villageBuildings} town={townBuildings} block={currentBlock}
+            quests={quests}
+            loading={buildingsLoading} error={buildingsError} onRetry={() => { void fetchBuildingData(); }}
+            onSelect={(type, building) => { handleBuildingSelect(type, building); requestAnimationFrame(() => buildingPanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })); }} />
           </div>
 
           <div className="min-w-0 space-y-4">

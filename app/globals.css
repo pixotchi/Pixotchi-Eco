@@ -1086,7 +1086,7 @@
     max-width: 28rem;
   }
 
-  @media (min-width: 40rem) {
+  @media (min-width: 54rem) {
     .app-shell-inner[data-connected="true"] {
       max-width: min(100vw, 56rem);
     }
@@ -1899,6 +1899,29 @@ button.profile-follow-button.follow-button p {
 }
 .motion-off .transaction-feedback-card { transform: none !important; }
 .performance-mode .transaction-feedback-card { transition: none; transform: none !important; box-shadow: 0 2px 10px rgb(0 0 0 / 0.16); }
+
+/* Quest choices carry both a color and an icon; the existing radio/keyboard behavior stays shared. */
+.quest-difficulty {
+  --quest-easy: 148 65% 27%;
+  --quest-medium: 30 88% 29%;
+  --quest-hard: 350 70% 37%;
+}
+.dark .quest-difficulty {
+  --quest-easy: 151 69% 74%;
+  --quest-medium: 40 94% 75%;
+  --quest-hard: 350 90% 82%;
+}
+.quest-difficulty[data-difficulty="0"] { --quest-active: var(--quest-easy); }
+.quest-difficulty[data-difficulty="1"] { --quest-active: var(--quest-medium); }
+.quest-difficulty[data-difficulty="2"] { --quest-active: var(--quest-hard); }
+.quest-difficulty .quest-difficulty-0 { color: hsl(var(--quest-easy)); }
+.quest-difficulty .quest-difficulty-1 { color: hsl(var(--quest-medium)); }
+.quest-difficulty .quest-difficulty-2 { color: hsl(var(--quest-hard)); }
+.quest-difficulty .surface-control-selected {
+  background: hsl(var(--quest-active) / 0.14);
+  border-color: hsl(var(--quest-active) / 0.6);
+  box-shadow: inset 0 0 0 1px hsl(var(--quest-active) / 0.12);
+}
 
 /* Keep phone fields readable and prevent iOS focus zoom, including caller density overrides. */
 @media (max-width: 53.999rem), (pointer: coarse) {

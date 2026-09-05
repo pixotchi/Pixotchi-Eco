@@ -8,6 +8,8 @@ import { ResourceState } from '@/components/ui/resource-state';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { PlantCareCatalog } from '@/components/plant-care-catalog';
+import { PlantCareLayout } from '@/components/plant-care-layout';
+import { QuestDifficultySelector } from '@/components/building-details/quest-difficulty-selector';
 import { RouletteBettingTable } from '@/components/transactions/roulette-betting-table';
 import { MarketplaceOrderSummary } from '@/components/transactions/marketplace-order-summary';
 import { ChatComposer } from '@/components/chat/chat-composer';
@@ -31,6 +33,7 @@ export function FrontendFixtures() {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
   const [amount, setAmount] = useState('');
+  const [questDifficulty, setQuestDifficulty] = useState(0);
   const [selected, setSelected] = useState<GardenItem | ShopItem | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [lastBet, setLastBet] = useState('');
@@ -60,9 +63,13 @@ export function FrontendFixtures() {
       <DropdownMenu><DropdownMenuTrigger asChild><Button className="w-full">Select a plant</Button></DropdownMenuTrigger>
         <DropdownMenuContent matchTriggerWidth><DropdownMenuItem>Very long plant name · #22419</DropdownMenuItem><DropdownMenuItem>TYJ · #1</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
     </section>
-    <section aria-label="Care catalog" className="max-w-xl">
-      <PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden" isSmartWallet
-        getQuantity={id => quantities[id] ?? 0} onQuantityChange={(id, value) => setQuantities(q => ({ ...q, [id]: value }))} onSelect={option => setSelected(option.item)} />
+    <section aria-label="Care catalog" className="@container max-w-[640px]">
+      <PlantCareLayout selectionKey={selected?.id ?? null} catalog={<div aria-label="Care choices"><PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden" isSmartWallet
+        getQuantity={id => quantities[id] ?? 0} onQuantityChange={(id, value) => setQuantities(q => ({ ...q, [id]: value }))} onSelect={option => setSelected(option.item)} /></div>}
+        details={<p aria-label="Care review">{selected ? `Review ${selected.name}` : 'Choose a care item below.'}</p>} />
+    </section>
+    <section aria-label="Quest difficulty fixture" className="max-w-sm">
+      <QuestDifficultySelector label="Quest difficulty" value={questDifficulty} onChange={setQuestDifficulty} />
     </section>
     <section aria-label="Read failure" className="max-w-md">
       <ResourceState status={resource} title={resource === 'error' ? 'Production unavailable' : 'Nothing ready to collect'} description={resource === 'error' ? 'The network read failed.' : 'Your next production is still growing.'} onRetry={resource === 'error' ? () => setResource('empty') : undefined} />

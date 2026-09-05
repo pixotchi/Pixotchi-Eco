@@ -3,7 +3,7 @@
 import GameTransaction from '@/components/transactions/game-transaction';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import { ToggleGroup } from '@/components/ui/toggle-group';
+import { QuestDifficultySelector } from './quest-difficulty-selector';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { getQuestSlotState, getUnlockedQuestSlots, type QuestSlot } from '@/lib/quest-slots';
@@ -232,17 +232,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                   <>
                     <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
-                        <ToggleGroup
-                          ariaLabel={`Quest ${idx + 1} difficulty`}
-                          value={String(difficulty[idx] ?? 0)}
-                          onValueChange={(v) => setDifficulty((prev) => ({ ...prev, [idx]: Number(v || 0) }))}
-                          options={[
-                            { value: '0', label: <span>Easy <span className="text-xs text-muted-foreground">(3h)</span></span> },
-                            { value: '1', label: <span>Med <span className="text-xs text-muted-foreground">(6h)</span></span> },
-                            { value: '2', label: <span>Hard <span className="text-xs text-muted-foreground">(12h)</span></span> },
-                          ]}
-                          className="w-full"
-                          getButtonClassName={() => 'flex-1'}
+                        <QuestDifficultySelector
+                          label={`Quest ${idx + 1} difficulty`}
+                          value={difficulty[idx] ?? 0}
+                          onChange={value => setDifficulty(prev => ({ ...prev, [idx]: value }))}
                         />
                       </div>
                       <GameTransaction

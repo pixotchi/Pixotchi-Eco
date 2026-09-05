@@ -31,9 +31,13 @@ test('selector matches its trigger and returns keyboard focus', async ({ page })
 
 test('catalog names and quantity controls fit without overflow', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
+  const choices = catalog.getByLabel('Care choices', { exact: true });
+  expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
   await catalog.getByRole('button', { name: 'Select Water' }).click();
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toHaveAttribute('aria-pressed', 'true');
+  expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
+  await expect(catalog.getByRole('region', { name: 'Care item review' })).toBeFocused();
   expect(await catalog.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -109,7 +113,8 @@ test('land overview retries failed reads and opens the intended building', async
   await expect(overview.getByRole('alert')).toContainText('Buildings unavailable');
   await expect(overview.getByRole('button', { name: 'Use stored resources' })).toHaveCount(0);
   await overview.getByRole('button', { name: 'Retry' }).click();
-  await expect(overview).toContainText('1 production building has');
+  await expect(overview).toContainText('Ready to collect');
+  await expect(overview.getByRole('button', { name: 'Collect: Solar Panels' })).toContainText('12 PTS');
   await expect(overview).toContainText('2.5 PTS');
   await overview.getByRole('button', { name: 'Use stored resources' }).click();
   await expect(page.getByLabel('Selected building')).toHaveText('town:3');
@@ -325,4 +330,22 @@ test('production readouts retain tiny points and total lifetime without looking 
   await expect(production.getByText('Lifetime per day')).toHaveCount(0);
   await expect(production.getByRole('button')).toHaveCount(0);
   expect(await production.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+});
+
+test('quest difficulty has distinct colors and retains arrow-key selection', async ({ page }) => {
+  const group = page.getByRole('radiogroup', { name: 'Quest difficulty', exact: true });
+  const easy = group.getByRole('radio', { name: 'Easy 3h', exact: true });
+  const medium = group.getByRole('radio', { name: 'Med 6h', exact: true });
+  const hard = group.getByRole('radio', { name: 'Hard 12h', exact: true });
+  const colors = await group.getByRole('radio').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).color));
+  expect(new Set(colors).size).toBe(3);
+  await expect(easy).toHaveAttribute('aria-checked', 'true');
+  await easy.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(medium).toBeFocused();
+  await expect(medium).toHaveAttribute('aria-checked', 'true');
+  await hard.click();
+  await expect(hard).toHaveAttribute('aria-checked', 'true');
+  expect(await group.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  for (const option of [easy, medium, hard]) expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(40);
 });

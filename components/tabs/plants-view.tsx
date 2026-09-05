@@ -11,6 +11,7 @@ import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { FirstCareGuide } from "@/components/first-care-guide";
 import { completeFirstCareStep } from '@/lib/first-care-progress';
 import { PlantCareCatalog } from "@/components/plant-care-catalog";
+import { PlantCareLayout } from "@/components/plant-care-layout";
 import { SolanaNotSupported,useIsSolanaWallet,useTwinAddress } from "@/components/solana";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -444,7 +445,7 @@ export default function PlantsView() {
               : "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[1100px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
           }
         >
-          <div className="space-y-4 tablet:sticky tablet:top-0">
+          <div className="mx-auto w-full max-w-[420px] space-y-4 tablet:sticky tablet:top-0">
           {plants.length > 1 && (
             <TabCard>
               <CardHeader><CardTitle>Select Plant</CardTitle></CardHeader>
@@ -857,22 +858,18 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 gap-4 @min-[36rem]:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)] @min-[36rem]:items-start">
-                  <PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
+                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null}
+                  catalog={<PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
                     isSmartWallet={isSmartWallet} getQuantity={getItemQuantity} onQuantityChange={handleQuantityChange}
-                    onSelect={({ item, itemType: nextType }) => { setSelectedItem(item); setItemType(nextType); }} />
-
-                  {/* Item Details and Purchase */}
-                  <div className="order-first @min-[36rem]:order-none">
-                  <ItemDetailsPanel
+                    onSelect={({ item, itemType: nextType }) => { setSelectedItem(item); setItemType(nextType); }} />}
+                  details={<ItemDetailsPanel
                     selectedItem={selectedItem}
                     selectedPlant={selectedPlant}
                     itemType={itemType}
                     onPurchaseSuccess={onPurchaseSuccess}
                     quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
-                  />
-                  </div>
-                </div>
+                  />}
+                />
               </CardContent>
             </TabCard>
           )}
