@@ -20,7 +20,7 @@ export function landQuestQueryOptions(owner: string | null | undefined, chainId:
   };
 }
 
-/** Query keys own isolation and deduplication. Only the overview polls; the
+/** Query keys own isolation and deduplication. Only the land controller polls; the
  * detail panel observes the same cache and explicitly refreshes after actions. */
 export function useLandQuestSlots({ owner, chainId, landId, enabled = true, poll = false, read = getQuestSlotsByLandId }: {
   owner?: string | null; chainId: number; landId: bigint | null; enabled?: boolean; poll?: boolean;

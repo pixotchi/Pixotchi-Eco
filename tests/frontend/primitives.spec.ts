@@ -108,20 +108,21 @@ test('nested dialog dismisses one layer and restores focus', async ({ page }) =>
   await expect(opener).toBeFocused();
 });
 
-test('land overview retries failed reads and opens the intended building', async ({ page }) => {
-  const overview = page.getByRole('region', { name: 'Land overview fixture' });
-  await expect(overview.getByRole('alert')).toContainText('Buildings unavailable');
-  await expect(overview.getByRole('button', { name: 'Use stored resources' })).toHaveCount(0);
-  await overview.getByRole('button', { name: 'Retry' }).click();
-  await expect(overview).toContainText('Ready to collect');
-  await expect(overview.getByRole('button', { name: 'Collect: Solar Panels' })).toContainText('12 PTS');
-  await expect(overview).toContainText('2.5 PTS');
-  await overview.getByRole('button', { name: 'Use stored resources' }).click();
-  await expect(page.getByLabel('Selected building')).toHaveText('town:3');
-  await overview.getByRole('button', { name: 'View farmer quests' }).click();
-  await expect(page.getByLabel('Selected building')).toHaveText('town:7');
-  await overview.getByRole('button', { name: /Upgrade ready to finish/ }).click();
-  await expect(page.getByLabel('Selected building')).toHaveText('village:3');
+test('land resource badges fit beside Map and retain exact totals', async ({ page }) => {
+  const fixture = page.getByRole('region', { name: 'Land resource fixture' });
+  const badges = fixture.getByRole('group', { name: 'Available land resources' });
+  await expect(badges).toContainText('2.5 PTS');
+  await expect(badges.getByLabel('1h lifetime', { exact: true })).toBeVisible();
+  await fixture.getByRole('button', { name: 'Use large land totals' }).click();
+  await expect(badges.getByLabel('1,234,567,890.123456789012 PTS', { exact: true })).toHaveText('1.23B PTS');
+  await expect(badges.getByLabel('400d 1h 2m 3s lifetime', { exact: true })).toHaveText('400d 1h');
+  const image = (await fixture.getByLabel('Land illustration fixture', { exact: true }).boundingBox())!;
+  const badgeBox = (await badges.boundingBox())!;
+  const map = (await fixture.getByRole('button', { name: 'Open fixture map' }).boundingBox())!;
+  expect(badgeBox.x).toBeGreaterThanOrEqual(map.x + map.width + 4);
+  expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(image.x + image.width);
+  expect(badgeBox.y + badgeBox.height).toBeLessThanOrEqual(image.y + image.height);
+  expect(await badges.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
 });
 
 test('nested Escape respects a feature that must keep its confirmation open', async ({ page }) => {

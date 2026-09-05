@@ -9,13 +9,11 @@ import { parseAmountInput } from '../lib/amount-input';
 import { parseCasinoAmountInput } from '../lib/casino-amount-input';
 import { extractTransactionHash, normalizeTransactionReceipt, getHighestTransactionReceiptBlock, parseReceiptBlock } from '../lib/transaction-utils';
 import { getAtomicCapabilityStatus, getErrorStatusName, getNestedErrorCode, isUnresolvedWaitError, isDefinitivePostSubmissionError } from '../lib/transaction-lifecycle';
-import { getLandActionSummary } from '../lib/land-summary';
 import { formatEditableAmount, parseInputAmount } from '../lib/swap/amount';
 import { parseFirstCareProgress } from '../lib/first-care-progress';
 import { calculateHandValue } from '../lib/blackjack-cards';
 import { deriveInitialPlayerActions, hasTrustedActionState, parseBlackjackSnapshot, reconcileTurnCards } from '../lib/blackjack-state';
 import { BlackjackPhase } from '../public/abi/blackjack-abi';
-import type { BuildingData } from '../lib/types';
 
 const B = BigInt;
 const sellLeaf = [100, 1000].map(n => ({ sellToken: 1, amount: B(n), amountAsk: B(1) }));
@@ -104,12 +102,6 @@ assert.equal(isDefinitivePostSubmissionError(new Error('network connection lost'
 assert.equal(formatEditableAmount(B('123456789123456789'), 18), '0.123456789123456789');
 assert.equal(parseInputAmount('0.0000000000000000009', 'ETH'), null);
 assert.deepEqual(parseFirstCareProgress('{"care":"true","tasks":true}'), { care: false, tasks: true });
-const building = { id: 0, level: 1, accumulatedPoints: B(3), accumulatedLifetime: B(0), isUpgrading: false } as BuildingData;
-const upgrade = { ...building, id: 3, isUpgrading: true, blockHeightUntilUpgradeDone: B(10) };
-const landSummary = getLandActionSummary([building, upgrade], [], B(10));
-assert.equal(landSummary.ready.length, 1, 'An upgrading producer is not offered as collectable');
-assert.equal(landSummary.upgrades[0]?.ready, true);
-assert.equal(getLandActionSummary([upgrade], [], B(0)).upgrades[0]?.ready, false, 'An unknown block never presents an upgrade as complete');
 const blackjack = { isActive: true, player: '0x0000000000000000000000000000000000000001', phase: BlackjackPhase.PLAYER_TURN, betAmount: B(1), activeHandCount: 1, hasSplit: false, actionHandIndex: 0, hand1Cards: [9, 22], hand1Value: 20, hand2Cards: [], hand2Value: 0, dealerCards: [2], dealerValue: 3, canHit: true, canStand: true, canDouble: true, canSplit: true, canSurrender: true };
 assert.deepEqual(parseBlackjackSnapshot(blackjack), blackjack);
 assert.deepEqual(parseBlackjackSnapshot({ snapshot: Object.values(blackjack) }), blackjack);

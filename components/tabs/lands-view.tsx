@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { LandActionSummary } from '@/components/land-action-summary';
+import { LandResourceBadges } from '@/components/land-resource-badges';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
 import { ResourceState } from '@/components/ui/resource-state';
 import { useQueryClient } from "@tanstack/react-query";
@@ -259,7 +259,6 @@ function LandsViewContent() {
   const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
   const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
   const [buildingsError, setBuildingsError] = useState<string | null>(null);
-  const buildingPanelRef = useRef<HTMLDivElement>(null);
   const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
   const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
@@ -1043,6 +1042,8 @@ function LandsViewContent() {
                   </Button>
                 </div>
 
+                <LandResourceBadges land={selectedLand} />
+
                 <div
                   className="absolute inset-0 md:inset-8 flex items-center justify-center z-10"
                 >
@@ -1108,10 +1109,6 @@ function LandsViewContent() {
             </CardContent>
           </TabCard>
 
-          <LandActionSummary land={selectedLand} village={villageBuildings} town={townBuildings} block={currentBlock}
-            quests={quests}
-            loading={buildingsLoading} error={buildingsError} onRetry={() => { void fetchBuildingData(); }}
-            onSelect={(type, building) => { handleBuildingSelect(type, building); requestAnimationFrame(() => buildingPanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })); }} />
           </div>
 
           <div className="min-w-0 space-y-4">
@@ -1267,7 +1264,7 @@ function LandsViewContent() {
                     showWhenEmpty
                   />
                 ) : selectedBuilding && (
-                  <div ref={buildingPanelRef} className="scroll-mt-4"><BuildingDetailsPanel
+                  <div className="scroll-mt-4"><BuildingDetailsPanel
                     selectedBuilding={selectedBuilding}
                     landId={selectedLand.tokenId}
                     buildingType={buildingType}

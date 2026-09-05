@@ -3,11 +3,17 @@
 import { useCallback, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
-import { LandQuestSummary } from '@/components/land-action-summary';
 import { Button } from '@/components/ui/button';
-import type { QuestSlot } from '@/lib/quest-slots';
+import { summarizeQuestSlots, type QuestSlot } from '@/lib/quest-slots';
 
 const idleSlot: QuestSlot = { difficulty: 0, startBlock: BigInt(0), endBlock: BigInt(0), pseudoRndBlock: BigInt(0), coolDownBlock: BigInt(0) };
+
+function QuestQueryStatus({ quests }: { quests: ReturnType<typeof useLandQuestSlots> }) {
+  if (quests.error) return <><p role="alert">{quests.error}</p><Button onClick={() => { void quests.refresh(); }}>Retry quests</Button></>;
+  if (!quests.ready) return <p role="status">Checking quest timing…</p>;
+  const counts = summarizeQuestSlots(quests.slots, BigInt(500));
+  return <p>{counts ? `${counts.available} available` : 'Quest timing unavailable'}</p>;
+}
 
 function QuestQueryFixtureContent() {
   const [owner, setOwner] = useState('wallet-a');
@@ -23,8 +29,8 @@ function QuestQueryFixtureContent() {
   const overview = useLandQuestSlots({ owner, chainId, landId: land, read });
   const panel = useLandQuestSlots({ owner, chainId, landId: land, read });
   return <section aria-label="Quest query fixture" className="max-w-lg space-y-3 rounded border bg-card p-4">
-    <div role="region" aria-label="Quest overview observer"><LandQuestSummary quests={overview} block={BigInt(500)} /></div>
-    <div role="region" aria-label="Quest panel observer"><LandQuestSummary quests={panel} block={BigInt(500)} /></div>
+    <div role="region" aria-label="Quest overview observer"><QuestQueryStatus quests={overview} /></div>
+    <div role="region" aria-label="Quest panel observer"><QuestQueryStatus quests={panel} /></div>
     <div className="flex flex-wrap gap-2">
       <Button onClick={() => pending.current.get(scope)?.resolve(Array.from({ length: owner === 'wallet-a' ? 3 : 2 }, () => idleSlot))}>Resolve current quests</Button>
       <Button onClick={() => pending.current.get(scope)?.reject(new Error('Read unavailable'))}>Fail current quests</Button>

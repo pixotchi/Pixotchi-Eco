@@ -1,26 +1,16 @@
 "use client";
 
 import { useRef, useState } from 'react';
-import { LandActionSummary } from '@/components/land-action-summary';
+import { LandResourceBadges } from '@/components/land-resource-badges';
 import { FirstCareGuide } from '@/components/first-care-guide';
 import { completeFirstCareStep } from '@/lib/first-care-progress';
-import type { BuildingData } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { AmountField } from '@/components/ui/amount-field';
 import { ReviewActionBar } from '@/components/ui/review-action-bar';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-const building = (id: number, patch: Partial<BuildingData> = {}): BuildingData => ({
-  id, level: 1, maxLevel: 10, productionRatePlantPointsPerDay: BigInt(0), productionRatePlantLifetimePerDay: BigInt(0),
-  accumulatedPoints: BigInt(0), accumulatedLifetime: BigInt(0), levelUpgradeCostLeaf: BigInt(0), levelUpgradeCostSeedInstant: BigInt(0),
-  levelUpgradeBlockInterval: BigInt(0), isUpgrading: false, blockHeightUpgradeInitiated: BigInt(0), blockHeightUntilUpgradeDone: BigInt(0), ...patch,
-});
-const village = [building(0, { accumulatedPoints: BigInt('12000000000000') }), building(3, { isUpgrading: true, blockHeightUntilUpgradeDone: BigInt(100) })];
-const town = [building(3), building(7)];
-
 export function ActionFixtures() {
-  const [landError, setLandError] = useState(true);
-  const [selection, setSelection] = useState('');
+  const [largeLandTotals, setLargeLandTotals] = useState(false);
   const [owner, setOwner] = useState('fixture-wallet-a');
   const [urgent, setUrgent] = useState(false);
   const [bet, setBet] = useState('');
@@ -29,10 +19,12 @@ export function ActionFixtures() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const review = useRef<HTMLDivElement>(null);
   return <>
-    <section aria-label="Land overview fixture" className="max-w-lg space-y-2">
-      <LandActionSummary land={{ accumulatedPlantPoints: BigInt('2500000000000'), accumulatedPlantLifetime: BigInt(3600) }} village={village} town={town}
-        block={BigInt(100)} loading={false} error={landError ? 'The network read failed.' : undefined} onRetry={() => setLandError(false)} onSelect={(type, selected) => setSelection(`${type}:${selected.id}`)} />
-      <output aria-label="Selected building">{selection}</output>
+    <section aria-label="Land resource fixture" className="max-w-[420px] space-y-2 rounded border bg-card p-4">
+      <div aria-label="Land illustration fixture" className="relative aspect-square w-full rounded border bg-muted/30">
+        <Button className="absolute bottom-3 left-3 h-11 px-3 text-xs" aria-label="Open fixture map">MAP</Button>
+        <LandResourceBadges land={{ accumulatedPlantPoints: BigInt(largeLandTotals ? '1234567890123456789012' : '2500000000000'), accumulatedPlantLifetime: BigInt(largeLandTotals ? 34563723 : 3600) }} />
+      </div>
+      <Button onClick={() => setLargeLandTotals(true)}>Use large land totals</Button>
     </section>
     <section aria-label="First-care fixture" className="max-w-lg space-y-3">
       <FirstCareGuide owner={owner} hasPlant urgent={urgent} />

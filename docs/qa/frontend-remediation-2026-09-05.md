@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Latest land presentation
+
+At the user's request, the Land overview panel has been removed, including its unused component and selectors. The selected land's stored PTS and lifetime now appear as two icon badges in the illustration's lower-right corner, matching the XP/coordinate treatment. These are the Warehouse totals, not an estimate that adds unclaimed production. Compact labels retain exact accessible values, and the badge area leaves room for Map. The land controller still owns quest polling and receipt refreshes.
+
+The replacement badge geometry/precision test and the existing quest query tests passed in all 14 presentation contexts (**42 cases**). Live checks at 320/390/800/864/1440px confirmed that the overview is absent and the badges fit inside the illustration without overlapping Map. The previous overview screenshots and notes below are historical. [Updated land illustration](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/land-resource-badges-390.png).
+
 ## Visual corrections after player screenshot review
 
 The user's screenshots exposed layout problems that the earlier fixture coverage missed. These corrections supersede the earlier notes about a collapsible illustration and a split care panel.
