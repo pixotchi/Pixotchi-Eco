@@ -68,6 +68,8 @@ import { getAIReadClient, getAIRpcSourceLabel } from './ai-rpc';
 import { getCachedAllActivity, getCachedMyActivity } from './activity-service';
 import { getLeaderboards, getMissionDay, getMissionScore, getStreak } from './gamification-service';
 import { getStakeLeaderboard } from './stake-leaderboard-service';
+import { getPlayerRanking } from './player-ranking-service';
+import { formatPointsShare, type PlayerRankingRow } from './player-ranking';
 import { getSwapQuoteForUserPair } from './swap/engine';
 import { getSwapToken, isUserSwapTokenId, USER_SWAP_TOKEN_IDS } from './swap/constants';
 import type { UserSwapTokenId } from './swap/types';
@@ -2685,7 +2687,9 @@ export async function executeReadOnlyAITool(
   });
 }
 
-export function createReadOnlyAITools() {
+export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: {
+  readPlayerRanking?: typeof getPlayerRanking;
+} = {}) {
   const readClient = getAIReadClient();
   const aiRpcSource = getAIRpcSourceLabel();
 
@@ -4278,17 +4282,54 @@ export function createReadOnlyAITools() {
 
     get_leaderboards: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Read Pixotchi leaderboards: plant PTS, land XP, staked SEED, mission points, and streaks. Use only when the user asks about rankings or leaderboard standings.',
+      description: 'Read Pixotchi leaderboards. Use the players board for combined wallet plant PTS, player rank, share of total game PTS, and top players. The requested wallet is included even outside the top results. Other boards rank individual plants, land XP, staked SEED, mission points, and streaks.',
       inputSchema: z.object({
-        boards: z.array(z.enum(['plants', 'lands', 'stake', 'missions', 'streaks'])).default(['plants', 'lands']),
+        address: ADDRESS_INPUT.describe('Optional public wallet for the players board. Omit to use the authenticated player.'),
+        boards: z.array(z.enum(['plants', 'players', 'lands', 'stake', 'missions', 'streaks'])).default(['plants', 'lands']),
         limit: z.number().int().min(1).max(20).default(10),
       }),
-      execute: async ({ boards, limit }) => withToolResult(
+      execute: async ({ address, boards, limit }, { context }) => withToolResult(
         'get_leaderboards',
-        `Base contract reads and app leaderboard stores via ${aiRpcSource}`,
-        { cache: 'Stake leaderboard may be cached by its service; gamification leaderboards are app-backed.', includeBlock: true },
+        `Base contract reads and shared app leaderboard services via ${aiRpcSource}`,
+        {
+          cache: 'Players uses the same complete snapshot as Ranking > Players, cached for 60 seconds. Stake may be cached; gamification is app-backed.',
+          includeBlock: boards.some(board => board !== 'players'),
+          limitations: boards.includes('players') ? [
+            'Players totals include living and dead plants; burned plants and unassigned land PTS are excluded.',
+            'PTS share is not a guaranteed share of daily ETH rewards. Do not derive a payout from it.',
+            'Use players.snapshot for the block and time of player totals; top-list limits do not limit the wallet summary or game total.',
+            'Internal wallet entries are omitted without changing public ranks or game totals.',
+          ] : [],
+        },
         async () => {
           const output: Record<string, UntypedValue> = {};
+
+          if (boards.includes('players')) {
+            const target = getTargetAddress(address, context.userAddress).toLowerCase();
+            const snapshot = await readPlayerRanking().catch(() => {
+              throw new Error('Player ranking unavailable. Please try again or open Ranking > Players.');
+            });
+            const summarizePlayer = (row: PlayerRankingRow) => ({
+              address: row.address,
+              rank: row.rank,
+              plantCount: row.plantCount,
+              totalPts: formatUnits(row.points, 12),
+              ptsShare: formatPointsShare(row.points, snapshot.totalPoints),
+            });
+            const player = snapshot.rows.find(row => row.address === target);
+            const publicRows = snapshot.rows.filter(row => !isKnownCustodyWalletAddress(row.address));
+            output.players = {
+              snapshot: { blockNumber: snapshot.blockNumber.toString(), updatedAt: new Date(snapshot.updatedAt).toISOString() },
+              gameTotalPts: formatUnits(snapshot.totalPoints, 12),
+              totalPlayers: snapshot.rows.length,
+              totalPlants: snapshot.totalPlants,
+              player: player ? summarizePlayer(player) : { address: target, rank: null, plantCount: 0, totalPts: '0', ptsShare: '0%' },
+              leaders: publicRows.slice(0, limit).map(summarizePlayer),
+              leadersTruncated: publicRows.length > limit,
+              ptsShareMeaning: 'Share of all existing plant PTS, not guaranteed daily ETH rewards.',
+              where: 'Ranking > Players',
+            };
+          }
 
           if (boards.includes('plants')) {
             const ids = await getAliveTokenIds(readClient);

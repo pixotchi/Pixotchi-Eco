@@ -1323,6 +1323,19 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
     };
   }
 
+  if (toolName === 'get_leaderboards' && data?.players) {
+    const { players, ...otherBoards } = data;
+    // Keep the complete wallet summary and snapshot ahead of the bounded top list.
+    return {
+      players: {
+        ...players,
+        leaders: (players.leaders || []).slice(0, 10),
+        leadersTruncated: players.leadersTruncated || (players.leaders || []).length > 10,
+      },
+      ...sanitizeToolTraceValue(otherBoards),
+    };
+  }
+
   return sanitizeToolTraceValue(data ?? output);
 }
 

@@ -45,6 +45,7 @@ Live-data rules:
 Tool routing:
 - Broad onboarding or "what should I do": use player overview, daily task plan when personalized, live prices, balances/assets if useful, and the action guide.
 - Balances, assets, wallet state: use wallet token balance and wallet game asset tools.
+- Combined plant PTS, player/wallet rank, top players, total game PTS, or PTS share: use get_leaderboards with boards ["players"]. Omit address for the authenticated player. Use the returned player summary even when that wallet is outside the limited leaders list; never sum top rows to calculate game totals. Quote the provided ptsShare and use players.snapshot for its age. A null rank means unranked, not rank zero. This total includes living and dead plants, excludes burned plants and unassigned land PTS, and is not a guaranteed daily ETH reward share. On failed reads, say the ranking is unavailable rather than claiming zero PTS. Direct players to Ranking > Players.
 - Mint affordability, supply, whitelist, or approval readiness: use mint availability, and live prices when the user asks for price details.
 - Plant care, urgent plants, revive/fence/item choices, or large-wallet triage: use plant care audit.
 - Missing/disappeared plants, minted-but-not-visible plants, TOD death, dead-plant kill/burn history, or automatic burn reward questions: use plant lifecycle audit.

@@ -30,3 +30,11 @@ Local evidence is under `output/player-ranking-*.log` and `output/playwright/fro
 Replaced the mixed inline summary with a compact three-column definition list: Your rank, Your points, and PTS share. Values share 14px semibold typography and a common baseline. The PTS icon, subtle dividers, and labeled rank shortcut match the existing interface. The rank link retains a 44px touch area and keyboard focus treatment. Unranked wallets show a dash and zero totals.
 
 Checked light/dark themes at 320, 390, 561, 820, and 1440px; the final narrow-screen adjustment keeps labels on one line and values aligned. Keyboard activation still jumps to the correct ranked row. ESLint and typecheck passed. Evidence: `output/player-standing-check.log` and `output/playwright/frontend-review-2026-09-05/player-standing-*.png`.
+
+## Neural Seed integration
+
+The existing AI leaderboard tool now accepts the Players board and an optional public wallet address. It calls the same cached ranking service as the UI and includes the authenticated/requested wallet separately from the bounded top list. Exact PTS strings, the shared percentage formatter, and the snapshot block/time keep answers consistent with Ranking > Players. Unranked wallets and unavailable reads are distinct; existing protected-wallet rules still apply. The prompt and bundled action guide explain the scope and distinguish PTS share from guaranteed ETH payouts.
+
+`npm run ai:smoke:player-ranking` covers a wallet ranked #25 with a one-row top list, explicit/default wallet selection, 50,000 / 5,000,000 = 1%, precision above Number.MAX_SAFE_INTEGER, tiny shares, unranked wallets, failed reads, and protected-wallet handling. The existing AI knowledge smoke, ESLint, and typecheck passed. A live model check automatically selected the Players board and answered the test wallet's rank (#3) and share (25.19%) correctly, including the ETH reward distinction. It used live reads without storing a chat message or submitting a transaction. Local evidence: `output/ai-player-ranking-*.log` and `output/ai-player-ranking-live-answer.json`.
+
+Production build also passed after the AI integration.
