@@ -1362,7 +1362,7 @@ export default function MintTab() {
           </section>
 
           {/* The land controller retains one mounted position across layouts. */}
-          <aside className="flex min-w-0 flex-col gap-3">
+          <aside className="order-first flex min-w-0 flex-col gap-3 tablet:order-none">
             <div className={mintType === 'land' ? 'block min-w-0' : 'hidden min-w-0 min-[54rem]:block'}>
               {renderDesktopLandMinting()}
             </div>
