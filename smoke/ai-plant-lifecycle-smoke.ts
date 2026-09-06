@@ -44,21 +44,8 @@ async function getHighAssetAddresses(): Promise<string[]> {
   ]);
 
   try {
-    const { getAliveTokenIds, getLandLeaderboard, getPlantsInfoExtended } = await import('../lib/contracts');
-    const leaderboard = await getLandLeaderboard();
-    const counts = new Map<string, number>();
-    for (const entry of leaderboard) {
-      const owner = String(entry.owner || '').toLowerCase();
-      if (/^0x[a-f0-9]{40}$/.test(owner)) {
-        counts.set(owner, (counts.get(owner) || 0) + 1);
-      }
-    }
-
-    [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .forEach(([owner]) => addresses.add(owner));
-
+    const { getAliveTokenIds, getPlantsInfoExtended } = await import('../lib/contracts');
+    // Plant records include owners; land leaderboard entries do not.
     const plantIds = (await getAliveTokenIds()).slice(0, 500);
     const plants = plantIds.length ? await getPlantsInfoExtended(plantIds) : [];
     const plantOwnerCounts = new Map<string, number>();

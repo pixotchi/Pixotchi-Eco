@@ -165,15 +165,10 @@ export function LandMapModal({
   const isUserOwned = presentedLandId ? userLands.some(l => Number(l.tokenId) === presentedLandId) : false;
   const isTappedLandMinted = presentedLandId !== null && presentedLandId > 0 && presentedLandId < totalSupply;
   
-  // Owners we can resolve without an RPC call, reduced to plain strings so the
-  // effect below doesn't re-run (and re-fetch) every time the parent re-renders
-  // and hands us new `userLands` / `neighborData` object identities.
+  // Own-land addresses are already known. Neighbor ownership is not included
+  // in getLeaderboard and must be read separately when a plot is selected.
   const knownOwnerAddress =
     isUserOwned && userLands.length > 0 ? userLands[0].owner : null;
-  const neighborOwnerAddress =
-    neighbor?.owner && neighbor.owner !== '' && neighbor.owner !== '0x0000000000000000000000000000000000000000'
-      ? neighbor.owner
-      : null;
 
   // Fetch owner on demand
   useEffect(() => {
@@ -181,12 +176,6 @@ export function LandMapModal({
       // If user owned, we know the owner
       if (knownOwnerAddress) {
         setFetchedOwner(knownOwnerAddress);
-        return;
-      }
-
-      // If neighbor has owner field (future proof), use it
-      if (neighborOwnerAddress) {
-        setFetchedOwner(neighborOwnerAddress);
         return;
       }
 
@@ -220,7 +209,7 @@ export function LandMapModal({
       setFetchedOwner(null);
       setIsOwnerLoading(false);
     }
-  }, [presentedLandId, knownOwnerAddress, neighborOwnerAddress]);
+  }, [presentedLandId, knownOwnerAddress]);
 
   const ownerAddress = fetchedOwner || '';
   

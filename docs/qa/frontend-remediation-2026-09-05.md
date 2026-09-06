@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Land ranking response validation — 6 September
+
+The ranking parser required `owner`, although the deployed contract ABI's `getLeaderboard` tuple contains only `landId`, `experiencePoints` and `name`. Valid RPC responses therefore failed validation. The parser and shared type now match those three fields, retaining strict ID/XP/name validation. The map continues to resolve owners on demand; AI ranking output no longer reads nonexistent owner fields. Fixtures and the lifecycle smoke's owner-discovery code were corrected to use fields their respective contract reads actually supply.
+
+The regression check encodes and decodes rows with the real land ABI, then verifies object/tuple parsing, exact XP ordering, unnamed-land fallback and malformed-response rejection. All four frontend smoke suites, TypeScript, focused lint and 14 Chromium/WebKit ranking retry/cache cases passed. Live rankings rendered 12 rows at 390px and 20 rows at 864/1440px; Next/Back pagination passed with no horizontal overflow. [Live desktop land ranking](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/land-ranking-fixed-1440.png), [mobile ranking](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/land-ranking-fixed-390.png).
+
 ## Swap chart height — 6 September
 
 The desktop chart's autosized iframe was loaded but measured 0px high: its `flex-1` wrapper depended on a definite ancestor height that the revised `items-start` grid no longer supplied. The two-column grid now stretches both cards to the same row height, with the chart's content filling the available space. An absolutely bounded widget host gives the iframe definite dimensions without depending on percentage heights through auto-sized ancestors. Single-column chart heights remain 360px on phones and 420px on larger screens; the desktop plot retains a 420px minimum.

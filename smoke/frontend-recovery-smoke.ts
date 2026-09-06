@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import type { Hex } from 'viem';
+import { decodeFunctionResult, encodeFunctionResult, type Hex } from 'viem';
+import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import { isPendingEvmEffects, normalizePendingEffects } from '../lib/pending-evm-effects';
 import { getBatchTransactionHashes, hasWalletBatchResolution, parseWalletBatchStatus, parseWalletCallsId, WalletStatusUnavailableError } from '../lib/wallet-batch-status';
 import { isUnresolvedWaitError } from '../lib/transaction-lifecycle';
@@ -25,10 +26,19 @@ function memoryStorage(): PendingEvmStorage {
 }
 
 async function main() {
-  const owner = `0x${'1'.repeat(40)}`;
   assert.deepEqual(parseLandLeaderboard([]), []);
-  assert.deepEqual(rankLands(parseLandLeaderboard([[1, '1000000000000000000001', '', owner], [2, '1000000000000000000002', 'Meadow', owner]])).map(row => row.landId), [2, 1]);
-  for (const value of [null, {}, [null], [[true, 0, '', owner]], [[Number.MAX_SAFE_INTEGER + 1, 0, '', owner]], [[1, -1, '', owner]], [[1, 0, null, owner]], [[1, 0, '', 'bad-owner']], [[1, 0, '', owner], []]]) assert.throws(() => parseLandLeaderboard(value));
+  const contractRows = [
+    { landId: BigInt(1), experiencePoints: BigInt('1000000000000000000001'), name: '' },
+    { landId: BigInt(2), experiencePoints: BigInt('1000000000000000000002'), name: 'Meadow' },
+  ];
+  const encoded = encodeFunctionResult({ abi: landAbi, functionName: 'getLeaderboard', result: contractRows });
+  const decoded = decodeFunctionResult({ abi: landAbi, functionName: 'getLeaderboard', data: encoded });
+  const parsed = parseLandLeaderboard(decoded);
+  assert.deepEqual(parsed, contractRows.map(row => ({ ...row, landId: Number(row.landId) })));
+  assert.deepEqual(parseLandLeaderboard(contractRows.map(row => [row.landId, row.experiencePoints.toString(), row.name])), parsed);
+  assert.deepEqual(rankLands(parsed).map(row => row.landId), [2, 1]);
+  assert.equal(rankLands(parsed)[1].name, 'Land #1');
+  for (const value of [null, {}, [null], [[true, 0, '']], [[Number.MAX_SAFE_INTEGER + 1, 0, '']], [[1, -1, '']], [[1, 0, null]], [{ landId: 1, name: 'Missing XP' }], [[1, 0, ''], []]]) assert.throws(() => parseLandLeaderboard(value));
   for (const effects of badEffects) {
     const storage = memoryStorage();
     const record = createPendingEvmRecord({ callsDigest: hash, identity, method: 'direct', proof: { kind: 'hash', hash } });

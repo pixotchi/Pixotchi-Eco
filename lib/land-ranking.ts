@@ -1,6 +1,7 @@
 import { asRecord, parseReceiptBlock } from '@/lib/transaction-utils';
 
-export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string; owner: string };
+// getLeaderboard returns these three fields; ownership is a separate contract read.
+export type LandLeaderboardEntry = { landId: number; experiencePoints: bigint; name: string };
 export type LandLeaderboardRow = { rank: number; landId: number; name: string; exp: number };
 
 export function parseLandLeaderboard(value: unknown): LandLeaderboardEntry[] {
@@ -11,10 +12,9 @@ export function parseLandLeaderboard(value: unknown): LandLeaderboardEntry[] {
     const landId = parseReceiptBlock(field('landId', 0));
     const experiencePoints = parseReceiptBlock(field('experiencePoints', 1));
     const name = field('name', 2);
-    const owner = field('owner', 3);
     if (landId === undefined || landId > BigInt(Number.MAX_SAFE_INTEGER) || experiencePoints === undefined
-      || typeof name !== 'string' || typeof owner !== 'string' || !/^0x[\da-f]{40}$/i.test(owner)) throw new Error('Land ranking response is incomplete.');
-    return { landId: Number(landId), experiencePoints, name, owner };
+      || typeof name !== 'string') throw new Error('Land ranking response is incomplete.');
+    return { landId: Number(landId), experiencePoints, name };
   });
 }
 

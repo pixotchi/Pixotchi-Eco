@@ -18,7 +18,7 @@ function RankingQueryContent() {
       : ranking.loading ? <p role="status">Loading land ranking</p> : ranking.rows.length === 0 ? <p>No lands ranked yet</p> : <ol>{ranking.rows.map(row => <li key={row.landId}>{row.rank}. {row.name}</li>)}</ol>}
     <div className="flex flex-wrap gap-2">
       <Button onClick={() => pending.current?.reject(new Error('RPC unavailable'))}>Fail ranking read</Button>
-      <Button onClick={() => pending.current?.resolve([1, 2].map(id => ({ landId: id, name: `Land ${id}`, experiencePoints: BigInt(id), owner: `0x${'1'.repeat(40)}` })))}>Resolve ranking read</Button>
+      <Button onClick={() => pending.current?.resolve([1, 2].map(id => ({ landId: id, name: `Land ${id}`, experiencePoints: BigInt(id) })))}>Resolve ranking read</Button>
     </div>
     <output aria-label="Land ranking read count">{reads}</output>
     <output aria-label="Second ranking observer count">{secondObserver.rows.length}</output>

@@ -4323,8 +4323,6 @@ export function createReadOnlyAITools() {
                 experiencePoints: formatToken(land.experiencePoints),
                 landId: land.landId,
                 name: land.name || `Land #${land.landId}`,
-                owner: publicAddressField(land.owner),
-                ownerRedacted: redactCustodyAddress(land.owner).redacted,
                 rank: index + 1,
               }));
           }
