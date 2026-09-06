@@ -387,12 +387,12 @@ export default function PlantsView() {
     && reviveAllowance.value < revivePrice;
 
   const renderNoPlantsView = () => (
-    <div className="space-y-4"><FirstCareGuide hasPlant={false} owner={ownerKey} /><EmptyState
+    <EmptyState
       className="min-h-[60dvh]"
       icon={Flower2}
       title="No Plants Yet!"
       description="Choose a strain and review its cost to begin."
-    /></div>
+    />
   );
 
   // Only block render if we have NO plants data at all
