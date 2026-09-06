@@ -1368,13 +1368,6 @@ export default function MintTab() {
           disabled={mintType === 'plant' && !selectedStrain}
           onReview={() => { const target = (mintType === 'plant' ? plantReviewRef : landReviewRef).current; target?.scrollIntoView({ block: 'start', behavior: 'instant' }); target?.focus({ preventScroll: true }); }} />
         <div className="grid grid-cols-1 items-start gap-3 min-[54rem]:grid-cols-[minmax(0,1.48fr)_minmax(300px,0.9fr)] xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
-          <div className={mintType === 'plant' ? 'col-span-full [&:empty]:hidden' : 'hidden col-span-full min-[54rem]:block [&:empty]:hidden'}>
-            <VerifyClaim strainId={4} onClaimSuccess={({ strainId, mintTxHash }) => {
-              incrementForcedFetch();
-              const claimStrain = PLANT_STRAINS_BY_ID[strainId];
-              openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
-            }} />
-          </div>
           <section className={mintType === 'plant' ? 'block' : 'hidden min-[54rem]:block'}>
             {renderDesktopPlantMinting()}
           </section>
@@ -1384,7 +1377,13 @@ export default function MintTab() {
             <div className={mintType === 'land' ? 'block min-w-0' : 'hidden min-w-0 min-[54rem]:block'}>
               {renderDesktopLandMinting()}
             </div>
-
+            <div className={mintType === 'plant' ? '[&:empty]:hidden' : 'hidden min-[54rem]:block [&:empty]:hidden'}>
+              <VerifyClaim strainId={4} onClaimSuccess={({ strainId, mintTxHash }) => {
+                incrementForcedFetch();
+                const claimStrain = PLANT_STRAINS_BY_ID[strainId];
+                openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
+              }} />
+            </div>
           </aside>
         </div>
 

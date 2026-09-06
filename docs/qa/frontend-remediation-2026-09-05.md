@@ -4,6 +4,10 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Verify & Claim placement — 6 September
+
+Moved the free-plant Verify & Claim card from the full-width top row back into the right-hand column below Mint Land. It matches the land card's width with the existing 12px gap. One claim component remains mounted; claim callbacks, transaction controllers and mobile visibility rules are preserved. Live layout checks passed at 320/390/820/864/1024/1440/1920px with no horizontal overflow, and desktop/tablet captures were visually reviewed. Focused mint-tab lint passed. [Restored desktop placement](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/mint-claim-below-land-1440.png).
+
 ## Restored incoming chat backgrounds
 
 Follow-up: the chat Profile action now uses the existing 32px compact button height, matching mobile Tasks/Stake, instead of overriding it to 44px. Live checks at 390/820/1440px confirmed the height and no message overflow. All 14 chat behavior cases and three visual contexts passed; the updated chat images were reviewed. Focused lint passed.
