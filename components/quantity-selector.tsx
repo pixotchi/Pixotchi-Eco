@@ -32,15 +32,17 @@ export default function QuantitySelector({
   };
 
   const compact = size === 'xs' || size === 'sm';
-  // Explicit compact desktop density; touch controls never overlap.
-  const buttonSize = compact
+  // xs is the compact catalog stepper; review/form controls retain 44px targets.
+  const buttonSize = size === 'xs'
+    ? 'h-7 min-h-7 w-7 min-w-7 p-0'
+    : compact
     ? 'h-11 min-h-11 w-11 min-w-11 p-0 [@media(min-width:864px)_and_(pointer:fine)]:h-8 [@media(min-width:864px)_and_(pointer:fine)]:min-h-8 [@media(min-width:864px)_and_(pointer:fine)]:w-8 [@media(min-width:864px)_and_(pointer:fine)]:min-w-8'
     : 'h-11 min-h-11 w-11 min-w-11 p-0';
-  const iconSize = 'h-4 w-4';
-  const textSize = 'text-sm';
+  const iconSize = size === 'xs' ? 'h-3 w-3' : 'h-4 w-4';
+  const textSize = size === 'xs' ? 'text-xs min-w-[0.875rem]' : 'text-sm min-w-[1rem]';
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={`flex items-center ${size === 'xs' ? 'gap-px' : 'gap-1'}`}>
       <Button
         variant="outline"
         size="icon"
@@ -52,7 +54,7 @@ export default function QuantitySelector({
         <Minus className={iconSize} />
       </Button>
       
-      <span className={`${textSize} font-semibold min-w-[1rem] text-center tabular-nums`} aria-live="polite">
+      <span className={`${textSize} font-semibold text-center tabular-nums`} aria-live="polite">
         {quantity}
       </span>
       

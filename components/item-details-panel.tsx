@@ -18,6 +18,7 @@ import type { FenceV2Config } from '@/lib/contracts';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
 import { Button } from '@/components/ui/button';
+import QuantitySelector from '@/components/quantity-selector';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { usePaymaster } from '@/lib/paymaster-context';
@@ -55,6 +56,8 @@ interface ItemDetailsPanelProps {
   itemType: 'shop' | 'garden';
   onPurchaseSuccess: () => void;
   quantity: number;
+  onQuantityChange?: (quantity: number) => void;
+  embedded?: boolean;
 }
 
 export default function ItemDetailsPanel({
@@ -62,7 +65,9 @@ export default function ItemDetailsPanel({
   selectedPlant,
   itemType,
   onPurchaseSuccess,
-  quantity
+  quantity,
+  onQuantityChange,
+  embedded = false,
 }: ItemDetailsPanelProps) {
   const { address } = useAccount();
   const { isSponsored } = usePaymaster();
@@ -348,7 +353,7 @@ export default function ItemDetailsPanel({
   }
 
   const disabledMessage = (() => {
-    if (!hasQuantitySelected && itemType === 'garden') return 'Select quantity above';
+    if (!hasQuantitySelected && itemType === 'garden') return 'Choose quantity';
     if (isFenceItem && fenceV2Bounds.todCapBreached) return 'Fence duration exceeds plant lifetime';
     if (isFenceItem && fenceV2InputInvalid) {
       if (fenceV2DaysInput.trim() === '') return 'Enter fence duration';
@@ -467,11 +472,17 @@ export default function ItemDetailsPanel({
   };
 
   return (
-    <Card className="bg-muted/30">
-      <CardHeader>
+    <Card className={embedded ? 'border-0 !bg-transparent p-0 shadow-none' : 'bg-muted/30'}>
+      {!embedded && <CardHeader>
         <CardTitle>{headerTitle}</CardTitle>
-      </CardHeader>
+      </CardHeader>}
       <CardContent className="space-y-4">
+        {itemType === 'garden' && isSmartWallet && onQuantityChange && (
+          <div className="flex items-center justify-between gap-3 text-sm" role="group" aria-label="Purchase quantity">
+            <span className="text-muted-foreground">Quantity</span>
+            <QuantitySelector quantity={quantity} onQuantityChange={onQuantityChange} min={1} max={80} />
+          </div>
+        )}
         <div className="space-y-2">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-sm">
             <span className="text-muted-foreground">
@@ -524,9 +535,9 @@ export default function ItemDetailsPanel({
             </div>
           </div>
 
-          <div className="flex justify-between items-center text-sm">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-sm">
             <span className="text-muted-foreground">Effect:</span>
-            <span className="font-semibold text-primary">
+            <span className="text-right font-semibold text-primary">
               {getItemBenefits()}
             </span>
           </div>
@@ -595,7 +606,7 @@ export default function ItemDetailsPanel({
                 : itemType === 'shop'
                   ? 'Purchase Item'
                   : quantity === 0
-                    ? 'Select quantity above'
+                    ? 'Choose quantity'
                     : quantity === 1
                       ? 'Purchase Item'
                       : canBundle && isSmartWallet

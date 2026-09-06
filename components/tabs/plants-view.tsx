@@ -859,16 +859,24 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null} reviewRequest={careReviewRequest}
+                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null} reviewRequest={careReviewRequest} reviewTitle={selectedItem?.name || 'Plant care'}
                   catalog={<PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
                     isSmartWallet={isSmartWallet} getQuantity={getItemQuantity} onQuantityChange={handleQuantityChange}
-                    onSelect={({ item, itemType: nextType }, intent) => { setSelectedItem(item); setItemType(nextType); if (intent === 'review') setCareReviewRequest(request => request + 1); }} />}
+                    onSelect={({ item, itemType: nextType }, intent) => {
+                      setSelectedItem(item); setItemType(nextType);
+                      if (intent === 'review') {
+                        if (nextType === 'garden' && getItemQuantity(item.id) === 0) handleQuantityChange(item.id, 1);
+                        setCareReviewRequest(request => request + 1);
+                      }
+                    }} />}
                   details={<ItemDetailsPanel
                     selectedItem={selectedItem}
                     selectedPlant={selectedPlant}
                     itemType={itemType}
                     onPurchaseSuccess={onPurchaseSuccess}
                     quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
+                    onQuantityChange={quantity => { if (selectedItem) handleQuantityChange(selectedItem.id, quantity); }}
+                    embedded
                   />}
                 />
               </CardContent>

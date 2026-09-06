@@ -34,24 +34,35 @@ test('catalog names and quantity controls fit without overflow', async ({ page }
   const choices = catalog.getByLabel('Care choices', { exact: true });
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
+  await catalog.getByRole('button', { name: 'Select Water' }).scrollIntoViewIfNeeded();
+  const scrollTop = await page.evaluate(() => scrollY);
   await catalog.getByRole('button', { name: 'Select Water' }).click();
+  const review = page.getByRole('dialog', { name: 'Care item review' });
+  await expect(review).toBeVisible();
+  await expect(review.getByLabel('Care review', { exact: true })).toHaveText('Review Water');
+  expect(await page.evaluate(() => scrollY)).toBe(scrollTop);
+  await page.keyboard.press('Escape');
+  await expect(review).not.toBeVisible();
+  await expect(catalog.getByRole('button', { name: 'Select Water' })).toBeFocused();
+  expect(await page.evaluate(() => scrollY)).toBe(scrollTop);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toHaveAttribute('aria-pressed', 'true');
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
-  await expect(catalog.getByRole('region', { name: 'Care item review' })).toBeFocused();
   expect(await catalog.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  expect(await catalog.locator('[aria-haspopup="dialog"]').evaluateAll(items => items.every(item => item.scrollHeight <= item.clientHeight + 1))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('care quantity editing keeps focus when switching items', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
   await catalog.getByRole('button', { name: 'Select Water' }).click();
+  await page.keyboard.press('Escape');
   const increase = catalog.getByRole('button', { name: 'Increase quantity' }).nth(1);
   await increase.scrollIntoViewIfNeeded();
   await increase.focus();
   const top = await page.evaluate(() => scrollY);
   await increase.press('Space');
   await expect(increase).toBeFocused();
-  await expect(catalog.getByLabel('Care review', { exact: true })).not.toHaveText('Review Water');
+  await expect(page.getByRole('dialog', { name: 'Care item review' })).not.toBeVisible();
   expect(Math.abs(await page.evaluate(() => scrollY) - top)).toBeLessThan(2);
   await increase.press('Space');
   await expect(increase).toBeFocused();
@@ -60,13 +71,15 @@ test('care quantity editing keeps focus when switching items', async ({ page }) 
 test('selecting the same care item reopens its review', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
   const item = catalog.getByRole('button', { name: 'Select Water' });
-  const review = catalog.getByRole('region', { name: 'Care item review' });
+  const review = page.getByRole('dialog', { name: 'Care item review' });
   await item.click();
-  await expect(review).toBeFocused();
+  await expect(review).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(item).toBeFocused();
   await item.scrollIntoViewIfNeeded();
   await item.focus();
   await item.press('Space');
-  await expect(review).toBeFocused();
+  await expect(review).toBeVisible();
 });
 
 test('roulette number centers always select that straight number', async ({ page }) => {
