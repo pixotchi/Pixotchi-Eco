@@ -495,11 +495,9 @@ function SeedChartPanel({
   showStats?: boolean;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className={showStats
-        ? 'h-[360px] min-h-[360px] flex-none overflow-hidden sm:h-[420px] sm:min-h-[420px]'
-        : 'min-h-0 flex-1 overflow-hidden'
-      }>
+    <div className="flex flex-col gap-3">
+      {/* The autosized iframe needs a definite height even in an auto-height grid row. */}
+      <div className="h-[360px] flex-none overflow-hidden sm:h-[420px] tablet:h-[clamp(420px,65dvh,720px)]">
         <TradingViewWidget />
       </div>
       {showStats ? <SeedMarketStats marketData={marketData} /> : null}

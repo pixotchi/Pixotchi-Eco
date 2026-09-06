@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Swap chart height — 6 September
+
+The desktop chart's autosized iframe was loaded but measured 0px high: its `flex-1` wrapper depended on a definite ancestor height that the revised `items-start` grid no longer supplied. The chart now owns a definite responsive height: 360px on phones, 420px on larger single-column layouts, and 65dvh clamped to 420–720px in the two-column layout. Stats visibility no longer changes the sizing strategy.
+
+Live TradingView canvases rendered at 320/390/820/864/1024/1440/1920px, including a 1024×600 window, with no horizontal page overflow. Dark-theme rendering and navigating Farm → Swap were also checked. Focused lint passed. [Restored desktop chart](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/swap-chart-fixed-dark-1920.png), [mobile chart](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/swap-chart-fixed-390.png). No swap was submitted.
+
 ## Verify & Claim placement — 6 September
 
 Moved the free-plant Verify & Claim card from the full-width top row back into the right-hand column below Mint Land. It matches the land card's width with the existing 12px gap. One claim component remains mounted; claim callbacks, transaction controllers and mobile visibility rules are preserved. Live layout checks passed at 320/390/820/864/1024/1440/1920px with no horizontal overflow, and desktop/tablet captures were visually reviewed. Focused mint-tab lint passed. [Restored desktop placement](C:/Users/Goat/Documents/Pixotchi-Eco/output/playwright/frontend-review-2026-09-05/mint-claim-below-land-1440.png).
