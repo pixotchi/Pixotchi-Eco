@@ -1,11 +1,13 @@
 import type { BuildingData } from '@/lib/types';
 import { formatDurationSeconds } from '@/lib/duration-display';
 import { TokenAmount } from '@/components/ui/token-amount';
+import { getVillageProductionRates } from '@/lib/land-production';
 
-export function ProductionSummary({ building }: { building: Pick<BuildingData, 'productionRatePlantPointsPerDay' | 'productionRatePlantLifetimePerDay' | 'accumulatedPoints' | 'accumulatedLifetime'> }) {
+export function ProductionSummary({ building }: { building: Pick<BuildingData, 'level' | 'isUpgrading' | 'productionRatePlantPointsPerDay' | 'productionRatePlantLifetimePerDay' | 'accumulatedPoints' | 'accumulatedLifetime'> }) {
+  const production = getVillageProductionRates(building);
   const rows = [
-    { label: 'Points per day', amount: building.productionRatePlantPointsPerDay, kind: 'points' },
-    { label: 'Lifetime per day', amount: building.productionRatePlantLifetimePerDay, kind: 'lifetime' },
+    { label: 'Points per day', amount: production.pointsPerDay, kind: 'points' },
+    { label: 'Lifetime per day', amount: production.lifetimePerDaySeconds, kind: 'lifetime' },
     { label: 'Stored points', amount: building.accumulatedPoints, kind: 'points' },
     { label: 'Stored lifetime', amount: building.accumulatedLifetime, kind: 'lifetime' },
   ].filter(row => row.amount > BigInt(0));

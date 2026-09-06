@@ -110,8 +110,8 @@ export type BuildingData = {
   id: number;                                // Building identifier (0,1,3,5,7)
   level: number;                            // Current building level
   maxLevel: number;                         // Maximum possible level
-  productionRatePlantPointsPerDay: bigint;  // Points produced per day
-  productionRatePlantLifetimePerDay: bigint; // Lifetime hours per day
+  productionRatePlantPointsPerDay: bigint;  // Configured PTS rate (12 decimals); use getVillageProductionRates for effective production
+  productionRatePlantLifetimePerDay: bigint; // Lifetime seconds per day
   accumulatedPoints: bigint;                // Points ready to collect
   accumulatedLifetime: bigint;              // Lifetime ready to collect
   levelUpgradeCostLeaf: bigint;             // LEAF cost for next upgrade

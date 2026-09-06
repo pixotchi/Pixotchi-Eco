@@ -27,12 +27,12 @@ assert.match(
 );
 assert.match(
   infoDialog,
-  /formatProductionRate\(building\.productionRatePlantPointsPerDay\)/,
-  'info PTS production must come from the live BuildingData rate',
+  /getVillageProductionRates\(building\)/,
+  'info production must convert the live BuildingData rate using the contract accrual rule',
 );
 assert.match(
   infoDialog,
-  /formatLifetimeProduction\(building\.productionRatePlantLifetimePerDay\)/,
+  /formatLifetimeProduction\(production\.lifetimePerDaySecondsWhenReady\)/,
   'info TOD production must come from the live BuildingData rate',
 );
 assert.doesNotMatch(

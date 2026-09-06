@@ -1,4 +1,5 @@
 import 'server-only';
+import { landPointsToNumber, readBuildingProduction } from './land-production';
 import { formatAddress } from "@/lib/utils";
 import { getPlantLifetime } from '@/lib/plant-lifetime';
 
@@ -901,23 +902,25 @@ function summarizeAttackPlant(plant: ReturnType<typeof normalizePlant>) {
 }
 
 function normalizeBuilding(building: BuildingData | UntypedValue, kind: 'town' | 'village') {
-  const id = Number(building?.id ?? building?.[0] ?? 0);
-  const level = Number(building?.level ?? building?.[1] ?? 0);
+  const production = readBuildingProduction(building, kind);
+  const { id, level } = production;
   const name = kind === 'village'
     ? VILLAGE_BUILDING_NAMES[id as keyof typeof VILLAGE_BUILDING_NAMES] || `Village Building ${id}`
     : TOWN_BUILDING_LABELS[id] || `Town Building ${id}`;
 
   return {
-    accumulatedLifetimeSeconds: toNumber(building?.accumulatedLifetime ?? building?.[6]),
-    accumulatedPoints: toNumber(building?.accumulatedPoints ?? building?.[5], 12),
+    accumulatedLifetimeSeconds: Number(production.accumulatedLifetime),
+    accumulatedPoints: landPointsToNumber(production.accumulatedPoints),
     id,
     kind,
     level,
-    maxLevel: Number(building?.maxLevel ?? building?.[2] ?? 0),
+    maxLevel: production.maxLevel,
     name,
-    productionLifetimePerDaySeconds: toNumber(building?.productionRatePlantLifetimePerDay ?? building?.[4]),
-    productionPtsPerDay: toNumber(building?.productionRatePlantPointsPerDay ?? building?.[3], 12),
-    upgrading: Boolean(building?.isUpgrading ?? building?.[9] ?? false),
+    productionLifetimePerDaySeconds: Number(production.lifetimePerDaySeconds),
+    productionPtsPerDay: landPointsToNumber(production.pointsPerDay),
+    productionLifetimePerDaySecondsWhenReady: Number(production.lifetimePerDaySecondsWhenReady),
+    productionPtsPerDayWhenReady: landPointsToNumber(production.pointsPerDayWhenReady),
+    upgrading: production.isUpgrading,
   };
 }
 
@@ -932,8 +935,7 @@ function summarizeBuildings(results: Array<{ townBuildings?: UntypedValue[]; vil
   }> = {};
 
   const addBuiltBuilding = (building: UntypedValue, kind: 'town' | 'village') => {
-    const id = Number(building?.id ?? building?.[0] ?? 0);
-    const level = Number(building?.level ?? building?.[1] ?? 0);
+    const { id, level, maxLevel, isUpgrading } = readBuildingProduction(building, kind);
     if (level <= 0) return;
 
     const key = `${kind}:${id}`;
@@ -945,42 +947,32 @@ function summarizeBuildings(results: Array<{ townBuildings?: UntypedValue[]; vil
       count: 0,
       id,
       kind,
-      maxLevel: Number(building?.maxLevel ?? building?.[2] ?? 0),
+      maxLevel,
       name,
       upgradingCount: 0,
     };
     builtBuildings[key].count += 1;
     builtBuildings[key].maxLevel = Math.max(
       builtBuildings[key].maxLevel,
-      Number(building?.maxLevel ?? building?.[2] ?? 0),
+      maxLevel,
     );
-    if (Boolean(building?.isUpgrading ?? building?.[9] ?? false)) {
+    if (isUpgrading) {
       builtBuildings[key].upgradingCount += 1;
     }
   };
 
   const totals = results.reduce(
     (totals, entry) => {
-      for (const building of entry.villageBuildings || []) {
-        addBuiltBuilding(building, 'village');
-        const level = Number(building?.level ?? building?.[1] ?? 0);
-        if (level <= 0) continue;
-
-        totals.accumulatedLifetimeSeconds += toNumber(building?.accumulatedLifetime ?? building?.[6]);
-        totals.accumulatedPts += toNumber(building?.accumulatedPoints ?? building?.[5], 12);
-        totals.productionLifetimePerDaySeconds += toNumber(building?.productionRatePlantLifetimePerDay ?? building?.[4]);
-        totals.productionPtsPerDay += toNumber(building?.productionRatePlantPointsPerDay ?? building?.[3], 12);
-      }
-
-      for (const building of entry.townBuildings || []) {
-        addBuiltBuilding(building, 'town');
-        const level = Number(building?.level ?? building?.[1] ?? 0);
-        if (level <= 0) continue;
-
-        totals.accumulatedLifetimeSeconds += toNumber(building?.accumulatedLifetime ?? building?.[6]);
-        totals.accumulatedPts += toNumber(building?.accumulatedPoints ?? building?.[5], 12);
-        totals.productionLifetimePerDaySeconds += toNumber(building?.productionRatePlantLifetimePerDay ?? building?.[4]);
-        totals.productionPtsPerDay += toNumber(building?.productionRatePlantPointsPerDay ?? building?.[3], 12);
+      for (const kind of ['village', 'town'] as const) {
+        for (const raw of (kind === 'village' ? entry.villageBuildings : entry.townBuildings) || []) {
+          addBuiltBuilding(raw, kind);
+          const building = normalizeBuilding(raw, kind);
+          if (building.level <= 0) continue;
+          totals.accumulatedLifetimeSeconds += building.accumulatedLifetimeSeconds;
+          totals.accumulatedPts += building.accumulatedPoints;
+          totals.productionLifetimePerDaySeconds += building.productionLifetimePerDaySeconds;
+          totals.productionPtsPerDay += building.productionPtsPerDay;
+        }
       }
 
       return totals;

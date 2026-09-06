@@ -1,4 +1,5 @@
 import { TOWN_BUILDING_NAMES,VILLAGE_BUILDING_NAMES } from './constants';
+import { landPointsToNumber, normalizeLandResources, readBuildingProduction, sumLandResources } from './land-production';
 import {
 barracksGetLandStateV2,
 CREATOR_TOKEN_ADDRESS,
@@ -306,7 +307,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
   }
 
   // Try to get cached stats first
-  const cacheKey = `user:stats:${address.toLowerCase()}`;
+  const cacheKey = `user:stats:v2:${address.toLowerCase()}`;
   if (redis) {
     try {
       const cached = await redis.get(cacheKey);
@@ -340,9 +341,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
 
     // Calculate land stats
     const totalLands = lands.length;
-    const totalLandXP = lands.reduce((sum, l) => sum + Number(l.experiencePoints), 0);
-    const totalStoredPTS = lands.reduce((sum, l) => sum + Number(l.accumulatedPlantPoints), 0);
-    const totalStoredTOD = lands.reduce((sum, l) => sum + Number(l.accumulatedPlantLifetime), 0);
+    const landResourceTotals = sumLandResources(lands);
     let landsWithCasino = 0;
     let landsWithBarracks = 0;
 
@@ -450,10 +449,11 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         // Process village buildings
         villageData.forEach((building: UntypedValue) => {
           if (building.level > 0) { // Only include built buildings
-            const dailyPTS = Number(building.productionRatePlantPointsPerDay) / 1e12; // Production rates use 12 decimals
-            const dailyTOD = Number(building.productionRatePlantLifetimePerDay); // TOD values are already in seconds
-            const buildingUnclaimedPTS = Number(building.accumulatedPoints) / 1e18; // Accumulated amounts use 18 decimals
-            const buildingUnclaimedTOD = Number(building.accumulatedLifetime); // TOD values are already in seconds
+            const production = readBuildingProduction(building, 'village');
+            const dailyPTS = landPointsToNumber(production.pointsPerDay);
+            const dailyTOD = Number(production.lifetimePerDaySeconds);
+            const buildingUnclaimedPTS = landPointsToNumber(production.accumulatedPoints);
+            const buildingUnclaimedTOD = Number(production.accumulatedLifetime);
             
             const buildingInfo = {
               type: getVillageBuildingName(building.id),
@@ -526,10 +526,11 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
         // Process additional town buildings from contract
         townData.forEach((building: UntypedValue) => {
           if (building.level > 0 && building.id !== 1 && building.id !== 3) { // Exclude prebuilt buildings
-            const dailyPTS = Number(building.productionRatePlantPointsPerDay) / 1e12; // Production rates use 12 decimals
-            const dailyTOD = Number(building.productionRatePlantLifetimePerDay); // TOD values are already in seconds
-            const buildingUnclaimedPTS = Number(building.accumulatedPoints) / 1e18; // Accumulated amounts use 18 decimals
-            const buildingUnclaimedTOD = Number(building.accumulatedLifetime); // TOD values are already in seconds
+            // TownBuilding has no production or accumulated-resource fields.
+            const dailyPTS = 0;
+            const dailyTOD = 0;
+            const buildingUnclaimedPTS = 0;
+            const buildingUnclaimedTOD = 0;
             
             const buildingInfo = {
               type: getTownBuildingName(building.id),
@@ -566,9 +567,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
             x: Number(land.coordinateX),
             y: Number(land.coordinateY)
           },
-          experiencePoints: Math.round(Number(land.experiencePoints) / 1e18),
-          storedPTS: Math.round(Number(land.accumulatedPlantPoints) / 1e18),
-          storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
+          ...normalizeLandResources(land),
           casinoBuilt,
           barracksBuilt,
           barracks: barracksInfo,
@@ -585,9 +584,7 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
             x: Number(land.coordinateX),
             y: Number(land.coordinateY)
           },
-          experiencePoints: Math.round(Number(land.experiencePoints) / 1e18),
-          storedPTS: Math.round(Number(land.accumulatedPlantPoints) / 1e18),
-          storedTOD: Math.round(Number(land.accumulatedPlantLifetime) / 1e18),
+          ...normalizeLandResources(land),
           casinoBuilt: false,
           barracksBuilt: false,
           barracks: null,
@@ -756,9 +753,9 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       
       // Land Stats
       totalLands,
-      totalLandXP: Math.round(totalLandXP / 1e18), // Convert from wei
-      totalStoredPTS: Math.round(totalStoredPTS / 1e18), // Convert from wei
-      totalStoredTOD: Math.round(totalStoredTOD / 1e18), // Convert from wei
+      totalLandXP: landResourceTotals.experiencePoints,
+      totalStoredPTS: landResourceTotals.storedPTS,
+      totalStoredTOD: landResourceTotals.storedTOD,
       landsWithCasino,
       landsWithBarracks,
       
@@ -768,10 +765,10 @@ export async function getUserGameStats(address: string): Promise<UserGameStats> 
       // Aggregated Building Stats (legacy for compatibility)
       villageBuildings,
       townBuildings,
-      totalDailyPTSProduction: Math.round(totalDailyPTSProduction),
-      totalDailyTODProduction: Math.round(totalDailyTODProduction),
-      unclaimedPTS: Math.round(unclaimedPTS),
-      unclaimedTOD: Math.round(unclaimedTOD),
+      totalDailyPTSProduction,
+      totalDailyTODProduction,
+      unclaimedPTS,
+      unclaimedTOD,
       
       // Financial Stats
       formattedSeedBalance,
@@ -808,14 +805,6 @@ export function formatStatsForAI(stats: UserGameStats): string {
 
   const formatDecimal = (value: number, fractionDigits = 2): string =>
     value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: fractionDigits });
-
-  const formatFromWei = (raw: number, fractionDigits = 2): string =>
-    (raw / 1e18).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: fractionDigits });
-
-  const formatHoursFromWeiSeconds = (raw: number, fractionDigits = 2): string => {
-    const hours = (raw / 1e18) / 3600;
-    return `${hours.toFixed(fractionDigits)} hours`;
-  };
 
   const formatHoursFromSeconds = (seconds: number, fractionDigits = 2): string =>
     `${(seconds / 3600).toFixed(fractionDigits)} hours`;
@@ -854,9 +843,9 @@ export function formatStatsForAI(stats: UserGameStats): string {
     // Land Summary
     landSummary: {
       totalLands: formatInteger(stats.totalLands),
-      totalLandXP: formatInteger(stats.totalLandXP / 1e18),
-      totalStoredPTS: formatFromWei(stats.totalStoredPTS, 2),
-      totalStoredTOD: formatHoursFromWeiSeconds(stats.totalStoredTOD),
+      totalLandXP: formatInteger(stats.totalLandXP),
+      totalStoredPTS: formatDecimal(stats.totalStoredPTS, 2),
+      totalStoredTOD: formatHoursFromSeconds(stats.totalStoredTOD),
       landsWithCasino: formatInteger(stats.landsWithCasino),
       landsWithBarracks: formatInteger(stats.landsWithBarracks),
     },

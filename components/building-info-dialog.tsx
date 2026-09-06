@@ -1,5 +1,7 @@
 "use client";
 
+import { getVillageProductionRates } from '@/lib/land-production';
+
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -395,6 +397,7 @@ export default function BuildingInfoDialog({
   }
 
   const isProductionBuilding = buildingType === 'village';
+  const production = getVillageProductionRates(building);
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
   const isCasino = 'isCasino' in info && info.isCasino;
   const isBarracks = 'isBarracks' in info && info.isBarracks;
@@ -551,19 +554,22 @@ export default function BuildingInfoDialog({
 
             {isProductionBuilding && (
               <InfoSection title="Production Rates">
+                {building.isUpgrading && (
+                  <p className="mb-3 text-sm text-muted-foreground">Production is paused during this upgrade. These rates start when it completes.</p>
+                )}
                 <InfoRows>
                   <InfoRow label="Current level" value={`Level ${building.level}/${building.maxLevel}`} />
                   {building.productionRatePlantPointsPerDay > BigInt(0) && (
                     <InfoRow
-                      label="PTS / day"
-                      value={formatProductionRate(building.productionRatePlantPointsPerDay)}
+                      label={building.isUpgrading ? 'PTS / day after upgrade' : 'PTS / day'}
+                      value={formatProductionRate(production.pointsPerDayWhenReady)}
                       valueClassName="text-primary"
                     />
                   )}
                   {building.productionRatePlantLifetimePerDay > BigInt(0) && (
                     <InfoRow
-                      label="Lifetime per day"
-                      value={formatLifetimeProduction(building.productionRatePlantLifetimePerDay)}
+                      label={building.isUpgrading ? 'Lifetime / day after upgrade' : 'Lifetime per day'}
+                      value={formatLifetimeProduction(production.lifetimePerDaySecondsWhenReady)}
                       valueClassName="text-primary"
                     />
                   )}

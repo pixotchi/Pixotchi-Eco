@@ -50,7 +50,7 @@ export function DialogLayoutFixtures() {
       <ApprovalState label="Plants" state={approval}><Button>Approve fixture plants</Button></ApprovalState>
     </section>
     <section aria-label="Production readouts fixture" className="max-w-sm rounded border p-4">
-      <ProductionSummary building={{productionRatePlantPointsPerDay: BigInt(1), productionRatePlantLifetimePerDay: BigInt(0), accumulatedPoints: BigInt('9007199254740993123456789'), accumulatedLifetime: BigInt(400 * 86400 + 3661)}} />
+      <ProductionSummary building={{level: 1, isUpgrading: false, productionRatePlantPointsPerDay: BigInt(1), productionRatePlantLifetimePerDay: BigInt(0), accumulatedPoints: BigInt('9007199254740993123456789'), accumulatedLifetime: BigInt(400 * 86400 + 3661)}} />
     </section>
   </>;
 }
