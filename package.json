@@ -16,6 +16,7 @@
     "uiux:smoke": "tsx smoke/uiux-audit-fixes-smoke.ts",
     "production-fixes:smoke": "tsx smoke/production-fixes-smoke.ts",
     "land-production:smoke": "tsx smoke/land-production-smoke.ts",
+    "player-ranking:smoke": "tsx smoke/player-ranking-smoke.ts",
     "transaction-infra:smoke": "tsx smoke/transaction-package-compatibility.ts && tsx smoke/production-fixes-smoke.ts",
     "transaction-feedback:smoke": "tsx smoke/transaction-feedback-smoke.ts",
     "activity:smoke": "tsx smoke/activity-filters-smoke.ts",

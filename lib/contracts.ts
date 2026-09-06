@@ -794,7 +794,7 @@ export const getReadClient = (): PixotchiReadClient => getBaseReadClient();
 export const retryWithBackoff = async <T>(fn: () => Promise<T>): Promise<T> => fn();
 
 // Simplified contract ABIs (only the functions we need)
-const PIXOTCHI_NFT_ABI = [
+export const PIXOTCHI_NFT_ABI = [
   {
     inputs: [
       { name: 'id', type: 'uint256' }

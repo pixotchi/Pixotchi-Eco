@@ -4,7 +4,10 @@ import { isTransactionActionPending } from "@/lib/transaction-lifecycle";
 import { parseTransactionHash, type TransactionReceiptLike } from "@/lib/transaction-utils";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
-import { useStakeLeaderboard, useRocksLeaderboard } from "@/hooks/useApiLeaderboards";
+import { useStakeLeaderboard, useRocksLeaderboard, usePlayerLeaderboard } from "@/hooks/useApiLeaderboards";
+import { PlayerRankingRow } from '@/components/player-ranking-row';
+import { TokenAmount } from '@/components/ui/token-amount';
+import { formatPointsShare, type PlayerRankingRow as PlayerRow } from '@/lib/player-ranking';
 import type { StakeLeaderboardEntry, RocksLeaderboardEntry } from "@/lib/ranking-response";
 import { useLandLeaderboard } from "@/hooks/useLandLeaderboard";
 import type { LandLeaderboardRow } from "@/lib/land-ranking";
@@ -217,12 +220,13 @@ export default function LeaderboardTab() {
     },
     serialize: (value) => (value ? '1' : null),
   });
-  const [boardType, setBoardType] = useWebQueryState<'plants' | 'lands' | 'stake' | 'rocks'>({
+  const [boardType, setBoardType] = useWebQueryState<'plants' | 'players' | 'lands' | 'stake' | 'rocks'>({
     key: 'leaderboardBoard',
     defaultValue: 'plants',
     enabled: !frame?.isInMiniApp,
     parse: (rawValue) =>
       rawValue === 'plants' ||
+      rawValue === 'players' ||
       rawValue === 'lands' ||
       rawValue === 'stake' ||
       rawValue === 'rocks'
@@ -231,6 +235,10 @@ export default function LeaderboardTab() {
     serialize: (value) => (value === 'plants' ? null : value),
   });
   const stakeRanking = useStakeLeaderboard({ enabled: boardType === 'stake' && isVisible });
+  const playerRanking = usePlayerLeaderboard({ enabled: boardType === 'players' && isVisible });
+  const playerSnapshot = playerRanking.snapshot;
+  const playerRows = playerSnapshot?.rows ?? [];
+  const myPlayerRow = playerRows.find(row => row.address === address?.toLowerCase());
   const rocksRanking = useRocksLeaderboard({ enabled: boardType === 'rocks' && showRocksBoard && isVisible,
     disabledMessage: gamificationDisabled ? gamificationDisabledMessage : undefined });
   const { rows: stakeRows, loading: stakeLoading, error: stakeError, refresh: fetchStakeLeaderboard } = stakeRanking;
@@ -239,6 +247,7 @@ export default function LeaderboardTab() {
   const landRows = landRanking.rows;
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedPlantForProfile, setSelectedPlantForProfile] = useState<LeaderboardPlant | null>(null);
+  const [selectedPlayerAddress, setSelectedPlayerAddress] = useState<string | null>(null);
   const handleAttackDialogFrameRef = useCallback((node: HTMLDivElement | null) => {
     setAttackMenuPortalContainer(node);
   }, []);
@@ -326,8 +335,8 @@ export default function LeaderboardTab() {
   }, []);
 
   useEffect(() => {
-    fetchLeaderboardData();
-  }, [fetchLeaderboardData]);
+    if (boardType === 'plants') void fetchLeaderboardData();
+  }, [boardType, fetchLeaderboardData]);
 
   useEffect(() => {
     if (showRocksBoard || boardType !== 'rocks') return;
@@ -398,13 +407,13 @@ export default function LeaderboardTab() {
 
   // Refresh data when tab becomes visible
   useEffect(() => {
-    if (isVisible && Date.now() - lastVisibleFetchRef.current > 30_000) {
+    if (isVisible && boardType === 'plants' && Date.now() - lastVisibleFetchRef.current > 30_000) {
       lastVisibleFetchRef.current = Date.now();
       fetchLeaderboardData();
       void fetchMyPlants();
 
     }
-  }, [isVisible, fetchLeaderboardData, fetchMyPlants]);
+  }, [isVisible, boardType, fetchLeaderboardData, fetchMyPlants]);
 
   // Refresh SEED balance when opening revive dialog
   useEffect(() => {
@@ -527,6 +536,7 @@ export default function LeaderboardTab() {
   }, [killDialogOpen, livingKillerPlants, selectedKillerId, targetPlant]);
 
   const handlePlantImageClick = (plant: LeaderboardPlant) => {
+    setSelectedPlayerAddress(null);
     setSelectedPlantForProfile(plant);
     setProfileDialogOpen(true);
     if (!address) return;
@@ -575,10 +585,16 @@ export default function LeaderboardTab() {
   const desktopStakes = getPageRows(stakeRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   const totalRockItems = rocksRows.length;
+  const totalPlayerItems = playerRows.length;
+  const totalPlayerPages = getTotalPages(totalPlayerItems, ITEMS_PER_PAGE);
+  const desktopPlayerPages = getTotalPages(totalPlayerItems, DESKTOP_ITEMS_PER_PAGE);
+  const currentPlayers = getPageRows(playerRows, currentPage, ITEMS_PER_PAGE);
+  const desktopPlayers = getPageRows(playerRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   activeMobilePageSizeRef.current = boardType === 'lands' ? LAND_ITEMS_PER_PAGE : ITEMS_PER_PAGE;
   activeTotalItemsRef.current =
     boardType === 'plants' ? totalItems
+    : boardType === 'players' ? totalPlayerItems
     : boardType === 'lands' ? totalLandItems
     : boardType === 'stake' ? totalStakeItems
     : totalRockItems;
@@ -1072,6 +1088,12 @@ export default function LeaderboardTab() {
     );
   };
 
+  const renderPlayerRow = (row: PlayerRow, compact = false) => (
+    <PlayerRankingRow key={row.address} row={row} totalPoints={playerSnapshot?.totalPoints ?? BigInt(0)}
+      currentAddress={address} compact={compact} rankIcon={row.rank <= 3 ? getRankIcon(row.rank) : `#${row.rank}`}
+      onOpenProfile={owner => { setSelectedPlantForProfile(null); setSelectedPlayerAddress(owner); setProfileDialogOpen(true); }} />
+  );
+
   const renderContent = () => {
     // Only show full page loader if we have NO plants data and are loading
     if (loading && totalItems === 0) {
@@ -1133,7 +1155,7 @@ export default function LeaderboardTab() {
           : "h-full min-h-[26rem] overflow-hidden tablet:h-auto",
       )}>
         <CardHeader className="flex-none">
-          <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
+          <div className="flex flex-col items-start gap-3 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
             <CardTitle>
               Ranking
             </CardTitle>
@@ -1175,7 +1197,7 @@ export default function LeaderboardTab() {
                 )}
               </div>
             )}
-            <div className="w-full min-[380px]:w-auto tablet:col-start-3 tablet:justify-self-end">
+            <div className="w-full min-[520px]:w-auto tablet:col-start-3 tablet:justify-self-end">
               <ToggleGroup
                 ariaLabel="Ranking board"
                 value={boardType}
@@ -1183,10 +1205,11 @@ export default function LeaderboardTab() {
                   setCurrentPage(1);
                   setBoardType((nextValue as typeof boardType) || 'plants');
                 }}
-                className="w-full min-[380px]:w-auto"
-                getButtonClassName={() => "min-w-0 flex-1 px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] min-[380px]:flex-none"}
+                className="w-full min-[520px]:w-auto"
+                getButtonClassName={() => "min-w-0 flex-1 px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] min-[520px]:flex-none"}
                 options={[
                   { value: 'plants', label: 'Plants' },
+                  { value: 'players', label: 'Players' },
                   { value: 'lands', label: 'Lands' },
                   { value: 'stake', label: 'Stake' },
                   ...(showRocksBoard ? [{ value: 'rocks', label: 'Rocks' }] : []),
@@ -1194,6 +1217,27 @@ export default function LeaderboardTab() {
               />
             </div>
           </div>
+          {boardType === 'players' && playerSnapshot && (
+            <div className="mt-3 space-y-2 text-xs text-muted-foreground" aria-label="Player ranking summary">
+              {address && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground">
+                  {myPlayerRow ? <>
+                    <Button variant="link" size="compact" className="px-0" onClick={() => {
+                      setCurrentPage(Math.ceil(myPlayerRow.rank / (isDesktopBoard ? DESKTOP_ITEMS_PER_PAGE : ITEMS_PER_PAGE)));
+                      scrollLeaderboardToTop();
+                    }} aria-label={`Show your rank, ${myPlayerRow.rank}`}>You · #{myPlayerRow.rank}</Button>
+                    <TokenAmount amount={myPlayerRow.points} decimals={12} unit="PTS" mode="compact" />
+                    <span className="text-muted-foreground">{formatPointsShare(myPlayerRow.points, playerSnapshot.totalPoints)} PTS share</span>
+                  </> : <><span>You</span><TokenAmount amount={BigInt(0)} decimals={12} unit="PTS" /><span className="text-muted-foreground">0% PTS share</span></>}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>Game total: <TokenAmount amount={playerSnapshot.totalPoints} decimals={12} unit="PTS" mode="compact" /></span>
+                <time dateTime={new Date(playerSnapshot.updatedAt).toISOString()} title={`Block ${playerSnapshot.blockNumber}`}>As of {new Date(playerSnapshot.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+              </div>
+              <p>Includes dead plants; excludes unassigned land PTS.</p>
+            </div>
+          )}
           {boardType === 'plants' && !isDesktopBoard && (
             <div className="mt-2 flex items-center justify-between gap-2 flex-wrap tablet:hidden">
               <ToggleGroup
@@ -1233,6 +1277,11 @@ export default function LeaderboardTab() {
         <CardContent className={cn("min-h-0 overflow-visible", usesCompactPageScroll ? "flex-none" : "flex-1")}>
           {boardType === 'plants' ? (
             renderContent()
+          ) : boardType === 'players' ? (
+            playerRanking.loading ? renderRankingState(<BaseExpandedLoadingPageLoader text="Loading player ranking..." />)
+              : playerRanking.error ? renderRankingState(<ResourceState status="error" title="Player ranking unavailable" description={playerRanking.error} onRetry={() => { void playerRanking.refresh(); }} />)
+              : totalPlayerItems === 0 ? renderRankingState(<EmptyState icon={Flower2} title="No players ranked yet" description="Players appear here when they own a plant." />)
+              : renderResponsiveRows(currentPlayers, desktopPlayers, totalPlayerPages, desktopPlayerPages, renderPlayerRow, true)
           ) : boardType === 'lands' ? (
             landRanking.loading && totalLandItems === 0 ? (
               renderRankingState(
@@ -1749,6 +1798,8 @@ export default function LeaderboardTab() {
           open={profileDialogOpen}
           onOpenChange={setProfileDialogOpen}
           plant={selectedPlantForProfile}
+          variant={selectedPlayerAddress ? 'wallet' : 'plant'}
+          walletAddressOverride={selectedPlayerAddress}
         />
       </EfpTransactionBoundary>
 

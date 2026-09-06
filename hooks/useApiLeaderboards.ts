@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from '@tanstack/react-query';
 import { parseRocksRanking, parseStakeRanking } from '@/lib/ranking-response';
+import { parsePlayerRanking } from '@/lib/player-ranking';
 
 export type RankingReader = (signal: AbortSignal) => Promise<unknown>;
 const readRanking = (path: string): RankingReader => async signal => {
@@ -10,6 +11,15 @@ const readRanking = (path: string): RankingReader => async signal => {
 };
 const readStake = readRanking('/api/leaderboard/stake');
 const readRocks = readRanking('/api/leaderboard/rocks');
+const readPlayers = readRanking('/api/leaderboard/players');
+
+export function usePlayerLeaderboard({ enabled, read = readPlayers }: { enabled: boolean; read?: RankingReader }) {
+  const query = useQuery({ queryKey: ['leaderboard', 'players'], enabled,
+    queryFn: async ({ signal }) => parsePlayerRanking(await read(signal)),
+    staleTime: 60_000, gcTime: 5 * 60_000, refetchInterval: enabled ? 60_000 : false, retry: false });
+  return { snapshot: query.isError ? undefined : query.data, loading: query.isPending,
+    error: query.isError ? 'Player rankings could not be loaded. Please try again.' : null, refresh: query.refetch };
+}
 
 /** Public rankings have separate lifetimes, cancellation, validation and error states. */
 export function useStakeLeaderboard({ enabled, read = readStake }: { enabled: boolean; read?: RankingReader }) {
