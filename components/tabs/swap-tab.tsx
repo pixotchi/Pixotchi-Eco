@@ -495,10 +495,10 @@ function SeedChartPanel({
   showStats?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      {/* The autosized iframe needs a definite height even in an auto-height grid row. */}
-      <div className="h-[360px] flex-none overflow-hidden sm:h-[420px] tablet:h-[clamp(420px,65dvh,720px)]">
-        <TradingViewWidget />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="relative h-[360px] flex-none overflow-hidden sm:h-[420px] tablet:h-auto tablet:min-h-[420px] tablet:flex-1">
+        {/* Absolute bounds give the autosized iframe a definite height as the grid row stretches. */}
+        <div className="absolute inset-0"><TradingViewWidget /></div>
       </div>
       {showStats ? <SeedMarketStats marketData={marketData} /> : null}
       <ChartAttribution />
@@ -570,7 +570,7 @@ export default function SwapTab() {
 
   const formVisible = isDesktopSwapLayout || swapView === 'swap';
   return (
-    <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-start tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(0,1fr)]">
+    <div className="space-y-4 tablet:grid tablet:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] tablet:items-stretch tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(360px,480px)_minmax(0,1fr)]">
       <div className="tablet:hidden">
         <ToggleGroup ariaLabel="Swap panel view" value={swapView} onValueChange={v => setSwapView(v as SwapView)} options={[
           { value: 'swap', label: 'Swap' }, { value: 'chart', label: 'Chart' }, { value: 'info', label: 'Token Info' },
@@ -588,7 +588,7 @@ export default function SwapTab() {
       {(isDesktopSwapLayout || swapView === 'chart') && (
         <TabCard className="flex min-h-0 min-w-0 flex-col" padding="none">
           <CardHeader className="px-4 pt-4"><CardTitle>Chart</CardTitle></CardHeader>
-          <CardContent className="min-w-0 flex-1 overflow-hidden p-4"><SeedChartPanel marketData={seedMarketData} showStats={!isDesktopSwapLayout} /></CardContent>
+          <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4"><SeedChartPanel marketData={seedMarketData} showStats={!isDesktopSwapLayout} /></CardContent>
         </TabCard>
       )}
       {(isDesktopSwapLayout || swapView === 'info') && (
