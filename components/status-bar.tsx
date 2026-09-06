@@ -192,9 +192,9 @@ export default function StatusBar({
     ? <Skeleton className={balanceSkeletonClassName} />
     : ethValue;
   const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
-  const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-bold leading-none tabular-nums";
+  const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-bold leading-none tabular-nums max-[340px]:text-[11px]";
   const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
-  const statusActionButtonClassName = "px-2.5 max-tablet:h-8 max-tablet:min-h-8 max-tablet:py-1 max-[380px]:px-2 max-[340px]:px-1.5 max-[340px]:text-[11px] max-[340px]:!gap-1";
+  const statusActionButtonClassName = "px-2.5 max-tablet:h-8 max-tablet:min-h-8 max-tablet:py-1 max-[420px]:px-2 max-[420px]:!gap-1 max-[380px]:px-1.5 max-[340px]:text-[11px]";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana
     ? solanaLoading ? <Skeleton className={balanceSkeletonClassName} /> : solanaError ? 'Unavailable' : formatTokenShort(solBalance, 9)
@@ -224,7 +224,7 @@ export default function StatusBar({
         }
       >
         <div className={isHeaderPlacement ? "flex w-full min-w-0 items-center justify-start gap-3" : "flex w-full min-w-0 flex-wrap items-center justify-between gap-2 xl:justify-start"}>
-          <div className={isHeaderPlacement ? "app-status-scroll flex min-w-0 items-center gap-2 overflow-x-auto" : "flex min-w-0 flex-wrap items-center gap-2 xl:gap-3"} role="group" aria-label="Token balances">
+          <div className={isHeaderPlacement ? "app-status-scroll flex min-w-0 items-center gap-2 overflow-x-auto" : "flex min-w-0 flex-wrap items-center gap-2 max-[340px]:gap-1 xl:gap-3"} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className={balanceItemClassName}>
@@ -260,7 +260,7 @@ export default function StatusBar({
             </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-[hsl(var(--divider)/0.72)]" : "hidden h-5 w-px bg-[hsl(var(--divider)/0.72)] xl:block"} aria-hidden="true" />
-          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[380px]:gap-1">
+          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[420px]:gap-1">
             {balanceReadError && !balanceReadPending && (
               <Button
                 type="button"
@@ -287,7 +287,7 @@ export default function StatusBar({
                 aria-label="Open tasks"
                 aria-haspopup="dialog"
               >
-                <span className="max-[420px]:sr-only">Tasks</span>
+                <span>Tasks</span>
               </Button>
             )}
             {/* Hide staking for Solana wallet users (not supported via bridge) */}
@@ -303,7 +303,7 @@ export default function StatusBar({
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"
               >
-                <span className="max-[420px]:sr-only">Stake</span>
+                <span>Stake</span>
               </Button>
             )}
           </div>
