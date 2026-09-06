@@ -24,3 +24,9 @@ The total includes living and dead plants, excludes burned plants and PTS still 
 - A browser-only API fixture verified the connected wallet's rank link and last-page resizing; the fixture was removed and live data restored. No onchain data changed.
 
 Local evidence is under `output/player-ranking-*.log` and `output/playwright/frontend-review-2026-09-05/player-ranking-*.png` (ignored artifacts).
+
+## Personal summary refinement
+
+Replaced the mixed inline summary with a compact three-column definition list: Your rank, Your points, and PTS share. Values share 14px semibold typography and a common baseline. The PTS icon, subtle dividers, and labeled rank shortcut match the existing interface. The rank link retains a 44px touch area and keyboard focus treatment. Unranked wallets show a dash and zero totals.
+
+Checked light/dark themes at 320, 390, 561, 820, and 1440px; the final narrow-screen adjustment keeps labels on one line and values aligned. Keyboard activation still jumps to the correct ranked row. ESLint and typecheck passed. Evidence: `output/player-standing-check.log` and `output/playwright/frontend-review-2026-09-05/player-standing-*.png`.

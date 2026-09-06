@@ -57,7 +57,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
-import { ChevronDown,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
+import { ChevronDown,ChevronRight,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
 import Image from "next/image";
 import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
 import dynamic from "next/dynamic";
@@ -1220,16 +1220,30 @@ export default function LeaderboardTab() {
           {boardType === 'players' && playerSnapshot && (
             <div className="mt-3 space-y-2 text-xs text-muted-foreground" aria-label="Player ranking summary">
               {address && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-foreground">
-                  {myPlayerRow ? <>
-                    <Button variant="link" size="compact" className="px-0" onClick={() => {
-                      setCurrentPage(Math.ceil(myPlayerRow.rank / (isDesktopBoard ? DESKTOP_ITEMS_PER_PAGE : ITEMS_PER_PAGE)));
-                      scrollLeaderboardToTop();
-                    }} aria-label={`Show your rank, ${myPlayerRow.rank}`}>You · #{myPlayerRow.rank}</Button>
-                    <TokenAmount amount={myPlayerRow.points} decimals={12} unit="PTS" mode="compact" />
-                    <span className="text-muted-foreground">{formatPointsShare(myPlayerRow.points, playerSnapshot.totalPoints)} PTS share</span>
-                  </> : <><span>You</span><TokenAmount amount={BigInt(0)} decimals={12} unit="PTS" /><span className="text-muted-foreground">0% PTS share</span></>}
-                </div>
+                <dl aria-label="Your standing" className="grid w-full max-w-sm grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] divide-x divide-border rounded-[var(--radius-control)] bg-muted/30 py-2 text-foreground">
+                  <div className="relative min-h-11 min-w-0 px-2 min-[380px]:px-3">
+                    <dt className="whitespace-nowrap text-[11px] leading-4 text-muted-foreground min-[380px]:text-xs">Your rank</dt>
+                    <dd className="mt-1 text-sm font-semibold leading-5 tabular-nums">
+                      {myPlayerRow ? <button type="button" className="flex items-center gap-1 text-primary before:absolute before:inset-0 before:rounded-[var(--radius-control)] hover:underline focus-visible:outline-none focus-visible:before:ring-2 focus-visible:before:ring-ring" onClick={() => {
+                        setCurrentPage(Math.ceil(myPlayerRow.rank / (isDesktopBoard ? DESKTOP_ITEMS_PER_PAGE : ITEMS_PER_PAGE)));
+                        scrollLeaderboardToTop();
+                      }} aria-label={`Show your rank, ${myPlayerRow.rank}`}>
+                        #{myPlayerRow.rank}<ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      </button> : <span aria-label="Not ranked">—</span>}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 px-2 min-[380px]:px-3">
+                    <dt className="whitespace-nowrap text-[11px] leading-4 text-muted-foreground min-[380px]:text-xs">Your points</dt>
+                    <dd className="mt-1 flex items-center gap-1 text-sm font-semibold leading-5">
+                      <Image src="/icons/pts.svg" alt="" aria-hidden="true" width={14} height={14} className="shrink-0" />
+                      <TokenAmount amount={myPlayerRow?.points ?? BigInt(0)} decimals={12} unit="PTS" mode="compact" />
+                    </dd>
+                  </div>
+                  <div className="min-w-0 px-2 min-[380px]:px-3">
+                    <dt className="whitespace-nowrap text-[11px] leading-4 text-muted-foreground min-[380px]:text-xs">PTS share</dt>
+                    <dd className="mt-1 text-sm font-semibold leading-5 tabular-nums">{formatPointsShare(myPlayerRow?.points ?? BigInt(0), playerSnapshot.totalPoints)}</dd>
+                  </div>
+                </dl>
               )}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>Game total: <TokenAmount amount={playerSnapshot.totalPoints} decimals={12} unit="PTS" mode="compact" /></span>
