@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Ranking action backgrounds — 6 September
+
+Compared with freshly fetched `origin/main` (`8653990`): main uses the control-surface gradient and control shadow for ranking attack/kill buttons. The remediation replaced these with a transparent background and no shadow, causing them to blend into their rows. Restored the theme-aware control surface and shadow while preserving the current 44px targets. Focused lint passed.
+
+Live Attackable ranking checks at 390/864/1440px in Light, Dark and Green confirmed the gradient, shadow, 44px dimensions and no document overflow. The three phone captures were inspected (`output/playwright/frontend-review-2026-09-05/ranking-button-{Light,Dark,Green}-390.png`). No attack was submitted.
+
 ## Mint preview spacing and shortcut removal — 6 September
 
 Removed the extra Mint review shortcut for both EVM and Solana layouts, along with its unused component, focus refs, fixture and test. The existing mint confirmation sections remain in place. This supersedes the earlier mobile review-shortcut implementation recorded below.

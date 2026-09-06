@@ -82,7 +82,7 @@ const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the lo
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
 const RANKING_ACTION_BUTTON_CLASS =
-  "flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-transparent p-0 text-foreground shadow-none hover:bg-muted hover:text-primary";
+  "flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-control-surface)] p-0 text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary";
 const RANKING_ACTION_ICON_CLASS = "h-6 w-6 object-contain";
 
 function formatAttackScoreDelta(score: number, direction: "gain" | "loss") {
