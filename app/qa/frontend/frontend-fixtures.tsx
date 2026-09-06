@@ -37,6 +37,7 @@ export function FrontendFixtures() {
   const [questDifficulty, setQuestDifficulty] = useState(0);
   const [selected, setSelected] = useState<GardenItem | ShopItem | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [careReviewRequest, setCareReviewRequest] = useState(0);
   const [lastBet, setLastBet] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nestedOpen, setNestedOpen] = useState(false);
@@ -65,8 +66,8 @@ export function FrontendFixtures() {
         <DropdownMenuContent matchTriggerWidth><DropdownMenuItem>Very long plant name · #22419</DropdownMenuItem><DropdownMenuItem>TYJ · #1</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
     </section>
     <section aria-label="Care catalog" className="@container max-w-[640px]">
-      <PlantCareLayout selectionKey={selected?.id ?? null} catalog={<div aria-label="Care choices"><PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden" isSmartWallet
-        getQuantity={id => quantities[id] ?? 0} onQuantityChange={(id, value) => setQuantities(q => ({ ...q, [id]: value }))} onSelect={option => setSelected(option.item)} /></div>}
+      <PlantCareLayout selectionKey={selected?.id ?? null} reviewRequest={careReviewRequest} catalog={<div aria-label="Care choices"><PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden" isSmartWallet
+        getQuantity={id => quantities[id] ?? 0} onQuantityChange={(id, value) => setQuantities(q => ({ ...q, [id]: value }))} onSelect={(option, intent) => { setSelected(option.item); if (intent === 'review') setCareReviewRequest(request => request + 1); }} /></div>}
         details={<p aria-label="Care review">{selected ? `Review ${selected.name}` : 'Choose a care item below.'}</p>} />
     </section>
     <section aria-label="Quest difficulty fixture" className="max-w-sm">

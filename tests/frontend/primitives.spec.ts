@@ -42,6 +42,33 @@ test('catalog names and quantity controls fit without overflow', async ({ page }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('care quantity editing keeps focus when switching items', async ({ page }) => {
+  const catalog = page.getByRole('region', { name: 'Care catalog' });
+  await catalog.getByRole('button', { name: 'Select Water' }).click();
+  const increase = catalog.getByRole('button', { name: 'Increase quantity' }).nth(1);
+  await increase.scrollIntoViewIfNeeded();
+  await increase.focus();
+  const top = await page.evaluate(() => scrollY);
+  await increase.press('Space');
+  await expect(increase).toBeFocused();
+  await expect(catalog.getByLabel('Care review', { exact: true })).not.toHaveText('Review Water');
+  expect(Math.abs(await page.evaluate(() => scrollY) - top)).toBeLessThan(2);
+  await increase.press('Space');
+  await expect(increase).toBeFocused();
+});
+
+test('selecting the same care item reopens its review', async ({ page }) => {
+  const catalog = page.getByRole('region', { name: 'Care catalog' });
+  const item = catalog.getByRole('button', { name: 'Select Water' });
+  const review = catalog.getByRole('region', { name: 'Care item review' });
+  await item.click();
+  await expect(review).toBeFocused();
+  await item.scrollIntoViewIfNeeded();
+  await item.focus();
+  await item.press('Space');
+  await expect(review).toBeFocused();
+});
+
 test('roulette number centers always select that straight number', async ({ page }) => {
   for (let number = 0; number <= 36; number++) {
     const button = page.getByRole('button', { name: `Bet straight on ${number}`, exact: true });

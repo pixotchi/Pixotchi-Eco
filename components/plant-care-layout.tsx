@@ -4,18 +4,20 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /** Keep the catalog's geometry stable while one mounted review handles purchases. */
-export function PlantCareLayout({ selectionKey, catalog, details }: {
+export function PlantCareLayout({ selectionKey, reviewRequest, catalog, details }: {
   selectionKey: string | null;
+  reviewRequest: number;
   catalog: ReactNode;
   details: ReactNode;
 }) {
   const review = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!selectionKey) return;
-    // Changing quantity keeps the same key, so editing never pulls focus away.
+    if (!reviewRequest) return;
+    // Only an explicit item click requests focus. Quantity edits can select a
+    // different item without moving the player away from its controls.
     review.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     review.current?.focus({ preventScroll: true });
-  }, [selectionKey]);
+  }, [reviewRequest]);
   return (
     <div className="flex flex-col gap-4">
       <div className="min-w-0">{catalog}</div>

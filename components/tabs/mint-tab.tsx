@@ -932,13 +932,13 @@ export default function MintTab() {
                         <Image src={getPlantThumbImage(strain.id)} alt={strain.name} width={28} height={28} unoptimized />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold">{strain.name}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {formatNumber(strain.maxSupply - strain.totalMinted)} left
-                          </span>
+                          {isSoldOut ? <Badge variant="danger" className="min-h-0 py-0.5">Sold</Badge>
+                            : isBaseOnly ? <Badge variant="chain" className="min-h-0 py-0.5">Base</Badge>
+                            : <span className="block text-xs text-muted-foreground">
+                              {formatNumber(strain.maxSupply - strain.totalMinted)} left
+                            </span>}
                         </span>
                       </span>
-                      {isSoldOut && <Badge variant="danger" className="min-h-0 py-0.5">Sold</Badge>}
-                      {isBaseOnly && !isSoldOut && <Badge variant="chain" className="min-h-0 py-0.5">Base</Badge>}
                     </button>
                   );
                 })}

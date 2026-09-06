@@ -137,6 +137,7 @@ export default function PlantsView() {
   const [itemType, setItemType] = useState<"shop" | "garden">("garden");
 
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
+  const [careReviewRequest, setCareReviewRequest] = useState(0);
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
   const [claimConfirmationText, setClaimConfirmationText] = useState("");
@@ -858,10 +859,10 @@ export default function PlantsView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null}
+                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null} reviewRequest={careReviewRequest}
                   catalog={<PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
                     isSmartWallet={isSmartWallet} getQuantity={getItemQuantity} onQuantityChange={handleQuantityChange}
-                    onSelect={({ item, itemType: nextType }) => { setSelectedItem(item); setItemType(nextType); }} />}
+                    onSelect={({ item, itemType: nextType }, intent) => { setSelectedItem(item); setItemType(nextType); if (intent === 'review') setCareReviewRequest(request => request + 1); }} />}
                   details={<ItemDetailsPanel
                     selectedItem={selectedItem}
                     selectedPlant={selectedPlant}

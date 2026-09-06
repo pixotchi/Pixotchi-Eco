@@ -15,7 +15,7 @@ interface PlantCareCatalogProps {
   itemType: 'garden' | 'shop';
   isSmartWallet: boolean;
   getQuantity: (id: string) => number;
-  onSelect: (option: CareItem) => void;
+  onSelect: (option: CareItem, intent: 'review' | 'quantity') => void;
   onQuantityChange: (id: string, quantity: number) => void;
 }
 
@@ -39,7 +39,7 @@ export function PlantCareCatalog({ gardenItems, shopItems, selectedItem, itemTyp
             ? [Number(item.points) > 0 && `+${Number(item.points) / 1e12} PTS`, Number(item.timeExtension) > 0 && `+${formatDuration(Number(item.timeExtension))} lifetime`].filter(Boolean).join(' · ')
             : 'Protects against attacks';
           return <div key={`${option.itemType}-${item.id}`} className="min-w-0 space-y-2">
-            <Button type="button" variant="ghost" onClick={() => onSelect(option)} aria-pressed={selected}
+            <Button type="button" variant="ghost" onClick={() => onSelect(option, 'review')} aria-pressed={selected}
               aria-label={`Select ${item.name}`} className={cn('h-auto min-h-28 w-full flex-col items-center gap-1 whitespace-normal rounded-[var(--radius-control)] border p-3 text-center', selected ? 'border-primary bg-primary/10' : 'border-border/60 bg-card')}>
               <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt="" width={32} height={32} />
               <span className="text-sm font-medium">{item.name}</span>
@@ -47,7 +47,7 @@ export function PlantCareCatalog({ gardenItems, shopItems, selectedItem, itemTyp
               <span className="text-xs tabular-nums">{isFence ? 'Price by duration' : `${formatTokenAmount(BigInt(item.price))} SEED`}</span>
             </Button>
             {option.itemType === 'garden' && isSmartWallet && <div className="flex justify-center">
-              <QuantitySelector quantity={getQuantity(item.id)} onQuantityChange={quantity => { onQuantityChange(item.id, quantity); onSelect(option); }} max={80} min={0} />
+              <QuantitySelector quantity={getQuantity(item.id)} onQuantityChange={quantity => { onQuantityChange(item.id, quantity); onSelect(option, 'quantity'); }} max={80} min={0} />
             </div>}
           </div>;
         })}
