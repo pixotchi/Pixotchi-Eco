@@ -74,6 +74,9 @@ type LeaderboardPlant = Plant & {
 };
 
 const ITEMS_PER_PAGE = 12;
+// Land rows are shorter than plant rows; keep enough entries in a mobile page
+// to fill the ranking frame, with the same 20-row boundaries as desktop.
+const LAND_ITEMS_PER_PAGE = DESKTOP_ITEMS_PER_PAGE;
 const NO_PLANTS: Plant[] = [];
 
 // Client-side cache duration for stake data (24 hours since cron runs once at midnight)
@@ -134,6 +137,7 @@ export default function LeaderboardTab() {
   // Total rows on the currently-selected board, kept in a ref so the resize handler
   // can clamp the shared page index without re-subscribing on every data change.
   const activeTotalItemsRef = useRef(0);
+  const activeMobilePageSizeRef = useRef(ITEMS_PER_PAGE);
   const [currentPage, setCurrentPage] = useWebQueryState<number>({
     key: "leaderboardPage",
     defaultValue: 1,
@@ -159,12 +163,12 @@ export default function LeaderboardTab() {
 
     const handleChange = (event: MediaQueryListEvent) => {
       setIsDesktopBoard(event.matches);
-      // Page size changes with the breakpoint (12 <-> 20) while currentPage is
+      // Some boards change page size with the breakpoint while currentPage is
       // shared, so clamp or a user on page 3 of 12 rotates into an empty page.
       // Only meaningful once rows exist; before that there is nothing to clamp to.
       const totalItemsForBoard = activeTotalItemsRef.current;
       if (totalItemsForBoard === 0) return;
-      const nextSize = event.matches ? DESKTOP_ITEMS_PER_PAGE : ITEMS_PER_PAGE;
+      const nextSize = event.matches ? DESKTOP_ITEMS_PER_PAGE : activeMobilePageSizeRef.current;
       setCurrentPage((page) => Math.max(1, Math.min(page, getTotalPages(totalItemsForBoard, nextSize))));
     };
 
@@ -558,9 +562,9 @@ export default function LeaderboardTab() {
 
   // Lands pagination
   const totalLandItems = landRows.length;
-  const totalLandPages = getTotalPages(totalLandItems, ITEMS_PER_PAGE);
+  const totalLandPages = getTotalPages(totalLandItems, LAND_ITEMS_PER_PAGE);
   const desktopLandPages = getTotalPages(totalLandItems, DESKTOP_ITEMS_PER_PAGE);
-  const currentLands = getPageRows(landRows, currentPage, ITEMS_PER_PAGE);
+  const currentLands = getPageRows(landRows, currentPage, LAND_ITEMS_PER_PAGE);
   const desktopLands = getPageRows(landRows, currentPage, DESKTOP_ITEMS_PER_PAGE);
 
   // Stake pagination
@@ -572,6 +576,7 @@ export default function LeaderboardTab() {
 
   const totalRockItems = rocksRows.length;
 
+  activeMobilePageSizeRef.current = boardType === 'lands' ? LAND_ITEMS_PER_PAGE : ITEMS_PER_PAGE;
   activeTotalItemsRef.current =
     boardType === 'plants' ? totalItems
     : boardType === 'lands' ? totalLandItems
@@ -1118,14 +1123,14 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className={cn("flex min-h-0 flex-col space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
+    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
       <TabCard className={cn(
         "flex flex-col",
         usesCompactPageScroll
           ? "h-auto min-h-0 overflow-visible"
-          // Cap mobile height without stretching short lists. Overflow clipping
-          // preserves the rounded footer; longer lists keep their inner scroll.
-          : "max-h-full min-h-0 overflow-hidden tablet:max-h-none",
+          // Match the plant board's mobile frame and scrolling behavior. Desktop
+          // keeps its two content-sized columns. Clip the footer to the card radius.
+          : "h-full min-h-[26rem] overflow-hidden tablet:h-auto",
       )}>
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
