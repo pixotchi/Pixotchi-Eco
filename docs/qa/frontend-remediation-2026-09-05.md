@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Land ranking blank space — 6 September
+
+The mobile ranking card used full available height, stretching the row area and pushing pagination down even when every row fit. At 561×1148 this left about 128px between the last row box and the footer; at 820×1180 it left about 160px. The card now sits in a flex column with a maximum height and no forced full height. It fits short lists and shrinks its scrollable body when necessary. The normal gap is now 24px (list padding plus section spacing).
+
+Live checks covered 561×1148, 390×844, 390×600, 820×1180, 864×900 and 1440×1000, with no horizontal overflow. The 561px capture was visually inspected. Next/Back restored the expected rows at both phone heights; the regular phone layout retains inner scrolling, and the existing compact-height layout uses the page scroller. Desktop pagination positions were unchanged. Focused lint passed. Evidence: `output/land-ranking-spacing-before.log`, `output/land-ranking-spacing-after.log`, `output/land-ranking-pagination-check.log`, and `output/playwright/frontend-review-2026-09-05/land-ranking-spacing.png`.
+
 ## Ranking action backgrounds — 6 September
 
 Compared with freshly fetched `origin/main` (`8653990`): main uses the control-surface gradient and control shadow for ranking attack/kill buttons. The remediation replaced these with a transparent background and no shadow, causing them to blend into their rows. Restored the theme-aware control surface and shadow while preserving the current 44px targets. Focused lint passed.

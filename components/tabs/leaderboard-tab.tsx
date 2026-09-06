@@ -1118,17 +1118,14 @@ export default function LeaderboardTab() {
   };
 
   return (
-    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
+    <div className={cn("flex min-h-0 flex-col space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
       <TabCard className={cn(
         "flex flex-col",
         usesCompactPageScroll
           ? "h-auto min-h-0 overflow-visible"
-          // `overflow-hidden` must stay: the pagination footer bleeds to the
-          // card edges (-mx-4 -mb-4) with square bottom corners and relies on
-          // this clip to inherit the card's radius. The desktop panel is sized
-          // to its content, so nothing needs to escape the card anyway — a
-          // window too short for it scrolls in the shell's own scroller.
-          : "h-full min-h-[26rem] overflow-hidden tablet:h-auto",
+          // Cap mobile height without stretching short lists. Overflow clipping
+          // preserves the rounded footer; longer lists keep their inner scroll.
+          : "max-h-full min-h-0 overflow-hidden tablet:max-h-none",
       )}>
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
