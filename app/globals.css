@@ -1297,12 +1297,6 @@
 
     [data-viewport-shell="status"] {
       border-radius: 0 0 var(--radius-panel) var(--radius-panel);
-      padding-left: 0.625rem;
-      padding-right: 0.625rem;
-    }
-
-    [data-viewport-shell="status"] [data-status-actions] {
-      gap: 0.375rem;
     }
 
     [data-viewport-shell="nav"] {
