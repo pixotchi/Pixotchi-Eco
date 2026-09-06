@@ -4,6 +4,12 @@ Implementation record for the [frontend audit](C:/Users/Goat/Documents/Pixotchi-
 
 The initial findings now have implemented remedies, including the prioritized controller/boundary work and the QA enforcement acceptance criteria. **31 findings have implementation responses; this is not a claim of 100% runtime, wallet or physical-device coverage.** The remaining work listed below is release verification and further coverage expansion. No deployment or new transaction was performed by this implementation work. The original remediation was prepared as two local commits, followed by the visual corrections below; pushing remains separate.
 
+## Mint preview spacing and shortcut removal — 6 September
+
+Removed the extra Mint review shortcut for both EVM and Solana layouts, along with its unused component, focus refs, fixture and test. The existing mint confirmation sections remain in place. This supersedes the earlier mobile review-shortcut implementation recorded below.
+
+The horizontal plant preview now has equal 16px padding on both sides, a fixed 16px image/text gap, and a text column that takes the remaining width instead of giving that space to the image wrapper. At tablet widths the square artwork is bounded by its column. Live checks at 320/390/540/820/864/1024/1440px confirmed that the shortcut is absent, both preview children remain inside the card, and there is no document horizontal overflow. Phone, tablet and desktop captures were visually inspected. TypeScript and focused lint passed. Evidence: `output/mint-preview-check.log` and `output/playwright/frontend-review-2026-09-05/mint-preview-balanced-{390,864,1440}.png`.
+
 ## Land ranking response validation — 6 September
 
 The ranking parser required `owner`, although the deployed contract ABI's `getLeaderboard` tuple contains only `landId`, `experiencePoints` and `name`. Valid RPC responses therefore failed validation. The parser and shared type now match those three fields, retaining strict ID/XP/name validation. The map continues to resolve owners on demand; AI ranking output no longer reads nonexistent owner fields. Fixtures and the lifecycle smoke's owner-discovery code were corrected to use fields their respective contract reads actually supply.

@@ -193,20 +193,6 @@ test('game amounts remain readable with visible labels and associated errors', a
   expect(appearance.font).toBeGreaterThanOrEqual(testInfo.project.use.viewport!.width < 864 ? 16 : 14);
 });
 
-test('mobile review shortcut focuses the existing confirmation without submitting', async ({ page }, testInfo) => {
-  const form = page.getByRole('form', { name: 'Review navigation fixture' });
-  const shortcut = form.getByRole('button', { name: 'Review', exact: true });
-  if (testInfo.project.use.viewport!.width < 864) {
-    await shortcut.click();
-    await expect(page.getByLabel('Mint confirmation fixture')).toBeFocused();
-    await expect(page.getByLabel('Fixture submit count')).toHaveText('0');
-  } else {
-    await expect(shortcut).toBeHidden();
-  }
-  await form.getByRole('button', { name: 'Confirm fixture mint' }).click();
-  await expect(page.getByLabel('Fixture submit count')).toHaveText('1');
-});
-
 test('dialog spacing variants retain a reachable footer in a short viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 430 });
   for (const padding of ['default', 'compact', 'none']) {

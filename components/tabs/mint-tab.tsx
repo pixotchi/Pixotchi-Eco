@@ -19,7 +19,6 @@ DropdownMenuTrigger,
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { VerifyClaim } from '@/components/verify-claim';
-import { ReviewActionBar } from '@/components/ui/review-action-bar';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import { useFarmView } from '@/lib/farm-view-context';
 import { useBalances } from '@/lib/balance-context';
@@ -180,8 +179,6 @@ export default function MintTab() {
   const [strains, setStrains] = useState<Strain[]>([]);
   const [selectedStrain, setSelectedStrain] = useState<Strain | null>(null);
   const submittedStrainRef = useRef<Strain | null>(null);
-  const plantReviewRef = useRef<HTMLDivElement>(null);
-  const landReviewRef = useRef<HTMLDivElement>(null);
   const [paymentTokenSnapshot, setPaymentTokenSnapshot] = useState<PaymentTokenSnapshot>(() => ({
     allowance: BigInt(0),
     balance: BigInt(0),
@@ -757,7 +754,7 @@ export default function MintTab() {
             </CardContent>
           </TabCard>
 
-          <Card ref={plantReviewRef} tabIndex={-1} aria-label="Review plant mint" className="scroll-mt-24 border-violet-500/30 bg-violet-500/5 p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Card aria-label="Review plant mint" className="border-violet-500/30 bg-violet-500/5 p-6">
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
                 <Image src="/icons/solana.svg" alt="Solana" width={28} height={28} />
@@ -880,9 +877,9 @@ export default function MintTab() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 tablet:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
-          <div className="chromatic-white-surface flex flex-row items-center gap-3 tablet:min-h-[220px] tablet:flex-col tablet:justify-between rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)] tablet:min-h-[372px] tablet:p-4">
-            <div className="flex flex-1 items-center justify-center">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-card/70 tablet:h-48 tablet:w-48 2xl:h-56 2xl:w-56">
+          <div className="chromatic-white-surface flex min-w-0 items-center gap-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/85 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)] tablet:min-h-[372px] tablet:flex-col tablet:justify-between">
+            <div className="flex shrink-0 items-center justify-center tablet:w-full tablet:flex-1">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-card/70 tablet:aspect-square tablet:h-auto tablet:w-full tablet:max-w-48 2xl:max-w-56">
                 <Image
                   src={selectedImage}
                   alt={selectedStrain?.name || 'Selected plant'}
@@ -894,10 +891,10 @@ export default function MintTab() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="min-w-0 flex-1 space-y-4 tablet:flex-none tablet:self-stretch">
               <div>
                 <h3 className="text-xl font-semibold">{selectedStrain?.name || 'Select a strain'}</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
                   {selectedStrain ? `${plantRequiredLabel} ${paymentTokenSymbol} · ${Math.floor(selectedStrain.strainInitialTOD / 3600)}h starting lifetime` : 'Pick one of the available strains.'}
                 </p>
               </div>
@@ -989,7 +986,7 @@ export default function MintTab() {
               )}
             </div>
 
-            <div ref={plantReviewRef} tabIndex={-1} aria-label="Review plant mint" className="scroll-mt-24 rounded-[var(--radius-panel)] border border-border/60 bg-card p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <div aria-label="Review plant mint" className="rounded-[var(--radius-panel)] border border-border/60 bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Confirm Mint</h3>
                 <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || needsPlantApproval || isSponsored))} />
@@ -1189,7 +1186,7 @@ export default function MintTab() {
             )}
           </div>
 
-          <div ref={landReviewRef} tabIndex={-1} aria-label="Review land mint" className="scroll-mt-24 rounded-[var(--radius-panel)] border border-border/60 bg-card p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <div aria-label="Review land mint" className="rounded-[var(--radius-panel)] border border-border/60 bg-card p-3">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold">Confirm Mint</h3>
               <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || needsLandApproval || isSponsored))} />
@@ -1344,10 +1341,6 @@ export default function MintTab() {
     if (isSolana) {
       return (
         <div className="space-y-4">
-          <ReviewActionBar title={selectedStrain?.name ?? 'Choose a strain'}
-            detail={selectedStrain ? `${Math.floor(selectedStrain.strainInitialTOD / 3600)}h starting lifetime · Review bridge cost and payment` : 'Select a strain to see its cost and availability.'}
-            disabled={!selectedStrain}
-            onReview={() => { plantReviewRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); plantReviewRef.current?.focus({ preventScroll: true }); }} />
           {renderPlantMinting()}
           <MintShareModal
             open={showShareModal}
@@ -1363,10 +1356,6 @@ export default function MintTab() {
     // state cannot reset into a second clickable controller during a resize.
     return (
       <div className="space-y-4 tablet:space-y-3">
-        <ReviewActionBar title={mintType === 'plant' ? (selectedStrain?.name ?? 'Choose a strain') : 'Mint a land'}
-          detail={mintType === 'plant' ? (selectedStrain ? `${Math.floor(selectedStrain.strainInitialTOD / 3600)}h starting lifetime · Review price and payment` : 'Select a strain to see its cost and availability.') : `${landMintDataCurrent ? formatTokenDisplay(landMintPrice, 18, 18) : 'Checking price…'} SEED · Review payment`}
-          disabled={mintType === 'plant' && !selectedStrain}
-          onReview={() => { const target = (mintType === 'plant' ? plantReviewRef : landReviewRef).current; target?.scrollIntoView({ block: 'start', behavior: 'instant' }); target?.focus({ preventScroll: true }); }} />
         <div className="grid grid-cols-1 items-start gap-3 min-[54rem]:grid-cols-[minmax(0,1.48fr)_minmax(300px,0.9fr)] xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
           <section className={mintType === 'plant' ? 'block' : 'hidden min-[54rem]:block'}>
             {renderDesktopPlantMinting()}
