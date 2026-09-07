@@ -17,7 +17,7 @@ export function ProductionSummary({ building }: { building: Pick<BuildingData, '
       <dt className="text-muted-foreground">{row.label}</dt>
       <dd className="min-w-0 font-medium tabular-nums [overflow-wrap:anywhere]">
         <ResourceValue resource={row.kind === 'points' ? 'points' : 'lifetime'}>
-          {row.kind === 'points' ? <TokenAmount amount={row.amount} decimals={12} unit="PTS" /> : <span title={formatDurationSeconds(row.amount, 'exact')}>{formatDurationSeconds(row.amount)}</span>}
+          {row.kind === 'points' ? <TokenAmount amount={row.amount} decimals={12} unit="PTS" withIcon={false} /> : <span title={formatDurationSeconds(row.amount, 'exact')}>{formatDurationSeconds(row.amount)}</span>}
         </ResourceValue>
       </dd>
     </div>)}

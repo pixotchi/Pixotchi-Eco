@@ -37,7 +37,7 @@ export function PlayerRankingRow({ row, totalPoints, currentAddress, compact, ra
       <span className="flex shrink-0 flex-col items-end gap-1 text-right">
         <span className="flex items-center gap-1 text-sm font-bold">
           <Image src="/icons/pts.svg" alt="" aria-hidden="true" width={14} height={14} />
-          <TokenAmount amount={row.points} decimals={12} unit="PTS" mode="compact" />
+          <TokenAmount amount={row.points} decimals={12} unit="PTS" mode="compact" withIcon={false} />
         </span>
         <span className="text-xs tabular-nums text-muted-foreground" title="Share of total plant PTS">{formatPointsShare(row.points, totalPoints)}</span>
       </span>

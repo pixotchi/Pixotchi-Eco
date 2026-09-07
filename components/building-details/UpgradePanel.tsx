@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { ResourceValue } from '@/components/ui/resource-value';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { formatTokenAmount, formatUpgradeDuration, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
 import BuildingUpgradeTransaction from '@/components/transactions/building-upgrade-transaction';
@@ -96,7 +97,7 @@ export default function UpgradePanel({
             <ProgressBar label="Building upgrade progress" value={upgradeProgress} />
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted-foreground">Time left:</span>
-              <span className="font-semibold">{timeLeft}</span>
+              <ResourceValue resource="duration" className="font-semibold">{timeLeft}</ResourceValue>
             </div>
           </div>
         )}
@@ -107,20 +108,20 @@ export default function UpgradePanel({
             {!building.isUpgrading && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Construction time</span>
-                <span className="font-semibold">{formatUpgradeDuration(building.levelUpgradeBlockInterval)}</span>
+                <ResourceValue resource="duration" className="font-semibold">{formatUpgradeDuration(building.levelUpgradeBlockInterval)}</ResourceValue>
               </div>
             )}
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Normal</span>
-              <span className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
+              <ResourceValue resource="leaf" className={`font-semibold ${hasInsufficientLeaf ? 'text-value' : ''}`}>
                 {formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF
-              </span>
+              </ResourceValue>
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Optional speed up</span>
-              <span className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
+              <ResourceValue resource="pixotchi" className={`font-semibold ${hasInsufficientPixotchi ? 'text-value' : ''}`}>
                 {formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI
-              </span>
+              </ResourceValue>
             </div>
             <p className="text-xs text-muted-foreground">Speed up completes an upgrade after it has started.</p>
           </div>

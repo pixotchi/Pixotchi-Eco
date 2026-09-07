@@ -20,6 +20,7 @@ import { RankingColumns } from "@/components/ranking-columns";
 import { getTotalPages, getBoundedPage, getPageRows, DESKTOP_ITEMS_PER_PAGE, type RankedRow } from "@/lib/ranking-pagination";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ResourceValue } from '@/components/ui/resource-value';
 import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
 import PlantImage from "@/components/PlantImage";
@@ -1231,7 +1232,7 @@ export default function LeaderboardTab() {
                     <dt className="whitespace-nowrap text-[11px] leading-4 text-muted-foreground min-[380px]:text-xs">Your points</dt>
                     <dd className="mt-1 flex items-center gap-1 text-sm font-semibold leading-5">
                       <Image src="/icons/pts.svg" alt="" aria-hidden="true" width={14} height={14} className="shrink-0" />
-                      <TokenAmount amount={myPlayerRow?.points ?? BigInt(0)} decimals={12} unit="PTS" mode="compact" />
+                      <TokenAmount amount={myPlayerRow?.points ?? BigInt(0)} decimals={12} unit="PTS" mode="compact" withIcon={false} />
                     </dd>
                   </div>
                   <div className="min-w-0 px-2 min-[380px]:px-3">
@@ -1760,7 +1761,7 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
-                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: {formatTokenAmount(revivePrice)} SEED.
+                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: <ResourceValue resource="seed">{formatTokenAmount(revivePrice)} SEED</ResourceValue>.
               </div>
             )}
             <div className="pt-2 space-y-2">

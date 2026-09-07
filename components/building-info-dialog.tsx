@@ -1,6 +1,7 @@
 "use client";
 
 import { getVillageProductionRates } from '@/lib/land-production';
+import { ResourceValue } from '@/components/ui/resource-value';
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
@@ -255,7 +256,10 @@ function BarracksTroopTile({
           />
           <InfoRow
             label="Can carry PTS/lifetime"
-            value={`${formatBarracksPoints(troop.troopCarryPoints)}/${formatDuration(Number(troop.troopCarryLifetime))}`}
+            value={<span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
+              <ResourceValue resource="points">{formatBarracksPoints(troop.troopCarryPoints)}</ResourceValue>
+              <ResourceValue resource="lifetime">{formatDuration(Number(troop.troopCarryLifetime))}</ResourceValue>
+            </span>}
           />
         </InfoRows>
       </div>
@@ -564,14 +568,14 @@ export default function BuildingInfoDialog({
                   {building.productionRatePlantPointsPerDay > BigInt(0) && (
                     <InfoRow
                       label={building.isUpgrading ? 'PTS / day after upgrade' : 'PTS / day'}
-                      value={formatProductionRate(production.pointsPerDayWhenReady)}
+                      value={<ResourceValue resource="points">{formatProductionRate(production.pointsPerDayWhenReady)}</ResourceValue>}
                       valueClassName="text-primary"
                     />
                   )}
                   {building.productionRatePlantLifetimePerDay > BigInt(0) && (
                     <InfoRow
                       label={building.isUpgrading ? 'Lifetime / day after upgrade' : 'Lifetime per day'}
-                      value={formatLifetimeProduction(production.lifetimePerDaySecondsWhenReady)}
+                      value={<ResourceValue resource="lifetime">{formatLifetimeProduction(production.lifetimePerDaySecondsWhenReady)}</ResourceValue>}
                       valueClassName="text-primary"
                     />
                   )}
@@ -597,16 +601,16 @@ export default function BuildingInfoDialog({
                 <InfoRows>
                   <InfoRow
                     label={`Next upgrade (Level ${building.level + 1})`}
-                    value={`${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF`}
+                    value={<ResourceValue resource="leaf">{formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF</ResourceValue>}
                     valueClassName="text-amber-600"
                   />
                   <InfoRow
                     label="Construction time"
-                    value={formatUpgradeDuration(building.levelUpgradeBlockInterval)}
+                    value={<ResourceValue resource="duration">{formatUpgradeDuration(building.levelUpgradeBlockInterval)}</ResourceValue>}
                   />
                   <InfoRow
                     label="Optional speed up"
-                    value={`${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI`}
+                    value={<ResourceValue resource="pixotchi">{formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI</ResourceValue>}
                     valueClassName="text-amber-600"
                   />
                 </InfoRows>

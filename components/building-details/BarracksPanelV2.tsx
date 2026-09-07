@@ -1,4 +1,5 @@
 "use client";
+import { ResourceValue } from '@/components/ui/resource-value';
 
 import { useBarracksSnapshot } from "@/hooks/useBarracksSnapshot";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -577,17 +578,17 @@ export default function BarracksPanelV2({
             <h4 className="font-semibold text-sm">Build Cost:</h4>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Instant Build:</span>
-              <span className="font-semibold">
+              <ResourceValue unit={buildTokenSymbol} className="font-semibold">
                 {buildCostDisplay} {buildTokenSymbol}
-              </span>
+              </ResourceValue>
             </div>
             {address && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Your Balance:</span>
-                <span className={hasBuildBalance ? "font-medium" : "font-medium text-destructive"}>
+                <ResourceValue unit={buildTokenSymbol} className={hasBuildBalance ? "font-medium" : "font-medium text-destructive"}>
                   {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."}{" "}
                   {buildTokenSymbol}
-                </span>
+                </ResourceValue>
               </div>
             )}
           </div>
@@ -731,18 +732,18 @@ export default function BarracksPanelV2({
 
           <div id={trainAmountHelpId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
             <TroopCount type={selectedTrainTroop} amount="" withName withRole />
-            <span className="[overflow-wrap:anywhere]">Costs {trainingCostDisplay} {trainingTokenSymbol}</span>
+            <span className="[overflow-wrap:anywhere]">Costs <ResourceValue unit={trainingTokenSymbol}>{trainingCostDisplay} {trainingTokenSymbol}</ResourceValue></span>
           </div>
 
           {address && (
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
               <span className="text-muted-foreground">Your Balance</span>
-              <span className={hasTrainingBalance ? "font-medium" : "font-medium text-destructive"}>
+              <ResourceValue unit={trainingTokenSymbol} className={hasTrainingBalance ? "font-medium" : "font-medium text-destructive"}>
                 {trainingTokenBalance
                   ? formatTokenAmount(trainingTokenBalance.value, trainingTokenDecimals)
                   : "..."}{" "}
                 {trainingTokenSymbol}
-              </span>
+              </ResourceValue>
             </div>
           )}
 

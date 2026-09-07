@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ResourceValue } from '@/components/ui/resource-value';
 import { FirstCareGuide } from "@/components/first-care-guide";
 import { completeFirstCareStep } from '@/lib/first-care-progress';
 import { PlantCareCatalog } from "@/components/plant-care-catalog";
@@ -94,7 +95,7 @@ type AllowanceState = {
 function FittedEthRewardValue({ amount }: { amount: string }) {
   const compact = amount.replace(/(\.\d{0,6})\d+$/, '$1').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   const display = Number(amount) > 0 && Number(compact) === 0 ? '<0.000001' : compact;
-  return <span className="block min-w-0 break-words text-center text-xs font-bold tabular-nums" title={amount + ' ETH'} aria-label={amount + ' ETH'}>{display} ETH</span>;
+  return <span className="block min-w-0 break-words text-center text-xs font-bold tabular-nums" title={amount + ' ETH'} aria-label={amount + ' ETH'}><ResourceValue resource="eth">{display} ETH</ResourceValue></span>;
 }
 
 type PlantInvariant = (plants: Plant[]) => boolean;
@@ -776,9 +777,9 @@ export default function PlantsView() {
                   <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Revive cost</span>
-                      <span className="font-semibold text-foreground">
+                      <ResourceValue resource="seed" className="font-semibold text-foreground">
                         {reviveDataLoading ? "Loading..." : `${formatTokenAmount(revivePrice)} SEED`}
-                      </span>
+                      </ResourceValue>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Your SEED balance</span>
@@ -788,13 +789,13 @@ export default function PlantsView() {
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">SEED allowance</span>
-                      <span className="font-semibold text-foreground">
+                      <ResourceValue resource="seed" className="font-semibold text-foreground">
                         {reviveAllowanceKnown && reviveAllowance.value !== null
                           ? `${formatTokenAmount(reviveAllowance.value)} SEED`
                           : reviveAllowance.status === "loading"
                             ? "Checking..."
                             : "Unavailable"}
-                      </span>
+                      </ResourceValue>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Confirm Revive</span>

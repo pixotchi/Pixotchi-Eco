@@ -1,4 +1,5 @@
 "use client";
+import { ResourceValue } from '@/components/ui/resource-value';
 
 import { parseAmountInput } from "@/lib/amount-input";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -508,22 +509,22 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               <div className="mt-1.5 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="shrink-0 text-muted-foreground">Per SEED</span>
-                  <span className="max-w-[60%] text-right font-semibold leading-tight">
+                  <ResourceValue resource="leaf" className="max-w-[60%] text-right font-semibold leading-tight">
                     {formatRewardDisplay(rewardRateInfo.ratePerUnit)} LEAF / {rewardRateInfo.periodLabel}
-                  </span>
+                  </ResourceValue>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="shrink-0 text-muted-foreground">Your rewards</span>
-                  <span className="max-w-[60%] text-right font-semibold leading-tight">
+                  <ResourceValue resource="leaf" className="max-w-[60%] text-right font-semibold leading-tight">
                     {formatRewardDisplay(rewardRateInfo.estimated)} LEAF / {rewardRateInfo.periodLabel}
-                  </span>
+                  </ResourceValue>
                 </div>
                 {typeof rewardRateInfo.totalStaked === 'number' && rewardRateInfo.totalStaked >= 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="shrink-0 text-muted-foreground">Total staked</span>
-                    <span className="max-w-[60%] text-right font-semibold leading-tight">
+                    <ResourceValue resource="seed" className="max-w-[60%] text-right font-semibold leading-tight">
                       {totalStaked !== null ? formatTokenAmount(totalStaked) : '0'} SEED
-                    </span>
+                    </ResourceValue>
                   </div>
                 )}
               </div>

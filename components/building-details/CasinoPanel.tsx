@@ -1,4 +1,5 @@
 "use client";
+import { ResourceValue } from '@/components/ui/resource-value';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
@@ -489,16 +490,16 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
             <h4 className="font-semibold text-sm">Build Cost:</h4>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Instant Build:</span>
-              <span className="font-semibold">
+              <ResourceValue unit={buildTokenSymbol} className="font-semibold">
                 {buildCostDisplay} {buildTokenSymbol}
-              </span>
+              </ResourceValue>
             </div>
             {address && buildingConfig && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Your Balance:</span>
-                <span className={hasSufficientBalance ? "font-medium" : "font-medium text-destructive"}>
+                <ResourceValue unit={buildTokenSymbol} className={hasSufficientBalance ? "font-medium" : "font-medium text-destructive"}>
                   {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} {buildTokenSymbol}
-                </span>
+                </ResourceValue>
               </div>
             )}
           </div>

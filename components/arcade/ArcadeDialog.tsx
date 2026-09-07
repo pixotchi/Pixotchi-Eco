@@ -1,4 +1,5 @@
 "use client";
+import { ResourceValue } from '@/components/ui/resource-value';
 import { ResourceState } from "@/components/ui/resource-state";
 import { parseSpinMetadata, parseSpinCommit } from "@/lib/spin-metadata";
 import { readSafeUint } from "@/lib/contract-value";
@@ -1374,8 +1375,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
                   <div className="divide-y divide-border/60 text-sm">
                     <ArcadeStatLine label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
-                    <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? formatDuration(currentCooldown) : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
-                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={boxHasInsufficientStars ? "danger" : "default"} />
+                    <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? <ResourceValue resource="duration">{formatDuration(currentCooldown)}</ResourceValue> : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
+                    <ArcadeStatLine label="Stars available" value={<ResourceValue resource="stars">{starsAvailable}</ResourceValue>} tone={boxHasInsufficientStars ? "danger" : "default"} />
                   </div>
 
                   {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
@@ -1500,7 +1501,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       }
                       tone={!spinRead.canStart ? "default" : pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
                     />
-                    <ArcadeStatLine label="Stars available" value={starsAvailable} tone={spinHasInsufficientStars ? "danger" : "default"} />
+                    <ArcadeStatLine label="Stars available" value={<ResourceValue resource="stars">{starsAvailable}</ResourceValue>} tone={spinHasInsufficientStars ? "danger" : "default"} />
                     <ArcadeStatLine
                       label="Cost per spin"
                       value={(

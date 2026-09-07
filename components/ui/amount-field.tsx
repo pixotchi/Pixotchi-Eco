@@ -4,6 +4,7 @@ import { useId, type ReactNode } from 'react';
 import { Input, type InputProps } from './input';
 import { Button } from './button';
 import { cn } from '@/lib/utils';
+import { ResourceValue } from './resource-value';
 
 export interface AmountFieldProps extends Omit<InputProps, 'size'> {
   label: string;
@@ -35,7 +36,7 @@ export function AmountField({ id, label, unit, balance, error, hint, onMax, maxD
         {onMax && <Button type="button" variant="outline" onClick={onMax} disabled={input.disabled || maxDisabled} aria-label={maxLabel ?? `Use maximum ${unit}`}>Max</Button>}
       </div>
       {hasDescription && <div id={descriptionId} className={cn('space-y-1 text-xs leading-relaxed', surface === 'game' ? 'text-white/75' : 'text-muted-foreground')}>
-        {balance != null && <p>Available: {balance} {unit}</p>}
+        {balance != null && <p>Available: <ResourceValue unit={unit}>{balance} {unit}</ResourceValue></p>}
         {error ? <p role="alert" className={surface === 'game' ? 'text-red-200' : 'text-destructive'}>{error}</p> : hint}
       </div>}
     </div>

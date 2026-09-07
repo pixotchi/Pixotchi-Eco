@@ -1,4 +1,5 @@
 "use client";
+import { ResourceValue } from '@/components/ui/resource-value';
 
 import { parseAmountInput } from "@/lib/amount-input";
 import { parseMarketplaceOrder, type MarketplaceOrder } from "@/lib/marketplace-order";
@@ -557,8 +558,8 @@ export default function MarketplaceDialog({ open, onOpenChange, landId }: { open
 
                 {createOrderCall && (
                   <div className="space-y-1 rounded-[var(--radius-control)] border border-border bg-muted/40 p-3 text-sm" aria-label="Order preview">
-                    <p>You give <strong>{formatUnits(parsedAmount!, 18)} {sellSide}</strong></p>
-                    <p>You receive <strong>{formatUnits(createOrderCall.args[3] as bigint, 18)} {sellSide === 'LEAF' ? 'SEED' : 'LEAF'}</strong> if this order is filled.</p>
+                    <p>You give <ResourceValue unit={sellSide} className="font-bold">{formatUnits(parsedAmount!, 18)} {sellSide}</ResourceValue></p>
+                    <p>You receive <ResourceValue unit={sellSide === 'LEAF' ? 'SEED' : 'LEAF'} className="font-bold">{formatUnits(createOrderCall.args[3] as bigint, 18)} {sellSide === 'LEAF' ? 'SEED' : 'LEAF'}</ResourceValue> if this order is filled.</p>
                     <p className="text-xs text-muted-foreground">Creating an order does not guarantee a trade.</p>
                   </div>
                 )}

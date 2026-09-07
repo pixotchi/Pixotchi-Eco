@@ -16,7 +16,7 @@ export function LandResourceBadges({ land }: {
       className="absolute bottom-3 right-3 z-20 flex max-w-[calc(100%-6rem)] flex-col items-end gap-1 text-xs font-bold text-foreground/80">
       <div className={badgeClass}>
         <Image src="/icons/pts.svg" alt="" width={16} height={16} className="h-4 w-4 shrink-0" />
-        <TokenAmount amount={land.accumulatedPlantPoints} decimals={12} unit="PTS" mode="compact" className="min-w-0 text-right" />
+        <TokenAmount amount={land.accumulatedPlantPoints} decimals={12} unit="PTS" mode="compact" className="min-w-0 text-right" withIcon={false} />
       </div>
       <div className={badgeClass} title={exactLifetime}>
         <Image src="/icons/tod.svg" alt="" width={16} height={16} className="h-4 w-4 shrink-0" />
