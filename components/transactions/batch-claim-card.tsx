@@ -17,6 +17,7 @@ import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { erc20Abi,parseUnits } from 'viem';
 import { TokenAmount } from '@/components/ui/token-amount';
+import { ResourceValue } from '@/components/ui/resource-value';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
 
@@ -409,9 +410,9 @@ export default function BatchClaimCard({
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs px-1">
               <span className="text-muted-foreground">Cost:</span>
-              <span className="font-mono text-primary font-semibold">
+              <ResourceValue resource="pixotchi" className="font-mono text-primary font-semibold">
                 {BURN_AMOUNT_TOKENS} PIXOTCHI
-              </span>
+              </ResourceValue>
             </div>
             <SmartWalletTransaction
               successFeedback="feature"

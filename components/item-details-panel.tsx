@@ -13,6 +13,7 @@ import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ResourceValue } from '@/components/ui/resource-value';
 import type { FenceV2Config } from '@/lib/contracts';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
 import { useBalances } from '@/lib/balance-context';
@@ -26,7 +27,6 @@ import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
 import { formatDuration,getFriendlyErrorMessage } from '@/lib/utils';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
-import Image from 'next/image';
 import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
@@ -394,22 +394,24 @@ export default function ItemDetailsPanel({
     if (!selectedItem) return 'Item effect';
 
     if (isFenceItem) {
-      return `${activeFenceV2Days} day${activeFenceV2Days === 1 ? '' : 's'} protection`;
+      return <ResourceValue resource="protection">{activeFenceV2Days} day{activeFenceV2Days === 1 ? '' : 's'} protection</ResourceValue>;
     }
 
     if (quantity === 0 && itemType === 'garden') return 'Select quantity above';
 
     if (itemType === 'shop') {
       const shopItem = selectedItem as ShopItem;
-      return `${formatDuration(shopItem.effectTime)} protection`;
+      return <ResourceValue resource="protection">{formatDuration(shopItem.effectTime)} protection</ResourceValue>;
     } else {
       const gardenItem = selectedItem as GardenItem;
       const points = Number(gardenItem.points) / 1e12 * quantity;
       const hours = Math.floor(Number(gardenItem.timeExtension) / 3600) * quantity;
 
-      if (points > 0 && hours > 0) return `+${points} PTS & +${hours}h lifetime`;
-      if (points > 0) return `+${points} PTS`;
-      if (hours > 0) return `+${hours}h lifetime`;
+      if (points > 0 || hours > 0) return <>
+        {points > 0 && <ResourceValue resource="points">+{points} PTS</ResourceValue>}
+        {points > 0 && hours > 0 && <span className="sr-only"> and </span>}
+        {hours > 0 && <ResourceValue resource="lifetime">+{hours}h lifetime</ResourceValue>}
+      </>;
       return 'Item effect';
     }
   };
@@ -491,24 +493,20 @@ export default function ItemDetailsPanel({
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right font-semibold tabular-nums [overflow-wrap:anywhere]">
               {/* ETH Mode: show ETH price for smart wallet users */}
               {isSmartWallet && isEthMode && !isSolana && ethQuote ? (
-                <>
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                  <span>
-                    {formatTokenEstimate(ethQuote.ethAmountWithBuffer)} ETH
-                    {itemType === 'garden' && quantity === 0 ? ' each' : ''}
-                  </span>
-                </>
+                <ResourceValue resource="eth">
+                  {formatTokenEstimate(ethQuote.ethAmountWithBuffer)} ETH
+                  {itemType === 'garden' && quantity === 0 ? ' each' : ''}
+                </ResourceValue>
               ) : isSmartWallet && isEthMode && !isSolana && ethQuoteLoading ? (
-                <>
-                  <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
+                <ResourceValue resource="eth">
                   <Skeleton className="h-4 w-20" />
-                </>
+                </ResourceValue>
               ) : isSolana ? (
                 solanaQuote ? (
                   solanaQuote.error ? (
                     <span className="text-amber-500">Quote error</span>
                   ) : (
-                    `${formatWsol(solanaQuote.wsolAmount)} SOL`
+                    <ResourceValue resource="sol">{formatWsol(solanaQuote.wsolAmount)} SOL</ResourceValue>
                   )
                 ) : (
                   <Skeleton className="h-4 w-24" />
@@ -519,21 +517,21 @@ export default function ItemDetailsPanel({
                 ) : fenceV2Quote === null ? (
                   <span className="text-muted-foreground" title="Fence quote unavailable">—</span>
                 ) : (
-                  `${formatExactSeed(fenceV2Quote)} SEED`
+                  <ResourceValue resource="seed">{formatExactSeed(fenceV2Quote)} SEED</ResourceValue>
                 )
               ) : itemType === 'shop' ? (
-                `${formatExactSeed(selectedItem.price)} SEED`
+                <ResourceValue resource="seed">{formatExactSeed(selectedItem.price)} SEED</ResourceValue>
               ) : quantity === 0 ? (
-                `${formatExactSeed(selectedItem.price)} SEED each`
+                <ResourceValue resource="seed">{formatExactSeed(selectedItem.price)} SEED each</ResourceValue>
               ) : (
-                `${formatExactSeed(totalCost)} SEED`
+                <ResourceValue resource="seed">{formatExactSeed(totalCost)} SEED</ResourceValue>
               )}
             </div>
           </div>
 
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-sm">
             <span className="text-muted-foreground">Effect:</span>
-            <span className="text-right font-semibold text-primary">
+            <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 text-right font-semibold text-primary">
               {getItemBenefits()}
             </span>
           </div>

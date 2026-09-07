@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AmountField } from '@/components/ui/amount-field';
 import { ResourceState } from '@/components/ui/resource-state';
+import { ResourceValue } from '@/components/ui/resource-value';
 import { getPlantsByOwner } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -152,7 +153,11 @@ export default function WarehousePanel({
   return (
     <div className="space-y-3 pt-4 border-t border-border">
       <h4 className="font-semibold text-sm text-center">Apply Warehouse to Plant</h4>
-      <p id={availableDescriptionId} className="text-xs text-muted-foreground text-center">Available: {availablePtsHuman} PTS • {availableMinutes} min lifetime</p>
+      <p id={availableDescriptionId} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground text-center">
+        <span>Available:</span>
+        <ResourceValue resource="points">{availablePtsHuman} PTS</ResourceValue>
+        <ResourceValue resource="lifetime">{availableMinutes} min lifetime</ResourceValue>
+      </p>
 
       {plantsError ? <ResourceState status="error" title="Plants unavailable" description={plantsError} onRetry={() => void loadPlants()} />
         : plantsLoading ? <ResourceState status="loading" title="Loading your plants…" />

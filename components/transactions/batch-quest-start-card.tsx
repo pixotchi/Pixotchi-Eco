@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { ResourceValue } from '@/components/ui/resource-value';
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useQuestRewardsAvailability } from "@/hooks/useQuestRewardsAvailability";
 import { useBalances } from "@/lib/balance-context";
@@ -657,9 +658,9 @@ export default function BatchQuestStartCard({
               <div className="flex items-center justify-between px-1 text-xs">
                 <span className="text-muted-foreground">Cost:</span>
                 {shouldBurn ? (
-                  <span className="font-mono font-semibold text-primary">
+                  <ResourceValue resource="pixotchi" className="font-mono font-semibold text-primary">
                     {BURN_AMOUNT_TOKENS.toLocaleString()} PIXOTCHI
-                  </span>
+                  </ResourceValue>
                 ) : (
                   <span className="font-semibold text-[hsl(var(--success-strong))]">
                     Already paid this run

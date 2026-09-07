@@ -1,6 +1,7 @@
 import type { BuildingData } from '@/lib/types';
 import { formatDurationSeconds } from '@/lib/duration-display';
 import { TokenAmount } from '@/components/ui/token-amount';
+import { ResourceValue } from '@/components/ui/resource-value';
 import { getVillageProductionRates } from '@/lib/land-production';
 
 export function ProductionSummary({ building }: { building: Pick<BuildingData, 'level' | 'isUpgrading' | 'productionRatePlantPointsPerDay' | 'productionRatePlantLifetimePerDay' | 'accumulatedPoints' | 'accumulatedLifetime'> }) {
@@ -15,7 +16,9 @@ export function ProductionSummary({ building }: { building: Pick<BuildingData, '
     {rows.map(row => <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <dt className="text-muted-foreground">{row.label}</dt>
       <dd className="min-w-0 font-medium tabular-nums [overflow-wrap:anywhere]">
-        {row.kind === 'points' ? <TokenAmount amount={row.amount} decimals={12} unit="PTS" /> : <span title={formatDurationSeconds(row.amount, 'exact')}>{formatDurationSeconds(row.amount)}</span>}
+        <ResourceValue resource={row.kind === 'points' ? 'points' : 'lifetime'}>
+          {row.kind === 'points' ? <TokenAmount amount={row.amount} decimals={12} unit="PTS" /> : <span title={formatDurationSeconds(row.amount, 'exact')}>{formatDurationSeconds(row.amount)}</span>}
+        </ResourceValue>
       </dd>
     </div>)}
   </dl>;
