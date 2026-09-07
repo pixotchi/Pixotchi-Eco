@@ -397,7 +397,9 @@ export default function BuildingInfoDialog({
   }
 
   const isProductionBuilding = buildingType === 'village';
-  const production = getVillageProductionRates(building);
+  // Town tuples have no production fields. This dialog stays mounted even
+  // while closed, so calculating Village rates here would crash the Farm tab.
+  const production = isProductionBuilding ? getVillageProductionRates(building) : null;
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
   const isCasino = 'isCasino' in info && info.isCasino;
   const isBarracks = 'isBarracks' in info && info.isBarracks;
@@ -552,7 +554,7 @@ export default function BuildingInfoDialog({
 
             {isBarracks && <BarracksInfoContent open={open} />}
 
-            {isProductionBuilding && (
+            {production && (
               <InfoSection title="Production Rates">
                 {building.isUpgrading && (
                   <p className="mb-3 text-sm text-muted-foreground">Production is paused during this upgrade. These rates start when it completes.</p>

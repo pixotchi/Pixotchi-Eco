@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
+import BuildingInfoDialog from '../components/building-info-dialog';
+import type { BuildingData } from '../lib/types';
 import { decodeFunctionResult, encodeFunctionResult, type Abi } from 'viem';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
 import {
@@ -70,6 +74,19 @@ async function main() {
     levelUpgradeCostSeedInstant: BigInt('999000000000000000000'),
     levelUpgradeBlockInterval: BigInt(12345), levelUpgradeCostSeed: BigInt('789000000000000000000'),
   };
+  // The real Town ABI omits Village production fields. BuildingDetailsPanel
+  // mounts this dialog even while closed, including after restoring selection.
+  for (const id of [1, 3, 5, 6, 7, 8]) {
+    for (const level of [0, 1, 3]) {
+      const [decodedTown] = abiForms('townGetBuildingsByLandId', { ...town, id, level });
+      assert.doesNotThrow(() => renderToString(createElement(BuildingInfoDialog, {
+        open: false,
+        onOpenChange: () => {},
+        building: decodedTown as BuildingData,
+        buildingType: 'town',
+      })), `Closed Town info dialog must render for building ${id} at level ${level}`);
+    }
+  }
   for (const input of abiForms('townGetBuildingsByLandId', town)) {
     const result = readBuildingProduction(input, 'town');
     assert.equal(result.isUpgrading, true);
@@ -109,7 +126,7 @@ async function main() {
   assert.equal(formatted.landSummary.totalStoredTOD, '1.02 hours');
   assert.equal(formatted.individualLands[0].storedTOD, '1.02 hours');
   assert.equal(formatted.productionSummary.unclaimedPTS, (0.285333333333).toLocaleString(undefined, { maximumFractionDigits: 2 }));
-  console.log('Land production smoke passed: onchain rates, ABI object/tuple forms, upgrades, town fields, stored units and AI formatting.');
+  console.log('Land production smoke passed: onchain rates, ABI object/tuple forms, upgrades, Town dialog rendering, stored units and AI formatting.');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
