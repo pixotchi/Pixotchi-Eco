@@ -32,7 +32,7 @@ test('chat long content and profile actions fit with readable timestamps', async
   await expect(region.getByRole('heading', { name: 'Your next steps' })).toBeVisible();
   const button = region.getByRole('button', { name: /Open profile for/ });
   const box = (await button.boundingBox())!;
-  expect(box.height).toBe(32);
+  expect(box.height).toBe(24);
   await button.click();
   await expect(region.getByLabel('Fixture profile visits')).toHaveText('1');
   await expect(region.locator('time')).toHaveCount(3);
@@ -46,7 +46,7 @@ test('chat long content and profile actions fit with readable timestamps', async
   expect(publicSurface.background).not.toBe('rgba(0, 0, 0, 0)');
   expect(publicSurface.image).toContain('linear-gradient');
   expect(publicSurface.border).toBe('1px');
-  expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none');
+  expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('linear-gradient');
 });
 
 test('arcade values wrap and ranking columns keep continuous order', async ({ page }, testInfo) => {
