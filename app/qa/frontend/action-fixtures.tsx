@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { AppToaster } from '@/components/ui/app-toaster';
 import { LandResourceBadges } from '@/components/land-resource-badges';
 import { FirstCareGuide } from '@/components/first-care-guide';
 import { completeFirstCareStep } from '@/lib/first-care-progress';
@@ -16,6 +18,13 @@ export function ActionFixtures() {
   const [padding, setPadding] = useState<'default' | 'compact' | 'none'>('default');
   const [dialogOpen, setDialogOpen] = useState(false);
   return <>
+    <AppToaster />
+    <section aria-label="Notification fixture" className="flex flex-wrap gap-2">
+      <Button onClick={() => toast.success('Fixture action complete', { id: 'fixture-status', duration: Infinity })}>Show success notification</Button>
+      <Button onClick={() => toast.error('Fixture action failed', { id: 'fixture-status', duration: Infinity })}>Show error notification</Button>
+      <Button onClick={() => toast.loading('Fixture action pending', { id: 'fixture-status', duration: Infinity })}>Show pending notification</Button>
+      <Button onClick={() => toast.remove('fixture-status')}>Clear fixture notification</Button>
+    </section>
     <section aria-label="Land resource fixture" className="max-w-[420px] space-y-2 rounded border bg-card p-4">
       <div aria-label="Land illustration fixture" className="relative aspect-square w-full rounded border bg-muted/30">
         <Button className="absolute bottom-3 left-3 h-11 px-3 text-xs" aria-label="Open fixture map">MAP</Button>

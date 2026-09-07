@@ -1,6 +1,7 @@
 "use client";
 
 import { Toaster } from "react-hot-toast";
+import { Check, X } from "lucide-react";
 
 export function AppToaster() {
   return (
@@ -22,16 +23,12 @@ export function AppToaster() {
           lineHeight: "1.35",
         },
         success: {
-          iconTheme: {
-            primary: "hsl(var(--success))",
-            secondary: "hsl(var(--success-foreground))",
-          },
+          // Built-in status icons start invisible and animate over a loader.
+          // Static SVGs keep completed states visible when motion is disabled.
+          icon: <Check aria-hidden="true" data-toast-icon="success" className="h-5 w-5 shrink-0 rounded-full bg-[hsl(var(--success))] p-0.5 text-[hsl(var(--success-foreground))]" />,
         },
         error: {
-          iconTheme: {
-            primary: "hsl(var(--destructive))",
-            secondary: "hsl(var(--destructive-foreground))",
-          },
+          icon: <X aria-hidden="true" data-toast-icon="error" className="h-5 w-5 shrink-0 rounded-full bg-destructive p-0.5 text-destructive-foreground" />,
         },
       }}
       containerStyle={{

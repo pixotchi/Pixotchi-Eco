@@ -26,3 +26,9 @@ Verified the real roulette UI with a selected `Number 23` bet and SEED icon at 3
 - Chromium touch-event simulation dragged across a split target: horizontal scroll moved from 0 to 180px without placing a bet. A subsequent tap selected Split 10–11. This is emulated touch input, not a physical-phone check.
 
 Evidence: `output/roulette-table-*.log`, `output/roulette-combinations-live.log`, `output/roulette-combination-touch.log`, and `output/playwright/frontend-review-2026-09-05/roulette-combinations-*.png`.
+
+## Completed notification icons without motion
+
+The default toast library renders a loader underneath success/error icons that start at zero opacity. The app's reduced-motion, motion-off and performance-mode rules disable those animations, leaving a frozen loader visible for completed notifications. `AppToaster` now supplies static, theme-colored checkmark and error SVGs. Pending notifications retain their loading state.
+
+Chromium phone/desktop and WebKit phone tests passed for normal motion, system reduced motion, motion-off and performance mode, checking visible completed icons and transitions back to pending. Typecheck and changed-file ESLint passed. A reduced-motion screenshot confirms the visible checkmark. Evidence: `output/toast-static-icons-*.log` and `output/playwright/frontend-review-2026-09-05/toast-success-reduced-motion.png`.

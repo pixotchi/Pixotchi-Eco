@@ -6,6 +6,32 @@ test.beforeEach(async ({ page }, testInfo) => {
   await page.evaluate(theme => { document.documentElement.classList.add(theme); }, testInfo.project.name.endsWith('dark') ? 'dark' : 'light');
 });
 
+test('completed notification icons remain visible with every motion setting', async ({ page }) => {
+  for (const mode of ['normal', 'system', 'motion-off', 'performance-mode']) {
+    await page.emulateMedia({ reducedMotion: mode === 'system' ? 'reduce' : 'no-preference' });
+    await page.evaluate(value => {
+      document.documentElement.classList.remove('motion-off', 'performance-mode');
+      if (value === 'motion-off' || value === 'performance-mode') document.documentElement.classList.add(value);
+    }, mode);
+    for (const state of ['success', 'error']) {
+      await page.getByRole('button', { name: `Show ${state} notification`, exact: true }).click();
+      const icon = page.locator(`[data-toast-icon="${state}"]`);
+      await expect(icon).toBeVisible();
+      const appearance = await icon.evaluate(node => {
+        const style = getComputedStyle(node);
+        return { opacity: style.opacity, animation: style.animationName, pathCount: node.querySelectorAll('path').length };
+      });
+      expect(appearance.opacity).toBe('1');
+      expect(appearance.animation).toBe('none');
+      expect(appearance.pathCount).toBeGreaterThan(0);
+    }
+    await page.getByRole('button', { name: 'Show pending notification', exact: true }).click();
+    await expect(page.getByText('Fixture action pending', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-toast-icon]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Clear fixture notification', exact: true }).click();
+  }
+});
+
 test('amounts keep labels, units, Max and errors associated', async ({ page }, testInfo) => {
   const field = page.getByRole('textbox', { name: 'Points to add (PTS)' });
   await field.fill('100');
