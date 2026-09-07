@@ -33,6 +33,7 @@ export async function getPlayerRanking(): Promise<PlayerRankingSnapshot> {
       getPlantIds: blockNumber => client.readContract({ address: PIXOTCHI_NFT_ADDRESS, abi: PIXOTCHI_NFT_ABI, functionName: 'airdropGetAliveAndDeadTokenIds', blockNumber }),
       getPlantCount: blockNumber => client.readContract({ address: PIXOTCHI_NFT_ADDRESS, abi: parseAbi(['function totalSupply() view returns (uint256)']), functionName: 'totalSupply', blockNumber }),
       getPlants: (ids, blockNumber) => client.readContract({ address: PIXOTCHI_NFT_ADDRESS, abi: PIXOTCHI_NFT_ABI, functionName: 'getPlantsInfoExtended', args: [ids], blockNumber }),
+      getPlantOwner: (id, blockNumber) => client.readContract({ address: PIXOTCHI_NFT_ADDRESS, abi: parseAbi(['function ownerOf(uint256) view returns (address)']), functionName: 'ownerOf', args: [id], blockNumber }),
     });
     cached = { snapshot, expiresAt: Date.now() + CACHE_SECONDS * 1000 };
     if (redis) {

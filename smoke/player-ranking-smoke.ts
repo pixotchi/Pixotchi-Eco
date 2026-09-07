@@ -49,6 +49,7 @@ async function main() {
     getBlock: async () => ({ number: blockNumber, timestamp }),
     getPlantIds: async block => { assert.equal(block, blockNumber); return ids; },
     getPlantCount: async block => { assert.equal(block, blockNumber); return BigInt(ids.length); },
+    getPlantOwner: async () => { throw new Error('Unexpected owner lookup'); },
     getPlants: async (batch, block) => {
       calls.push({ block, ids: batch });
       return [...batch].reverse().map(id => ({ id, owner: id % BigInt(2) === BigInt(0) ? a : b, score: scale }));
@@ -65,6 +66,35 @@ async function main() {
   await assert.rejects(readPlayerRanking({ ...reader, getPlants: async batch => batch.slice(1).map(id => ({ id, owner: a, score: scale })) }), /Incomplete/);
   await assert.rejects(readPlayerRanking({ ...reader, getPlants: async () => { throw new Error('RPC unavailable'); } }), /RPC unavailable/);
   await assert.rejects(readPlayerRanking({ ...reader, getPlants: async batch => batch.map(() => ({ id: BigInt(1), owner: a, score: scale })) }), /Unexpected/);
+  const zeroOwner = `0x${'0'.repeat(40)}`;
+  const missingOwnerReader: PlayerRankingReader = {
+    ...reader,
+    getPlantIds: async () => [BigInt(22434), BigInt(22435)],
+    getPlantCount: async () => BigInt(2),
+    getPlants: async () => [
+      { id: BigInt(22434), owner: zeroOwner, score: BigInt(0) },
+      { id: BigInt(22435), owner: a, score: scale },
+    ],
+    getPlantOwner: async (id, block) => {
+      assert.equal(id, BigInt(22434));
+      assert.equal(block, blockNumber, 'Ownership must use the same block as scores and supply');
+      return b;
+    },
+  };
+  const recovered = await readPlayerRanking(missingOwnerReader);
+  assert.equal(recovered.totalPlants, 2, 'Keep zero-PTS plants whose extended owner is missing');
+  assert.equal(recovered.totalPoints, scale);
+  assert.equal(recovered.rows.find(row => row.address === b)?.plantCount, 1);
+  const recoveredPoints = await readPlayerRanking({ ...missingOwnerReader,
+    getPlants: async () => [
+      { id: BigInt(22434), owner: zeroOwner, score: scale },
+      { id: BigInt(22435), owner: a, score: scale },
+    ],
+  });
+  assert.equal(formatPointsShare(recoveredPoints.rows.find(row => row.address === b)!.points, recoveredPoints.totalPoints), '50%');
+  await assert.rejects(readPlayerRanking({ ...missingOwnerReader, getPlantOwner: async () => zeroOwner }), /Missing plant owner/);
+  await assert.rejects(readPlayerRanking({ ...missingOwnerReader, getPlantOwner: async () => { throw new Error('Owner RPC unavailable'); } }), /Owner RPC unavailable/);
+  await assert.rejects(readPlayerRanking({ ...missingOwnerReader, getPlantOwner: async () => 'invalid' }));
   const empty = await readPlayerRanking({ ...reader, getPlantIds: async () => [], getPlantCount: async () => BigInt(0) });
   assert.equal(empty.totalPoints, BigInt(0));
   assert.deepEqual(empty.rows, []);

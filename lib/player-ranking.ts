@@ -10,6 +10,7 @@ export type PlayerRankingSnapshot = {
 };
 export type PlayerPoints = { id: bigint; owner: `0x${string}`; score: bigint };
 const ZERO = BigInt(0);
+const ZERO_ADDRESS = `0x${'0'.repeat(40)}`;
 
 /** Each existing plant contributes once, before any pagination or wallet filtering. */
 export function aggregatePlayerPoints(plants: PlayerPoints[], blockNumber: bigint, updatedAt: number): PlayerRankingSnapshot {
@@ -20,7 +21,7 @@ export function aggregatePlayerPoints(plants: PlayerPoints[], blockNumber: bigin
     if (seen.has(plant.id)) throw new Error('Duplicate plant in ranking snapshot');
     seen.add(plant.id);
     const address = readAddress(plant.owner).toLowerCase() as `0x${string}`;
-    if (address === `0x${'0'.repeat(40)}`) throw new Error('Missing plant owner');
+    if (address === ZERO_ADDRESS) throw new Error('Missing plant owner');
     const score = readUint(plant.score);
     const row = wallets.get(address) ?? { address, points: ZERO, plantCount: 0 };
     row.points += score;
@@ -80,6 +81,7 @@ export interface PlayerRankingReader {
   getPlantIds(blockNumber: bigint): Promise<unknown>;
   getPlantCount(blockNumber: bigint): Promise<unknown>;
   getPlants(ids: bigint[], blockNumber: bigint): Promise<unknown>;
+  getPlantOwner(id: bigint, blockNumber: bigint): Promise<unknown>;
 }
 
 /** Pin every batch to one block. Any missing/failed batch fails the whole snapshot. */
@@ -99,12 +101,22 @@ export async function readPlayerRanking(reader: PlayerRankingReader): Promise<Pl
       const raw = await reader.getPlants(batch, block.number);
       if (!Array.isArray(raw) || raw.length !== batch.length) throw new Error('Incomplete plant batch');
       const expected = new Set(batch);
-      return raw.map(value => {
+      const records = raw.map(value => {
         const plant = readRecord(value);
         const id = readUint(plant.id);
         if (!expected.delete(id)) throw new Error('Unexpected plant in batch');
         return { id, owner: readAddress(plant.owner), score: readUint(plant.score) };
       });
+      // The extended query can omit an existing token's owner (observed for
+      // #22434). Resolve it from ERC-721 ownership at the same snapshot block.
+      // Keep fallback reads bounded by the three batch workers, and fail the
+      // snapshot if ownership cannot be verified rather than dropping a plant.
+      for (const plant of records) {
+        if (plant.owner === ZERO_ADDRESS) {
+          plant.owner = readAddress(await reader.getPlantOwner(plant.id, block.number));
+        }
+      }
+      return records;
     }));
     plants.push(...results.flat());
   }
