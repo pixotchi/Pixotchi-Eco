@@ -33,3 +33,9 @@ Final validation: all 12 targeted regression cases, ESLint, typecheck, and produ
 Follow-up evidence: `output/care-effects-*.log`, `output/care-keyboard-{before,after}.log`, and `output/playwright/frontend-review-2026-09-05/care-{effects,keyboard}-*.png`.
 
 Follow-up validation: 36 targeted Chromium/WebKit regression cases, ESLint for changed source/tests, typecheck and production build passed.
+
+## Desktop catalog width follow-up
+
+The living-plant desktop grid retained a 640px care column after purchases moved into dialogs. Capped that column at 420px and the centered pair at 860px; the plant card retains its existing maximum width. Mobile rules and the dead-plant layout are unchanged.
+
+Browser measurements at 1440/1920px: care card width 640 → 420px, height 614 → 602px; four points items fill the row. At 1024px, card width 464 → 420px. Phone 390px and tablet 820px card widths, heights and tile widths match the baseline exactly. No horizontal overflow at any sampled width, and the Water review still opens and closes. Changed-file ESLint passed. Evidence: `output/care-desktop-{before,after}.log`, `output/care-desktop-dialog-check.log` and `output/playwright/frontend-review-2026-09-05/care-desktop-*.png`.

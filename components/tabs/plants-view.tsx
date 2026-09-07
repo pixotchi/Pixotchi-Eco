@@ -443,7 +443,7 @@ export default function PlantsView() {
           className={
             selectedPlant.status === 4
               ? "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[980px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(360px,520px)]"
-              : "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[1100px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(500px,640px)]"
+              : "space-y-4 tablet:mx-auto tablet:grid tablet:w-full tablet:max-w-[860px] tablet:grid-cols-[minmax(300px,380px)_minmax(0,420px)] tablet:items-start tablet:justify-center tablet:gap-5 tablet:space-y-0 xl:grid-cols-[minmax(320px,420px)_minmax(0,420px)]"
           }
         >
           <div className="mx-auto w-full max-w-[420px] space-y-4 tablet:sticky tablet:top-0">
