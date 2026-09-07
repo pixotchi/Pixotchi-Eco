@@ -861,13 +861,10 @@ export default function PlantsView() {
               <CardContent>
                 <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null} reviewRequest={careReviewRequest} reviewTitle={selectedItem?.name || 'Plant care'}
                   catalog={<PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
-                    isSmartWallet={isSmartWallet} getQuantity={getItemQuantity} onQuantityChange={handleQuantityChange}
-                    onSelect={({ item, itemType: nextType }, intent) => {
+                    onSelect={({ item, itemType: nextType }) => {
                       setSelectedItem(item); setItemType(nextType);
-                      if (intent === 'review') {
-                        if (nextType === 'garden' && getItemQuantity(item.id) === 0) handleQuantityChange(item.id, 1);
-                        setCareReviewRequest(request => request + 1);
-                      }
+                      if (nextType === 'garden' && getItemQuantity(item.id) === 0) handleQuantityChange(item.id, 1);
+                      setCareReviewRequest(request => request + 1);
                     }} />}
                   details={<ItemDetailsPanel
                     selectedItem={selectedItem}

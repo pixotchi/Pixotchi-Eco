@@ -9,6 +9,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { PlantCareCatalog } from '@/components/plant-care-catalog';
 import { PlantCareLayout } from '@/components/plant-care-layout';
+import QuantitySelector from '@/components/quantity-selector';
 import { QuestDifficultySelector } from '@/components/building-details/quest-difficulty-selector';
 import { RouletteBettingTable } from '@/components/transactions/roulette-betting-table';
 import { MarketplaceOrderSummary } from '@/components/transactions/marketplace-order-summary';
@@ -67,9 +68,11 @@ export function FrontendFixtures() {
         <DropdownMenuContent matchTriggerWidth><DropdownMenuItem>Very long plant name · #22419</DropdownMenuItem><DropdownMenuItem>TYJ · #1</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
     </section>
     <section aria-label="Care catalog" className="@container max-w-[640px]">
-      <PlantCareLayout selectionKey={selected?.id ?? null} reviewRequest={careReviewRequest} catalog={<div aria-label="Care choices"><PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden" isSmartWallet
-        getQuantity={id => quantities[id] ?? 0} onQuantityChange={(id, value) => setQuantities(q => ({ ...q, [id]: value }))} onSelect={(option, intent) => { setSelected(option.item); if (intent === 'review') setCareReviewRequest(request => request + 1); }} /></div>}
-        details={<p aria-label="Care review">{selected ? `Review ${selected.name}` : 'Choose a care item below.'}</p>} />
+      <PlantCareLayout selectionKey={selected?.id ?? null} reviewRequest={careReviewRequest} catalog={<div aria-label="Care choices"><PlantCareCatalog gardenItems={gardenItems} shopItems={[]} selectedItem={selected} itemType="garden"
+        onSelect={option => { setSelected(option.item); setCareReviewRequest(request => request + 1); }} /></div>}
+        details={<div className="space-y-3"><p aria-label="Care review">{selected ? `Review ${selected.name}` : 'Choose a care item below.'}</p>
+          {selected && <div role="group" aria-label="Purchase quantity"><QuantitySelector quantity={quantities[selected.id] ?? 1} min={1} max={80} onQuantityChange={value => setQuantities(q => ({ ...q, [selected.id]: value }))} /></div>}
+        </div>} />
     </section>
     <section aria-label="Quest difficulty fixture" className="max-w-sm">
       <QuestDifficultySelector label="Quest difficulty" value={questDifficulty} onChange={setQuestDifficulty} />

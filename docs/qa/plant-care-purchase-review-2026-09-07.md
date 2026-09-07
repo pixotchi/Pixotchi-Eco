@@ -2,10 +2,10 @@
 
 Main used compact image choices with adjacent smart-wallet quantity controls. The current catalog had grown into large effect/price cards, and its selection handler explicitly scrolled to the review below the list. This change uses compact image-led tiles and a purchase dialog on every viewport.
 
-- Item tiles start at 80px and grow together within a row for wrapping names and effects, keeping batch controls aligned. Effects appear above prices in the same muted color, in bold. The purchase review shows the effect for the selected quantity.
-- Smart-wallet catalog steppers are 28px, with non-overlapping targets and an item-specific accessible group name. The review keeps 44px quantity controls.
-- Selecting an item opens the shared dialog; it does not scroll the catalog. Closing restores focus and the original scroll position. Editing a catalog quantity does not open the dialog.
-- A garden item starts at one when explicitly opened from zero quantity. The selected quantity remains shared between the catalog and review.
+- Item tiles start at 80px and grow together within a row for wrapping names and effects. Effects appear above prices in the same muted color, in bold. The purchase review shows the effect for the selected quantity.
+- Smart-wallet quantities are edited only in the purchase review, using a grouped stepper with 32px buttons and a clearly separated count.
+- Selecting an item opens the shared dialog; it does not scroll the catalog. Closing restores focus and the original scroll position.
+- A garden item starts at one when explicitly opened from zero quantity. Each item's quantity is retained when closing and reopening its review.
 - The review uses the existing purchase/approval, SEED/ETH/Solana, fence quote, balance, and receipt components. It stays the same mounted dialog across viewport changes. Existing transaction infrastructure owns durable pending purchases.
 
 ## Verification
@@ -39,3 +39,9 @@ Follow-up validation: 36 targeted Chromium/WebKit regression cases, ESLint for c
 The living-plant desktop grid retained a 640px care column after purchases moved into dialogs. Capped that column at 420px and the centered pair at 860px; the plant card retains its existing maximum width. Mobile rules and the dead-plant layout are unchanged.
 
 Browser measurements at 1440/1920px: care card width 640 → 420px, height 614 → 602px; four points items fill the row. At 1024px, card width 464 → 420px. Phone 390px and tablet 820px card widths, heights and tile widths match the baseline exactly. No horizontal overflow at any sampled width, and the Water review still opens and closes. Changed-file ESLint passed. Evidence: `output/care-desktop-{before,after}.log`, `output/care-desktop-dialog-check.log` and `output/playwright/frontend-review-2026-09-05/care-desktop-*.png`.
+
+## Popup-only quantity controls
+
+Removed catalog steppers and their unused wallet/quantity props and selection-intent branch. The shared quantity selector now uses one compact design: 32px ghost buttons inside a single bordered group, with a labeled count. The review retains its 1–80 quantity limits and existing transaction/cost calculations; the close button remains 44px.
+
+Twelve fixture checks passed across Chromium 320/390/1440px and WebKit 390px: no catalog quantity buttons, compact popup controls, minimum boundary, keyboard focus, quantities retained per item, reopen behavior, and no card overflow. Typecheck and changed-file ESLint passed. A live smart-wallet read fixture did not load a plant, so no new live cost or transaction validation is claimed. Fixture routes were removed. Evidence: `output/care-popup-quantity-*.log` and `output/playwright/frontend-review-2026-09-05/care-popup-compact-stepper.png`.

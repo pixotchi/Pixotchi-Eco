@@ -9,7 +9,6 @@ interface QuantitySelectorProps {
   onQuantityChange: (quantity: number) => void;
   max?: number;
   min?: number;
-  size?: 'xs' | 'sm' | 'default';
 }
 
 export default function QuantitySelector({
@@ -17,7 +16,6 @@ export default function QuantitySelector({
   onQuantityChange,
   max = 80,
   min = 0,
-  size = 'sm'
 }: QuantitySelectorProps) {
   const handleIncrement = () => {
     if (quantity < max) {
@@ -31,42 +29,36 @@ export default function QuantitySelector({
     }
   };
 
-  const compact = size === 'xs' || size === 'sm';
-  // xs is the compact catalog stepper; review/form controls retain 44px targets.
-  const buttonSize = size === 'xs'
-    ? 'h-7 min-h-7 w-7 min-w-7 p-0'
-    : compact
-    ? 'h-11 min-h-11 w-11 min-w-11 p-0 [@media(min-width:864px)_and_(pointer:fine)]:h-8 [@media(min-width:864px)_and_(pointer:fine)]:min-h-8 [@media(min-width:864px)_and_(pointer:fine)]:w-8 [@media(min-width:864px)_and_(pointer:fine)]:min-w-8'
-    : 'h-11 min-h-11 w-11 min-w-11 p-0';
-  const iconSize = size === 'xs' ? 'h-3 w-3' : 'h-4 w-4';
-  const textSize = size === 'xs' ? 'text-xs min-w-[0.875rem]' : 'text-sm min-w-[1rem]';
+  const buttonClassName = 'h-8 min-h-8 w-8 min-w-8 rounded-[calc(var(--radius-control)-1px)] p-0';
 
   return (
-    <div className={`flex items-center ${size === 'xs' ? 'gap-px' : 'gap-1'}`}>
+    <div className="inline-flex shrink-0 items-center rounded-[var(--radius-control)] border border-input bg-card">
       <Button
-        variant="outline"
-        size="icon"
-        className={`${buttonSize}`}
+        type="button"
+        variant="ghost"
+        size="compact"
+        className={buttonClassName}
         onClick={handleDecrement}
         disabled={quantity <= min}
         aria-label="Decrease quantity"
       >
-        <Minus className={iconSize} />
+        <Minus className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
       
-      <span className={`${textSize} font-semibold text-center tabular-nums`} aria-live="polite">
+      <output className="min-w-8 px-1 text-center text-sm font-semibold tabular-nums" aria-label="Quantity" aria-live="polite">
         {quantity}
-      </span>
+      </output>
       
       <Button
-        variant="outline"
-        size="icon"
-        className={`${buttonSize}`}
+        type="button"
+        variant="ghost"
+        size="compact"
+        className={buttonClassName}
         onClick={handleIncrement}
         disabled={quantity >= max}
         aria-label="Increase quantity"
       >
-        <Plus className={iconSize} />
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>
     </div>
   );

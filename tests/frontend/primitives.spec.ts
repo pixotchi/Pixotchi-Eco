@@ -55,8 +55,9 @@ test('selector matches its trigger and returns keyboard focus', async ({ page })
   await expect(trigger).toBeFocused();
 });
 
-test('catalog names and quantity controls fit without overflow', async ({ page }) => {
+test('catalog cards fit without overflow or quantity controls', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
+  await expect(catalog.getByRole('button', { name: /quantity/ })).toHaveCount(0);
   const choices = catalog.getByLabel('Care choices', { exact: true });
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
@@ -79,20 +80,28 @@ test('catalog names and quantity controls fit without overflow', async ({ page }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('care quantity editing keeps focus when switching items', async ({ page }) => {
+test('care quantities are compact, edited in the popup and retained per item', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
   await catalog.getByRole('button', { name: 'Select Water' }).click();
-  await page.keyboard.press('Escape');
-  const increase = catalog.getByRole('button', { name: 'Increase quantity' }).nth(1);
-  await increase.scrollIntoViewIfNeeded();
+  const review = page.getByRole('dialog', { name: 'Care item review' });
+  const increase = review.getByRole('button', { name: 'Increase quantity' });
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('1');
+  await expect(review.getByRole('button', { name: 'Decrease quantity' })).toBeDisabled();
+  const bounds = (await increase.boundingBox())!;
+  expect(bounds.width).toBe(32);
+  expect(bounds.height).toBe(32);
+  expect(bounds.height).toBeLessThan((await review.getByRole('button', { name: 'Close dialog' }).boundingBox())!.height);
   await increase.focus();
-  const top = await page.evaluate(() => scrollY);
   await increase.press('Space');
   await expect(increase).toBeFocused();
-  await expect(page.getByRole('dialog', { name: 'Care item review' })).not.toBeVisible();
-  expect(Math.abs(await page.evaluate(() => scrollY) - top)).toBeLessThan(2);
-  await increase.press('Space');
-  await expect(increase).toBeFocused();
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('2');
+  await page.keyboard.press('Escape');
+  await expect(catalog.getByRole('button', { name: /quantity/ })).toHaveCount(0);
+  await catalog.getByRole('button', { name: 'Select Sunlight' }).click();
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('1');
+  await page.keyboard.press('Escape');
+  await catalog.getByRole('button', { name: 'Select Water' }).click();
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('2');
 });
 
 test('selecting the same care item reopens its review', async ({ page }) => {
