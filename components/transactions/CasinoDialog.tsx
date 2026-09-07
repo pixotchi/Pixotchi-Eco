@@ -79,7 +79,7 @@ function getRouletteBetLabel(type: CasinoBetType, numbers: number[]): string {
 
     switch (type) {
         case CasinoBetType.STRAIGHT:
-            return `${sortedNumbers[0] ?? 0}`;
+            return `Number ${sortedNumbers[0] ?? 0}`;
         case CasinoBetType.SPLIT:
             return `Split ${sortedNumbers.join('-')}`;
         case CasinoBetType.STREET:
@@ -526,12 +526,13 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
 
         const exists = placedBets.some(b => b.type === type && JSON.stringify([...b.numbers].sort()) === JSON.stringify([...numbers].sort()));
         if (exists) { toast.error('Bet already placed'); return; }
-        const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
+        const displayLabel = type === CasinoBetType.STRAIGHT ? getRouletteBetLabel(type, numbers) : label;
+        const newBet: PlacedBet = { id: `${Date.now()}-${Math.random()}`, type, label: displayLabel, numbers, amount: currentBetAmount, payout: `${CASINO_PAYOUT_MULTIPLIERS[type]}:1` };
         setResult(null);
         setExpiredResult(null);
         setError(null);
         setPlacedBets(prev => [...prev, newBet]);
-        toast.success(`Added ${label} bet`);
+        toast.success(`Added ${displayLabel} bet`);
     }, [bettingLocked, canAddMoreBets, currentBetAmount, maxBets, placedBets, config, tokenDecimals, tokenSymbol, pendingGame, formattedMaxBet, formattedMinBet, offeredMaxBet, uiMinBet, payoutPoolBalance, payoutPoolReadStatus, bestPossibleWinWei]);
 
     const removeBet = useCallback((id: string) => { setPlacedBets(prev => prev.filter(b => b.id !== id)); }, []);
@@ -882,7 +883,7 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                         {/* Bets Panel - Right Side */}
                         <div className="w-full min-w-0">
                             <div className="h-full rounded-md border border-white/10 bg-black/35 p-2 text-white backdrop-blur-[var(--blur-surface)] sm:p-2.5">
-                                <RouletteBetList bets={placedBets} limit={maxBets} locked={bettingLocked} onClear={clearBets} onRemove={removeBet} />
+                                <RouletteBetList bets={placedBets} limit={maxBets} locked={bettingLocked} tokenLogo={tokenLogo} tokenSymbol={tokenSymbol} onClear={clearBets} onRemove={removeBet} />
                                 {placedBets.length > 0 && (
                                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[11px]">
                                         <span className="flex min-w-0 items-center gap-1">Total <strong className="flex min-w-0 items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 shrink-0 rounded-full" /><span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">{totalBetAmountDisplay}</span></strong></span>

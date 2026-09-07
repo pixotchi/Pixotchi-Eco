@@ -1,10 +1,12 @@
 "use client";
 
 import { Trash2, X } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 
-export function RouletteBetList({ bets, limit, locked, onClear, onRemove }: {
+export function RouletteBetList({ bets, limit, locked, tokenLogo, tokenSymbol, onClear, onRemove }: {
   bets: readonly { id: string; label: string; amount: string }[];
+  tokenLogo: string; tokenSymbol: string;
   limit: number; locked: boolean; onClear: () => void; onRemove: (id: string) => void;
 }) {
   return <section aria-label="Placed roulette bets" className="space-y-2">
@@ -19,7 +21,10 @@ export function RouletteBetList({ bets, limit, locked, onClear, onRemove }: {
       : <ul className="max-h-40 space-y-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
         {bets.map(bet => <li key={bet.id} className="flex min-w-0 items-center gap-2 rounded-md border border-white/15 bg-black/40 pl-2 text-xs">
           <span className="min-w-0 flex-1 break-words font-medium text-white">{bet.label}</span>
-          <span className="min-w-0 max-w-[45%] text-right tabular-nums text-white/80 [overflow-wrap:anywhere]">{bet.amount}</span>
+          <span className="flex min-w-0 max-w-[45%] items-center gap-1 text-right tabular-nums text-white/80" title={`${bet.amount} ${tokenSymbol}`}>
+            <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 shrink-0 rounded-full" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{bet.amount}</span>
+          </span>
           <button type="button" onClick={() => onRemove(bet.id)} disabled={locked} aria-label={`Remove ${bet.label} bet`}
             className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-md text-red-200 transition-colors [@media(hover:hover)_and_(pointer:fine)]:hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-40">
             <X className="h-4 w-4" aria-hidden="true" />

@@ -331,6 +331,8 @@ test('named dialog layouts keep long content and actions reachable at enlarged t
 
 test('roulette removal targets stay distinct and preserve long amounts', async ({ page }) => {
   const bets = page.getByRole('region', { name: 'Bet removal fixture' });
+  await expect(bets.getByRole('img', { name: 'ETH', exact: true })).toHaveCount(2);
+  expect(await bets.getByRole('listitem').evaluateAll(rows => rows.every(row => row.scrollWidth <= row.clientWidth + 1))).toBe(true);
   for (const button of await bets.getByRole('button').all()) {
     const bounds = (await button.boundingBox())!;
     expect(bounds.height).toBeGreaterThanOrEqual(44);

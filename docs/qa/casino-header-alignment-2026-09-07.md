@@ -9,3 +9,9 @@ Compared the casino dialogs with local `main`: the refactor added an opaque, bor
 - Existing Chromium/WebKit tests cover reachable close controls at enlarged text sizes and narrow heights, the transparent game header, and roulette removal controls with long amounts.
 
 Evidence: `output/casino-polish-check.log`, `output/casino-polish-tests.log` and `output/playwright/frontend-review-2026-09-05/casino-polish-*.png`.
+
+## Descriptive bet rows
+
+Straight bets now read `Number 23` for both newly selected bets and restored onchain bets. Each row uses the current betting token's icon next to its amount, including accessible token text. Combination and outside-bet labels are unchanged. The amount still wraps for extreme values and removal controls retain their 44px targets.
+
+Verified the real roulette UI with a selected `Number 23` bet and SEED icon at 320, 390, 820 and 1440px using the same read-only browser fixture. No transaction was submitted. Chromium's long-amount/removal tests passed at three widths. WebKit's first run timed out loading the fixture before reaching the test; its isolated rerun passed. Evidence: `output/casino-bet-description*.log` and `output/playwright/frontend-review-2026-09-05/casino-bet-description-*.png`.

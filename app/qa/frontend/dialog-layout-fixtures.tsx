@@ -36,7 +36,7 @@ export function DialogLayoutFixtures() {
         </DialogContent>
       </Dialog>
     </section>
-    <section aria-label="Bet removal fixture" className="max-w-md rounded-lg bg-slate-950 p-3"><RouletteBetList bets={bets} limit={15} locked={false} onClear={() => setBets([])} onRemove={id => setBets(previous => previous.filter(bet => bet.id !== id))} /></section>
+    <section aria-label="Bet removal fixture" className="max-w-md rounded-lg bg-slate-950 p-3"><RouletteBetList bets={bets} limit={15} locked={false} tokenLogo="/icons/ethlogo.svg" tokenSymbol="ETH" onClear={() => setBets([])} onRemove={id => setBets(previous => previous.filter(bet => bet.id !== id))} /></section>
     <section aria-label="Token precision fixture" className="max-w-xs space-y-2">
       <TokenAmount amount={BigInt(1)} unit="SEED" />
       <TokenAmount amount={BigInt('9007199254740993123456789123456789')} unit="SEED" mode="exact" />
