@@ -1,9 +1,6 @@
 "use client";
 
 import { useMemo } from 'react';
-import { usePaymaster } from '@/lib/paymaster-context';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import GameTransaction from './game-transaction';
 
@@ -44,8 +41,6 @@ export function PlantNameTransaction({
   hideLabel = false,
   onButtonClick,
 }: PlantNameTransactionProps) {
-  const { isSponsored } = usePaymaster();
-  const { isSmartWallet } = useSmartWallet();
   const calls = useMemo(() => [{
     address: PIXOTCHI_NFT_ADDRESS,
     abi: PIXOTCHI_NFT_ABI,
@@ -58,7 +53,6 @@ export function PlantNameTransaction({
       {!hideLabel && (
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">{buttonText}</span>
-          <SponsoredBadge show={isSponsored && isSmartWallet} />
         </div>
       )}
 

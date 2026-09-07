@@ -5,7 +5,6 @@ import { readSafeUint } from "@/lib/contract-value";
 import { getSpinReadState } from "@/lib/spin-read-state";
 import { ArcadeStatLine } from "./arcade-stat-line";
 
-import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
 import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
@@ -16,13 +15,11 @@ import { DisabledReason, InlineBalanceNotice, RewardResultPanel } from "@/compon
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { getBaseLogClient } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
-import { usePaymaster } from "@/lib/paymaster-context";
 import {
 invalidateOwnerResources,
 isAbortError,
 retryOwnerRead,
 } from "@/lib/owner-resource-invalidation";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
 import {
 SPIN_GAME_V2_COMMITTED_EVENT,
 SPIN_GAME_V2_FORFEITED_EVENT,
@@ -178,8 +175,6 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
   const baseLogClient = useMemo(() => getBaseLogClient(), []);
-  const { isSponsored } = usePaymaster();
-  const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const plantId = plant.id;
   const [selectedGame, setSelectedGame] = useState<GameId>("box");
@@ -1576,7 +1571,6 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   : pending ? canReveal ? "Ready to claim the result" : "Waiting for the result" : !spinRead.canStart ? "Cost and cooldown are not confirmed" : spinStarCost > 0 ? `${spinStarCost} star per spin` : "Ready to spin"}
               </div>
             </div>
-            <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
 
           {selectedGame === "box" && (

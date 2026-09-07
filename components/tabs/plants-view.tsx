@@ -7,7 +7,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { FirstCareGuide } from "@/components/first-care-guide";
 import { completeFirstCareStep } from '@/lib/first-care-progress';
 import { PlantCareCatalog } from "@/components/plant-care-catalog";
@@ -37,7 +36,6 @@ getRevivePrice,
 getTokenBalance,
 PIXOTCHI_NFT_ADDRESS,
 } from "@/lib/contracts";
-import { usePaymaster } from "@/lib/paymaster-context";
 import {
 invalidateOwnerResources,
 type OwnerResourceInvalidationDetail,
@@ -128,7 +126,6 @@ export default function PlantsView() {
     return evmAddress || (isSolana && twinAddress ? twinAddress as `0x${string}` : undefined);
   }, [evmAddress, isSolana, twinAddress]);
   const ownerKey = address?.toLowerCase() ?? null;
-  const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('dashboard');
@@ -801,7 +798,6 @@ export default function PlantsView() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Confirm Revive</span>
-                      <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
                     </div>
                     {isSolana ? (
                       <SolanaNotSupported feature="Revive action" />

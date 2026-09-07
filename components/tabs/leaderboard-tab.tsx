@@ -19,7 +19,6 @@ import { canPlantAttack, getPlantAttackAvailability, getPlantAttackReadyAt, PLAN
 import { RankingColumns } from "@/components/ranking-columns";
 import { getTotalPages, getBoundedPage, getPageRows, DESKTOP_ITEMS_PER_PAGE, type RankedRow } from "@/lib/ranking-pagination";
 
-import { SponsoredBadge } from "@/components/paymaster-toggle";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EfpTransactionBoundary } from "@/components/efp-transaction-boundary";
 import PlantProfileDialog from "@/components/plant-profile-dialog";
@@ -52,8 +51,6 @@ import { CLIENT_ENV } from "@/lib/env-config";
 import { useFrameContext } from "@/lib/frame-context";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { postMissionProgress } from "@/lib/mission-tracking";
-import { usePaymaster } from "@/lib/paymaster-context";
-import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
@@ -109,8 +106,6 @@ export default function LeaderboardTab() {
   const gamificationPolicy = getClientGamificationPolicy();
   const showRocksBoard = gamificationPolicy.visible;
   const { address: evmAddress } = useAccount();
-  const { isSponsored } = usePaymaster();
-  const { isSmartWallet } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const twinAddress = useTwinAddress();
   const { isTabVisible } = useTabVisibility();
@@ -1516,7 +1511,6 @@ export default function LeaderboardTab() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Attack</span>
-                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
               </div>
               {targetPlant && selectedAttackerId !== null ? (
                 (() => {
@@ -1724,7 +1718,6 @@ export default function LeaderboardTab() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm kill and earn one star</span>
-                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
               </div>
               {isSolana ? (
                 <SolanaNotSupported feature="Kill action" />
@@ -1773,7 +1766,6 @@ export default function LeaderboardTab() {
             <div className="pt-2 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Confirm Revive</span>
-                <SponsoredBadge show={isSponsored && isSmartWallet && !isSolana} />
               </div>
               {isSolana ? (
                 <SolanaNotSupported feature="Revive action" />

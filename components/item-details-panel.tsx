@@ -1,6 +1,5 @@
 "use client";
 
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
 import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
 import BundleBuyTransaction from '@/components/transactions/bundle-buy-transaction';
@@ -21,7 +20,6 @@ import { Button } from '@/components/ui/button';
 import QuantitySelector from '@/components/quantity-selector';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { postMissionProgress } from '@/lib/mission-tracking';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
@@ -70,7 +68,6 @@ export default function ItemDetailsPanel({
   embedded = false,
 }: ItemDetailsPanelProps) {
   const { address } = useAccount();
-  const { isSponsored } = usePaymaster();
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const isSolana = useIsSolanaWallet();
   const { isEthMode } = useEthModeSafe();
@@ -390,7 +387,6 @@ export default function ItemDetailsPanel({
   //   preventPurchase,
   //   selectedPlant: !!selectedPlant,
   //   selectedItem: !!selectedItem,
-  //   isSponsored,
   //   bundleCondition: canBundle && isSmartWallet && selectedPlant && selectedItem
   // });
 
@@ -615,7 +611,6 @@ export default function ItemDetailsPanel({
                           ? `Purchase ${quantity} Items (Smart Wallet Required)`
                           : `Purchase ${quantity} Items`}
             </span>
-            <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
 
           {/* Solana users: Gate fence items and bundle transactions */}

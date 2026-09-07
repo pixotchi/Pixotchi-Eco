@@ -3,9 +3,6 @@
 import React from 'react';
 import { BuildingData, BuildingType } from '@/lib/types';
 import { formatTokenAmount, formatUpgradeDuration, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
-import { usePaymaster } from '@/lib/paymaster-context';
-import { SponsoredBadge } from '@/components/paymaster-toggle';
-import { useSmartWallet } from '@/lib/smart-wallet-context';
 import BuildingUpgradeTransaction from '@/components/transactions/building-upgrade-transaction';
 import BuildingSpeedUpTransaction from '@/components/transactions/building-speedup-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
@@ -42,8 +39,6 @@ export default function UpgradePanel({
   seedAllowance,
   onSeedApprovalSuccess,
 }: UpgradePanelProps) {
-  const { isSponsored } = usePaymaster();
-  const { isSmartWallet } = useSmartWallet();
   const {
     pixotchiBalance: userPixotchiBalance,
     leafBalance: userLeafBalance,
@@ -137,7 +132,6 @@ export default function UpgradePanel({
               {building.isUpgrading ? 'Upgrade Actions' :
                 isMaxLevel ? 'Building at Max Level' : 'Upgrade Building'}
             </span>
-            <SponsoredBadge show={isSponsored && isSmartWallet} />
           </div>
           {building.isUpgrading ? (
             !pixotchiBalanceReady ? balanceUnavailable('PIXOTCHI', pixotchiBalanceStatus) : needsSeedApproval ? (

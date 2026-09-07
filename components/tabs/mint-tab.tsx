@@ -2,7 +2,6 @@
 
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import { MintShareModal } from '@/components/mint-share-modal';
-import { SponsoredBadge } from '@/components/paymaster-toggle';
 import { useIsSolanaWallet,useSolanaWallet,useTwinAddress } from '@/components/solana';
 import SolanaBridgeButton from '@/components/transactions/solana-bridge-button';
 import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
@@ -28,7 +27,6 @@ import { CLIENT_ENV } from '@/lib/env-config';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useFrameContext } from '@/lib/frame-context';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Strain } from '@/lib/types';
@@ -106,7 +104,6 @@ const getPlantThumbImage = (strainId: number | undefined) => {
 
 export default function MintTab() {
   const { address: evmAddress, chainId } = useAccount();
-  const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const {
     seedBalance: seedBalanceRaw,
@@ -989,7 +986,6 @@ export default function MintTab() {
             <div aria-label="Review plant mint" className="rounded-[var(--radius-panel)] border border-border/60 bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold">Confirm Mint</h3>
-                <SponsoredBadge show={Boolean(isSmartWallet && (showEthPlantMint || needsPlantApproval || isSponsored))} />
               </div>
 
               {showEthPlantMint && (
@@ -1189,7 +1185,6 @@ export default function MintTab() {
           <div aria-label="Review land mint" className="rounded-[var(--radius-panel)] border border-border/60 bg-card p-3">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold">Confirm Mint</h3>
-              <SponsoredBadge show={Boolean(isSmartWallet && (showEthLandMint || needsLandApproval || isSponsored))} />
             </div>
 
             {landMintError && (
