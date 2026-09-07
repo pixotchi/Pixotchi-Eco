@@ -3,7 +3,7 @@ import { CasinoBetType } from '@/public/abi/casino-abi';
 export type RouletteCombination = 'split' | 'street' | 'corner' | 'six-line';
 export type RouletteBetOption = { type: CasinoBetType; label: string; numbers: number[] };
 
-/** Separate, labeled choices replace overlapping table-edge hit regions. */
+/** Canonical combinations supported by the betting table. */
 export function getRouletteCombinationOptions(kind: RouletteCombination): RouletteBetOption[] {
   const result: RouletteBetOption[] = [];
   for (let base = 1; base <= 34; base += 3) {
@@ -22,4 +22,28 @@ export function getRouletteCombinationOptions(kind: RouletteCombination): Roulet
     }
   }
   return result;
+}
+
+export type RouletteTableTarget = RouletteBetOption & {
+  anchor: number;
+  position: 'right' | 'bottom' | 'corner' | 'top' | 'top-corner';
+};
+
+/** Anchor each combination once, in the table's 3/2/1 row orientation. */
+export function getRouletteTableTargets(): RouletteTableTarget[] {
+  return (['split', 'street', 'corner', 'six-line'] as const).flatMap(kind =>
+    getRouletteCombinationOptions(kind).map(option => {
+      const [first, second] = option.numbers;
+      switch (kind) {
+        case 'split':
+          return { ...option, anchor: second - first === 1 ? second : first, position: second - first === 1 ? 'bottom' as const : 'right' as const };
+        case 'street':
+          return { ...option, anchor: first + 2, position: 'top' as const };
+        case 'corner':
+          return { ...option, anchor: first + 1, position: 'corner' as const };
+        case 'six-line':
+          return { ...option, anchor: first + 2, position: 'top-corner' as const };
+      }
+    }),
+  );
 }

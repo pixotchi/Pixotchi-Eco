@@ -119,9 +119,57 @@ test('roulette number centers always select that straight number', async ({ page
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.getByLabel('Selected bet')).toHaveText(`0:${number}:${number}`);
   }
-  await page.getByText('Combination bets', { exact: true }).click();
   await page.getByRole('button', { name: 'Split 3–6', exact: true }).click();
   await expect(page.getByLabel('Selected bet')).toHaveText('1:Split 3–6:3,6');
+});
+
+test('roulette combinations occupy their table edges without covering number centers', async ({ page }) => {
+  const table = page.getByRole('group', { name: 'Roulette betting table', exact: true });
+  const targets = table.locator('[data-roulette-combination]');
+  await expect(targets).toHaveCount(102);
+  const failures = await targets.evaluateAll(buttons => buttons.flatMap(button => {
+    button.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    const label = button.getAttribute('aria-label')!;
+    const numbers = label.replace(/^6-Line/, '').match(/\d+/g)!.map(Number);
+    const cell = (number: number) => document.querySelector(`[aria-label="Bet straight on ${number}"]`)!.getBoundingClientRect();
+    let x: number, y: number;
+    const first = cell(numbers[0]);
+    if (label.startsWith('Split')) {
+      const second = cell(numbers[1]);
+      if (numbers[1] - numbers[0] === 1) {
+        x = first.x + first.width / 2; y = (first.top + second.bottom) / 2;
+      } else {
+        x = (first.right + second.left) / 2; y = first.y + first.height / 2;
+      }
+    } else if (label.startsWith('Corner')) {
+      const opposite = cell(numbers[3]);
+      x = (first.right + opposite.left) / 2; y = (first.top + opposite.bottom) / 2;
+    } else {
+      const top = cell(numbers[0] + 2);
+      x = label.startsWith('Street') ? top.x + top.width / 2 : (top.right + cell(numbers[0] + 5).left) / 2;
+      y = top.top + 8;
+    }
+    const hit = document.elementFromPoint(x, y)?.closest('button');
+    return hit === button ? [] : [`${label}: hit ${hit?.getAttribute('aria-label')}`];
+  }));
+  expect(failures).toEqual([]);
+  for (const [name, value] of [
+    ['Split 1–2', '1:Split 1–2:1,2'], ['Split 33–36', '1:Split 33–36:33,36'],
+    ['Corner 1, 2, 4, 5', '3:Corner 1, 2, 4, 5:1,2,4,5'],
+    ['Street 34–36', '2:Street 34–36:34,35,36'], ['6-Line 1–6', '4:6-Line 1–6:1,2,3,4,5,6'],
+  ]) {
+    const target = table.getByRole('button', { name, exact: true });
+    await target.click();
+    await expect(page.getByLabel('Selected bet')).toHaveText(value);
+    await expect(target).toHaveAttribute('aria-pressed', 'true');
+  }
+  const keyboardTarget = table.getByRole('button', { name: 'Street 1–3', exact: true });
+  await keyboardTarget.focus();
+  await keyboardTarget.press('Enter');
+  await expect(page.getByLabel('Selected bet')).toHaveText('2:Street 1–3:1,2,3');
+  await page.getByLabel('Lock roulette betting', { exact: true }).check();
+  for (const button of await table.getByRole('button').all()) await expect(button).toBeDisabled();
+  await expect(page.getByText('Combination bets', { exact: true })).toHaveCount(0);
 });
 
 test('failed reads have a retry and distinct empty state', async ({ page }) => {

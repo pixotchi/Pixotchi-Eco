@@ -39,6 +39,7 @@ export function FrontendFixtures() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [careReviewRequest, setCareReviewRequest] = useState(0);
   const [lastBet, setLastBet] = useState('');
+  const [rouletteLocked, setRouletteLocked] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nestedOpen, setNestedOpen] = useState(false);
   const [blockEscape, setBlockEscape] = useState(false);
@@ -80,7 +81,8 @@ export function FrontendFixtures() {
       <Card><MarketplaceOrderSummary order={{ id: BigInt(1), seller: '0x0000000000000000000000000000000000000001', sellToken: 1, amount: BigInt(1), amountAsk: BigInt('1000000000000000000000000000000000000'), isActive: true }} /></Card>
     </section>
     <section aria-label="Roulette fixture" className="min-w-0 rounded-lg bg-slate-950 p-3 text-white">
-      <RouletteBettingTable bettingInputDisabled={false} addBet={(type, label, numbers) => setLastBet(`${type}:${label}:${numbers.join(',')}`)} hasBet={() => false} />
+      <label><input type="checkbox" checked={rouletteLocked} onChange={event => setRouletteLocked(event.target.checked)} /> Lock roulette betting</label>
+      <RouletteBettingTable bettingInputDisabled={rouletteLocked} addBet={(type, label, numbers) => setLastBet(`${type}:${label}:${numbers.join(',')}`)} hasBet={(type, numbers) => lastBet.startsWith(`${type}:`) && lastBet.endsWith(`:${numbers.join(',')}`)} />
       <output aria-label="Selected bet" className="block">{lastBet}</output>
     </section>
     <section aria-label="Chat fixtures" className="grid gap-4 tablet:grid-cols-2">

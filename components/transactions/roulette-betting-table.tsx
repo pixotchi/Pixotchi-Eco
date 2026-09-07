@@ -1,6 +1,8 @@
 "use client";
 import { CasinoBetType, RED_NUMBERS } from '@/public/abi/casino-abi';
-import { RouletteCombinationPicker } from './roulette-combination-picker';
+import { getRouletteTableTargets } from '@/lib/roulette-bet-options';
+import { cn } from '@/lib/utils';
+const TABLE_TARGETS = getRouletteTableTargets();
 const ROULETTE_NUMBER_BUTTON_CLASS =
     "flex h-12 w-full items-center justify-center rounded-sm border border-white/10 text-xs font-bold text-white transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-standard)] md:h-14 md:text-sm";
 const ROULETTE_COLUMN_BUTTON_CLASS =
@@ -19,11 +21,37 @@ export function RouletteBettingTable({ bettingInputDisabled, addBet, hasBet }: R
     const getNumberColor = getRouletteNumberColor;
 
     const renderNumberCell = (num: number) => (
-        <button key={num} type="button" onClick={() => addBet(CasinoBetType.STRAIGHT, String(num), [num])}
+      <div key={num} className="relative h-12 min-w-0 md:h-14">
+        <button type="button" onClick={() => addBet(CasinoBetType.STRAIGHT, String(num), [num])}
             disabled={bettingInputDisabled} aria-label={`Bet straight on ${num}`}
             className={`${ROULETTE_NUMBER_BUTTON_CLASS} ${getNumberColor(num)} ${hasBet(CasinoBetType.STRAIGHT, [num]) ? 'ring-2 ring-inset ring-amber-400' : ''}`}>
             {num}
         </button>
+        {TABLE_TARGETS.filter(target => target.anchor === num).map(target => {
+          const selected = hasBet(target.type, target.numbers);
+          return <button key={`${target.type}-${target.numbers.join('-')}`} type="button"
+            disabled={bettingInputDisabled} aria-label={target.label} title={target.label} aria-pressed={selected}
+            data-roulette-combination={target.position}
+            onClick={() => addBet(target.type, target.label, target.numbers)}
+            className={cn(
+              // 16px boundary bands share the existing 2px gutters. Their ends
+              // stop before junction targets, leaving number centers untouched.
+              'group absolute z-10 flex items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-200 disabled:cursor-not-allowed disabled:opacity-40 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-amber-300/25',
+              target.position === 'right' && cn('-right-[9px] bottom-2 w-4', num % 3 === 0 ? 'top-4' : 'top-2'),
+              target.position === 'bottom' && '-bottom-[9px] left-2 right-2 h-4',
+              target.position === 'corner' && '-bottom-[9px] -right-[9px] z-20 h-4 w-4',
+              target.position === 'top' && 'left-2 right-2 top-0 h-4',
+              target.position === 'top-corner' && '-right-[9px] top-0 z-20 h-4 w-4',
+              selected && 'bg-amber-400/25',
+            )}>
+            <span aria-hidden="true" className={cn(
+              'pointer-events-none rounded-full',
+              target.position === 'right' ? 'h-3 w-0.5' : target.position === 'bottom' || target.position === 'top' ? 'h-0.5 w-3' : 'h-1.5 w-1.5',
+              selected ? 'bg-amber-300 ring-1 ring-amber-100' : 'bg-white/35 group-focus-visible:bg-amber-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:bg-amber-200',
+            )} />
+          </button>;
+        })}
+      </div>
     );
 
 
@@ -102,5 +130,5 @@ export function RouletteBettingTable({ bettingInputDisabled, addBet, hasBet }: R
                         </div>
                     </div>
 
-                    <RouletteCombinationPicker disabled={bettingInputDisabled} onSelect={({ type, label, numbers }) => addBet(type, label, numbers)} /></>;
+                    <p className="text-center text-xs text-white/65">Edges: split · Intersections: corner · Top edge: street / six line</p></>;
 }
