@@ -24,11 +24,22 @@ import { DenseSurfaceFixtures } from './dense-surface-fixtures';
 import { RankingQueryFixtures } from './ranking-query-fixtures';
 import { ControllerFixtures } from './controller-fixtures';
 import { PlantAttackFixtures } from './plant-attack-fixtures';
+import { SeedPurchaseQuoteFixtures } from './seed-purchase-quote-fixtures';
 
 const gardenItems: GardenItem[] = [
+  { id: '0', name: 'Sunlight', price: BigInt('17250000000000000000'), points: 48000000000000, timeExtension: 0 },
   { id: '1', name: 'Water', price: BigInt('25875000000000000000'), points: 0, timeExtension: 43200 },
-  { id: '2', name: 'Sunlight', price: BigInt('17250000000000000000'), points: 48000000000000, timeExtension: 0 },
-  { id: '3', name: 'Dream Dew', price: BigInt('69000000000000000000'), points: 180000000000000, timeExtension: 172800 },
+  { id: '2', name: 'Fertilizer', price: BigInt('35937500000000000000'), points: 137500000000000, timeExtension: 0 },
+  { id: '3', name: 'Pollinator', price: BigInt('43125000000000000000'), points: 0, timeExtension: 93600 },
+  { id: '4', name: 'Magic Soil', price: BigInt('60375000000000000000'), points: 273000000000000, timeExtension: 0 },
+  { id: '5', name: 'Dream Dew', price: BigInt('69000000000000000000'), points: 180000000000000, timeExtension: 172800 },
+  { id: '6', name: 'Botano', price: BigInt('86250000000000000000'), points: 450000000000000, timeExtension: 0 },
+  { id: '7', name: 'Moonlight', price: BigInt('97750000000000000000'), points: 0, timeExtension: 272160 },
+  { id: '8', name: 'Nitro', price: BigInt('122187500000000000000'), points: 510000000000000, timeExtension: 259200 },
+  // Proposed values are fixtures only; the live catalog always reads the contract.
+  { id: '9', name: 'Superbloom', price: BigInt('37500000000000000000000'), points: 250000000000000000, timeExtension: 1209600 },
+  { id: '10', name: 'Everdew', price: BigInt('20000000000000000000000'), points: 125000000000000000, timeExtension: 7776000 },
+  { id: '11', name: 'Raincloud', price: BigInt('200000000000000000000'), points: 0, timeExtension: 604800 },
 ];
 
 export function FrontendFixtures() {
@@ -110,6 +121,7 @@ export function FrontendFixtures() {
     </select>
     {feedback && <TransactionFeedbackCard feedback={feedback} onDismiss={() => setFeedbackState('idle')} />}
     <PlantAttackFixtures />
+    <SeedPurchaseQuoteFixtures />
     <ControllerFixtures />
   </main>;
 }

@@ -12,7 +12,9 @@ type ItemCatalogs = {
 export function useItemCatalogs() {
   const query = useQuery<ItemCatalogs>({
     queryKey: ["item-catalogs"],
-    staleTime: 1000 * 60 * 30, // 30 minutes
+    staleTime: 60_000,
+    refetchInterval: 60_000, // Pick up onchain catalog additions while the garden is open.
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 60, // 1 hour
     queryFn: async () => {
       const [shopItems, gardenItems] = await Promise.all([

@@ -15,7 +15,8 @@ import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceValue } from '@/components/ui/resource-value';
 import type { FenceV2Config } from '@/lib/contracts';
-import { buildFenceV2PurchaseCall,checkTokenApproval,getEthQuoteForSeedAmount,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
+import { buildFenceV2PurchaseCall,checkTokenApproval,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
+import { useSeedPurchaseQuote } from '@/hooks/useSeedPurchaseQuote';
 import { useBalances } from '@/lib/balance-context';
 import { Button } from '@/components/ui/button';
 import QuantitySelector from '@/components/quantity-selector';
@@ -25,7 +26,7 @@ import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
-import { formatDuration,getFriendlyErrorMessage } from '@/lib/utils';
+import { formatDuration,formatNumber,getFriendlyErrorMessage } from '@/lib/utils';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -79,9 +80,6 @@ export default function ItemDetailsPanel({
   const [fenceV2QuoteState, setFenceV2QuoteState] = useState<FenceV2QuoteState>({ status: 'loading', days: 1 });
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
   const [solanaQuote, setSolanaQuote] = useState<{ wsolAmount: bigint; error?: string } | null>(null);
-  // ETH Mode state - store per-unit ETH quote, calculate total by multiplication
-  const [ethQuotePerUnit, setEthQuotePerUnit] = useState<{ ethAmount: bigint; ethAmountWithBuffer: bigint } | null>(null);
-  const [ethQuoteLoading, setEthQuoteLoading] = useState(false);
   const fenceDurationInputId = useId();
   const fenceDurationHelpId = useId();
   const { data: ethBalanceData } = useBalance({ address });
@@ -96,29 +94,6 @@ export default function ItemDetailsPanel({
     ? (quantity > 0 ? basePrice * BigInt(quantity) : BigInt(0))
     : basePrice;
   const hasQuantitySelected = itemType === 'garden' ? quantity > 0 : true;
-
-  // Calculate ETH totals from per-unit quote (no RPC call on quantity change)
-  const ethQuote = useMemo(() => {
-    if (!ethQuotePerUnit) return null;
-    // For fence, quote is already for the total (days-based), for items multiply by quantity
-    if (isFenceItem) return ethQuotePerUnit;
-    const qty = quantity > 0 ? BigInt(quantity) : BigInt(1);
-    return {
-      ethAmount: ethQuotePerUnit.ethAmount * qty,
-      ethAmountWithBuffer: ethQuotePerUnit.ethAmountWithBuffer * qty,
-    };
-  }, [ethQuotePerUnit, quantity, isFenceItem]);
-
-  // Check if user has insufficient funds
-  // For Solana users, skip this check - they pay with SOL and the quote system handles validation
-  // For ETH mode, check ETH balance instead of SEED
-  const hasInsufficientFunds = isSolana
-    ? false
-    : isSmartWallet && isEthMode && ethQuote
-      ? ethBalance < ethQuote.ethAmountWithBuffer
-      : !seedBalanceReady ? false : isFenceItem
-        ? fenceV2QuoteState.status === 'known' && fenceV2QuoteState.value > userSeedBalance
-        : totalCost > userSeedBalance;
 
   // Bundle transactions are only available for garden items and Smart Wallets
   const canBundle = itemType === 'garden' && quantity > 1;
@@ -210,6 +185,17 @@ export default function ItemDetailsPanel({
   const fenceV2QuoteLoading = fenceV2QuoteState.status === 'loading' && fenceV2QuoteState.days === activeFenceV2Days;
   const fenceV2QuoteReady = !isFenceItem || fenceV2Quote !== null;
 
+  const usesEthPayment = isSmartWallet && isEthMode && !isSolana;
+  const quoteSeedCost = isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost;
+  const { quote: ethQuote, isLoading: ethQuoteLoading, error: ethQuoteError, retry: retryEthQuote } = useSeedPurchaseQuote(quoteSeedCost, usesEthPayment);
+
+  // Solana quotes validate SOL funds. ETH mode must never fall back to SEED.
+  const hasInsufficientFunds = isSolana
+    ? false
+    : usesEthPayment
+      ? ethQuote !== null && ethBalance < ethQuote.ethAmountWithBuffer
+      : seedBalanceReady && quoteSeedCost > userSeedBalance;
+
   const fenceV2Calls = useMemo(() => {
     if (!selectedPlant || validFenceV2Days === null) return [];
     return [buildFenceV2PurchaseCall(selectedPlant.id, validFenceV2Days)];
@@ -281,58 +267,6 @@ export default function ItemDetailsPanel({
     };
   }, [activeFenceV2Days, isFenceItem, fenceV2Bounds.todCapBreached, validFenceV2Days]);
 
-  // Fetch ETH quote when ETH mode is active - only for per-unit price (fence uses its own quote)
-  useEffect(() => {
-    // Only fetch for smart wallet users with ETH mode enabled, not Solana
-    if (!isSmartWallet || !isEthMode || isSolana) {
-      setEthQuotePerUnit(null);
-      return;
-    }
-
-    // For fence items, use fenceV2Quote; for regular items, use basePrice (per-unit)
-    const seedCost = isFenceItem ? (fenceV2Quote ?? BigInt(0)) : basePrice;
-    if (seedCost <= BigInt(0)) {
-      setEthQuotePerUnit(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchEthQuote = async () => {
-      setEthQuoteLoading(true);
-      try {
-        const quote = await getEthQuoteForSeedAmount(seedCost);
-
-        if (!cancelled) {
-          if (quote.error || quote.ethAmountWithBuffer <= BigInt(0)) {
-            setEthQuotePerUnit(null);
-          } else {
-            setEthQuotePerUnit({
-              ethAmount: quote.ethAmount,
-              ethAmountWithBuffer: quote.ethAmountWithBuffer,
-            });
-          }
-        }
-      } catch (err) {
-        console.error('[ItemDetailsPanel] ETH quote fetch failed:', err);
-        if (!cancelled) {
-          setEthQuotePerUnit(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setEthQuoteLoading(false);
-        }
-      }
-    };
-
-    // Debounce the quote fetch
-    const timeoutId = setTimeout(fetchEthQuote, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [isSmartWallet, isEthMode, isSolana, isFenceItem, fenceV2Quote, basePrice]);
-
   const commitFenceV2DaysInput = () => {
     if (fenceV2Bounds.todCapBreached) return;
     const nextDays = rawFenceV2Days === null
@@ -360,7 +294,7 @@ export default function ItemDetailsPanel({
     if (isFenceItem && fenceV2QuoteLoading) return 'Loading Fence quote…';
     if (isFenceItem && !fenceV2QuoteReady) return 'Fence quote unavailable. Retry to continue.';
     if (isFenceItem && fenceV2BlockedByV1) return 'Existing fence active. Wait for expiry.';
-    if (hasInsufficientFunds) return 'Insufficient SEED Balance';
+    if (hasInsufficientFunds) return usesEthPayment ? 'Insufficient ETH Balance' : 'Insufficient SEED Balance';
     if (canBundle && itemType === 'garden' && !isSmartWallet) {
       return smartWalletLoading ? 'Detecting Wallet Type...' : 'Bundle Transactions Require Smart Wallet';
     }
@@ -405,12 +339,12 @@ export default function ItemDetailsPanel({
     } else {
       const gardenItem = selectedItem as GardenItem;
       const points = Number(gardenItem.points) / 1e12 * quantity;
-      const hours = Math.floor(Number(gardenItem.timeExtension) / 3600) * quantity;
+      const lifetime = Number(gardenItem.timeExtension) * quantity;
 
-      if (points > 0 || hours > 0) return <>
-        {points > 0 && <ResourceValue resource="points">+{points} PTS</ResourceValue>}
-        {points > 0 && hours > 0 && <span className="sr-only"> and </span>}
-        {hours > 0 && <ResourceValue resource="lifetime">+{hours}h lifetime</ResourceValue>}
+      if (points > 0 || lifetime > 0) return <>
+        {points > 0 && <ResourceValue resource="points">+{formatNumber(points)} PTS</ResourceValue>}
+        {points > 0 && lifetime > 0 && <span className="sr-only"> and </span>}
+        {lifetime > 0 && <ResourceValue resource="lifetime">+{formatDuration(lifetime)} lifetime</ResourceValue>}
       </>;
       return 'Item effect';
     }
@@ -420,7 +354,7 @@ export default function ItemDetailsPanel({
   const needsSeedApproval =
     !isSolana
     && seedAllowance < requiredSeedAllowance
-    && !(isSmartWallet && isEthMode && ethQuote);
+    && !usesEthPayment;
   const approvalActionButtonText = isFenceItem
     ? 'Approve + Buy Fence'
     : itemType === 'garden' && quantity > 1
@@ -492,15 +426,17 @@ export default function ItemDetailsPanel({
             </span>
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right font-semibold tabular-nums [overflow-wrap:anywhere]">
               {/* ETH Mode: show ETH price for smart wallet users */}
-              {isSmartWallet && isEthMode && !isSolana && ethQuote ? (
+              {usesEthPayment && ethQuote ? (
                 <ResourceValue resource="eth">
                   {formatTokenEstimate(ethQuote.ethAmountWithBuffer)} ETH
                   {itemType === 'garden' && quantity === 0 ? ' each' : ''}
                 </ResourceValue>
-              ) : isSmartWallet && isEthMode && !isSolana && ethQuoteLoading ? (
+              ) : usesEthPayment && ethQuoteLoading ? (
                 <ResourceValue resource="eth">
                   <Skeleton className="h-4 w-20" />
                 </ResourceValue>
+              ) : usesEthPayment ? (
+                <span className="text-muted-foreground">{hasQuantitySelected ? 'ETH quote unavailable' : 'Choose quantity'}</span>
               ) : isSolana ? (
                 solanaQuote ? (
                   solanaQuote.error ? (
@@ -643,7 +579,7 @@ export default function ItemDetailsPanel({
                 toast.error(getFriendlyErrorMessage(message));
               }}
             />
-          ) : isSmartWallet && isEthMode && ethQuote && !ethQuoteLoading && fenceV2QuoteReady && selectedPlant && selectedItem ? (
+          ) : usesEthPayment && ethQuote && fenceV2QuoteReady ? (
             // ETH Mode purchase - atomic swap + buy transaction
             <div className="flex flex-col space-y-2">
               {isFenceItem ? (
@@ -659,12 +595,12 @@ export default function ItemDetailsPanel({
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
-                    ethBalance < ethQuote.ethAmountWithBuffer
+                    ethQuoteLoading ? 'Updating ETH quote…' : ethBalance < ethQuote.ethAmountWithBuffer
                       ? "Insufficient ETH Balance"
                       : `Buy ${activeFenceV2Days} Day${activeFenceV2Days === 1 ? '' : 's'} Fence with ETH`
                   }
                   buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
-                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1 || fenceV2InputInvalid}
+                  disabled={ethQuoteLoading || selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || fenceV2Bounds.todCapBreached || fenceV2BlockedByV1 || fenceV2InputInvalid}
                 />
               ) : (
                 // Regular item purchases
@@ -681,20 +617,33 @@ export default function ItemDetailsPanel({
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
-                    ethBalance < ethQuote.ethAmountWithBuffer
+                    ethQuoteLoading ? 'Updating ETH quote…' : ethBalance < ethQuote.ethAmountWithBuffer
                       ? "Insufficient ETH Balance"
                       : quantity > 1
                         ? `Buy ${quantity}x with ETH`
                         : `Buy with ETH`
                   }
                   buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
-                  disabled={selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || (!hasQuantitySelected && itemType === 'garden')}
+                  disabled={ethQuoteLoading || selectedPlant.status === 4 || ethBalance < ethQuote.ethAmountWithBuffer || (!hasQuantitySelected && itemType === 'garden')}
                 />
               )}
               {ethBalance < ethQuote.ethAmountWithBuffer && (
                 <InlineBalanceNotice className="mt-0">
                   Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethQuote.ethAmountWithBuffer, 18, 18)}
                 </InlineBalanceNotice>
+              )}
+            </div>
+          ) : usesEthPayment ? (
+            <div className="space-y-2">
+              <DisabledTransaction
+                buttonText={disabledMessage || (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable')}
+                buttonClassName="w-full"
+              />
+              {ethQuoteError && !ethQuoteLoading && (
+                <>
+                  <p role="status" className="text-center text-xs text-muted-foreground">We could not price this purchase in ETH. Retry to get a fresh quote.</p>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => void retryEthQuote()}>Retry ETH quote</Button>
+                </>
               )}
             </div>
           ) : !seedBalanceReady ? (

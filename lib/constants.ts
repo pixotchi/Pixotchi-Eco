@@ -73,4 +73,7 @@ export const ITEM_ICONS: { [key: string]: string } = {
   botano: "/icons/botano.svg",
   moonlight: "/icons/moonlight.png",
   nitro: "/icons/Nitro.png",
+  superbloom: "/icons/superbloom.png",
+  everdew: "/icons/everdew.png",
+  raincloud: "/icons/raincloud.png",
 }; 

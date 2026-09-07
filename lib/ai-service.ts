@@ -562,7 +562,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
   if (toolName === 'get_game_prices') {
     return {
       fence: data?.fence,
-      gardenItems: (data?.gardenItems || []).slice(0, 8).map((item: UntypedValue) => ({
+      gardenItems: (data?.gardenItems || []).map((item: UntypedValue) => ({
         id: item.id,
         name: item.name,
         points: item.points,
@@ -624,7 +624,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
       careOptions: data?.careOptions
         ? {
           fenceOneDay: data.careOptions.fenceOneDay,
-          gardenItems: (data.careOptions.gardenItems || []).slice(0, 6),
+          gardenItems: data.careOptions.gardenItems || [],
           revivePrice: data.careOptions.revivePrice,
           shopItems: (data.careOptions.shopItems || []).slice(0, 6),
         }

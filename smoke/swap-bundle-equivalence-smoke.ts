@@ -1,10 +1,11 @@
 /**
- * Proves the shared swap-bundle builder emits exactly what the five hand-written
- * copies emitted, and that the router deadline is no longer frozen.
+ * Checks the net-SEED swap minimum, unchanged approval calls and deadline.
  *
  * Run: npx tsx smoke/swap-bundle-equivalence-smoke.ts
  */
 import assert from "node:assert/strict";
+import { decodeFunctionData, encodeFunctionData } from 'viem';
+import routerAbi from '../public/abi/Uniswap.json';
 
 import {
   PIXOTCHI_NFT_ADDRESS,
@@ -100,10 +101,16 @@ for (const spender of [PIXOTCHI_NFT_ADDRESS, "0x3f1F8F0C4BE4bCeB45E6597AFe0dE861
 
   assert.equal(next.length, 2, "bundle must still emit exactly swap + approve");
   assert.deepStrictEqual(
-    JSON.parse(JSON.stringify(next, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))),
-    JSON.parse(JSON.stringify(prev, (_k, v) => (typeof v === "bigint" ? `${v}n` : v))),
-    `shared builder output diverges from the legacy shape for spender ${spender}`,
+    next[1], prev[1], `approval must remain unchanged for spender ${spender}`,
   );
+  const decoded = decodeFunctionData({
+    abi: routerAbi,
+    data: encodeFunctionData({ abi: next[0].abi, functionName: next[0].functionName, args: next[0].args }),
+  });
+  assert.equal(next[0].address, UNISWAP_ROUTER_ADDRESS);
+  assert.equal(decoded.functionName, 'swapExactETHForTokensSupportingFeeOnTransferTokens', 'minimum must apply after SEED tax');
+  assert.equal(decoded.args?.[0], minSeedOut, 'encoded minimum is the full net SEED payment');
+  assert.equal(decoded.args?.[3], deadline);
 }
 
 // Constants must not have drifted during extraction.
@@ -128,7 +135,7 @@ assert.equal(sample[0].args[3], deadline, "deadline must be the 4th swap arg");
 assert.deepStrictEqual(sample[0].args[1], [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS], "swap path changed");
 assert.equal(sample[0].args[2], address, "swap recipient must be the user");
 
-console.log("swap bundle equivalence: OK (2 spender variants, shape byte-identical to pre-refactor)");
+console.log("swap bundles: OK (2 spender variants, net-SEED minimum, unchanged approvals)");
 
 // --- the bug this refactor fixes ---------------------------------------------
 // Demonstrates the class of defect, without React: a value computed inside a memo

@@ -26,8 +26,8 @@ export const UNISWAP_ROUTER_ABI = [
       { name: "to", type: "address" },
       { name: "deadline", type: "uint256" },
     ],
-    name: "swapExactETHForTokens",
-    outputs: [{ name: "amounts", type: "uint256[]" }],
+    name: "swapExactETHForTokensSupportingFeeOnTransferTokens",
+    outputs: [],
     stateMutability: "payable",
     type: "function",
   },
@@ -110,8 +110,8 @@ export type SwapBundleCall = TransactionCall;
  * Calls 1 and 2 of every ETH-mode bundle: swap ETH into SEED, then approve the
  * SEED spender for the action that follows.
  *
- * Emits exactly the shape the five components built by hand, so downstream
- * encoding and builder-code attribution are unchanged.
+ * Enforces the minimum SEED actually received after transfer tax. This keeps a
+ * large purchase from silently using existing SEED to cover a short swap.
  */
 export function buildSwapAndApproveCalls({
   address,
@@ -131,7 +131,7 @@ export function buildSwapAndApproveCalls({
     {
       address: UNISWAP_ROUTER_ADDRESS as `0x${string}`,
       abi: UNISWAP_ROUTER_ABI,
-      functionName: "swapExactETHForTokens",
+      functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
       args: [minSeedOut, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS], address, deadline] as UntypedValue[],
       value: ethAmount,
     },

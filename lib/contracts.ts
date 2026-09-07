@@ -9,6 +9,7 @@ import { fenceV2Abi } from '@/public/abi/fence-v2-abi';
 import { formatAddress } from "@/lib/format-address";
 import { stakingAbi } from '@/public/abi/staking-abi';
 import UniswapAbi from '@/public/abi/Uniswap.json';
+import { quoteSeedPurchase } from './swap/seed-purchase-quote';
 import { encodeFunctionData,formatUnits,getAddress,parseUnits } from 'viem';
 import { leafAbi } from '../public/abi/leaf-abi';
 import { landAbi } from '../public/abi/pixotchi-v3-abi';
@@ -1909,7 +1910,7 @@ export const getSwapQuote = async (ethAmount: string): Promise<{ quote: string; 
 };
 
 // Get ETH quote for a specific SEED amount (inverse of getSwapQuote)
-// Uses getAmountsIn to calculate how much ETH is needed for exact SEED output
+// Quote net SEED after buy tax, with pool impact for the complete payment.
 export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
   ethAmount: bigint;
   ethAmountWithBuffer: bigint;
@@ -1923,27 +1924,12 @@ export const getEthQuoteForSeedAmount = async (seedAmount: bigint): Promise<{
   const readClient = getReadClient();
 
   try {
-    // getAmountsIn returns [inputAmount, outputAmount] for exact output
-    const amounts = await readClient.readContract({
+    return await quoteSeedPurchase(seedAmount, async (grossSeedAmount) => await readClient.readContract({
       address: UNISWAP_ROUTER_ADDRESS,
       abi: UniswapAbi,
       functionName: 'getAmountsIn',
-      args: [seedAmount, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
-    }) as bigint[];
-
-    if (!amounts || amounts.length < 2 || amounts[0] <= BigInt(0)) {
-      return { ethAmount: BigInt(0), ethAmountWithBuffer: BigInt(0), seedAmount, error: "No liquidity available" };
-    }
-
-    const ethNeeded = amounts[0];
-    // Add 6% buffer for slippage protection
-    const ethWithBuffer = (ethNeeded * BigInt(106)) / BigInt(100);
-
-    return {
-      ethAmount: ethNeeded,
-      ethAmountWithBuffer: ethWithBuffer,
-      seedAmount,
-    };
+      args: [grossSeedAmount, [WETH_ADDRESS, PIXOTCHI_TOKEN_ADDRESS]],
+    }) as bigint[]);
   } catch (error: UntypedValue) {
     if (process.env.NODE_ENV === 'development') {
       console.error('[getEthQuoteForSeedAmount] Error:', error);
