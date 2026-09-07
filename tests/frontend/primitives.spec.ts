@@ -312,6 +312,11 @@ test('named dialog layouts keep long content and actions reachable at enlarged t
     expect(await scrollOwner.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
     if (layout === 'form') await expect(dialog.getByRole('button', { name: 'Finish layout check' })).toBeInViewport();
     if (layout === 'game') {
+      const headingSurface = await dialog.getByRole('button', { name: 'Close game layout dialog' }).evaluate(button => {
+        const style = getComputedStyle(button.parentElement!);
+        return { background: style.backgroundColor, border: style.borderBottomWidth };
+      });
+      expect(headingSurface).toEqual({ background: 'rgba(0, 0, 0, 0)', border: '0px' });
       const close = (await dialog.getByRole('button', { name: 'Close game layout dialog' }).boundingBox())!;
       const field = (await dialog.getByRole('textbox', { name: 'Layout amount (SEED)' }).boundingBox())!;
       expect(close.y + close.height).toBeLessThanOrEqual(field.y);

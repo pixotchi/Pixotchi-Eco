@@ -885,8 +885,8 @@ export default function CasinoDialog({ open, onOpenChange, landId, onSpinComplet
                                 <RouletteBetList bets={placedBets} limit={maxBets} locked={bettingLocked} onClear={clearBets} onRemove={removeBet} />
                                 {placedBets.length > 0 && (
                                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2 text-[11px]">
-                                        <span>Total <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{totalBetAmountDisplay}</strong></span>
-                                        <span className="text-right text-green-300">Max <strong className="inline-flex items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />{bestPossibleWinDisplay}</strong></span>
+                                        <span className="flex min-w-0 items-center gap-1">Total <strong className="flex min-w-0 items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 shrink-0 rounded-full" /><span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">{totalBetAmountDisplay}</span></strong></span>
+                                        <span className="flex min-w-0 items-center justify-end gap-1 text-right text-green-300">Max <strong className="flex min-w-0 items-center gap-1"><Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 shrink-0 rounded-full" /><span className="min-w-0 tabular-nums [overflow-wrap:anywhere]">{bestPossibleWinDisplay}</span></strong></span>
                                     </div>
                                 )}
                             </div>
