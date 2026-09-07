@@ -543,9 +543,9 @@ export default function ItemDetailsPanel({
           </div>
 
           {isFenceItem && (
-            <div className="flex justify-between items-center text-sm">
-              <label htmlFor={fenceDurationInputId} className="text-muted-foreground">Duration (days):</label>
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <label htmlFor={fenceDurationInputId} className="whitespace-nowrap text-muted-foreground">Duration (days):</label>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <Input
                   id={fenceDurationInputId}
                   type="text"
@@ -569,7 +569,7 @@ export default function ItemDetailsPanel({
                   aria-describedby={fenceDurationHelpId}
                   className="w-20"
                 />
-                <span id={fenceDurationHelpId} className="text-xs text-muted-foreground">
+                <span id={fenceDurationHelpId} className="whitespace-nowrap text-xs text-muted-foreground">
                   {fenceV2Bounds.min === fenceV2Bounds.max
                     ? `${fenceV2Bounds.min}d${fenceV2Bounds.min === 1 ? '' : 's'} minimum`
                     : `${fenceV2Bounds.min}-${fenceV2Bounds.max} days`}

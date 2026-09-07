@@ -201,7 +201,17 @@ const DialogContent = React.forwardRef<
        * Must be an inline style: Radix writes pointerEvents inline on this node and
        * spreads props.style last, so a utility class would lose the cascade.
        */
-      style={{ pointerEvents: "none", ...style }}
+      style={{
+        pointerEvents: "none",
+        // Position the frame in the visible viewport too: limiting only the
+        // panel's height leaves bottom sheets anchored behind the keyboard.
+        top: "var(--visual-viewport-offset-top, 0px)",
+        height: "var(--visual-viewport-height, 100dvh)",
+        bottom: "auto",
+        // The frame already includes the visual viewport's vertical offset.
+        paddingTop: useSafeAreaInset ? "max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top, 0px))" : undefined,
+        ...style,
+      }}
       onOpenAutoFocus={(event) => {
         openerRef.current = getDialogOpener();
         onOpenAutoFocus?.(event);

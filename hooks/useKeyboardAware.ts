@@ -55,6 +55,7 @@ export function useViewportInsets() {
       // where it is unset. The zeroed-above-threshold safe-area inset above is
       // deliberate and unchanged; this is the separate keyboard-aware channel.
       root.style.setProperty('--visual-viewport-height', `${visibleHeight}px`);
+      root.style.setProperty('--visual-viewport-offset-top', `${offsetTop}px`);
     };
 
     const scheduleUpdate = () => {
@@ -75,20 +76,31 @@ export function useViewportInsets() {
     };
 
     const viewport = window.visualViewport;
+    // Focusing an input can pan the visual viewport without resizing it. Move
+    // dialog frames with that pan without feeding transient scroll offsets into
+    // the app shell's browser-chrome padding.
+    const updateDialogOffset = () => {
+      const zoomed = viewport && Math.abs((viewport.scale ?? 1) - 1) > 0.01;
+      const top = zoomed ? 0 : Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      root.style.setProperty('--visual-viewport-offset-top', `${top}px`);
+    };
     scheduleUpdate();
 
     // Per the VisualViewport spec, `resize` reflects chrome show/hide and keyboard state;
     // `scroll` is for pinch-zoom panning and fires continuously during page scroll, which
     // samples mid-animation values on WebViews that animate their address bar. Listening
-    // only to `resize` is the correct signal for committed chrome state.
+    // only to `resize` keeps shell insets tied to committed chrome state. The
+    // separate scroll listener below updates dialog positioning only.
     window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('orientationchange', handleOrientationChange);
     viewport?.addEventListener('resize', scheduleUpdate);
+    viewport?.addEventListener('scroll', updateDialogOffset);
 
     return () => {
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('orientationchange', handleOrientationChange);
       viewport?.removeEventListener('resize', scheduleUpdate);
+      viewport?.removeEventListener('scroll', updateDialogOffset);
 
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);

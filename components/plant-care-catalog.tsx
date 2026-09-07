@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import QuantitySelector from './quantity-selector';
 import type { GardenItem, ShopItem } from '@/lib/types';
 import { ITEM_ICONS } from '@/lib/constants';
-import { cn, formatTokenAmount } from '@/lib/utils';
+import { cn, formatDuration, formatTokenAmount } from '@/lib/utils';
 
 type CareItem = { item: GardenItem | ShopItem; itemType: 'garden' | 'shop' };
 interface PlantCareCatalogProps {
@@ -35,11 +35,18 @@ export function PlantCareCatalog({ gardenItems, shopItems, selectedItem, itemTyp
           const { item } = option;
           const selected = selectedItem?.id === item.id && itemType === option.itemType;
           const isFence = /fence|shield/i.test(item.name);
+          const effect = 'points' in item
+            ? [
+              Number(item.points) > 0 && `+${Number(item.points) / 1e12} PTS`,
+              Number(item.timeExtension) > 0 && `+${formatDuration(Number(item.timeExtension))} lifetime`,
+            ].filter(Boolean).join(' · ')
+            : 'Attack protection';
           return <div key={`${option.itemType}-${item.id}`} className="flex min-w-0 flex-col gap-1">
             <Button type="button" variant="ghost" onClick={() => onSelect(option, 'review')} aria-pressed={selected} aria-haspopup="dialog"
               aria-label={`Select ${item.name}`} className={cn('h-auto min-h-20 w-full grow flex-col items-center gap-1 whitespace-normal rounded-[var(--radius-control)] border px-1 py-1.5 text-center', selected ? 'border-primary bg-primary/10' : 'border-border/60 bg-card')}>
               <Image src={ITEM_ICONS[item.name.toLowerCase()] || '/icons/BEE.png'} alt="" width={32} height={32} className="shrink-0" />
               <span className="text-xs font-medium leading-4">{item.name}</span>
+              <span className="text-[10px] font-bold leading-3 tabular-nums text-muted-foreground">{effect}</span>
               <span className="text-[10px] font-normal leading-3 tabular-nums text-muted-foreground">{isFence ? 'By duration' : `${formatTokenAmount(BigInt(item.price))} SEED`}</span>
             </Button>
             {option.itemType === 'garden' && isSmartWallet && <div className="flex justify-center" role="group" aria-label={`${item.name} quantity`}>

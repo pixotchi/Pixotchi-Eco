@@ -34,6 +34,7 @@ test('catalog names and quantity controls fit without overflow', async ({ page }
   const choices = catalog.getByLabel('Care choices', { exact: true });
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
+  await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('+12h lifetime');
   await catalog.getByRole('button', { name: 'Select Water' }).scrollIntoViewIfNeeded();
   const scrollTop = await page.evaluate(() => scrollY);
   await catalog.getByRole('button', { name: 'Select Water' }).click();
@@ -80,6 +81,32 @@ test('selecting the same care item reopens its review', async ({ page }) => {
   await item.focus();
   await item.press('Space');
   await expect(review).toBeVisible();
+});
+
+test('care sheet and form dialog stay above the keyboard and follow viewport panning', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const name of ['Select Water', 'Open spacing dialog']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const panel = dialog.locator('[data-viewport-debug-dialog-surface]');
+    for (const top of [0, 65]) {
+      await page.evaluate(offset => {
+        document.documentElement.style.setProperty('--visual-viewport-height', '410px');
+        document.documentElement.style.setProperty('--visual-viewport-offset-top', `${offset}px`);
+      }, top);
+      await expect.poll(async () => {
+        const box = (await panel.boundingBox())!;
+        return box.y >= top && box.y + box.height <= top + 411;
+      }).toBe(true);
+      await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeInViewport();
+    }
+    await page.evaluate(() => {
+      document.documentElement.style.removeProperty('--visual-viewport-height');
+      document.documentElement.style.removeProperty('--visual-viewport-offset-top');
+    });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+  }
 });
 
 test('roulette number centers always select that straight number', async ({ page }) => {

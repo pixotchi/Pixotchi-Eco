@@ -17,7 +17,7 @@ export function PlantCareLayout({ selectionKey, reviewRequest, reviewTitle = 'Ca
   return (
     <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) setDismissedRequest(reviewRequest); }}>
       <div className="min-w-0">{catalog}</div>
-      <DialogContent size="md" layout="detail" mobileMode="sheet" padding="compact">
+      <DialogContent size="md" layout="detail" mobileMode="sheet">
         <DialogHeader>
           <DialogTitle>{reviewTitle}</DialogTitle>
           <DialogDescription>Review the effect and total cost before buying.</DialogDescription>
