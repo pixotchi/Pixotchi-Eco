@@ -359,7 +359,7 @@ const DialogContent = React.forwardRef<
               // Ensure ring offset blends with dialog background
               "ring-offset-background",
               // Behavior
-              "transition-[border-color,background-color,color,box-shadow,filter,transform] duration-[var(--motion-quick)] ease-[var(--ease-standard)] disabled:pointer-events-none"
+              "transition-[border-color,background-color,color,box-shadow,filter,transform,translate,scale] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none disabled:pointer-events-none"
             )}
           >
             {/* aria-label above is the accessible name; the icon is decorative. */}

@@ -70,7 +70,9 @@ function useExitPresence<T>(value: T | null, skipMotion: boolean) {
       setRenderedValue(null);
       return;
     }
-    const exitTimer = window.setTimeout(() => setRenderedValue(null), 180);
+    const duration = getComputedStyle(document.documentElement).getPropertyValue('--motion-standard').trim();
+    const durationMs = Number.parseFloat(duration) * (duration.endsWith('ms') ? 1 : 1000);
+    const exitTimer = window.setTimeout(() => setRenderedValue(null), Number.isFinite(durationMs) ? durationMs : 220);
     return () => window.clearTimeout(exitTimer);
   }, [skipMotion, value]);
   return { isVisible, renderedValue };
@@ -90,6 +92,7 @@ export function LandMapModal({
 }: LandMapModalProps) {
   const { enabled: performanceModeEnabled } = usePerformanceMode();
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [keyboardNavigation, setKeyboardNavigation] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const [tappedLandId, setTappedLandId] = useState<number | null>(null);
@@ -97,6 +100,7 @@ export function LandMapModal({
   const [ownerRead, setOwnerRead] = useState<{ landId: number; owner: string | null; status: MapReadStatus } | null>(null);
   const [ownerRetry, setOwnerRetry] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
+  const mapViewportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const syncPreference = () => setPrefersReducedMotion(reducedMotion.matches);
@@ -109,7 +113,7 @@ export function LandMapModal({
       return () => reducedMotion.removeListener(syncPreference);
     }
   }, []);
-  const skipPanelMotion = performanceModeEnabled || prefersReducedMotion;
+  const skipPanelMotion = performanceModeEnabled || prefersReducedMotion || keyboardNavigation;
   const wildernessPresence = useExitPresence(tappedWilderness, skipPanelMotion);
   const landPresence = useExitPresence(tappedLandId, skipPanelMotion);
   const presentedLandId = landPresence.renderedValue;
@@ -132,6 +136,11 @@ export function LandMapModal({
   }, [isOpen, selectedLand]);
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.5, 5));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.5, 0.2));
+  const dismissMapDetails = () => {
+    setTappedLandId(null);
+    setTappedWilderness(null);
+    mapViewportRef.current?.querySelector<HTMLCanvasElement>('canvas')?.focus({ preventScroll: true });
+  };
 
   const handleCenterOnUser = () => {
     if (selectedLand) {
@@ -256,7 +265,8 @@ export function LandMapModal({
           </Button>
         </div>
         {/* Map Canvas Area */}
-        <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-[hsl(var(--info)/0.18)]">
+        <div ref={mapViewportRef} data-map-viewport className="relative min-h-0 w-full flex-1 overflow-hidden bg-[hsl(var(--info)/0.18)]"
+          onKeyDownCapture={() => setKeyboardNavigation(true)} onPointerDownCapture={() => setKeyboardNavigation(false)}>
           <LandMapCanvas
             center={center}
             zoom={zoom}
@@ -351,16 +361,17 @@ export function LandMapModal({
             </div>
         )}
           </LandMapCanvas>
-        </div>
 
-        {/* Wilderness Info Tooltip */}
+        {/* Anchored details never resize the canvas. Reserve the bottom 68px
+            for zoom/recenter controls and scroll long detail content locally. */}
         {wildernessPresence.renderedValue && (
             <div
+              data-map-details="terrain"
               aria-hidden={tappedWilderness === null || !wildernessPresence.isVisible}
               inert={tappedWilderness === null || !wildernessPresence.isVisible}
-              className={`relative max-h-[55%] shrink-0 overflow-y-auto p-[12px] transition-[opacity,transform] duration-[180ms] ease-[var(--ease-standard)] ${tappedWilderness !== null && wildernessPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
+              className={`absolute inset-x-0 bottom-[68px] max-h-[min(55%,22rem)] overflow-y-auto overscroll-contain touch-pan-y p-[12px] sm:right-auto sm:w-[min(100%,26rem)] transition-[opacity,translate] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${tappedWilderness !== null && wildernessPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
             >
-                <div className="flex items-center gap-[12px] rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-[12px] shadow-[var(--shadow-raised)]">
+                <section aria-label="Terrain details" className="flex items-center gap-[12px] rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-[12px] shadow-[var(--shadow-raised)]">
                     {/* Thumbnail */}
                     <div className="relative aspect-square w-[44px] shrink-0 overflow-hidden rounded-[var(--radius-control)] border border-border/50 bg-muted/50">
                         <Image
@@ -397,19 +408,20 @@ export function LandMapModal({
                         size="icon"
                         aria-label="Dismiss terrain details"
                         className="h-[44px] min-h-[44px] w-[44px] min-w-[44px] shrink-0"
-                        onClick={() => setTappedWilderness(null)}
+                        onClick={dismissMapDetails}
                     >
                         <X className="w-4 h-4" />
                     </Button>
-                </div>
+                </section>
             </div>
         )}
         {/* Neighbor Info Tooltip / Sheet */}
         {presentedLandId && (
             <div
+              data-map-details="land"
               aria-hidden={tappedLandId === null || !landPresence.isVisible}
               inert={tappedLandId === null || !landPresence.isVisible}
-              className={`relative max-h-[55%] shrink-0 overflow-y-auto p-[12px] transition-[opacity,transform] duration-[180ms] ease-[var(--ease-standard)] ${tappedLandId !== null && landPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
+              className={`absolute inset-x-0 bottom-[68px] max-h-[min(55%,22rem)] overflow-y-auto overscroll-contain touch-pan-y p-[12px] sm:right-auto sm:w-[min(100%,26rem)] transition-[opacity,translate] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${tappedLandId !== null && landPresence.isVisible ? 'pointer-events-auto z-20 translate-y-0 opacity-100' : 'pointer-events-none z-10 translate-y-3 opacity-0'}`}
             >
                 <section aria-label="Land details" className="rounded-[var(--radius-panel)] border border-border/60 bg-card bg-[image:var(--gradient-surface)] p-[12px] shadow-[var(--shadow-raised)]">
                     <div className="flex items-start justify-between gap-[12px]">
@@ -422,7 +434,7 @@ export function LandMapModal({
                                 #{presentedLandId} · ({getCoordinateFromTokenId(presentedLandId).x}, {getCoordinateFromTokenId(presentedLandId).y})
                             </p>
                         </div>
-                        <Button variant="headerIcon" size="icon" aria-label="Dismiss land details" className="h-[44px] min-h-[44px] w-[44px] min-w-[44px] shrink-0" onClick={() => setTappedLandId(null)}>
+                        <Button variant="headerIcon" size="icon" aria-label="Dismiss land details" className="h-[44px] min-h-[44px] w-[44px] min-w-[44px] shrink-0" onClick={dismissMapDetails}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
@@ -447,6 +459,7 @@ export function LandMapModal({
                 </section>
             </div>
         )}
+        </div>
         {ownerAddress && (
             <ChatProfileDialog
                 address={ownerAddress}

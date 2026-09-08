@@ -143,3 +143,48 @@ test('broken remote avatar renders the stable generated fallback', async ({ page
   await expect(avatar.locator('svg')).toBeVisible();
   expect(await avatar.locator('svg').locator('..').evaluate(node => getComputedStyle(node).backgroundImage)).toContain('linear-gradient');
 });
+
+test('button press and release interpolate independent transforms while keyboard and reduced motion stay immediate', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const button = page.getByRole('button', { name: 'Toggle link availability' });
+  await button.scrollIntoViewIfNeeded();
+  await button.evaluate(node => (node as HTMLElement).style.setProperty('--motion-quick', '2s'));
+  await button.hover();
+  const spatialTransitions = () => button.evaluate(node => node.getAnimations()
+    .filter(animation => 'transitionProperty' in animation && ['scale', 'translate'].includes((animation as CSSTransition).transitionProperty))
+    .map(animation => ({ property: (animation as CSSTransition).transitionProperty, duration: animation.effect?.getTiming().duration })));
+
+  await page.mouse.down();
+  await expect.poll(spatialTransitions).toEqual(expect.arrayContaining([
+    { property: 'scale', duration: 2000 },
+    { property: 'translate', duration: 2000 },
+  ]));
+  const pressedScale = await button.evaluate(node => {
+    const animation = node.getAnimations().find(item => (item as CSSTransition).transitionProperty === 'scale')!;
+    animation.pause();
+    animation.currentTime = 500;
+    return Number.parseFloat(getComputedStyle(node).scale);
+  });
+  expect(pressedScale).toBeGreaterThan(0.985);
+  expect(pressedScale).toBeLessThan(1);
+  // Releasing away from the target avoids triggering the fixture action.
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
+  await expect.poll(spatialTransitions).toEqual(expect.arrayContaining([
+    expect.objectContaining({ property: 'scale' }),
+  ]));
+
+  // Keyboard modality disables the shared control's spatial transitions.
+  await page.keyboard.press('Tab');
+  await button.focus();
+  await page.keyboard.down('Space');
+  await expect.poll(spatialTransitions).toEqual([]);
+  await page.keyboard.up('Space');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await button.hover();
+  await page.mouse.down();
+  await expect.poll(spatialTransitions).toEqual([]);
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
+});

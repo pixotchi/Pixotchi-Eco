@@ -337,7 +337,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
                   type="button"
                   aria-pressed={broadcastType === option.value}
                   onClick={() => setBroadcastType(option.value as BroadcastMessage['type'])}
-                  className={`min-h-11 rounded-[var(--radius-control)] border-2 p-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastType === option.value
+                  className={`min-h-11 rounded-[var(--radius-control)] border-2 p-3 transition-[background-color,border-color,color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastType === option.value
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-primary/50'
                     }`}
@@ -362,7 +362,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
                   type="button"
                   aria-pressed={broadcastPriority === option.value}
                   onClick={() => setBroadcastPriority(option.value as BroadcastMessage['priority'])}
-                  className={`min-h-11 w-full rounded-[var(--radius-control)] border-2 p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastPriority === option.value
+                  className={`min-h-11 w-full rounded-[var(--radius-control)] border-2 p-3 text-left transition-[background-color,border-color,color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastPriority === option.value
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-primary/50'
                     }`}
@@ -395,7 +395,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
                   setCustomExpiry('');
                 }}
                 aria-pressed={!broadcastNeverExpires && broadcastExpiresIn === option.value}
-                className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === option.value
+                className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-[background-color,border-color,color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === option.value
                   ? 'border-primary bg-primary/10 font-medium'
                   : 'border-border hover:border-primary/50'
                   }`}
@@ -410,7 +410,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
                 setBroadcastExpiresIn('custom');
               }}
               aria-pressed={!broadcastNeverExpires && broadcastExpiresIn === 'custom'}
-              className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
+              className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-[background-color,border-color,color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${!broadcastNeverExpires && broadcastExpiresIn === 'custom'
                 ? 'border-primary bg-primary/10 font-medium'
                 : 'border-border hover:border-primary/50'
                 }`}
@@ -421,7 +421,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
               type="button"
               aria-pressed={broadcastNeverExpires}
               onClick={() => setBroadcastNeverExpires(true)}
-              className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastNeverExpires
+              className={`min-h-11 rounded-[var(--radius-control)] border px-3 py-2 text-sm transition-[background-color,border-color,color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${broadcastNeverExpires
                 ? 'border-primary bg-primary/10 font-medium'
                 : 'border-border hover:border-primary/50'
                 }`}

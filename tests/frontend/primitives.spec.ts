@@ -60,7 +60,8 @@ test('catalog cards fit without overflow or quantity controls', async ({ page })
   await expect(catalog.getByRole('button', { name: /quantity/ })).toHaveCount(0);
   const choices = catalog.getByLabel('Care choices', { exact: true });
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
-  await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
+  await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.88 SEED');
+  await expect(catalog.getByRole('button', { name: 'Select Water' }).getByTitle('25.875 SEED')).toHaveAttribute('aria-label', '25.875 SEED');
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('+12h lifetime');
   await catalog.getByRole('button', { name: 'Select Water' }).scrollIntoViewIfNeeded();
   const scrollTop = await page.evaluate(() => scrollY);

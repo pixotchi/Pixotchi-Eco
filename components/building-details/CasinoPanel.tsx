@@ -2,7 +2,7 @@
 
 import { formatUpgradeDuration } from '@/lib/utils';
 import { BACCARAT_REVEAL_WINDOW_BLOCKS } from '@/lib/casino-reveal-window';
-import { ResourceValue } from '@/components/ui/resource-value';
+import { TokenAmount } from '@/components/ui/token-amount';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
@@ -43,7 +43,7 @@ import BlackjackDialog from "@/components/transactions/BlackjackDialog";
 import BaccaratDialog from "@/components/transactions/BaccaratDialog";
 import { PurchaseReadinessNotice } from './purchase-readiness-notice';
 import { getBuildingPurchaseReadiness } from '@/lib/building-purchase-readiness';
-import { formatTokenDisplay } from '@/lib/token-display';
+import { formatTokenCost, formatTokenSymbol } from '@/lib/token-display';
 import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
@@ -86,7 +86,7 @@ function CasinoTokenLabel({
   selected?: boolean;
 }) {
   const { symbol } = useTokenMetadata(tokenAddress);
-  const label = symbol || formatAddress(tokenAddress);
+  const label = formatTokenSymbol(symbol) || formatAddress(tokenAddress);
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -160,9 +160,9 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
   });
 
   const buildTokenMetadata = useTokenMetadata(buildingConfig?.token);
-  const buildTokenSymbol = buildTokenMetadata.symbol;
+  const buildTokenSymbol = formatTokenSymbol(buildTokenMetadata.symbol);
   const formatBuildAmount = (amount: bigint) => buildTokenMetadata.isReady && buildTokenMetadata.decimals !== undefined
-    ? formatTokenDisplay(amount, buildTokenMetadata.decimals, buildTokenMetadata.decimals) : '—';
+    ? formatTokenCost(amount, buildTokenMetadata.decimals) : '—';
   const buildCostWei = buildingConfig?.cost ?? BigInt(0);
   const buildReadiness = getBuildingPurchaseReadiness({ cost: buildCostWei, balance: buildTokenBalance?.value,
     balanceError: buildBalanceError, allowance: allowanceWei, allowanceError });
@@ -474,18 +474,18 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
         <div className="space-y-4 pt-4 border-t border-border">
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">Build cost</h4>
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
               <span className="text-muted-foreground">Instant build</span>
-              <ResourceValue unit={buildTokenSymbol} className="font-semibold">
-                {buildCostDisplay} {buildTokenSymbol}
-              </ResourceValue>
+              {buildTokenMetadata.isReady && buildTokenSymbol
+                ? <TokenAmount amount={buildCostWei} decimals={buildTokenMetadata.decimals} unit={buildTokenSymbol} mode="cost" className="ml-auto text-right font-semibold" />
+                : <span className="ml-auto">—</span>}
             </div>
             {address && buildingConfig && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
                 <span className="text-muted-foreground">Your balance</span>
-                <ResourceValue unit={buildTokenSymbol} className={buildReadiness === 'insufficient' ? "font-medium text-destructive" : "font-medium"}>
-                  {buildTokenBalance && !buildBalanceError ? formatBuildAmount(buildTokenBalance.value) : "—"} {buildTokenSymbol}
-                </ResourceValue>
+                {buildTokenBalance && !buildBalanceError && buildTokenMetadata.isReady && buildTokenSymbol
+                  ? <TokenAmount amount={buildTokenBalance.value} decimals={buildTokenMetadata.decimals} unit={buildTokenSymbol} className={`ml-auto text-right font-medium ${buildReadiness === 'insufficient' ? 'text-destructive' : ''}`} />
+                  : <span className="ml-auto">—</span>}
               </div>
             )}
           </div>
@@ -505,7 +505,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
               <ResourceState status={buildTokenMetadata.isError ? 'error' : 'loading'} title={buildTokenMetadata.isError ? 'Build token details unavailable' : 'Checking build token…'} description="The price must be verified before approving or building." onRetry={() => { void buildTokenMetadata.refetch(); }} />
             ) : buildReadiness !== 'ready' && buildReadiness !== 'approval_required' ? (
               <PurchaseReadinessNotice state={buildReadiness} symbol={buildTokenSymbol} cost={buildCostWei}
-                balance={buildTokenBalance?.value} formatAmount={formatBuildAmount}
+                balance={buildTokenBalance?.value} decimals={buildTokenMetadata.decimals}
                 onRetryBalance={() => { void refetchBuildTokenBalance(); }} onRetryAllowance={() => { void loadCasinoState(false); }} />
             ) : buildReadiness === 'approval_required' ? (
               buildApproval
@@ -660,19 +660,19 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
 
       {hasActiveRouletteGame && (
         <p className="text-xs text-muted-foreground">
-          Active Roulette game locked to {activeRouletteSymbol || formatAddress(activeRouletteToken!)} until revealed.
+          Active Roulette game locked to {formatTokenSymbol(activeRouletteSymbol) || formatAddress(activeRouletteToken!)} until revealed.
         </p>
       )}
 
       {hasActiveBlackjackGame && (
         <p className="text-xs text-muted-foreground">
-          Active Blackjack game locked to {activeBlackjackSymbol || formatAddress(activeBlackjackToken!)} until resolved.
+          Active Blackjack game locked to {formatTokenSymbol(activeBlackjackSymbol) || formatAddress(activeBlackjackToken!)} until resolved.
         </p>
       )}
 
       {hasActiveBaccaratGame && (
         <p className="text-xs text-muted-foreground">
-          Active Baccarat round locked to {activeBaccaratSymbol || formatAddress(activeBaccaratToken!)} until revealed.
+          Active Baccarat round locked to {formatTokenSymbol(activeBaccaratSymbol) || formatAddress(activeBaccaratToken!)} until revealed.
         </p>
       )}
 

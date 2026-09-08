@@ -26,22 +26,22 @@ function TasksRockIcon() {
   );
 }
 
-function StakeTokenCycleIcon() {
+function StakeTokenPairIcon() {
   return (
-    <span className="status-token-cycle" aria-hidden="true">
+    <span className="status-token-pair" aria-hidden="true">
       <Image
         src="/PixotchiKit/COIN.svg"
         alt=""
         width={16}
         height={16}
-        className="stake-token-cycle-seed absolute inset-0 h-4 w-4 object-contain"
+        className="stake-token-pair-seed object-contain"
       />
       <Image
         src="/icons/leaf.png"
         alt=""
         width={16}
         height={16}
-        className="stake-token-cycle-leaf absolute inset-0 h-4 w-4 object-contain"
+        className="stake-token-pair-leaf object-contain"
       />
     </span>
   );
@@ -195,7 +195,7 @@ export default function StatusBar({
   const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
   const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-bold leading-none tabular-nums max-[340px]:text-[11px]";
   const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
-  const statusActionButtonClassName = "px-2.5 max-tablet:h-8 max-tablet:min-h-8 max-tablet:py-1 max-[420px]:px-2 max-[420px]:!gap-1 max-[380px]:px-1.5 max-[340px]:text-[11px]";
+  const statusActionButtonClassName = "px-2.5 max-[420px]:px-2 max-[420px]:!gap-1 max-[380px]:px-1.5 max-[340px]:text-[11px]";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana
     ? solanaLoading ? <Skeleton className={balanceSkeletonClassName} /> : solanaError ? 'Unavailable' : formatTokenShort(solBalance, 9)
@@ -298,7 +298,7 @@ export default function StatusBar({
                 onClick={openStaking}
                 variant="statusAction"
                 size="touchCompact"
-                leadingIcon={<StakeTokenCycleIcon />}
+                leadingIcon={<StakeTokenPairIcon />}
                 className={statusActionButtonClassName}
                 aria-label="Open staking dialog"
                 aria-expanded={stakingOpen}

@@ -102,7 +102,7 @@ function WalletCopyButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.26)] bg-background/55 text-muted-foreground shadow-[var(--shadow-hairline)] transition-[border-color,background-color,color,box-shadow,transform] duration-[var(--motion-quick)] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.26)] bg-background/55 text-muted-foreground shadow-[var(--shadow-hairline)] transition-[border-color,background-color,color,box-shadow,transform,translate] duration-[var(--motion-quick)] ease-[var(--ease-standard)] [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary hover:shadow-[var(--shadow-control)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
       aria-label={label}
     >
       <Copy className="h-3.5 w-3.5" />

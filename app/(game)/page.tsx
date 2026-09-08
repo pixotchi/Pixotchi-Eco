@@ -306,7 +306,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
       className={cn(
         "relative isolate",
         mode === "desktop"
-          ? "flex flex-col gap-2"
+          ? "flex shrink-0 flex-col gap-2"
           : "grid w-full grid-cols-6 items-center gap-0.5",
       )}
       role="tablist"
@@ -340,7 +340,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
               "relative z-10",
               !animateIndicator && "transition-none",
               mode === "desktop"
-                ? "flex h-[68px] w-full flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                ? "flex h-[68px] w-full shrink-0 flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
             )}
             role="tab"
@@ -835,7 +835,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex w-24 shrink-0 flex-col gap-2 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="desktop-nav" className="hidden xl:flex min-h-0 w-24 shrink-0 flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain scroll-py-3 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 [scrollbar-width:thin]" role="navigation" aria-label="Main navigation">
                 <SlidingNavTabs
                   activeTab={activeTab}
                   animateIndicator={shouldAnimateTabChange}

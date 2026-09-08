@@ -84,3 +84,79 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
   }
   await header.screenshot({ path: test.info().outputPath(`header${enlarged ? '-200pct' : ''}.png`) });
 });
+
+test('status actions retain full touch targets across phone and tablet widths', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  for (const width of [320, 390, 820, 864]) {
+    await page.setViewportSize({ width, height: 844 });
+    const actions = page.locator('[data-status-actions] button');
+    await expect(actions.getByText('Stake', { exact: true })).toBeVisible();
+    for (const action of await actions.all()) {
+      const bounds = (await action.boundingBox())!;
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      await action.click({ trial: true });
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
+test('short desktop navigation scrolls with pointer and keyboard while its indicator stays aligned', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 480 });
+    const rail = page.locator('[data-viewport-shell="desktop-nav"]');
+    await expect(rail).toBeVisible();
+    expect(await rail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await rail.evaluate(element => { element.scrollTop = 0; });
+    await rail.hover();
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => rail.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    const about = rail.getByRole('tab', { name: 'About', exact: true });
+    await about.click();
+    await expect(about).toHaveAttribute('aria-selected', 'true');
+    const indicator = rail.locator('[data-main-nav-indicator="desktop"]');
+    await expect.poll(async () => {
+      const pill = (await indicator.boundingBox())!, tab = (await about.boundingBox())!;
+      return Math.abs(pill.x - tab.x) + Math.abs(pill.y - tab.y) + Math.abs(pill.width - tab.width) + Math.abs(pill.height - tab.height);
+    }).toBeLessThan(2);
+    await about.focus();
+    await page.keyboard.press('Home');
+    const farm = rail.getByRole('tab', { name: 'Farm', exact: true });
+    await expect(farm).toBeFocused();
+    await expect(farm).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('End');
+    await expect(about).toBeFocused();
+    await expect(about).toHaveAttribute('aria-selected', 'true');
+    const railBounds = (await rail.boundingBox())!, tabBounds = (await about.boundingBox())!;
+    expect(tabBounds.y).toBeGreaterThanOrEqual(railBounds.y);
+    expect(tabBounds.y + tabBounds.height).toBeLessThanOrEqual(railBounds.y + railBounds.height);
+    await expect.poll(() => indicator.evaluate(element => element.getAnimations().length)).toBe(0);
+  }
+});
+
+test('plant mint keeps readable tablet controls and preserves selection through layout changes', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 864, height: 900 });
+  await page.getByRole('tab', { name: 'Mint', exact: true }).click();
+  const card = page.getByLabel('Plant mint', { exact: true });
+  const picker = card.getByLabel('Choose a strain', { exact: true });
+  await expect(picker).toBeVisible({ timeout: 30_000 });
+  const choice = picker.locator('button:not(:disabled)').first();
+  await choice.click();
+  const originalPicker = await picker.elementHandle();
+  for (const width of [864, 1024, 1440, 390, 864]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(choice).toHaveAttribute('aria-pressed', 'true');
+    expect(await originalPicker!.evaluate(element => element.isConnected)).toBe(true);
+    expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    if (width >= 864) expect((await picker.boundingBox())!.width).toBeGreaterThanOrEqual(330);
+    for (const button of await picker.getByRole('button').all()) {
+      expect(await button.evaluate(element => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await originalPicker!.dispose();
+});

@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertTriangle, CheckCircle, FileText, Gift, RefreshCw, Shield, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
@@ -192,12 +193,11 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
                     </div>
                   )}
                 </div>
-                <div className="mt-3 h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${isInsufficient ? 'bg-destructive' : 'bg-primary'}`}
-                    style={{ width: `${Math.min(100, (balance / (remaining || 1)) * 100)}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  label={`${token} airdrop funding`}
+                  value={Number.isFinite(balance) ? (balance / (remaining || 1)) * 100 : 0}
+                  className={`mt-3 h-1.5 border-0 bg-muted shadow-none [&>div]:bg-none [&>div]:shadow-none ${isInsufficient ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
+                />
               </CardContent>
             </Card>
           );

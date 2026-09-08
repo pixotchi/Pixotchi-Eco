@@ -14,6 +14,26 @@ export function formatTokenDisplay(amount: bigint, decimals = 18, precision = 2)
   return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
 }
 
+/** Read-only costs round up at display precision so a shown price/shortfall is
+ * never less than the amount required. Keep tiny amounts visibly nonzero and
+ * never feed this formatted text back into a transaction. */
+export function formatTokenCost(amount: bigint, decimals = 18, precision = 2): string {
+  const digits = Math.max(0, Math.min(decimals, precision));
+  const step = BigInt(10) ** BigInt(decimals - digits);
+  if (amount < step) return formatTokenDisplay(amount, decimals, digits);
+  const rounded = ((amount + step - BigInt(1)) / step) * step;
+  return formatTokenDisplay(rounded, decimals, digits);
+}
+
+const knownSymbols = new Set(['SEED', 'LEAF', 'PIXOTCHI', 'ETH', 'SOL', 'WSOL', 'USDC', 'JESSE', '$JESSE', 'POET']);
+
+/** Normalize familiar tickers for display without changing contract metadata. */
+export function formatTokenSymbol(symbol: string | undefined): string | undefined {
+  if (!symbol) return symbol;
+  const upper = symbol.trim().toUpperCase();
+  return knownSymbols.has(upper) ? upper : symbol;
+}
+
 export function formatTokenDisplayCompact(amount: bigint, decimals = 18): string {
   const absolute = amount < BigInt(0) ? -amount : amount;
   for (const [power, suffix] of [[12, 'T'], [9, 'B'], [6, 'M'], [3, 'K']] as const) {

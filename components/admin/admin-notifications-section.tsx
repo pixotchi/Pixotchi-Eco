@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { AlertTriangle, Bell, Code, Eye, Megaphone, RefreshCw, Search, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -966,12 +967,11 @@ export function AdminNotificationsSection({ adminKey, isActive, showConfirmDialo
               <div className="text-sm">
                 Progress: <span className="font-semibold">{sendNotifProgress.sent}/{sendNotifProgress.total}</span>
               </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all"
-                  style={{ width: `${(sendNotifProgress.sent / sendNotifProgress.total) * 100}%` }}
-                />
-              </div>
+              <ProgressBar
+                label="Notifications sent"
+                value={sendNotifProgress.total > 0 ? (sendNotifProgress.sent / sendNotifProgress.total) * 100 : 0}
+                className="h-2 border-0 bg-muted shadow-none [&>div]:bg-primary [&>div]:bg-none [&>div]:shadow-none"
+              />
               {sendNotifProgress.errors.length > 0 && (
                 <div className="text-xs text-destructive">
                   Errors: {sendNotifProgress.errors.length}

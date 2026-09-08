@@ -1,5 +1,5 @@
 "use client";
-import { ResourceValue } from '@/components/ui/resource-value';
+import { TokenAmount } from '@/components/ui/token-amount';
 
 import { useBarracksSnapshot } from "@/hooks/useBarracksSnapshot";
 import { useBarracksRaidPreview } from '@/hooks/useBarracksRaidPreview';
@@ -19,7 +19,7 @@ import {
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { PurchaseReadinessNotice } from './purchase-readiness-notice';
 import { getBuildingPurchaseReadiness } from '@/lib/building-purchase-readiness';
-import { formatTokenDisplay } from '@/lib/token-display';
+import { formatTokenCost, formatTokenSymbol } from '@/lib/token-display';
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import { useBuildingApproval } from '@/hooks/useBuildingApproval';
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
@@ -157,12 +157,10 @@ export default function BarracksPanelV2({
   const currentTrainingAllowance = allowancesAreCurrent ? trainingAllowance : undefined;
   const buildTokenMetadata = useTokenMetadata(buildTokenAddress);
   const trainingTokenMetadata = useTokenMetadata(trainingTokenAddress);
-  const buildTokenSymbol = buildTokenMetadata.symbol;
-  const trainingTokenSymbol = trainingTokenMetadata.symbol;
+  const buildTokenSymbol = formatTokenSymbol(buildTokenMetadata.symbol);
+  const trainingTokenSymbol = formatTokenSymbol(trainingTokenMetadata.symbol);
   const formatBuildAmount = (amount: bigint) => buildTokenMetadata.isReady && buildTokenMetadata.decimals !== undefined
-    ? formatTokenDisplay(amount, buildTokenMetadata.decimals, buildTokenMetadata.decimals) : '—';
-  const formatTrainingAmount = (amount: bigint) => trainingTokenMetadata.isReady && trainingTokenMetadata.decimals !== undefined
-    ? formatTokenDisplay(amount, trainingTokenMetadata.decimals, trainingTokenMetadata.decimals) : '—';
+    ? formatTokenCost(amount, buildTokenMetadata.decimals) : '—';
 
   const { data: buildTokenBalance, isError: buildBalanceError, refetch: refreshBuildBalance } = useBalance({
     address,
@@ -525,7 +523,6 @@ export default function BarracksPanelV2({
   }
 
   const buildCostDisplay = formatBuildAmount(config.buildCost);
-  const trainingCostDisplay = formatTrainingAmount(trainCostTotal);
   const selectedTroopOption = getTroopOption(selectedTrainTroop);
   const buildApprovalToken = approval.active?.action === 'build' ? approval.active.token : config.buildToken as `0x${string}`;
   const buildApprovalLabel = approval.active?.action === 'build' ? approval.active.label : `Approve ${buildTokenSymbol} to Build`;
@@ -553,19 +550,18 @@ export default function BarracksPanelV2({
         <div className="surface-subpanel space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4">
           <div className="space-y-2">
             <h4 className="font-semibold text-sm">Build cost</h4>
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
               <span className="text-muted-foreground">Instant build</span>
-              <ResourceValue unit={buildTokenSymbol} className="font-semibold">
-                {buildCostDisplay} {buildTokenSymbol}
-              </ResourceValue>
+              {buildTokenMetadata.isReady && buildTokenSymbol
+                ? <TokenAmount amount={config.buildCost} decimals={buildTokenMetadata.decimals} unit={buildTokenSymbol} mode="cost" className="ml-auto text-right font-semibold" />
+                : <span className="ml-auto">—</span>}
             </div>
             {address && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
                 <span className="text-muted-foreground">Your balance</span>
-                <ResourceValue unit={buildTokenSymbol} className={buildReadiness === 'insufficient' ? "font-medium text-destructive" : "font-medium"}>
-                  {buildTokenBalance && !buildBalanceError ? formatBuildAmount(buildTokenBalance.value) : "—"}{" "}
-                  {buildTokenSymbol}
-                </ResourceValue>
+                {buildTokenBalance && !buildBalanceError && buildTokenMetadata.isReady && buildTokenSymbol
+                  ? <TokenAmount amount={buildTokenBalance.value} decimals={buildTokenMetadata.decimals} unit={buildTokenSymbol} className={`ml-auto text-right font-medium ${buildReadiness === 'insufficient' ? 'text-destructive' : ''}`} />
+                  : <span className="ml-auto">—</span>}
               </div>
             )}
           </div>
@@ -583,7 +579,7 @@ export default function BarracksPanelV2({
               <ResourceState status={buildTokenMetadata.isError ? 'error' : 'loading'} title={buildTokenMetadata.isError ? 'Build token details unavailable' : 'Checking build token…'} description="The price must be verified before approving or building." onRetry={() => { void buildTokenMetadata.refetch(); }} />
             ) : buildReadiness !== 'ready' && buildReadiness !== 'approval_required' ? (
               <PurchaseReadinessNotice state={buildReadiness} symbol={buildTokenSymbol} cost={config.buildCost}
-                balance={buildTokenBalance?.value} formatAmount={formatBuildAmount}
+                balance={buildTokenBalance?.value} decimals={buildTokenMetadata.decimals}
                 onRetryBalance={() => { void refreshBuildBalance(); }} onRetryAllowance={() => { void loadAllowances(); }} />
             ) : buildReadiness === 'approval_required' ? (
               buildApproval
@@ -698,18 +694,17 @@ export default function BarracksPanelV2({
 
           <div id={trainAmountHelpId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
             <TroopCount type={selectedTrainTroop} amount="" withName withRole />
-            <span className="[overflow-wrap:anywhere]">Costs <ResourceValue unit={trainingTokenSymbol}>{trainingCostDisplay} {trainingTokenSymbol}</ResourceValue></span>
+            <span>Costs {trainingTokenMetadata.isReady && trainingTokenSymbol
+              ? <TokenAmount amount={trainCostTotal} decimals={trainingTokenMetadata.decimals} unit={trainingTokenSymbol} mode="cost" />
+              : '—'}</span>
           </div>
 
           {address && (
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
-              <span className="text-muted-foreground">Your Balance</span>
-              <ResourceValue unit={trainingTokenSymbol} className={trainingReadiness === 'insufficient' ? "font-medium text-destructive" : "font-medium"}>
-                {trainingTokenBalance && !trainingBalanceError
-                  ? formatTrainingAmount(trainingTokenBalance.value)
-                  : "..."}{" "}
-                {trainingTokenSymbol}
-              </ResourceValue>
+              <span className="text-muted-foreground">Your balance</span>
+              {trainingTokenBalance && !trainingBalanceError && trainingTokenMetadata.isReady && trainingTokenSymbol
+                ? <TokenAmount amount={trainingTokenBalance.value} decimals={trainingTokenMetadata.decimals} unit={trainingTokenSymbol} className={`ml-auto text-right font-medium ${trainingReadiness === 'insufficient' ? 'text-destructive' : ''}`} />
+                : <span className="ml-auto">—</span>}
             </div>
           )}
 
@@ -725,7 +720,7 @@ export default function BarracksPanelV2({
             <ResourceState status={trainingTokenMetadata.isError ? 'error' : 'loading'} title={trainingTokenMetadata.isError ? 'Training token details unavailable' : 'Checking training token…'} description="The price must be verified before approving or training." onRetry={() => { void trainingTokenMetadata.refetch(); }} />
           ) : trainingReadiness !== 'ready' && trainingReadiness !== 'approval_required' ? (
             <PurchaseReadinessNotice state={trainingReadiness} symbol={trainingTokenSymbol} cost={trainCostTotal}
-              balance={trainingTokenBalance?.value} formatAmount={formatTrainingAmount}
+              balance={trainingTokenBalance?.value} decimals={trainingTokenMetadata.decimals}
               onRetryBalance={() => { void refreshTrainingBalance(); }} onRetryAllowance={() => { void loadAllowances(); }} />
           ) : trainingReadiness === 'approval_required' ? (
             trainingApproval

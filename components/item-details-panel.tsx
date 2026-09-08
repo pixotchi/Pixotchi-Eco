@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceValue } from '@/components/ui/resource-value';
+import { TokenAmount } from '@/components/ui/token-amount';
 import { getCareCapabilities, type CareResourceStatus } from '@/lib/care-catalog';
 import { useQuery } from '@tanstack/react-query';
 import { buildFenceV2PurchaseCall,checkTokenApproval,getFenceV2Config,PIXOTCHI_NFT_ADDRESS,quoteFenceV2 } from '@/lib/contracts';
@@ -27,12 +28,10 @@ import { formatWsol } from '@/lib/solana-quote';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { GardenItem,Plant,ShopItem,TransactionCall } from '@/lib/types';
 import { formatDuration,formatNumber,getFriendlyErrorMessage } from '@/lib/utils';
-import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
+import { formatTokenEstimate } from '@/lib/token-display';
 import { useEffect,useId,useMemo,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount,useBalance } from 'wagmi';
-
-const formatExactSeed = (amount: bigint) => formatTokenDisplay(amount, 18, 18);
 
 const parseFenceDaysInput = (value: string): number | null => {
   if (!/^\d+$/.test(value)) return null;
@@ -418,14 +417,14 @@ export default function ItemDetailsPanel({
                 ) : fenceV2Quote === null ? (
                   <span className="text-muted-foreground" title="Fence quote unavailable">—</span>
                 ) : (
-                  <ResourceValue resource="seed">{formatExactSeed(fenceV2Quote)} SEED</ResourceValue>
+                  <TokenAmount amount={fenceV2Quote} unit="SEED" mode="cost" />
                 )
               ) : itemType === 'shop' ? (
-                <ResourceValue resource="seed">{formatExactSeed(selectedItem.price)} SEED</ResourceValue>
+                <TokenAmount amount={selectedItem.price} unit="SEED" mode="cost" />
               ) : quantity === 0 ? (
-                <ResourceValue resource="seed">{formatExactSeed(selectedItem.price)} SEED each</ResourceValue>
+                <span><TokenAmount amount={selectedItem.price} unit="SEED" mode="cost" /> each</span>
               ) : (
-                <ResourceValue resource="seed">{formatExactSeed(totalCost)} SEED</ResourceValue>
+                <TokenAmount amount={totalCost} unit="SEED" mode="cost" />
               )}
             </div>
           </div>
@@ -583,7 +582,8 @@ export default function ItemDetailsPanel({
               )}
               {ethBalance < ethAmount && (
                 <InlineBalanceNotice className="mt-0">
-                  Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethAmount, 18, 18)}
+                  <p>You need <TokenAmount amount={ethAmount - ethBalance} unit="ETH" mode="cost" precision={6} withIcon={false} /> more.</p>
+                  <p className="mt-1">Available: <TokenAmount amount={ethBalance} unit="ETH" precision={6} withIcon={false} />.</p>
                 </InlineBalanceNotice>
               )}
             </div>
@@ -619,7 +619,8 @@ export default function ItemDetailsPanel({
 
           {hasInsufficientFunds && !isEthMode && (
             <InlineBalanceNotice>
-              Not enough SEED. Balance: {formatExactSeed(userSeedBalance)} • Required: {formatExactSeed(isFenceItem ? (fenceV2Quote ?? BigInt(0)) : totalCost)}
+              <p>You need <TokenAmount amount={quoteSeedCost - userSeedBalance} unit="SEED" mode="cost" withIcon={false} /> more.</p>
+              <p className="mt-1">Available: <TokenAmount amount={userSeedBalance} unit="SEED" withIcon={false} />.</p>
             </InlineBalanceNotice>
           )}
 

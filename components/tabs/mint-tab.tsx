@@ -733,7 +733,7 @@ export default function MintTab() {
       : formatNumber(selectedStrain?.mintPrice || 0);
 
     return (
-      <TabCard padding="sm" className="tablet:min-h-[520px]">
+      <TabCard padding="sm" className="@container/mint-plant tablet:min-h-[520px]" aria-label="Plant mint">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -743,10 +743,12 @@ export default function MintTab() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 tablet:grid-cols-[minmax(220px,0.86fr)_minmax(0,1fr)] xl:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
-          <div className="surface-inset flex min-w-0 items-center gap-4 rounded-[var(--radius-panel)] p-4 tablet:min-h-[372px] tablet:flex-col tablet:justify-between">
-            <div className="flex shrink-0 items-center justify-center tablet:w-full tablet:flex-1">
-              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center tablet:aspect-square tablet:h-auto tablet:w-full tablet:max-w-48 2xl:max-w-56">
+        {/* The outer layout already shares tablet width with land minting. Split
+            this card only when its own content can fit both artwork and review. */}
+        <CardContent className="grid gap-4 @min-[38rem]/mint-plant:grid-cols-[minmax(230px,0.86fr)_minmax(330px,1fr)]">
+          <div className="surface-inset flex min-w-0 items-center gap-4 rounded-[var(--radius-panel)] p-4 @min-[38rem]/mint-plant:min-h-[372px] @min-[38rem]/mint-plant:flex-col @min-[38rem]/mint-plant:justify-between">
+            <div className="flex shrink-0 items-center justify-center @min-[38rem]/mint-plant:w-full @min-[38rem]/mint-plant:flex-1">
+              <div className="relative flex h-20 w-20 shrink-0 items-center justify-center @min-[38rem]/mint-plant:aspect-square @min-[38rem]/mint-plant:h-auto @min-[38rem]/mint-plant:w-full @min-[38rem]/mint-plant:max-w-48 2xl:max-w-56">
                 <Image
                   src={selectedImage}
                   alt={selectedStrain?.name || 'Selected plant'}
@@ -758,7 +760,7 @@ export default function MintTab() {
               </div>
             </div>
 
-            <div className="min-w-0 flex-1 space-y-4 tablet:flex-none tablet:self-stretch">
+            <div className="min-w-0 flex-1 space-y-4 @min-[38rem]/mint-plant:flex-none @min-[38rem]/mint-plant:self-stretch">
               <div>
                 <h3 className="text-xl font-semibold">{selectedStrain?.name || 'Select a strain'}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">

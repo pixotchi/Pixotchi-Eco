@@ -310,12 +310,12 @@ function SafeEfpTransactionModal() {
         selectedList,
       });
       if (!writeEfpWorkflow(getBrowserEfpWorkflowStorage(), migrated)) {
-        throw new Error("The existing EFP update could not be safely restored.");
+        throw new Error("This browser could not save your earlier EFP update. Check your wallet's transaction activity before trying again.");
       }
       workflowRef.current = migrated;
       setWorkflow(migrated);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to restore the EFP update.");
+      toast.error(error instanceof Error ? error.message : "Your earlier EFP update could not be resumed. Check your wallet's transaction activity before trying again.");
     }
   }, [
     address,
@@ -336,13 +336,13 @@ function SafeEfpTransactionModal() {
     try {
       const calls = transformCallsWithBuilderCode([currentTransaction]) as unknown as EfpRawCall[];
       if (!calls[0]?.to || !calls[0]?.data) {
-        throw new Error("The EFP transaction could not be encoded.");
+        throw new Error("This EFP update could not be prepared. Cancel it and try again.");
       }
       return { calls, error: null };
     } catch (error) {
       return {
         calls: [] as EfpRawCall[],
-        error: error instanceof Error ? error.message : "The EFP transaction could not be encoded.",
+        error: error instanceof Error ? error.message : "This EFP update could not be prepared. Cancel it and try again.",
       };
     }
   }, [currentTransaction]);
@@ -386,7 +386,7 @@ function SafeEfpTransactionModal() {
     const submittedProof = getSubmittedProof(status);
     if (status.statusName === "success") {
       if (!getLifecycleTransactionProof(status) || !submittedProof) {
-        toast.error("The wallet reported success without durable transaction proof.");
+        toast.error("Your wallet reported success, but Pixotchi could not verify the update. Check your wallet's transaction activity for its status.");
         return;
       }
       const advanced = advanceEfpWorkflowAfterSuccess(
@@ -418,7 +418,7 @@ function SafeEfpTransactionModal() {
         advanced.snapshot.accountAddress,
         advanced.snapshot.workflowId,
       )) {
-        toast.error("EFP updated, but its completion marker could not be cleared safely.");
+        toast.error("Your EFP update is confirmed, but this window could not close. Select Finish to try again.");
         return;
       }
       workflowRef.current = null;
@@ -546,7 +546,7 @@ function SafeEfpTransactionModal() {
         }
 
         if (!currentProof.transactionHash) {
-          throw new Error("The pending EFP update has no transaction proof.");
+          throw new Error("This update's status could not be checked because its transaction details are missing. Check your wallet's transaction activity.");
         }
         const receipt = await waitForBaseReceipt(currentProof.transactionHash);
         if (cancelled) return;
@@ -563,7 +563,7 @@ function SafeEfpTransactionModal() {
           setOrphanError(
             error instanceof Error
               ? error.message
-              : "Confirmation is still unavailable. No new transaction will be sent.",
+              : "Confirmation is still unavailable. Select Check again to check its status without sending another transaction.",
           );
         }
       }
@@ -590,7 +590,7 @@ function SafeEfpTransactionModal() {
       latest.accountAddress,
       latest.workflowId,
     )) {
-      toast.error("The EFP update could not be cancelled safely.");
+      toast.error("The EFP update could not be cancelled. Try cancelling again.");
       return;
     }
     workflowRef.current = null;
@@ -607,7 +607,7 @@ function SafeEfpTransactionModal() {
       latest.accountAddress,
       latest.workflowId,
     )) {
-      toast.error("The EFP completion marker still cannot be cleared safely.");
+      toast.error("Your EFP update is confirmed, but this window could not close. Select Finish to try again.");
       return;
     }
     workflowRef.current = null;

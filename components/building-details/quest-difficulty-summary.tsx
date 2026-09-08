@@ -21,7 +21,14 @@ export function QuestDifficultySummary({ value }: { value: number }) {
     description="Check the current quest duration and rewards before starting or returning. Existing loot bags can still be checked and opened."
     onRetry={() => { void configuration.refetch(); }} />;
   const multiplier = selected.rewardMultiplier;
-  const amountRange = (minimum: bigint, maximum: bigint, decimals: number) => `${formatTokenDisplay(minimum * multiplier, decimals, decimals)}–${formatTokenDisplay(maximum * multiplier, decimals, decimals)}`;
+  const amountRange = (minimum: bigint, maximum: bigint, decimals: number) => {
+    const lower = minimum * multiplier;
+    const upper = maximum * multiplier;
+    const exact = `${formatTokenDisplay(lower, decimals, decimals)}–${formatTokenDisplay(upper, decimals, decimals)}`;
+    return <span className="tabular-nums" title={exact} aria-label={exact}>
+      {formatTokenDisplay(lower, decimals)}–{formatTokenDisplay(upper, decimals)}
+    </span>;
+  };
   return <div className="space-y-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
     <p>Estimated duration {formatUpgradeDuration(selected.durationInBlocks)} · {multiplier.toString()}× reward amounts. Difficulty changes the duration and reward size; the reward type and amount are random.</p>
     <p>After the quest, return your farmer and then open the loot bag in two separate transactions. Open within {QUEST_FINALIZE_EXPIRY_BLOCKS.toString()} blocks ({formatUpgradeDuration(QUEST_FINALIZE_EXPIRY_BLOCKS)}) after returning or the reward expires.</p>

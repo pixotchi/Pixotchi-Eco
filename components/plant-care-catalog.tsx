@@ -8,7 +8,6 @@ import {
   cn,
   formatDuration,
   formatNumber,
-  formatTokenAmount,
 } from "@/lib/utils";
 import {
   getCareCapabilities,
@@ -16,6 +15,7 @@ import {
 } from "@/lib/care-catalog";
 import { ResourceState } from "./ui/resource-state";
 import { Skeleton } from "./ui/skeleton";
+import { TokenAmount } from "./ui/token-amount";
 
 type CareItem = { item: GardenItem | ShopItem; itemType: "garden" | "shop" };
 interface PlantCareCatalogProps {
@@ -174,7 +174,7 @@ export function PlantCareCatalog({
                     <span className="max-w-full text-xs font-normal leading-relaxed tabular-nums text-muted-foreground">
                       {isFence
                         ? "By duration"
-                        : `${formatTokenAmount(BigInt(item.price))} SEED`}
+                        : <TokenAmount amount={BigInt(item.price)} unit="SEED" mode="cost" withIcon={false} />}
                     </span>
                   </Button>
                 );

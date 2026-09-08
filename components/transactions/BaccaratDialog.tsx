@@ -776,7 +776,7 @@ function BaccaratDialogContent({
                               betOptionRefs.current[optionIndex] = node;
                             }}
                             className={cn(
-                              "group relative flex min-h-11 min-w-0 items-center justify-center overflow-visible rounded-full border px-8 py-2 text-center text-sm font-extrabold uppercase leading-none text-yellow-200 shadow-[var(--shadow-hairline)] transition-[background-color,border-color,color,filter,box-shadow,transform] duration-[var(--motion-quick)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:translate-y-px disabled:pointer-events-none disabled:opacity-60",
+                              "group relative flex min-h-11 min-w-0 items-center justify-center overflow-visible rounded-full border px-8 py-2 text-center text-sm font-extrabold uppercase leading-none text-yellow-200 shadow-[var(--shadow-hairline)] transition-[background-color,border-color,color,filter,box-shadow,transform,translate] duration-[var(--motion-quick)] ease-[var(--ease-standard)] focus-visible:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:translate-y-px disabled:pointer-events-none disabled:opacity-60",
                               suppressBetOptionMotion && "transition-none",
                               option.widthClassName,
                               selected

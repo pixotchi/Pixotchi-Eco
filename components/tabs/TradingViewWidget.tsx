@@ -32,29 +32,6 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
     if (!mounted || performanceModeEnabled || !node) return;
     setLoadState('loading');
 
-    /*
-     * The host div is rendered with no children on purpose: this effect owns every
-     * node inside it. The previous version rendered a `__widget` child from JSX and
-     * then tore it out with a removeChild loop on the first run (the dark/light guard
-     * it was supposed to be gated behind started at null, so it never short-circuited),
-     * which is a React-owned node being deleted behind React's back.
-     *
-     * The guard is gone as well: it compared only the dark/light boolean, so a `symbol`
-     * change — which is in the dependency list — silently did nothing, and the six
-     * colour themes never re-tinted.
-     */
-    // TradingView discovers its mount point through `document.currentScript`.
-    // Keep that script parented to a dedicated host even if React deactivates
-    // this Activity while the network request is still in flight. Removing the
-    // script itself early makes TradingView dereference a null parent.
-    const widgetHost = document.createElement('div');
-    widgetHost.className = 'tradingview-widget-container__widget h-full w-full';
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.type = 'text/javascript';
-    script.async = true;
-
     const config = {
       allow_symbol_change: false,
       calendar: false,
@@ -80,38 +57,53 @@ function TradingViewWidget({ symbol = 'BASESWAP:SEEDWETH_AA6A81.USD' }: TradingV
       autosize: true,
     };
 
+    // Give the vendor an owned browsing context. Removing a pending script's
+    // host does not cancel its execution: TradingView can then create an iframe
+    // in a detached tree (without contentWindow). Removing this frame instead
+    // disposes its document, pending script and vendor event listeners together.
+    // This also covers React Activity deactivation and theme/symbol changes.
+    const widgetFrame = document.createElement('iframe');
+    widgetFrame.title = 'Price chart by TradingView';
+    widgetFrame.className = 'h-full w-full border-0';
+
     let disposed = false;
-    let settled = false;
+    const loadTimeout = window.setTimeout(() => {
+      if (!disposed) setLoadState('error');
+    }, 30_000);
+
     const handleLoad = () => {
-      settled = true;
-      if (!disposed) setLoadState('ready');
-      if (disposed) {
-        widgetHost.replaceChildren();
-      }
+      const document = widgetFrame.contentDocument;
+      if (disposed || document?.URL !== 'about:srcdoc') return;
+      window.clearTimeout(loadTimeout);
+      // The outer document's load waits for the vendor-created iframe to load.
+      // Script download alone is not chart readiness. Cross-origin chart data
+      // and support-service failures remain TradingView's responsibility.
+      setLoadState(document.querySelector('iframe') ? 'ready' : 'error');
     };
     const handleError = () => {
-      settled = true;
+      window.clearTimeout(loadTimeout);
       if (!disposed) setLoadState('error');
-      if (disposed) {
-        widgetHost.replaceChildren();
-      }
     };
-    script.addEventListener('load', handleLoad, { once: true });
-    script.addEventListener('error', handleError, { once: true });
-    script.innerHTML = JSON.stringify(config);
-    widgetHost.appendChild(script);
-    node.replaceChildren(widgetHost);
+    widgetFrame.addEventListener('load', handleLoad);
+    widgetFrame.addEventListener('error', handleError);
+    // Escape markup delimiters because symbol is a prop, even though the
+    // configuration is JSON inside a non-inline vendor script element.
+    const settings = JSON.stringify(config).replace(/</g, '\\u003c');
+    widgetFrame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+      html,body,.tradingview-widget-container{height:100%;width:100%;margin:0;overflow:hidden}
+      .tradingview-widget-container__widget{height:100%;width:100%}
+      </style></head><body><div class="tradingview-widget-container">
+      <div class="tradingview-widget-container__widget"></div>
+      <script async src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js">${settings}</script>
+      </div></body></html>`;
+    node.replaceChildren(widgetFrame);
 
     return () => {
       disposed = true;
-      // Detach the host from visible UI, but retain the script-parent relation
-      // until the async script has either executed or failed.
-      if (widgetHost.parentNode === node) {
-        widgetHost.remove();
-      }
-      if (settled) {
-        widgetHost.replaceChildren();
-      }
+      window.clearTimeout(loadTimeout);
+      widgetFrame.removeEventListener('load', handleLoad);
+      widgetFrame.removeEventListener('error', handleError);
+      widgetFrame.remove();
     };
   }, [mounted, isDarkTheme, performanceModeEnabled, retryKey, symbol]);
 
