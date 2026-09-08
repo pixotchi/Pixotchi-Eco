@@ -31,6 +31,7 @@ interface SwapFencePurchaseBundleProps {
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
+    onButtonClick?: () => void | boolean | Promise<void | boolean>;
 }
 
 /**
@@ -53,6 +54,7 @@ export default function SwapFencePurchaseBundle({
     buttonText,
     buttonClassName = 'w-full',
     disabled = false,
+    onButtonClick,
 }: SwapFencePurchaseBundleProps) {
     const { address } = useAccount();
 
@@ -122,6 +124,7 @@ export default function SwapFencePurchaseBundle({
             intentKey={`swap:fence:${plantId}`}
             onSuccess={handleSuccess}
             onError={onError}
+            onButtonClick={onButtonClick}
             buttonText={buttonText || defaultButtonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}

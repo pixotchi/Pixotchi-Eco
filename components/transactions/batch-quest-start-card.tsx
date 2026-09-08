@@ -1,9 +1,15 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ResourceValue } from '@/components/ui/resource-value';
 import { ToggleGroup } from "@/components/ui/toggle-group";
+import { ResourceState } from "@/components/ui/resource-state";
+import { useBatchReconciliation } from "@/hooks/useBatchReconciliation";
 import { useQuestRewardsAvailability } from "@/hooks/useQuestRewardsAvailability";
+import { useQuestConfiguration } from '@/hooks/useQuestConfiguration';
+import { QuestDifficultySummary } from '@/components/building-details/quest-difficulty-summary';
+import { formatUpgradeDuration } from '@/lib/utils';
 import { useBalances } from "@/lib/balance-context";
 import {
   CREATOR_TOKEN_ADDRESS,
@@ -30,8 +36,7 @@ import {
   storeBatchQuestDifficulty,
 } from "@/lib/quest-preferences";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
-import { dispatchPostTransactionRefresh } from "@/lib/transaction-refresh";
-import { extractTransactionHash } from "@/lib/transaction-utils";
+import { extractTransactionHash, getHighestTransactionReceiptBlock } from "@/lib/transaction-utils";
 import { Land } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, Lock } from "lucide-react";
@@ -46,6 +51,7 @@ import type { LifecycleStatus } from "./transaction-kit";
 interface BatchQuestStartCardProps {
   lands: Land[];
   onSuccess?: () => void;
+  onOpenFarmerHouse?: () => void;
   variant?: "card" | "embedded";
   showWhenEmpty?: boolean;
   className?: string;
@@ -73,8 +79,8 @@ const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
  * Chunking IS a live path, not headroom. Batching synchronises a fleet: farmers
  * sent together finish, rest and fall idle together, so a wallet's steady-state
  * batch is its TOTAL slot count, not whatever happens to be idle right now. The
- * two largest wallets hold 119 and 111 slots, so both split into two bundles -
- * and because the burn is one flat charge per bundle, both pay it twice.
+ * two largest wallets hold 119 and 111 slots, so both split into two bundles.
+ * The first confirmed bundle pays the run fee; continuation bundles do not.
  *
  * Raising the cap to swallow 119 in one bundle would need ~14.2M gas on Hard
  * (85% of the cap), which is too little margin for a bundler overhead figure we
@@ -84,11 +90,17 @@ const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_QUEST_MAX_SIZE || 10
 
 const SECONDS_PER_BLOCK = 2;
 
-/** Coalesce simultaneous building-domain refresh requests into one land sweep. */
-const REFRESH_DEBOUNCE_MS = 900;
+type BatchQuestSnapshot = QuestSlotSnapshot & { readBlock: bigint };
+const questSlotKey = (slot: BatchQuestSnapshot) => `${slot.landId}/${slot.slotIndex}/${slot.state}`;
+type SubmittedQuestBatch = {
+  slots: BatchQuestSnapshot[];
+  difficulty: QuestDifficultyId;
+  shouldBurn: boolean;
+  scope: string;
+};
 
 const embeddedSurfaceClassName =
-  "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]";
+  "surface-lifted rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]";
 
 const CENSUS_ROWS: Array<{ state: QuestSlotState; label: string; alwaysShow?: boolean }> = [
   { state: "available", label: "Idle", alwaysShow: true },
@@ -151,37 +163,33 @@ function matchesSubmittedIdentity(value: UntypedValue, expected: string): boolea
 export default function BatchQuestStartCard({
   lands,
   onSuccess,
+  onOpenFarmerHouse,
   variant = "card",
   showWhenEmpty = false,
   className,
 }: BatchQuestStartCardProps) {
-  const [loading, setLoading] = useState(false);
-  const [snapshots, setSnapshots] = useState<QuestSlotSnapshot[]>([]);
-  const [scanBlock, setScanBlock] = useState<bigint>(BigInt(0));
-  const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
-  const [unreadableLands, setUnreadableLands] = useState(0);
   // The flat fee is charged once per run, not once per bundle. A fleet larger
   // than MAX_BATCH_SIZE still costs BURN_AMOUNT_TOKENS in total.
   const [runPaid, setRunPaid] = useState(false);
   const [feePending, setFeePending] = useState(false);
   const [totalSentThisSession, setTotalSentThisSession] = useState(0);
-  const [txKey, setTxKey] = useState(0);
+  const [submittedBatch, setSubmittedBatch] = useState<SubmittedQuestBatch | null>(null);
+  const submittedBatchRef = useRef<SubmittedQuestBatch | null>(null);
+  const retiredProofRef = useRef<string | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<QuestDifficultyId>(DEFAULT_BATCH_QUEST_DIFFICULTY);
 
   const { isLoading: smartWalletLoading, isSmartWallet } = useSmartWallet();
   const { pixotchiBalance, pixotchiBalanceStatus } = useBalances();
   const { address } = useAccount();
   const rewards = useQuestRewardsAvailability();
-
-  // Guards against a slow scan for a previous land set overwriting a newer one.
-  const scanTokenRef = useRef(0);
+  const questConfiguration = useQuestConfiguration();
 
   useEffect(() => {
     setDifficulty(loadBatchQuestDifficulty());
   }, []);
 
   const burnAmountWei = useMemo(() => parseUnits(BURN_AMOUNT_TOKENS.toString(), 18), []);
-  const shouldBurn = !runPaid;
+  const shouldBurn = submittedBatch?.shouldBurn ?? !runPaid;
   const hasEnoughTokens = !shouldBurn
     || (pixotchiBalanceStatus === "ready" && pixotchiBalance >= burnAmountWei);
 
@@ -203,69 +211,32 @@ export default function BatchQuestStartCard({
     setFeePending(isBatchQuestRunPending(batchRunScope));
   }, [batchRunScope]);
 
-  const scanQuests = useCallback(async () => {
-    if (lands.length === 0) {
-      setSnapshots([]);
-      setLastScannedLandIds(landIdsHash);
-      return;
-    }
-
-    const token = ++scanTokenRef.current;
-    setLoading(true);
-
-    try {
+  const readQuests = useCallback(async (minimumBlock?: bigint) => {
+      const landIds = landIdsHash ? landIdsHash.split(',').map(BigInt) : [];
+      if (landIds.length === 0) return [];
       const readClient = getReadClient();
-      const [currentBlock, batch] = await Promise.all([
-        readClient.getBlockNumber(),
-        getQuestSlotsBatch(
-          lands.map((land) => land.tokenId),
-          { readClient },
-        ),
-      ]);
-
-      if (token !== scanTokenRef.current) return;
-
-      setScanBlock(currentBlock);
-      setSnapshots(toQuestSlotSnapshots(batch, currentBlock));
-      setUnreadableLands(batch.filter((entry) => !entry.ok).length);
-      setLastScannedLandIds(landIdsHash);
-    } catch (error) {
-      console.error("Failed to scan farmer quest slots:", error);
-      if (token === scanTokenRef.current) {
-        setLastScannedLandIds(landIdsHash);
-      }
-    } finally {
-      if (token === scanTokenRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [landIdsHash, lands]);
-
-  useEffect(() => {
-    if (landIdsHash !== lastScannedLandIds) {
-      void scanQuests();
-      setTotalSentThisSession(0);
-      setTxKey(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      const currentBlock = await readClient.getBlockNumber({ cacheTime: 0 });
+      if (minimumBlock !== undefined && currentBlock < minimumBlock) throw new Error('Quest node is behind the receipt.');
+      const batch = await getQuestSlotsBatch(landIds, { readClient, blockNumber: currentBlock });
+      if (batch.some((entry) => !entry.ok)) throw new Error('Some farmer slots could not be read.');
+      return toQuestSlotSnapshots(batch, currentBlock).map((slot) => ({ ...slot, readBlock: currentBlock }));
   }, [landIdsHash]);
 
-  useEffect(() => {
-    let debounce: ReturnType<typeof setTimeout> | null = null;
-    const handler = () => {
-      if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        debounce = null;
-        void scanQuests();
-      }, REFRESH_DEBOUNCE_MS);
-    };
+  const { items: snapshots, loading, ready: scanReady, error: scanError, coordinator, refresh: scanQuests } = useBatchReconciliation({
+    identity: batchRunScope,
+    address,
+    read: readQuests,
+    key: questSlotKey,
+    errorMessage: 'Farmer slots could not all be checked. Retry before sending another batch.',
+  });
+  const scanBlock = snapshots[0]?.readBlock ?? BigInt(0);
 
-    window.addEventListener("buildings:refresh", handler);
-    return () => {
-      if (debounce) clearTimeout(debounce);
-      window.removeEventListener("buildings:refresh", handler);
-    };
-  }, [scanQuests]);
+  useEffect(() => {
+    setTotalSentThisSession(0);
+    setSubmittedBatch(null);
+    submittedBatchRef.current = null;
+    retiredProofRef.current = undefined;
+  }, [batchRunScope]);
 
   const counts = useMemo(() => {
     const tally: Record<QuestSlotState, number> = {
@@ -290,23 +261,23 @@ export default function BatchQuestStartCard({
   // reports zero idle, and closing the run on that would charge the fee twice
   // for a single run.
   useEffect(() => {
-    if (!runPaid || snapshots.length === 0 || idleSlots.length > 0) return;
+    if (!scanReady || submittedBatch || !runPaid || snapshots.length === 0 || idleSlots.length > 0) return;
     clearBatchQuestRun();
     setRunPaid(false);
-  }, [idleSlots.length, runPaid, snapshots.length]);
+  }, [idleSlots.length, runPaid, scanReady, snapshots.length, submittedBatch]);
 
   const totalBatches = Math.ceil(idleSlots.length / MAX_BATCH_SIZE);
   const hasMultipleBatches = idleSlots.length > MAX_BATCH_SIZE;
   const currentBatchSlots = useMemo(
-    () => idleSlots.slice(0, MAX_BATCH_SIZE),
-    [idleSlots],
+    () => submittedBatch?.slots ?? idleSlots.slice(0, MAX_BATCH_SIZE),
+    [idleSlots, submittedBatch],
   );
 
   const calls = useMemo(() => {
     if (currentBatchSlots.length === 0) return [];
 
     const startCalls = currentBatchSlots.map((slot) =>
-      buildQuestStartCall(slot.landId, difficulty, slot.slotIndex),
+      buildQuestStartCall(slot.landId, submittedBatch?.difficulty ?? difficulty, slot.slotIndex),
     );
 
     // Continuation bundles of an already-paid run carry no burn.
@@ -320,7 +291,7 @@ export default function BatchQuestStartCard({
     };
 
     return [burnCall, ...startCalls];
-  }, [burnAmountWei, currentBatchSlots, difficulty, shouldBurn]);
+  }, [burnAmountWei, currentBatchSlots, difficulty, shouldBurn, submittedBatch]);
 
   const batchQuestIntentKey = useMemo(() => {
     const pairs = [...currentBatchSlots]
@@ -331,17 +302,32 @@ export default function BatchQuestStartCard({
       })
       .map((slot) => `${slot.landId}/${slot.slotIndex}`)
       .join(",");
-    return `batch-quest-start:${difficulty}:${shouldBurn ? "burn" : "paid"}:${pairs}`;
-  }, [currentBatchSlots, difficulty, shouldBurn]);
+    return `batch-quest-start:${submittedBatch?.difficulty ?? difficulty}:${shouldBurn ? "burn" : "paid"}:${pairs}`;
+  }, [currentBatchSlots, difficulty, shouldBurn, submittedBatch]);
 
   const handleDifficultyChange = useCallback((nextValue: string | number) => {
+    if (submittedBatch) return;
     const parsed = Number(nextValue);
     if (!isQuestDifficultyId(parsed)) return;
     setDifficulty(parsed);
     storeBatchQuestDifficulty(parsed);
-  }, []);
+  }, [submittedBatch]);
 
   const handleBatchStatus = useCallback((status: LifecycleStatus) => {
+    if (status.statusName === 'confirmedSyncing' && status.statusData.callsMatch !== false) {
+      const proof = extractTransactionHash(status.statusData) ?? status.statusData.transactionId;
+      if (proof && retiredProofRef.current !== proof) {
+        retiredProofRef.current = proof;
+        const confirmedBatch = submittedBatchRef.current ?? { slots: currentBatchSlots, difficulty, shouldBurn, scope: batchRunScope };
+        submittedBatchRef.current = confirmedBatch;
+        setSubmittedBatch(confirmedBatch);
+        coordinator.retire(confirmedBatch.slots,
+          getHighestTransactionReceiptBlock(status.statusData.transactionReceipts));
+      }
+    }
+    if (['idle', 'success', 'reverted', 'error', 'failed', 'cancelled', 'canceled', 'rejected', 'transactionRejected', 'userRejected', 'buildError'].includes(status.statusName)) {
+      setSubmittedBatch(null);
+    }
     const identity = getSubmittedIdentity(status.statusData);
     if (
       shouldBurn
@@ -370,15 +356,16 @@ export default function BatchQuestStartCard({
       setFeePending(false);
       setRunPaid(false);
     }
-  }, [batchRunScope, shouldBurn]);
+  }, [batchRunScope, shouldBurn, coordinator, currentBatchSlots, difficulty]);
 
   const handleBatchSuccess = useCallback((tx: UntypedValue) => {
-    const sentCount = currentBatchSlots.length;
-    const remainingCount = idleSlots.length - sentCount;
+    const submitted = submittedBatchRef.current;
+    if (submitted && submitted.scope !== batchRunScope) return;
+    const sentCount = submitted?.slots.length ?? currentBatchSlots.length;
+    const remainingCount = coordinator.state.items.filter((slot) => slot.state === 'available').length;
     const newTotalSent = totalSentThisSession + sentCount;
 
     setTotalSentThisSession(newTotalSent);
-    setTxKey((key) => key + 1);
 
     if (shouldBurn) {
       const identity = getSubmittedIdentity(tx) ?? feeSubmissionIdentityRef.current ?? undefined;
@@ -399,13 +386,6 @@ export default function BatchQuestStartCard({
     }
 
     onSuccess?.();
-    // buildings:refresh drives the re-scan through the debounced listener
-    // above, so no direct scanQuests() call here.
-    dispatchPostTransactionRefresh(["buildings:refresh"], undefined, {
-      address,
-      source: "batch-quest-start",
-      transactionHash: extractTransactionHash(tx),
-    });
 
     try {
       const payload: Record<string, UntypedValue> = { address, taskId: "s3_send_quest" };
@@ -415,11 +395,9 @@ export default function BatchQuestStartCard({
     } catch {
       // Mission tracking is best-effort and must never block the send.
     }
-  }, [address, batchRunScope, currentBatchSlots.length, idleSlots.length, onSuccess, shouldBurn, totalSentThisSession]);
+  }, [address, batchRunScope, coordinator, currentBatchSlots.length, onSuccess, shouldBurn, totalSentThisSession]);
 
-  const scanPending = lands.length > 0 && landIdsHash !== lastScannedLandIds;
-
-  if ((loading || (showWhenEmpty && scanPending)) && snapshots.length === 0) {
+  if (!submittedBatch && !feePending && !scanError && !scanReady && snapshots.length === 0) {
     const loadingContent = (
       <div className="flex items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -438,7 +416,9 @@ export default function BatchQuestStartCard({
     );
   }
 
-  const hasAnySlots = snapshots.length > 0;
+  if (scanError && !submittedBatch && !feePending) return <ResourceState status="error" title="Farmer slots unavailable" description={scanError} onRetry={() => void scanQuests()} className={className} />;
+
+  const hasAnySlots = snapshots.length > 0 || submittedBatch !== null || feePending;
 
   if (!hasAnySlots && !showWhenEmpty) return null;
 
@@ -446,6 +426,10 @@ export default function BatchQuestStartCard({
 
   const content = (
     <>
+      {!rewards.isReady && <ResourceState status={rewards.error ? 'error' : 'loading'}
+        title={rewards.error ? 'Quest rewards check unavailable' : 'Checking quest rewards…'}
+        description={rewards.error ? 'Retry before starting quests. Existing loot bags can still be checked and opened in Farmer House.' : undefined}
+        onRetry={() => { void rewards.refresh(); }} />}
       <div className="flex items-center justify-between border-b border-border/50 pb-2">
         <span className="font-semibold">Batch Quests</span>
         <div className="flex items-center gap-2 text-xs">
@@ -464,18 +448,11 @@ export default function BatchQuestStartCard({
 
       {!hasAnySlots ? (
         <div className="space-y-3">
-          {!smartWalletLoading && !isSmartWallet && (
-            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                <Lock className="h-3 w-3" />
-                Smart Wallet Required
-              </div>
-            </div>
-          )}
           <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
             None of your lands have a Farmer House yet. Upgrade one to unlock farmer
             slots and send them on quests.
           </div>
+          {onOpenFarmerHouse && <Button variant="outline" className="w-full" onClick={onOpenFarmerHouse}>View Farmer House</Button>}
         </div>
       ) : (
         <>
@@ -505,22 +482,13 @@ export default function BatchQuestStartCard({
             })}
           </div>
 
-          {unreadableLands > 0 && (
-            <div className="rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-2">
-              <div className="flex items-center gap-2 text-xs text-[hsl(var(--info))]">
-                <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                <span>
-                  {unreadableLands} land{unreadableLands === 1 ? "" : "s"} could not be
-                  read, so farmers there are not counted yet. Reopen this panel to retry.
-                </span>
-              </div>
-            </div>
-          )}
+          {scanError && <ResourceState status="error" title="Farmer refresh delayed" description={scanError} onRetry={() => void scanQuests()} />}
+          {loading && <p role="status" className="text-xs text-muted-foreground">Updating farmers before the next batch…</p>}
 
           {(counts.ready_to_commit > 0 || counts.committed > 0 || counts.expired > 0) && (
             <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-2 text-xs text-muted-foreground">
-              Recalling farmers and opening loot bags stays per-land in the Farmer
-              House, so every quest keeps its own reward roll.
+              Return farmers, open loot bags, and reset expired quests individually
+              in each land&apos;s Farmer House.
             </div>
           )}
 
@@ -558,23 +526,24 @@ export default function BatchQuestStartCard({
               }}
               onValueChange={handleDifficultyChange}
               options={QUEST_DIFFICULTIES.map((entry) => ({
-                ariaLabel: `${entry.label} quest, ${entry.durationHours} hours`,
+                ariaLabel: `${entry.label} quest`,
                 label: (
                   <span>
                     {entry.label}{" "}
-                    <span className="text-xs text-muted-foreground">({entry.durationHours}h)</span>
+                    <span className="text-xs text-muted-foreground">({questConfiguration.isReady && questConfiguration.data ? formatUpgradeDuration(questConfiguration.data.difficulties[entry.id].durationInBlocks) : '—'})</span>
                   </span>
                 ),
                 value: String(entry.id),
               }))}
               value={String(difficulty)}
             />
+            <QuestDifficultySummary value={difficulty} />
           </div>
           )}
 
           {hasMultipleBatches && (
             <div className="rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-2">
-              <div className="flex items-center gap-2 text-xs text-[hsl(var(--info))]">
+              <div className="flex items-center gap-2 text-xs text-info-strong">
                 <AlertTriangle className="h-3 w-3 flex-shrink-0" />
                 <span>
                   Large send split into {totalBatches} transactions of {MAX_BATCH_SIZE}.
@@ -586,53 +555,30 @@ export default function BatchQuestStartCard({
             </div>
           )}
 
-          {!smartWalletLoading && !isSmartWallet && (
+          {!submittedBatch && !feePending && !smartWalletLoading && !isSmartWallet && (
             <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-primary">
                 <Lock className="h-3 w-3" />
                 Smart Wallet Required
               </div>
+              <p className="text-sm text-muted-foreground">You can send farmers individually with your current wallet. A smart wallet sends up to {MAX_BATCH_SIZE} farmers per transaction.</p>
+              {onOpenFarmerHouse && <Button variant="outline" className="w-full" onClick={onOpenFarmerHouse}>Manage farmers individually</Button>}
             </div>
           )}
 
-          {idleSlots.length === 0 ? (
+          {!submittedBatch && !feePending && idleSlots.length === 0 ? (
             <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
-              No idle farmers right now. They will show up here as quests finish and
-              cooldowns expire.
+              No idle farmers right now. Finish active quests in Farmer House by returning
+              each farmer and opening its loot bag, or reset expired quests. Farmers become
+              available again after any cooldown ends.
             </div>
-          ) : rewards.isUnavailable ? (
-            <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-value">
-                <Lock className="h-3 w-3" />
-                Rewards Pool Refilling
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                Starting new quests is paused until the Farmer House reward wallet is
-                refilled and approved.
-              </div>
-            </div>
-          ) : !smartWalletLoading && !isSmartWallet ? (
+          ) : !submittedBatch && !feePending && rewards.isUnavailable ? (
+            <ResourceState status="empty" title="Quest rewards temporarily unavailable"
+              description="Starting new quests is paused. Refresh availability before trying again."
+              onRetry={() => { void rewards.refresh(); }} />
+          ) : !submittedBatch && !feePending && !smartWalletLoading && !isSmartWallet ? (
             null
-          ) : feePending ? (
-            <div className="space-y-2">
-              <div className="rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-muted-foreground">
-                Fee transaction submitted. Confirming it before sending another batch.
-              </div>
-              <SmartWalletTransaction
-                successFeedback="feature"
-                effects={{ domains: ["balances"] }}
-                key={txKey}
-                intentKey={batchQuestIntentKey}
-                calls={calls}
-                buttonText="Confirming fee…"
-                buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
-                disabled
-                onStatusUpdate={handleBatchStatus}
-                onSuccess={handleBatchSuccess}
-                onError={() => toast.error("Batch fee confirmation failed")}
-              />
-            </div>
-          ) : shouldBurn && pixotchiBalanceStatus !== "ready" ? (
+          ) : !submittedBatch && !feePending && shouldBurn && pixotchiBalanceStatus !== "ready" ? (
             <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-value">
                 <AlertTriangle className="h-3 w-3" />
@@ -642,7 +588,7 @@ export default function BatchQuestStartCard({
                 PIXOTCHI balance could not be confirmed. Refresh before paying the run fee.
               </div>
             </div>
-          ) : !hasEnoughTokens ? (
+          ) : !submittedBatch && !feePending && !hasEnoughTokens ? (
             <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-value">
                 <Lock className="h-3 w-3" />
@@ -669,20 +615,27 @@ export default function BatchQuestStartCard({
               </div>
               <SmartWalletTransaction
                 successFeedback="feature"
-                effects={{ domains: ["balances"] }}
-                key={txKey}
+                effects={{ domains: ["buildings", "lands", "balances"] }}
                 intentKey={batchQuestIntentKey}
                 calls={calls}
                 buttonText={
-                  hasMultipleBatches
+                  feePending ? "Confirming fee…" : hasMultipleBatches
                     ? `${shouldBurn ? "Burn & " : ""}Send Batch (${currentBatchSlots.length})`
                     : `${shouldBurn ? "Burn & " : ""}Send ${currentBatchSlots.length} Farmer${currentBatchSlots.length === 1 ? "" : "s"}`
                 }
                 buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
-                disabled={!rewards.isReady || smartWalletLoading}
+                disabled={!scanReady || feePending || !rewards.isReady || !questConfiguration.isReady || smartWalletLoading || !isSmartWallet || !hasEnoughTokens}
+                onButtonClick={async () => {
+                  coordinator.assertReady(currentBatchSlots);
+                  if (!questConfiguration.isReady || !questConfiguration.data) throw new Error('Check the quest terms before starting.');
+                  await rewards.requireReady(questConfiguration.data);
+                  coordinator.assertReady(currentBatchSlots);
+                  const submitted = { slots: currentBatchSlots, difficulty, shouldBurn, scope: batchRunScope };
+                  submittedBatchRef.current = submitted;
+                  setSubmittedBatch(submitted);
+                }}
                 onStatusUpdate={handleBatchStatus}
                 onSuccess={handleBatchSuccess}
-                onError={() => toast.error("Batch send failed")}
               />
             </div>
           )}

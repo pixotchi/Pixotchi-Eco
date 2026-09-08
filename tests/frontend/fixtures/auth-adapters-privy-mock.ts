@@ -1,0 +1,12 @@
+type Callbacks = { onComplete?: (input: { loginAccount: { type: 'wallet'; chainType: 'ethereum'; address: string } }) => void; onError?: (error: string) => void };
+let callbacks: Callbacks = {};
+const authenticated = new URLSearchParams(location.search).has('owner');
+const user = authenticated ? { linkedAccounts: [{ type: 'wallet', chainType: 'ethereum' }] } : null;
+export const usePrivy = () => ({ ready: true, authenticated, user });
+export const useModalStatus = () => ({ isOpen: false });
+const logout = async () => {};
+export const useLogout = () => ({ logout });
+const login = () => { document.documentElement.dataset.loginRequested = 'true'; };
+export const useLogin = (next: Callbacks) => { callbacks = next; return { login }; };
+export const completePrivy = (address: string) => callbacks.onComplete?.({ loginAccount: { type: 'wallet', chainType: 'ethereum', address } });
+export const rejectPrivy = () => callbacks.onError?.('unable_to_sign');

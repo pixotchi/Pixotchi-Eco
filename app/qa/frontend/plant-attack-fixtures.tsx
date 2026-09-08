@@ -8,7 +8,7 @@ import { canPlantAttack, getPlantAttackAvailability, getPlantAttackReadyAt, PLAN
 export function PlantAttackFixtures() {
   const [scenario, setScenario] = useState('cooldown');
   const [showAll, setShowAll] = useState(false);
-  const [startedAt] = useState(() => Math.floor(Date.now() / 1000));
+  const [startedAt, setStartedAt] = useState(() => Math.floor(Date.now() / 1000));
   const { owned, target } = useMemo(() => {
     const plant: AttackPlant = { id: 1, owner: 'player-a', level: 2, status: 0, lastAttackUsed: String(startedAt - 1800 + 3), lastAttacked: '0' };
     const target = { ...plant, id: 2, owner: 'player-b', level: scenario === 'no-targets' ? 1 : 3, lastAttackUsed: '0', lastAttacked: scenario === 'target-cooldown' ? String(startedAt - 3600 + 3) : '0' };
@@ -25,6 +25,7 @@ export function PlantAttackFixtures() {
   const now = useDeadlineClock(deadlines);
   const canAttack = owned.some(plant => canPlantAttack(plant, target, now, false));
   return <section aria-label="Plant attack fixture" className="max-w-md space-y-3 rounded border bg-card p-3">
+    <button type="button" onClick={() => setStartedAt(Math.floor(Date.now() / 1000))}>Restart fixture timer</button>
     <label className="block">Attack scenario<select aria-label="Attack scenario" className="ml-2 min-h-11 rounded border bg-background p-2" value={scenario} onChange={event => { setScenario(event.target.value); setShowAll(false); }}>
       {['cooldown','mixed','target-cooldown','no-targets','dead','empty','unavailable'].map(value => <option key={value}>{value}</option>)}
     </select></label>

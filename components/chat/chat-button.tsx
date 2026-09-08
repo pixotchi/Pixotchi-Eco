@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
-import { useChat } from "./chat-context";
+import { useChatHeader } from "./chat-view-context";
+import { onPublicChatOpen } from "@/lib/mission-navigation";
 
 const ChatDialog = dynamic(() => import("./chat-dialog"), {
   ssr: false,
@@ -23,7 +24,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
   const [showChat, setShowChat] = useState(false);
   const [hasOpenedChat, setHasOpenedChat] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { unreadCount, markAsRead, setChatOpen } = useChat();
+  const { unreadCount, setChatOpen, setMode } = useChatHeader();
 
   useEffect(() => {
     return () => {
@@ -34,12 +35,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
     };
   }, [setChatOpen]);
 
-  // Only show chat button when wallet is connected
-  if (!isConnected && !(isSolana && solanaAddress)) {
-    return null;
-  }
-
-  const handleOpenChat = () => {
+  const handleOpenChat = useCallback(() => {
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
@@ -47,8 +43,15 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
     setHasOpenedChat(true);
     setShowChat(true);
     setChatOpen(true);
-    markAsRead();
-  };
+  }, [setChatOpen]);
+
+  useEffect(() => onPublicChatOpen(() => {
+    if (!isConnected && !(isSolana && solanaAddress)) return;
+    setMode('public');
+    handleOpenChat();
+  }), [handleOpenChat, isConnected, isSolana, setMode, solanaAddress]);
+
+  if (!isConnected && !(isSolana && solanaAddress)) return null;
 
   const unreadLabel = unreadCount > 0
     ? `Open public chat, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
@@ -59,7 +62,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
       <Button
         type="button"
         variant="headerIcon"
-        size="icon"
+        size="headerIcon"
         onClick={handleOpenChat}
         className={`relative ${className}`}
         title="Open Public Chat"
@@ -77,9 +80,9 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
           preload
         />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-3 w-3" aria-hidden="true">
+          <span className="absolute -top-[4px] -right-[4px] flex h-[12px] w-[12px]" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(0_84%_60%)] opacity-75"></span>
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-[hsl(0_84%_60%)]"></span>
+            <span className="relative inline-flex h-[12px] w-[12px] rounded-full bg-[hsl(0_84%_60%)]"></span>
           </span>
         )}
       </Button>

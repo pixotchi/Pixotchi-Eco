@@ -299,7 +299,7 @@ assert.match(statusRouteSource, /Claim status is temporarily unavailable/);
 const componentSource = readFileSync(resolve(process.cwd(), 'components/verify-claim.tsx'), 'utf8');
 assert.match(componentSource, /claimState === 'retryable'/);
 assert.match(componentSource, /claimState === 'manual_review'/);
-assert.match(componentSource, /setClaimState\('unavailable'\)/);
+assert.match(componentSource, /setClaimState\(previous => previous === 'processing' \|\| previous === 'manual_review' \? previous : 'unavailable'\)/);
 
 console.log('Verify claim state smoke passed');
 }

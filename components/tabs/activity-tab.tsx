@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useActivityFeeds } from "@/hooks/useActivityFeeds";
+import { useActivityViewState } from "@/hooks/useActivityViewState";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -18,8 +21,6 @@ import {
   filterActivityEvents,
   hasActivityPerspective,
   isDirectionalActivityCategory,
-  parseActivityCategory,
-  parseActivityDirection,
   resolveActivityDirection,
   type ActivityCategoryId,
   type ActivityDirectionId,
@@ -61,6 +62,8 @@ import { useFrameContext } from "@/lib/frame-context";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { TABLET_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
+import { ActivityIdentityContext } from "@/components/activity/event-renderers";
+import { ActivityRowBoundary } from "@/components/activity/activity-row-boundary";
 
 type ActivityView = "all" | "my";
 type ItemMap = { [key: string]: string };
@@ -146,35 +149,21 @@ export default function ActivityTab() {
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('activity');
   const usesCompactPageScroll = useMediaQuery("(max-width: 53.99rem) and (max-height: 700px)");
-  // See the 30s freshness guard on the visibility refetch effect below.
-  const lastVisibleFetchRef = useRef(0);
   const myAddress = isSolana ? twinAddress : address;
   const isWalletConnected = isConnected || (isSolana && !!twinAddress);
-  const [activitiesByView, setActivitiesByView] = useState<Record<ActivityView, ProcessedActivityEvent[]>>({
-    all: [],
-    my: [],
+  const { activitiesByView, loadingByView, errorByView, lastSuccessByView, myAssetIds, refresh } = useActivityFeeds({
+    owner: myAddress ?? null,
+    visible: isVisible,
+    loadAll: getAllActivity,
+    loadMy: getMyActivity,
+    transform: bundleItemConsumedEvents,
   });
-  const [loadingByView, setLoadingByView] = useState<Record<ActivityView, boolean>>({
-    all: true,
-    my: false,
-  });
-  const [errorByView, setErrorByView] = useState<Record<ActivityView, string | null>>({
-    all: null,
-    my: null,
-  });
-  const [desktopPageByView, setDesktopPageByView] = useState<Record<ActivityView, number>>({
-    all: 1,
-    my: 1,
-  });
-  // Plant/land IDs the personal feed was scoped to, returned by /api/activity/my.
-  // They let us tell an attack on the viewer from one the viewer launched. The
-  // owning address is stored with them so a previous wallet's assets can never be
-  // used to classify the current wallet's feed.
-  const [myAssetIds, setMyAssetIds] = useState<{ address: string | null; landIds: string[]; plantIds: string[] }>({
-    address: null,
-    landIds: [],
-    plantIds: [],
-  });
+  const feedRefs = useRef<Record<ActivityView, HTMLDivElement | null>>({ all: null, my: null });
+  const feedRefCallbacks = useMemo(() => ({
+    all: (node: HTMLDivElement | null) => { feedRefs.current.all = node; },
+    my: (node: HTMLDivElement | null) => { feedRefs.current.my = node; },
+  }), []);
+  const { feeds, setPage, setCategory, setDirection, reset } = useActivityViewState(!isMiniApp);
   const [view, setView] = useWebQueryState<ActivityView>({
     key: "activityView",
     defaultValue: "all",
@@ -182,41 +171,8 @@ export default function ActivityTab() {
     parse: (rawValue) => (rawValue === "all" || rawValue === "my" ? rawValue : null),
     serialize: (value) => (value === "all" ? null : value),
   });
-  const [currentPage, setCurrentPage] = useWebQueryState<number>({
-    key: "activityPage",
-    defaultValue: 1,
-    enabled: !isMiniApp,
-    parse: (rawValue) => {
-      if (!rawValue) return null;
-      const parsed = Number.parseInt(rawValue, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    },
-    serialize: (value) => (value <= 1 ? null : value.toString()),
-  });
-  const [categoryFilter, setCategoryFilter] = useWebQueryState<ActivityCategoryId>({
-    key: "activityFilter",
-    defaultValue: DEFAULT_ACTIVITY_CATEGORY,
-    enabled: !isMiniApp,
-    parse: parseActivityCategory,
-    serialize: (value) => (value === DEFAULT_ACTIVITY_CATEGORY ? null : value),
-  });
-  const [directionFilter, setDirectionFilter] = useWebQueryState<ActivityDirectionId>({
-    key: "activityDirection",
-    defaultValue: DEFAULT_ACTIVITY_DIRECTION,
-    enabled: !isMiniApp,
-    parse: parseActivityDirection,
-    serialize: (value) => (value === DEFAULT_ACTIVITY_DIRECTION ? null : value),
-  });
-  // The desktop layout shows both feeds at once, so each column keeps its own
-  // filter and page - mirroring how pagination already works here.
-  const [desktopFilterByView, setDesktopFilterByView] = useState<Record<ActivityView, ActivityCategoryId>>({
-    all: DEFAULT_ACTIVITY_CATEGORY,
-    my: DEFAULT_ACTIVITY_CATEGORY,
-  });
-  const [desktopDirectionByView, setDesktopDirectionByView] = useState<Record<ActivityView, ActivityDirectionId>>({
-    all: DEFAULT_ACTIVITY_DIRECTION,
-    my: DEFAULT_ACTIVITY_DIRECTION,
-  });
+  const { page: currentPage, category: categoryFilter, direction: directionFilter } = feeds[view];
+  const setCurrentPage = useCallback((next: number | ((previous: number) => number)) => setPage(view, next), [setPage, view]);
   const { shopItems, gardenItems } = useItemCatalogs();
   const shopItemMap = useMemo<ItemMap>(() => {
     const nextMap: ItemMap = {};
@@ -233,120 +189,6 @@ export default function ActivityTab() {
     return nextMap;
   }, [gardenItems]);
 
-  // Request deduplication ref to prevent multiple simultaneous calls
-  const fetchActivitiesPendingRef = useRef<string | null>(null);
-  const activitiesByViewRef = useRef(activitiesByView);
-
-  const fetchActivities = useCallback(async () => {
-    const fetchKey = myAddress || 'public';
-
-    if (fetchActivitiesPendingRef.current === fetchKey) {
-      return;
-    }
-
-    fetchActivitiesPendingRef.current = fetchKey;
-
-    const feedsToFetch: ActivityView[] = myAddress ? ["all", "my"] : ["all"];
-
-    setLoadingByView(prev => ({
-      all: feedsToFetch.includes("all") && activitiesByViewRef.current.all.length === 0 ? true : prev.all,
-      my: feedsToFetch.includes("my") && activitiesByViewRef.current.my.length === 0 ? true : false,
-    }));
-    setErrorByView(prev => ({
-      all: feedsToFetch.includes("all") ? null : prev.all,
-      my: feedsToFetch.includes("my") ? null : prev.my,
-    }));
-
-    try {
-      const results = await Promise.allSettled(
-        feedsToFetch.map(async (feedView) => {
-          if (feedView === "my" && myAddress) {
-            const { activities, landIds, plantIds } = await getMyActivity(myAddress);
-            return {
-              activities: bundleItemConsumedEvents(activities),
-              assetIds: { address: myAddress, landIds, plantIds },
-              feedView,
-            };
-          }
-
-          return {
-            activities: bundleItemConsumedEvents(await getAllActivity()),
-            assetIds: null,
-            feedView,
-          };
-        })
-      );
-
-      if (fetchActivitiesPendingRef.current === fetchKey) {
-        setActivitiesByView(prev => {
-          const next = { ...prev };
-
-          results.forEach((result, index) => {
-            const feedView = feedsToFetch[index];
-            if (result.status === "fulfilled") {
-              next[feedView] = result.value.activities;
-            }
-          });
-
-          return next;
-        });
-
-        results.forEach((result) => {
-          if (result.status === "fulfilled" && result.value.assetIds) {
-            setMyAssetIds(result.value.assetIds);
-          }
-        });
-
-        setErrorByView(prev => {
-          const next = { ...prev };
-
-          results.forEach((result, index) => {
-            const feedView = feedsToFetch[index];
-            next[feedView] = result.status === "rejected"
-              ? "Failed to load activities. Please try again later."
-              : null;
-          });
-
-          return next;
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      if (fetchActivitiesPendingRef.current === fetchKey) {
-        setErrorByView(prev => ({
-          ...prev,
-          all: "Failed to load activities. Please try again later.",
-          my: myAddress ? "Failed to load activities. Please try again later." : prev.my,
-        }));
-      }
-    } finally {
-      if (fetchActivitiesPendingRef.current === fetchKey) {
-        setLoadingByView(prev => ({
-          ...prev,
-          all: false,
-          my: false,
-        }));
-        fetchActivitiesPendingRef.current = null;
-      }
-    }
-  }, [myAddress]);
-
-  useEffect(() => {
-    activitiesByViewRef.current = activitiesByView;
-  }, [activitiesByView]);
-
-  // Note: Removed auto-reset effect that caused race condition when switching to 'my' view
-  // The UI now handles missing wallet/address gracefully in renderContent()
-
-  // Refresh when tab becomes visible
-  useEffect(() => {
-    if (!isVisible) return;
-    if (Date.now() - lastVisibleFetchRef.current < 30_000) return;
-    lastVisibleFetchRef.current = Date.now();
-
-    fetchActivities();
-  }, [isVisible, fetchActivities]);
-
   // Only trust the stored assets while they still belong to the connected wallet.
   const perspective = useMemo<ActivityPerspective>(
     () => (myAddress && myAssetIds.address === myAddress
@@ -360,14 +202,6 @@ export default function ActivityTab() {
     (feedView: ActivityView) => (feedView === 'my' ? perspective : EMPTY_ACTIVITY_PERSPECTIVE),
     [perspective]
   );
-
-  // Clear the personal feed the moment the wallet changes: the previous
-  // account's rows used to keep rendering (with loading forced false because
-  // the stale list was non-empty) until the new fetch resolved.
-  useEffect(() => {
-    setActivitiesByView((previous) => (previous.my.length ? { ...previous, my: [] } : previous));
-    setLoadingByView((previous) => ({ ...previous, my: Boolean(myAddress) }));
-  }, [myAddress]);
 
   const renderActivity = (activity: ProcessedActivityEvent) => {
     switch (activity.__typename) {
@@ -385,23 +219,23 @@ export default function ActivityTab() {
         return <ShopItemPurchasedEventRenderer key={activity.id} event={activity} perspective={perspective} itemMap={shopItemMap} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} />;
       // Land Event Renderers
       case "LandTransferEvent":
-        return <LandTransferEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <LandTransferEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "LandMintedEvent":
-        return <LandMintedEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <LandMintedEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "LandNameChangedEvent":
         return <LandNameChangedEventRenderer key={activity.id} event={activity} />;
       case "VillageUpgradedWithLeafEvent":
-        return <VillageUpgradeEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <VillageUpgradeEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "VillageSpeedUpWithSeedEvent":
-        return <VillageSpeedUpEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <VillageSpeedUpEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "TownUpgradedWithLeafEvent":
-        return <TownUpgradeEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <TownUpgradeEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "TownSpeedUpWithSeedEvent":
-        return <TownSpeedUpEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <TownSpeedUpEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "QuestStartedEvent":
         return <QuestStartedEventRenderer key={activity.id} event={activity} />;
       case "QuestFinalizedEvent":
-        return <QuestFinalizedEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <QuestFinalizedEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "VillageProductionClaimedEvent":
         return <VillageProductionClaimedEventRenderer key={activity.id} event={activity} />;
       case "WarehouseAssignmentEvent":
@@ -412,13 +246,13 @@ export default function ActivityTab() {
         return <BarracksRaidEventRenderer key={activity.id} event={activity} />;
       // Casino Event Renderers
       case "CasinoBuiltEvent":
-        return <CasinoBuiltEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <CasinoBuiltEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "RouletteSpinResultEvent":
-        return <RouletteSpinResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <RouletteSpinResultEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "BlackjackResultEvent":
-        return <BlackjackResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <BlackjackResultEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       case "BaccaratRoundResultEvent":
-        return <BaccaratRoundResultEventRenderer key={activity.id} event={activity} userAddress={address} />;
+        return <BaccaratRoundResultEventRenderer key={activity.id} event={activity} userAddress={myAddress} />;
       default:
         return null;
     }
@@ -440,80 +274,30 @@ export default function ActivityTab() {
   );
   const desktopAllActivities = useMemo(
     () => filterActivityEvents(activitiesByView.all, {
-      category: desktopFilterByView.all,
+      category: feeds.all.category,
     }),
-    [activitiesByView, desktopFilterByView.all]
+    [activitiesByView, feeds.all.category]
   );
   const desktopMyDirection = resolveActivityDirection(
-    desktopFilterByView.my,
-    desktopDirectionByView.my,
+    feeds.my.category,
+    feeds.my.direction,
     perspective
   );
   const desktopMyActivities = useMemo(
     () => filterActivityEvents(activitiesByView.my, {
-      category: desktopFilterByView.my,
+      category: feeds.my.category,
       direction: desktopMyDirection,
       perspective,
     }),
-    [activitiesByView, desktopFilterByView.my, desktopMyDirection, perspective]
+    [activitiesByView, feeds.my.category, desktopMyDirection, perspective]
   );
 
   const selectedLoading = loadingByView[view];
   const selectedError = errorByView[view];
-  const selectedTotalPages = Math.ceil(mobileActivities.length / ITEMS_PER_PAGE);
-
-  const setDesktopPage = useCallback((
-    feedView: ActivityView,
-    nextPage: number | ((previousPage: number) => number)
-  ) => {
-    setDesktopPageByView(prev => ({
-      ...prev,
-      [feedView]: typeof nextPage === "function" ? nextPage(prev[feedView]) : nextPage,
-    }));
-  }, []);
-
-  const setDesktopCategory = useCallback((feedView: ActivityView, nextCategory: ActivityCategoryId) => {
-    setDesktopFilterByView(prev => ({ ...prev, [feedView]: nextCategory }));
-    if (!isDirectionalActivityCategory(nextCategory)) {
-      setDesktopDirectionByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_DIRECTION }));
-    }
-    setDesktopPage(feedView, 1);
-  }, [setDesktopPage]);
-
-  const setDesktopDirection = useCallback((feedView: ActivityView, nextDirection: ActivityDirectionId) => {
-    setDesktopDirectionByView(prev => ({ ...prev, [feedView]: nextDirection }));
-    setDesktopPage(feedView, 1);
-  }, [setDesktopPage]);
-
-  const resetDesktopFilter = useCallback((feedView: ActivityView) => {
-    setDesktopFilterByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_CATEGORY }));
-    setDesktopDirectionByView(prev => ({ ...prev, [feedView]: DEFAULT_ACTIVITY_DIRECTION }));
-    setDesktopPage(feedView, 1);
-  }, [setDesktopPage]);
-
-  const handleMobileCategoryChange = useCallback((nextCategory: ActivityCategoryId) => {
-    setCategoryFilter(nextCategory);
-    if (!isDirectionalActivityCategory(nextCategory)) {
-      setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
-    }
-    setCurrentPage(1);
-  }, [setCategoryFilter, setCurrentPage, setDirectionFilter]);
-
-  const handleMobileDirectionChange = useCallback((nextDirection: ActivityDirectionId) => {
-    setDirectionFilter(nextDirection);
-    setCurrentPage(1);
-  }, [setCurrentPage, setDirectionFilter]);
-
-  const resetMobileFilter = useCallback(() => {
-    setCategoryFilter(DEFAULT_ACTIVITY_CATEGORY);
-    setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
-    setCurrentPage(1);
-  }, [setCategoryFilter, setCurrentPage, setDirectionFilter]);
-
-  const scrollActivityToTop = useCallback(() => {
+  const scrollActivityToTop = useCallback((feedView: ActivityView) => {
     window.requestAnimationFrame(() => {
-      const feedScroll = document.querySelector<HTMLElement>('[data-activity-feed-scroll]');
-      const fallbackShell = document.querySelector<HTMLElement>('[data-viewport-shell="content"]');
+      const feedScroll = feedRefs.current[feedView];
+      const fallbackShell = feedScroll?.closest<HTMLElement>('[data-viewport-shell="content"]');
       const scrollOwner = usesCompactPageScroll ? fallbackShell : (feedScroll ?? fallbackShell);
       scrollOwner?.scrollTo({
         top: 0,
@@ -523,6 +307,7 @@ export default function ActivityTab() {
   }, [usesCompactPageScroll]);
 
   const renderPaginationControls = useCallback((
+    feedView: ActivityView,
     activePage: number,
     totalPages: number,
     setPage: PaginationConfig["setPage"]
@@ -532,27 +317,14 @@ export default function ActivityTab() {
       totalPages={totalPages}
       onPrevious={() => {
         setPage(prev => Math.max(prev - 1, 1));
-        scrollActivityToTop();
+        scrollActivityToTop(feedView);
       }}
       onNext={() => {
         setPage(prev => Math.min(prev + 1, totalPages));
-        scrollActivityToTop();
+        scrollActivityToTop(feedView);
       }}
     />
   ), [scrollActivityToTop]);
-
-  useEffect(() => {
-    if (selectedTotalPages === 0) {
-      if (currentPage !== 1) {
-        setCurrentPage(1);
-      }
-      return;
-    }
-
-    if (currentPage > selectedTotalPages) {
-      setCurrentPage(selectedTotalPages);
-    }
-  }, [currentPage, selectedTotalPages, setCurrentPage]);
 
   const desktopTotalsByView = useMemo(() => ({
     all: desktopAllActivities.length,
@@ -560,27 +332,13 @@ export default function ActivityTab() {
   }), [desktopAllActivities.length, desktopMyActivities.length]);
 
   useEffect(() => {
-    setDesktopPageByView(prev => {
-      let changed = false;
-      const next = { ...prev };
-
-      (["all", "my"] as ActivityView[]).forEach((feedView) => {
-        const maxPage = Math.max(1, Math.ceil(desktopTotalsByView[feedView] / ITEMS_PER_PAGE));
-
-        if (next[feedView] > maxPage) {
-          next[feedView] = maxPage;
-          changed = true;
-        }
-
-        if (next[feedView] < 1) {
-          next[feedView] = 1;
-          changed = true;
-        }
-      });
-
-      return changed ? next : prev;
+    (["all", "my"] as ActivityView[]).forEach(feedView => {
+      // A deep link is not out of range until a successful response proves it.
+      if (!lastSuccessByView[feedView] || loadingByView[feedView] || errorByView[feedView]) return;
+      const maxPage = Math.max(1, Math.ceil(desktopTotalsByView[feedView] / ITEMS_PER_PAGE));
+      if (feeds[feedView].page > maxPage) setPage(feedView, maxPage);
     });
-  }, [desktopTotalsByView]);
+  }, [desktopTotalsByView, errorByView, feeds, lastSuccessByView, loadingByView, setPage]);
 
   const renderFeedContent = (
     feedView: ActivityView,
@@ -591,19 +349,30 @@ export default function ActivityTab() {
     pagination?: PaginationConfig,
     usePageScroll = false,
   ) => {
+    const refreshNotice = error && activitiesByView[feedView].length > 0 ? (
+      <Alert variant="warning" role="status">
+        <AlertTitle>Showing saved activity</AlertTitle>
+        <AlertDescription>
+          The latest update failed. {lastSuccessByView[feedView] && <>Last updated {new Date(lastSuccessByView[feedView]!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</>}
+        </AlertDescription>
+        <Button variant="outline" size="touchCompact" className="mt-2" onClick={() => void refresh()}>Retry activity</Button>
+      </Alert>
+    ) : null;
     const renderFeedState = (content: ReactNode) => (
       <div className={cn("flex min-h-0 flex-col gap-3", usePageScroll ? "h-auto" : "h-full")}>
-        <div
+        {refreshNotice}
+        <ScrollArea
+          ref={feedRefCallbacks[feedView]}
           data-activity-feed-scroll
           className={cn(
-            "surface-scroll-area min-h-0 rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
+            "min-h-0 rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
             usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
           )}
         >
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
           </div>
-        </div>
+        </ScrollArea>
       </div>
     );
 
@@ -615,12 +384,13 @@ export default function ActivityTab() {
       );
     }
 
-    if (error) {
+    if (error && activitiesByView[feedView].length === 0) {
       return renderFeedState(
         <Alert variant="destructive" className="w-full">
           <Terminal className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>Activity could not load</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+          <Button variant="outline" size="touchCompact" className="mt-3" onClick={() => void refresh()}>Retry activity</Button>
         </Alert>
       );
     }
@@ -662,18 +432,22 @@ export default function ActivityTab() {
 
     return (
       <div className={cn("flex min-h-0 flex-col gap-3", usePageScroll ? "h-auto" : "h-full")}>
-        <div
+        {refreshNotice}
+        <ScrollArea
+          ref={feedRefCallbacks[feedView]}
           data-activity-feed-scroll
           className={cn(
-            "surface-scroll-area min-h-0 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
+            "min-h-0 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
             usePageScroll ? "flex-none overflow-visible" : "flex-1 overflow-y-auto",
           )}
         >
-          {visibleActivities.map(renderActivity)}
-        </div>
+          <ActivityIdentityContext.Provider value={perspective}>
+            {visibleActivities.map(activity => <ActivityRowBoundary key={activity.id} record={activity}>{renderActivity(activity)}</ActivityRowBoundary>)}
+          </ActivityIdentityContext.Provider>
+        </ScrollArea>
 
         {pagination && totalPages > 1 && (
-          renderPaginationControls(activePage, totalPages, pagination.setPage)
+          renderPaginationControls(feedView, activePage, totalPages, pagination.setPage)
         )}
       </div>
     );
@@ -697,26 +471,26 @@ export default function ActivityTab() {
   const mobileFilter: FilterConfig = {
     category: categoryFilter,
     direction: mobileDirection,
-    onCategoryChange: handleMobileCategoryChange,
-    onDirectionChange: handleMobileDirectionChange,
-    onReset: resetMobileFilter,
+    onCategoryChange: next => setCategory(view, next),
+    onDirectionChange: next => setDirection(view, next),
+    onReset: () => reset(view),
     showDirection: view === 'my' && isDirectionalActivityCategory(categoryFilter) && canFilterByDirection,
   };
   const desktopAllFilter: FilterConfig = {
-    category: desktopFilterByView.all,
+    category: feeds.all.category,
     direction: DEFAULT_ACTIVITY_DIRECTION,
-    onCategoryChange: (nextCategory) => setDesktopCategory('all', nextCategory),
-    onDirectionChange: (nextDirection) => setDesktopDirection('all', nextDirection),
-    onReset: () => resetDesktopFilter('all'),
+    onCategoryChange: (nextCategory) => setCategory('all', nextCategory),
+    onDirectionChange: (nextDirection) => setDirection('all', nextDirection),
+    onReset: () => reset('all'),
     showDirection: false,
   };
   const desktopMyFilter: FilterConfig = {
-    category: desktopFilterByView.my,
+    category: feeds.my.category,
     direction: desktopMyDirection,
-    onCategoryChange: (nextCategory) => setDesktopCategory('my', nextCategory),
-    onDirectionChange: (nextDirection) => setDesktopDirection('my', nextDirection),
-    onReset: () => resetDesktopFilter('my'),
-    showDirection: isDirectionalActivityCategory(desktopFilterByView.my) && canFilterByDirection,
+    onCategoryChange: (nextCategory) => setCategory('my', nextCategory),
+    onDirectionChange: (nextDirection) => setDirection('my', nextDirection),
+    onReset: () => reset('my'),
+    showDirection: isDirectionalActivityCategory(feeds.my.category) && canFilterByDirection,
   };
 
   return (
@@ -749,13 +523,6 @@ export default function ActivityTab() {
                   return;
                 }
 
-                // Direction needs the viewer's own assets, so it cannot survive a
-                // switch to the public feed.
-                if (nextValue === "all") {
-                  setDirectionFilter(DEFAULT_ACTIVITY_DIRECTION);
-                }
-
-                setCurrentPage(1);
                 setView(nextValue);
               }}
               options={[
@@ -800,8 +567,8 @@ export default function ActivityTab() {
           </CardHeader>
           <CardContent className="tablet:min-h-0 tablet:flex-1 tablet:overflow-visible">
             {renderFeedContent("all", desktopAllActivities, loadingByView.all, errorByView.all, desktopAllFilter, {
-              page: desktopPageByView.all,
-              setPage: (nextPage) => setDesktopPage("all", nextPage),
+              page: feeds.all.page,
+              setPage: (nextPage) => setPage("all", nextPage),
             })}
           </CardContent>
         </TabCard>
@@ -822,8 +589,8 @@ export default function ActivityTab() {
           </CardHeader>
           <CardContent className="tablet:min-h-0 tablet:flex-1 tablet:overflow-visible">
             {renderFeedContent("my", desktopMyActivities, loadingByView.my, errorByView.my, desktopMyFilter, {
-              page: desktopPageByView.my,
-              setPage: (nextPage) => setDesktopPage("my", nextPage),
+              page: feeds.my.page,
+              setPage: (nextPage) => setPage("my", nextPage),
             })}
           </CardContent>
         </TabCard>

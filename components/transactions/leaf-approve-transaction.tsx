@@ -3,6 +3,7 @@
 import React from 'react';
 import GameTransaction from './game-transaction';
 import { LEAF_CONTRACT_ADDRESS, LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import type { LifecycleStatus } from './transaction-kit';
 
 const LEAF_TOKEN_ABI = [
   {
@@ -23,6 +24,7 @@ interface LeafApproveTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
 }
 
 export default function LeafApproveTransaction({
@@ -30,7 +32,8 @@ export default function LeafApproveTransaction({
   onError,
   buttonText = "Approve LEAF",
   buttonClassName,
-  disabled = false
+  disabled = false,
+  onStatusUpdate,
 }: LeafApproveTransactionProps) {
   
   // Max approval amount
@@ -53,6 +56,7 @@ export default function LeafApproveTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      onStatusUpdate={onStatusUpdate}
     />
   );
 }

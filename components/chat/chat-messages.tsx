@@ -3,12 +3,15 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import ChatMessageComponent from "./chat-message";
 import ChatProfileDialog from "./chat-profile-dialog";
-import { useChat } from "./chat-context";
+import { useChatPane } from "./chat-view-context";
+import { useRelativeTimeTick } from '@/hooks/useRelativeTimeTick';
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
 import Image from "next/image";
 import type { ChatMode } from "@/lib/types";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ResourceState } from '@/components/ui/resource-state';
 
 const SCROLL_THRESHOLD = 56;
 
@@ -18,20 +21,18 @@ type ChatMessagesProps = {
 
 export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
   const {
-    messages,
-    loading,
-    mode,
-    getLoadingForMode,
-    getMessagesForMode,
+    messages: activeMessages,
+    loading: activeLoading,
+    activeMode,
+    historyError,
+    fetchHistoryForMode,
+    markAsRead,
     publicChatAddress,
     publicChatAuthenticated,
     publicChatLoading,
     publicChatState,
     retryPublicChatSession,
-  } = useChat();
-  const activeMode = modeOverride ?? mode;
-  const activeMessages = modeOverride ? getMessagesForMode(modeOverride) : messages;
-  const activeLoading = modeOverride ? getLoadingForMode(modeOverride) : loading;
+  } = useChatPane(modeOverride);
   const isAssistantMode = activeMode === 'ai';
   const publicChatUnavailable =
     (activeMode === 'public' || activeMode === 'ai') && !publicChatAuthenticated;
@@ -56,11 +57,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
   const openProfile = useCallback((address: string) => setProfileAddress(address), []);
   // Slow clock so relative timestamps tick over (AI-mode messages used to stay
   // on "now" for the whole session).
-  const [clockTick, setClockTick] = useState(0);
-  useEffect(() => {
-    const interval = window.setInterval(() => setClockTick((tick) => tick + 1), 30_000);
-    return () => window.clearInterval(interval);
-  }, []);
+  const clockTick = useRelativeTimeTick();
 
   const handleScroll = useCallback(() => {
     const node = containerRef.current;
@@ -70,11 +67,27 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
     if (isAtBottom) {
       lastSeenLengthRef.current = activeMessagesRef.current.length;
       setUnseenCount(0);
+      if (activeMode === 'public' && !touchActiveRef.current && activeMessagesRef.current.length > 0) {
+        markAsRead(Math.max(...activeMessagesRef.current.map(message => message.timestamp)));
+      }
     }
-  }, []);
+  }, [activeMode, markAsRead]);
 
   const activeMessagesRef = useRef(activeMessages);
   activeMessagesRef.current = activeMessages;
+
+  useEffect(() => {
+    if (activeMode !== 'public' || !stickToBottom || touchActiveRef.current || activeMessages.length === 0) return;
+    const through = Math.max(...activeMessages.map(message => message.timestamp));
+    markAsRead(through);
+  }, [activeMode, activeMessages, markAsRead, stickToBottom]);
+
+  useEffect(() => {
+    setProfileAddress(null);
+    setStickToBottom(true);
+    lastSeenLengthRef.current = 0;
+    setUnseenCount(0);
+  }, [publicChatAddress, activeMode]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -103,17 +116,23 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
 
   if (activeLoading && activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
+      <ScrollArea ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex items-center justify-center h-full">
           <BaseExpandedLoadingPageLoader text="Loading messages..." />
         </div>
-      </div>
+      </ScrollArea>
     );
+  }
+
+  if (historyError && activeMessages.length === 0 && !publicChatUnavailable) {
+    return <ScrollArea ref={containerRef} className="h-full overflow-y-auto p-4">
+      <ResourceState status="error" title="Messages unavailable" description={historyError} onRetry={() => void fetchHistoryForMode(activeMode, true)} />
+    </ScrollArea>;
   }
 
   if (activeMessages.length === 0) {
     return (
-      <div ref={containerRef} className="surface-scroll-fade h-full overflow-y-auto" onScroll={handleScroll}>
+      <ScrollArea ref={containerRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
         <div className="flex flex-col items-center justify-center h-full text-center p-4">
           {publicChatUnavailable ? (
             <div
@@ -179,20 +198,24 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
             </>
           )}
         </div>
-      </div>
+      </ScrollArea>
     );
   }
 
   return (
     <div className="relative h-full min-h-0">
-      <div
+      <ScrollArea
         ref={containerRef}
         onScroll={handleScroll}
         onTouchStart={() => { touchActiveRef.current = true; }}
-        onTouchEnd={() => { touchActiveRef.current = false; }}
-        onTouchCancel={() => { touchActiveRef.current = false; }}
-        className="surface-scroll-fade h-full overflow-y-auto"
+        onTouchEnd={() => { touchActiveRef.current = false; handleScroll(); }}
+        onTouchCancel={() => { touchActiveRef.current = false; handleScroll(); }}
+        className="h-full overflow-y-auto"
       >
+        {historyError && <div role="status" className="m-3 rounded-[var(--radius-control)] border border-border p-3 text-sm">
+          Could not refresh messages. Showing the last loaded conversation.
+          <Button variant="outline" className="mt-2" onClick={() => void fetchHistoryForMode(activeMode, true)}>Retry history</Button>
+        </div>}
         <div
           className="p-4 space-y-4"
           role="log"
@@ -213,7 +236,7 @@ export default function ChatMessages({ modeOverride }: ChatMessagesProps = {}) {
             />
           ))}
         </div>
-      </div>
+      </ScrollArea>
 
       {/* Scrolled-up affordance: new arrivals used to be invisible. */}
       {!stickToBottom && unseenCount > 0 && (

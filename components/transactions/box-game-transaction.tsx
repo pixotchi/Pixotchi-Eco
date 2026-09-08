@@ -4,56 +4,13 @@ import { getBoxResult, type BoxResult } from "@/lib/box-result";
 import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
 import React from 'react';
 import GameTransaction from './game-transaction';
-import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
+import { BOX_GAME_ABI, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { toast } from 'react-hot-toast';
 import { formatDuration, formatScore } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import type { TransactionFeedbackMode } from './transaction-kit';
-
-const BOX_GAME_ABI = [
-  {
-    inputs: [{ name: 'nftID', type: 'uint256' }],
-    name: 'boxGameGetCoolDownTimePerNFT',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'nftID', type: 'uint256' }],
-    name: 'boxGameGetCoolDownTimeWithStar',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'nftID', type: 'uint256' },
-      { name: 'seed', type: 'uint256' },
-    ],
-    name: 'boxGamePlay',
-    outputs: [
-      { name: 'points', type: 'uint256' },
-      { name: 'timeExtension', type: 'uint256' },
-    ],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'nftID', type: 'uint256' },
-      { name: 'seed', type: 'uint256' },
-    ],
-    name: 'boxGamePlayWithStar',
-    outputs: [
-      { name: 'points', type: 'uint256' },
-      { name: 'timeExtension', type: 'uint256' },
-    ],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-] as const;
 
 interface BoxGameTransactionProps {
   plantId: number;

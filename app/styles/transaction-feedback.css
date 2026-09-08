@@ -1,0 +1,97 @@
+/* Feature-owned styles; shared tokens and primitives remain in globals.css. */
+
+.transaction-feedback-viewport {
+  position: fixed;
+  z-index: var(--z-toast);
+  width: min(380px, calc(100vw - 24px));
+  pointer-events: auto;
+  top: max(12px, env(safe-area-inset-top), var(--safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  --feedback-enter-y: -8px;
+}
+
+.transaction-feedback-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 40px 12px 16px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 16px;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  box-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.3), 0 4px 12px -4px rgb(0 0 0 / 0.16);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@starting-style {
+  .transaction-feedback-card { opacity: 0; transform: translateY(var(--feedback-enter-y)); }
+}
+
+.transaction-feedback-viewport[data-state="closed"] { pointer-events: none; }
+.transaction-feedback-viewport[data-state="closed"] .transaction-feedback-card {
+  opacity: 0;
+  transform: translateY(var(--feedback-enter-y));
+}
+
+.transaction-feedback-icon {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+.transaction-feedback-icon[data-tone="success"] { background: hsl(var(--success) / 0.12); color: hsl(var(--success-strong)); }
+.transaction-feedback-icon[data-tone="warning"] { background: hsl(var(--warning) / 0.12); color: hsl(var(--warning-strong)); }
+.transaction-feedback-icon[data-tone="error"] { background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); }
+
+.transaction-feedback-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: hsl(var(--muted-foreground));
+}
+@media (hover: hover) {
+  .transaction-feedback-close:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.5); }
+}
+.transaction-feedback-close:active { transform: scale(0.96); }
+.transaction-feedback-close:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: -5px; }
+
+.transaction-feedback-viewport:is([data-position="bottom-center"], [data-position="bottom-right"]) {
+  top: auto;
+  bottom: max(88px, calc(80px + env(safe-area-inset-bottom)));
+  --feedback-enter-y: 8px;
+}
+.transaction-feedback-viewport:is([data-position="bottom-right"], [data-position="top-right"]) {
+  left: auto;
+  right: 12px;
+  transform: none;
+}
+@media (min-width: 1280px) {
+  .transaction-feedback-viewport[data-position="auto"] {
+    top: auto;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    left: auto;
+    right: max(24px, env(safe-area-inset-right));
+    transform: none;
+    --feedback-enter-y: 8px;
+  }
+  .transaction-feedback-viewport:is([data-position="bottom-center"], [data-position="bottom-right"]) { bottom: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transaction-feedback-card { transform: none !important; }
+}
+.motion-off .transaction-feedback-card { transform: none !important; }
+.performance-mode .transaction-feedback-card { transition: none; transform: none !important; box-shadow: 0 2px 10px rgb(0 0 0 / 0.16); }

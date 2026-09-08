@@ -11,7 +11,7 @@ const resourceIcons = {
   points: '/icons/pts.svg',
   lifetime: '/icons/tod.svg',
   protection: '/icons/Shield.png',
-  duration: '/icons/clock.svg',
+  duration: '/icons/duration-clock.png',
   stars: '/icons/Star.svg',
   jesse: '/icons/jessetoken.png',
   usdc: '/icons/usdc.svg',
@@ -33,7 +33,7 @@ export function ResourceValue({ resource, unit, children, className }: {
   className?: string;
 }) {
   const resolvedResource = resource ?? unitResources[unit?.trim().toUpperCase() ?? ''];
-  return <span className={cn('inline-flex max-w-full min-w-0 items-center gap-1 align-middle', className)}>
+  return <span className={cn('inline-flex max-w-full min-w-0 items-center gap-1 align-top', className)}>
     {resolvedResource && <Image src={resourceIcons[resolvedResource]} alt="" aria-hidden="true" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain" />}
     <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
   </span>;

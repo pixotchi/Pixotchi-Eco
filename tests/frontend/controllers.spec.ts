@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { openFrontendFixture } from './helpers/bootstrap';
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('/qa/frontend');
-  await expect(page.locator('[data-fixtures-ready=true]')).toBeVisible();
+test.beforeEach(async ({ page }, testInfo) => {
+  await openFrontendFixture(page, testInfo, 'controllers');
 });
 
 test('swap quote controller rejects a late quote after editing the draft', async ({ page }) => {
@@ -45,6 +45,7 @@ test('Barracks changes land during a read and recovers from a failed refresh', a
   await region.getByRole('button', { name: 'Refresh army' }).click();
   await region.getByRole('button', { name: 'Fail army read' }).click();
   await expect(region.getByRole('alert')).toContainText('Army unavailable');
+  await expect(region.getByLabel('Stationed army', { exact: true })).toHaveText('20 swordsmen (last known)');
   await region.getByRole('button', { name: 'Retry', exact: true }).click();
   await region.getByRole('button', { name: 'Resolve newest army' }).click();
   await expect(region.getByLabel('Stationed army', { exact: true })).toHaveText('20 swordsmen');

@@ -2,25 +2,11 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { usePerformanceMode } from "@/components/ui/performance-mode";
+import { useSelectionIndicator } from "@/components/hooks/use-selection-indicator";
+import { getRovingIndex } from "@/lib/roving-index";
 import { cn } from "@/lib/utils";
 
 export type ToggleValue = string | number;
-
-type IndicatorGeometry = {
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-};
-
-function parseMotionDuration(value: string, fallback: number) {
-  const amount = Number.parseFloat(value);
-  if (!Number.isFinite(amount)) return fallback;
-  if (value.trim().endsWith("ms")) return amount;
-  if (value.trim().endsWith("s")) return amount * 1000;
-  return fallback;
-}
 
 export interface ToggleOption {
   value: ToggleValue;
@@ -62,142 +48,14 @@ export function ToggleGroup({
   ariaLabelledBy,
   orientation = "horizontal",
 }: ToggleGroupProps) {
-  const { enabled: performanceModeEnabled } = usePerformanceMode();
-  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const indicatorRef = React.useRef<HTMLSpanElement | null>(null);
   const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
-  const targetIndicatorGeometryRef = React.useRef<IndicatorGeometry | null>(null);
-  const indicatorAnimationRef = React.useRef<Animation | null>(null);
-  const suppressNextIndicatorMotionRef = React.useRef(false);
-  const selectedIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
-  const skipIndicatorMotion = performanceModeEnabled || prefersReducedMotion;
-
-  React.useEffect(() => {
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncPreference = () => setPrefersReducedMotion(reducedMotion.matches);
-    syncPreference();
-
-    try {
-      reducedMotion.addEventListener("change", syncPreference);
-      return () => reducedMotion.removeEventListener("change", syncPreference);
-    } catch {
-      reducedMotion.addListener(syncPreference);
-      return () => reducedMotion.removeListener(syncPreference);
-    }
-  }, []);
-
-  React.useEffect(() => () => {
-    indicatorAnimationRef.current?.cancel();
-    indicatorAnimationRef.current = null;
-  }, []);
-
-  React.useLayoutEffect(() => {
-    const container = containerRef.current;
-    const indicator = indicatorRef.current;
-    const selectedOption = optionRefs.current[selectedIndex];
-    if (!container || !indicator || !selectedOption) {
-      indicatorAnimationRef.current?.cancel();
-      indicatorAnimationRef.current = null;
-      targetIndicatorGeometryRef.current = null;
-      if (indicator) indicator.style.opacity = "0";
-      return;
-    }
-
-    const updateIndicator = (allowMotion = true) => {
-      const nextGeometry: IndicatorGeometry = {
-        height: selectedOption.offsetHeight,
-        left: selectedOption.offsetLeft,
-        top: selectedOption.offsetTop,
-        width: selectedOption.offsetWidth,
-      };
-      const previousTarget = targetIndicatorGeometryRef.current;
-
-      if (
-        previousTarget &&
-        previousTarget.height === nextGeometry.height &&
-        previousTarget.left === nextGeometry.left &&
-        previousTarget.top === nextGeometry.top &&
-        previousTarget.width === nextGeometry.width
-      ) {
-        suppressNextIndicatorMotionRef.current = false;
-        if (skipIndicatorMotion && indicatorAnimationRef.current) {
-          indicatorAnimationRef.current.cancel();
-          indicatorAnimationRef.current = null;
-        }
-        return;
-      }
-
-      // Measure before cancelling an in-flight animation. The resulting inverse
-      // transform starts at the currently rendered pill, so a rapid retarget
-      // continues smoothly instead of snapping to its previous destination.
-      const indicatorRect = indicator.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      const previousVisualGeometry = previousTarget && indicatorRect.width > 0 && indicatorRect.height > 0
-        ? {
-            height: indicatorRect.height,
-            left: indicatorRect.left - containerRect.left - container.clientLeft,
-            top: indicatorRect.top - containerRect.top - container.clientTop,
-            width: indicatorRect.width,
-          }
-        : null;
-      indicatorAnimationRef.current?.cancel();
-      indicatorAnimationRef.current = null;
-
-      const finalTransform = `translate3d(${nextGeometry.left}px, ${nextGeometry.top}px, 0) scale(1, 1)`;
-      indicator.style.height = `${nextGeometry.height}px`;
-      indicator.style.opacity = "1";
-      indicator.style.transform = finalTransform;
-      indicator.style.transformOrigin = "top left";
-      indicator.style.width = `${nextGeometry.width}px`;
-
-      const shouldAnimate =
-        allowMotion &&
-        previousVisualGeometry !== null &&
-        !suppressNextIndicatorMotionRef.current &&
-        !skipIndicatorMotion &&
-        typeof indicator.animate === "function";
-      suppressNextIndicatorMotionRef.current = false;
-      targetIndicatorGeometryRef.current = nextGeometry;
-      if (!shouldAnimate) return;
-
-      const computedStyle = window.getComputedStyle(container);
-      const duration = parseMotionDuration(
-        computedStyle.getPropertyValue("--motion-standard"),
-        220
-      );
-      const easing = computedStyle.getPropertyValue("--ease-standard").trim() || "cubic-bezier(0.2, 0.8, 0.2, 1)";
-      const animation = indicator.animate(
-        [
-          {
-            transform: `translate3d(${previousVisualGeometry.left}px, ${previousVisualGeometry.top}px, 0) scale(${previousVisualGeometry.width / nextGeometry.width}, ${previousVisualGeometry.height / nextGeometry.height})`,
-          },
-          { transform: finalTransform },
-        ],
-        { duration, easing }
-      );
-      indicatorAnimationRef.current = animation;
-      animation.onfinish = () => {
-        if (indicatorAnimationRef.current === animation) {
-          indicatorAnimationRef.current = null;
-        }
-      };
-    };
-
-    updateIndicator();
-
-    if (typeof ResizeObserver === "undefined") return;
-
-    const resizeObserver = new ResizeObserver(() => updateIndicator(false));
-    resizeObserver.observe(container);
-    optionRefs.current.forEach((option) => {
-      if (option) resizeObserver.observe(option);
-    });
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [options.length, orientation, selectedIndex, size, skipIndicatorMotion]);
+  const selectedIndex = options.findIndex((opt) => opt.value === value);
+  const suppressNextIndicatorMotionRef = useSelectionIndicator({
+    containerRef, indicatorRef, itemRefs: optionRefs, selectedIndex,
+    itemCount: options.length, layoutKey: orientation + size,
+  });
 
   const focusOption = (index: number) => {
     optionRefs.current[index]?.focus();
@@ -212,29 +70,9 @@ export function ToggleGroup({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (options.length === 0) return;
-
-    const isHorizontal = orientation === "horizontal";
-    const previousKey = isHorizontal ? "ArrowLeft" : "ArrowUp";
-    const nextKey = isHorizontal ? "ArrowRight" : "ArrowDown";
-
-    let nextIndex = index;
-
-    if (event.key === previousKey) {
-      event.preventDefault();
-      nextIndex = (index - 1 + options.length) % options.length;
-    } else if (event.key === nextKey) {
-      event.preventDefault();
-      nextIndex = (index + 1) % options.length;
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      event.preventDefault();
-      nextIndex = options.length - 1;
-    } else {
-      return;
-    }
+    const nextIndex = getRovingIndex(event.key, index, options.length, orientation);
+    if (nextIndex === null) return;
+    event.preventDefault();
 
     // Keyboard navigation should feel immediate; reserve the glide for pointer
     // selection where spatial continuity is useful.
@@ -245,7 +83,7 @@ export function ToggleGroup({
     <div
       ref={containerRef}
       className={cn(
-        "surface-control relative isolate inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border p-0.5",
+        "surface-inset relative isolate inline-flex items-center rounded-[calc(var(--radius-nav)+0.125rem)] border border-solid border-[hsl(var(--edge-panel))] p-0.5",
         orientation === "vertical" && "flex-col",
         className
       )}
@@ -272,7 +110,7 @@ export function ToggleGroup({
           // WCAG 2.5.3 (Label in Name) failure. Undefined lets the accessible name
           // come from the rendered content, which is what the label already is.
           aria-label={opt.ariaLabel ?? (typeof opt.label === "string" ? opt.label : undefined)}
-          tabIndex={index === selectedIndex ? 0 : -1}
+          tabIndex={index === Math.max(0, selectedIndex) ? 0 : -1}
           onClick={(event) => selectOption(index, event.detail !== 0)}
           onKeyDown={(event) => handleKeyDown(event, index)}
           ref={(node) => {

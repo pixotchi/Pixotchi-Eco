@@ -1,4 +1,5 @@
 "use client";
+import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 
 import { useMemo, useRef, useCallback } from "react";
 import GameTransaction from "./game-transaction";
@@ -6,26 +7,20 @@ import {
     buildCasinoPlaceBetsCall,
     buildCasinoPlaceBetsWithTokenCall,
     buildCasinoRevealCall,
+    LAND_CONTRACT_ADDRESS,
 } from "@/lib/contracts";
 import { rouletteHasUnsupportedZeroCombo } from "@/lib/casino-hardening-rules.mjs";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
-import { casinoAbi, CasinoBetType } from "@/public/abi/casino-abi";
+import { CasinoBetType } from "@/public/abi/casino-abi";
 import { toast } from "react-hot-toast";
-import { decodeEventLog, formatUnits, type Hex } from "viem";
-import type { LifecycleStatus } from "./transaction-kit";
+import { formatUnits, type Hex } from "viem";
+import type { LifecycleStatus, TransactionPreflight } from "./transaction-kit";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
 import { postMissionProgress } from "@/lib/mission-tracking";
+import { parseRouletteReceipt, type RouletteReceiptResult } from "@/lib/roulette-receipt";
 
-type CasinoRevealResult = {
-    winningNumber?: number;
-    won?: boolean;
-    payout?: string;
-    expired?: boolean;
-    forfeitedAmount?: string;
-    transactionHash?: string;
-    receiptIncomplete?: boolean;
-};
+type CasinoRevealResult = Partial<RouletteReceiptResult> & { receiptIncomplete?: boolean };
 
 interface CasinoTransactionProps {
     mode: "placeBets" | "reveal";
@@ -40,68 +35,14 @@ interface CasinoTransactionProps {
     buttonClassName?: string;
     onStatusUpdate?: (status: LifecycleStatus) => void;
     onComplete?: (result?: CasinoRevealResult) => void;
-    onButtonClick?: () => void;
+    onButtonClick?: TransactionPreflight;
     tokenSymbol?: string;
     tokenDecimals?: number;
     bettingToken?: string | null;
 }
 
-const FAILURE_STATUSES = new Set([
-    "error",
-    "failed",
-    "reverted",
-    "cancelled",
-    "canceled",
-    "rejected",
-    "transactionRejected",
-    "userRejected",
-    "buildError",
-]);
 
-const parseRouletteResultFromReceipts = (
-    receipts: UntypedValue[],
-    tokenDecimals: number
-): CasinoRevealResult | undefined => {
-    for (const receipt of receipts) {
-        const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
-        const transactionHash = extractTransactionHash(receipt);
 
-        for (const log of logs) {
-            try {
-                const decoded = decodeEventLog({
-                    abi: casinoAbi,
-                    data: log.data as `0x${string}`,
-                    topics: log.topics as UntypedValue,
-                });
-
-                if (decoded.eventName === "RouletteSpinResult") {
-                    const args = decoded.args as UntypedValue;
-
-                    return {
-                        winningNumber: Number(args.winningNumber),
-                        won: Boolean(args.won),
-                        payout: formatUnits(args.payout ?? BigInt(0), tokenDecimals),
-                        transactionHash,
-                    };
-                }
-
-                if (decoded.eventName === "RouletteBetExpired") {
-                    const args = decoded.args as UntypedValue;
-
-                    return {
-                        expired: true,
-                        forfeitedAmount: formatUnits(args.forfeitedAmount ?? BigInt(0), tokenDecimals),
-                        transactionHash,
-                    };
-                }
-            } catch {
-                // Continue to next log if decode fails
-            }
-        }
-    }
-
-    return undefined;
-};
 
 export default function CasinoTransaction({
     mode,
@@ -115,8 +56,8 @@ export default function CasinoTransaction({
     onStatusUpdate,
     onComplete,
     onButtonClick,
-    tokenSymbol = "SEED",
-    tokenDecimals = 18,
+    tokenSymbol = "TOKEN",
+    tokenDecimals,
     bettingToken = null,
 }: CasinoTransactionProps) {
     const { address } = useAccount();
@@ -146,9 +87,11 @@ export default function CasinoTransaction({
         return [];
     }, [mode, landId, betTypes, betNumbersArray, betAmounts, bettingToken]);
 
-    const handleButtonClick = useCallback(() => {
+    const handleButtonClick = useCallback(async () => {
+        const accepted = await onButtonClick?.();
+        if (accepted === false) return false;
         transactionInitiatedRef.current = true;
-        onButtonClick?.();
+        return accepted;
     }, [onButtonClick]);
 
     const handleStatus = useCallback(async (status: LifecycleStatus) => {
@@ -160,7 +103,7 @@ export default function CasinoTransaction({
         }
 
         // Handle failures - only report if user actually initiated the transaction
-        if (FAILURE_STATUSES.has(status.statusName ?? "")) {
+        if (isGameTransactionFailure(status.statusName)) {
             if (transactionInitiatedRef.current) {
                 onComplete?.(undefined);
                 transactionInitiatedRef.current = false; // Reset for next attempt
@@ -201,85 +144,35 @@ export default function CasinoTransaction({
                 }
             }
 
-            // Parse roulette result or expiration event
-            let revealResult = parseRouletteResultFromReceipts(receipts, tokenDecimals);
-
-            for (const receipt of receipts) {
-                const logs = receipt?.logs || [];
-                const receiptTransactionHash = extractTransactionHash(receipt);
-                for (const log of logs) {
-                    try {
-                        const decoded = decodeEventLog({
-                            abi: casinoAbi,
-                            data: log.data as `0x${string}`,
-                            topics: log.topics as UntypedValue,
-                        });
-
-                        if (decoded.eventName === "RouletteSpinResult") {
-                            const args = decoded.args as UntypedValue;
-                            const winningNumber = Number(args.winningNumber);
-                            const won = Boolean(args.won);
-                            const payout = formatUnits(args.payout ?? BigInt(0), tokenDecimals);
-
-                            revealResult = {
-                                winningNumber,
-                                won,
-                                payout,
-                                transactionHash: receiptTransactionHash,
-                            };
-
-                            if (won) {
-                                toast.success(`🎉 Payout ${payout} ${tokenSymbol}!`, {
-                                    id: "casino-result",
-                                });
-                            } else {
-                                toast("Better luck next time!", {
-                                    icon: "🎲",
-                                    id: "casino-result",
-                                });
-                            }
-                            break;
-                        }
-
-                        if (decoded.eventName === "RouletteBetExpired") {
-                            const args = decoded.args as UntypedValue;
-                            const forfeitedAmount = formatUnits(args.forfeitedAmount ?? BigInt(0), tokenDecimals);
-
-                            revealResult = {
-                                expired: true,
-                                forfeitedAmount,
-                                transactionHash: receiptTransactionHash,
-                            };
-
-                            toast.error(`Bet expired. ${forfeitedAmount} ${tokenSymbol} forfeited.`, {
-                                id: "casino-result",
-                            });
-                            break;
-                        }
-                    } catch {
-                        // Continue to next log if decode fails
-                        continue;
-                    }
-                }
-                if (revealResult) break;
-            }
+            // Recovery never depends on token metadata: decode and retain raw units.
+            const subject = { landId, player: address, contract: LAND_CONTRACT_ADDRESS };
+            let revealResult = parseRouletteReceipt(receipts, subject);
 
             if (!revealResult && revealTxHash) {
                 try {
                     const fetchedReceipt = await getBaseTransactionReceipt(revealTxHash as Hex);
-                    revealResult = parseRouletteResultFromReceipts([...receipts, fetchedReceipt], tokenDecimals);
+                    revealResult = parseRouletteReceipt([...receipts, fetchedReceipt], subject);
                 } catch (error) {
                     console.warn("Failed to refetch roulette reveal receipt:", error);
                 }
             }
 
-            if (!revealResult) {
-                toast.success("Spin complete. Refreshing roulette state...", { id: "casino-result" });
+            const canFormat = tokenDecimals !== undefined && bettingToken?.toLowerCase() === revealResult?.bettingToken.toLowerCase();
+            if (revealResult?.expired) {
+                const amount = canFormat && revealResult.forfeitedAmountWei !== undefined ? `${formatUnits(revealResult.forfeitedAmountWei, tokenDecimals!)} ${tokenSymbol} ` : '';
+                toast.error(`Bet expired. ${amount}forfeited.`, { id: 'casino-result' });
+            } else if (revealResult?.won) {
+                const amount = canFormat && revealResult.payoutWei !== undefined ? ` Payout ${formatUnits(revealResult.payoutWei, tokenDecimals!)} ${tokenSymbol}.` : ' Token amount is awaiting verified details.';
+                toast.success(`Winning spin.${amount}`, { id: 'casino-result' });
+            } else if (revealResult) {
+                toast('No win this spin.', { id: 'casino-result', icon: '🎲' });
+            } else {
+                toast('Spin confirmed. Checking the result...', { id: 'casino-result' });
             }
 
             onComplete?.(revealResult ?? { transactionHash: revealTxHash, receiptIncomplete: true });
         }
-    }, [mode, onComplete, onStatusUpdate, address, tokenDecimals, tokenSymbol]);
+    }, [mode, landId, onComplete, onStatusUpdate, address, bettingToken, tokenDecimals, tokenSymbol]);
 
     let defaultText = "Submit";
     if (mode === "placeBets") defaultText = "🎲 Place Bets";

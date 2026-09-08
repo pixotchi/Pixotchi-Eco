@@ -1,0 +1,113 @@
+{
+  "address": "0xa2ef17bb7eea1143196678337069dfa24d37d2ac",
+  "block": "51052250",
+  "timestamp": "1788893847",
+  "values": [
+    {
+      "method": "totalSupply",
+      "value": "1000000000000000000000000000"
+    },
+    {
+      "method": "decimals",
+      "value": 18
+    },
+    {
+      "method": "symbol",
+      "value": "pixotchi"
+    },
+    {
+      "method": "name",
+      "value": "pixotchi"
+    },
+    {
+      "method": "vestingStartTime",
+      "value": "1765900813"
+    },
+    {
+      "method": "vestingEndTime",
+      "value": "1923688813"
+    },
+    {
+      "method": "totalSupplyForPositions",
+      "value": "500000000000000000000000000"
+    }
+  ],
+  "sourceStatus": 200,
+  "sourceFiles": [
+    "src/CreatorCoin.sol",
+    "src/interfaces/ICreatorCoin.sol",
+    "src/libs/CoinConstants.sol",
+    "src/interfaces/ICoin.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/IPoolManager.sol",
+    "src/BaseCoin.sol",
+    "node_modules/@openzeppelin/contracts/utils/introspection/IERC165.sol",
+    "src/interfaces/IERC7572.sol",
+    "src/interfaces/IDopplerErrors.sol",
+    "src/types/PoolConfiguration.sol",
+    "src/interfaces/IHasRewardsRecipients.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/IHooks.sol",
+    "node_modules/@uniswap/v4-periphery/src/libraries/PathKey.sol",
+    "node_modules/@uniswap/v4-core/src/types/Currency.sol",
+    "src/interfaces/IDeployedCoinVersionLookup.sol",
+    "node_modules/@uniswap/v4-core/src/types/PoolKey.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/external/IERC6909Claims.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/IProtocolFees.sol",
+    "node_modules/@uniswap/v4-core/src/types/BalanceDelta.sol",
+    "node_modules/@uniswap/v4-core/src/types/PoolId.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/IExtsload.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/IExttload.sol",
+    "node_modules/@uniswap/v4-core/src/types/PoolOperation.sol",
+    "node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol",
+    "src/interfaces/ICoinComments.sol",
+    "src/interfaces/IUniswapV3Factory.sol",
+    "src/interfaces/IUniswapV3Pool.sol",
+    "src/interfaces/ISwapRouter.sol",
+    "src/interfaces/IAirlock.sol",
+    "src/interfaces/IProtocolRewards.sol",
+    "src/interfaces/IWETH.sol",
+    "src/libs/UniV4SwapToCurrency.sol",
+    "src/interfaces/IUpgradeableV4Hook.sol",
+    "src/libs/CoinCommon.sol",
+    "node_modules/@openzeppelin/contracts/utils/Address.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/utils/introspection/ERC165Upgradeable.sol",
+    "node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol",
+    "src/version/ContractVersionBase.sol",
+    "src/utils/MultiOwnable.sol",
+    "src/utils/uniswap/FullMath.sol",
+    "src/utils/uniswap/TickMath.sol",
+    "src/utils/uniswap/LiquidityAmounts.sol",
+    "src/types/LpPosition.sol",
+    "src/types/PoolState.sol",
+    "node_modules/@uniswap/v4-core/src/types/BeforeSwapDelta.sol",
+    "node_modules/@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol",
+    "node_modules/@uniswap/v4-core/src/libraries/CustomRevert.sol",
+    "node_modules/@uniswap/v4-core/src/libraries/SafeCast.sol",
+    "node_modules/@zoralabs/shared-contracts/src/interfaces/uniswap/ISwapRouter.sol",
+    "src/interfaces/ISwapPathRouter.sol",
+    "node_modules/@uniswap/v4-core/src/libraries/TickMath.sol",
+    "src/interfaces/IZoraV4CoinHook.sol",
+    "src/libs/CoinConfigurationVersions.sol",
+    "node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol",
+    "node_modules/@openzeppelin/contracts/utils/cryptography/ECDSA.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/utils/NoncesUpgradeable.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol",
+    "node_modules/@zoralabs/shared-contracts/src/interfaces/IVersionedContract.sol",
+    "node_modules/@openzeppelin/contracts/utils/structs/EnumerableSet.sol",
+    "src/utils/uniswap/BitMath.sol",
+    "src/utils/uniswap/CustomRevert.sol",
+    "src/utils/uniswap/FixedPoint96.sol",
+    "node_modules/@zoralabs/shared-contracts/src/interfaces/uniswap/IUniswapV3SwapCallback.sol",
+    "node_modules/@uniswap/v4-core/src/libraries/BitMath.sol",
+    "node_modules/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol",
+    "node_modules/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol",
+    "node_modules/@openzeppelin/contracts/interfaces/draft-IERC6093.sol",
+    "node_modules/@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol",
+    "node_modules/@openzeppelin/contracts/interfaces/IERC5267.sol",
+    "node_modules/@openzeppelin/contracts/utils/Strings.sol",
+    "node_modules/@openzeppelin/contracts/utils/math/Math.sol",
+    "node_modules/@openzeppelin/contracts/utils/math/SignedMath.sol"
+  ]
+}

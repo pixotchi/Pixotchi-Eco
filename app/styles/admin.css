@@ -1,0 +1,6 @@
+/* Feature-owned styles; shared tokens and primitives remain in globals.css. */
+
+.admin-page-scrollable {
+  height: auto !important;
+  overflow: auto !important;
+}

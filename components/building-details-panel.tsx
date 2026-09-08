@@ -37,6 +37,9 @@ interface BuildingDetailsPanelProps {
   warehousePoints?: bigint;
   warehouseLifetime?: bigint;
   villageBuildings?: BuildingData[];
+  allowancesReady?: boolean;
+  allowancesError?: string | null;
+  onRetryAllowances?: () => void;
 }
 
 function BuildingDetailsPanel({
@@ -52,6 +55,9 @@ function BuildingDetailsPanel({
   warehousePoints,
   warehouseLifetime,
   villageBuildings = [],
+  allowancesReady = true,
+  allowancesError,
+  onRetryAllowances,
 }: BuildingDetailsPanelProps) {
   const [showInfoDialog, setShowInfoDialog] = useState(false);
 
@@ -59,7 +65,7 @@ function BuildingDetailsPanel({
 
   if (!selectedBuilding) {
     return (
-      <Card className="building-detail-surface">
+      <Card className="surface-detail">
         <CardContent className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 mb-4 rounded-full bg-muted flex items-center justify-center">
             <span className="text-2xl">🏗️</span>
@@ -170,9 +176,9 @@ function BuildingDetailsPanel({
   };
 
   return (
-    <Card className="building-detail-surface">
-      <CardHeader>
-        <div className="flex items-center space-x-3">
+    <Card className="surface-detail">
+      <CardHeader className="@container/building-heading">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 @min-[18rem]/building-heading:grid-cols-[auto_minmax(0,1fr)_auto]">
           <Image
             src={buildingIcon}
             alt={buildingName}
@@ -180,24 +186,23 @@ function BuildingDetailsPanel({
             height={48}
             className="h-12 w-12 shrink-0 rounded-md object-contain"
           />
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <CardTitle>{buildingName}</CardTitle>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowInfoDialog(true)}
-                aria-label={`Info about ${buildingName}`}
-                title={`Info about ${buildingName}`}
-              >
-                <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </Button>
-            </div>
+          <div className="col-span-2 row-start-2 min-w-0 @min-[18rem]/building-heading:col-span-1 @min-[18rem]/building-heading:col-start-2 @min-[18rem]/building-heading:row-start-1">
+            <CardTitle className="[overflow-wrap:anywhere]">{buildingName}</CardTitle>
             <p className="text-sm text-muted-foreground">
               {`Level ${selectedBuilding.level}/${selectedBuilding.maxLevel}`}
             </p>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="col-start-2 row-start-1 @min-[18rem]/building-heading:col-start-3"
+            onClick={() => setShowInfoDialog(true)}
+            aria-label={`Info about ${buildingName}`}
+            title={`Info about ${buildingName}`}
+          >
+            <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </Button>
         </div>
       </CardHeader>
 
@@ -214,6 +219,9 @@ function BuildingDetailsPanel({
             onUpgradeSuccess={onUpgradeSuccess}
             onLeafApprovalSuccess={onLeafApprovalSuccess || (() => { })}
             seedAllowance={seedAllowance}
+            allowancesReady={allowancesReady}
+            allowancesError={allowancesError}
+            onRetryAllowances={onRetryAllowances}
             onSeedApprovalSuccess={onSeedApprovalSuccess || (() => { })}
           />
         )}

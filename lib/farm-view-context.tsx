@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, type ReactNode } 
 
 import { useIsSolanaWallet } from '@/components/solana';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { GAME_NAVIGATION_EVENT } from '@/lib/game-navigation';
 
 export type DashboardView = 'plants' | 'lands';
 export type MintType = 'plant' | 'land';
@@ -58,6 +59,19 @@ export function FarmViewProvider({
     parse: (rawValue) => (rawValue === 'plant' || rawValue === 'land' ? rawValue : null),
     serialize: (value) => (value === 'plant' ? null : value),
   });
+
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== 'object' || !('tab' in detail)) return;
+      if (detail.tab === 'dashboard' && 'dashboardView' in detail
+        && (detail.dashboardView === 'plants' || detail.dashboardView === 'lands')) setDashboardView(detail.dashboardView);
+      if (detail.tab === 'mint' && 'mintType' in detail
+        && (detail.mintType === 'plant' || detail.mintType === 'land')) setMintType(detail.mintType);
+    };
+    window.addEventListener(GAME_NAVIGATION_EVENT, onNavigate);
+    return () => window.removeEventListener(GAME_NAVIGATION_EVENT, onNavigate);
+  }, [setDashboardView, setMintType]);
 
   // Land minting is EVM-only and the shared toggle is hidden for Solana wallets
   // on the Mint tab, so a lingering mintType of 'land' (via ?mintType=land or a

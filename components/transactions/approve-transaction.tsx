@@ -3,6 +3,7 @@
 import React from 'react';
 import GameTransaction from './game-transaction';
 import { PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
+import type { LifecycleStatus } from './transaction-kit';
 
 const PIXOTCHI_TOKEN_ABI = [
   {
@@ -26,6 +27,7 @@ interface ApproveTransactionProps {
   buttonClassName?: string;
   disabled?: boolean;
   showToast?: boolean;
+  onStatusUpdate?: (status: LifecycleStatus) => void;
 }
 
 export default function ApproveTransaction({
@@ -37,6 +39,7 @@ export default function ApproveTransaction({
   buttonClassName,
   disabled = false,
   showToast = true,
+  onStatusUpdate,
 }: ApproveTransactionProps) {
 
   // Max approval amount
@@ -63,6 +66,7 @@ export default function ApproveTransaction({
       buttonClassName={buttonClassName}
       disabled={disabled}
       showToast={showToast}
+      onStatusUpdate={onStatusUpdate}
     />
   );
 }

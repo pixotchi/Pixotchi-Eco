@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import GlobalTransactionToast from "@/components/transactions/global-transaction-toast";
 import { TransactionRecoveryOptions } from "@/components/transactions/transaction-recovery-options";
 import { Transaction,TransactionButton,TransactionStatus,type LifecycleStatus } from "@/components/transactions/transaction-kit";
+import { TransferPlanReview } from '@/components/transactions/transfer-plan-review';
+import { getStepAssetIds, type TransferPlanStep } from '@/lib/transfer-assets-review';
 import { useDebounce } from "@/hooks/useDebounce";
 import { getBaseReadClient } from "@/lib/base-rpc";
 import {
@@ -41,11 +43,6 @@ interface TransferAssetsDialogProps {
 
 const TRANSFER_PLAN_STORAGE_PREFIX = "pixotchi:transfer-assets:v1";
 const TRANSFER_PLAN_MAX_ASSETS = 1_000;
-
-type TransferPlanStep =
-  | { kind: "router"; landIds: string[]; plantIds: number[] }
-  | { kind: "plant"; plantId: number }
-  | { kind: "land"; landId: string };
 
 type TransferPlan = {
   accountAddress: `0x${string}`;
@@ -191,12 +188,6 @@ const removeTransferPlan = (plan: TransferPlan): boolean => {
 const createTransferPlanId = () =>
   globalThis.crypto?.randomUUID?.()
   ?? `transfer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-
-const getStepAssetIds = (step: TransferPlanStep) => {
-  if (step.kind === "plant") return { plantIds: [step.plantId], landIds: [] as string[] };
-  if (step.kind === "land") return { plantIds: [] as number[], landIds: [step.landId] };
-  return { plantIds: step.plantIds, landIds: step.landIds };
-};
 
 const getTransferStepIntentKey = (plan: TransferPlan, step: TransferPlanStep) => {
   const target = plan.targetAddress.toLowerCase();
@@ -1011,6 +1002,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                 <div className="min-w-0 space-y-1">
                   <ApprovalState label="Plants" state={approvalLoadErrors.plants ? 'error' : !approvalStatusLoaded.plants || !plantApprovalCall ? 'loading' : approvals.plants ? 'approved' : 'required'}>
                     <Transaction
+                      canSubmit={open && !loading && Boolean(plantApprovalCall) && approvalStatusLoaded.plants && !approvalLoadErrors.plants && !approvals.plants}
                       calls={plantApprovalCall ? [plantApprovalCall] : []}
                       effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${PIXOTCHI_NFT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
@@ -1025,6 +1017,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                 <div className="min-w-0 space-y-1">
                   <ApprovalState label="Lands" state={approvalLoadErrors.lands ? 'error' : !approvalStatusLoaded.lands || !landApprovalCall ? 'loading' : approvals.lands ? 'approved' : 'required'}>
                     <Transaction
+                      canSubmit={open && !loading && Boolean(landApprovalCall) && approvalStatusLoaded.lands && !approvalLoadErrors.lands && !approvals.lands}
                       calls={landApprovalCall ? [landApprovalCall] : []}
                       effects={{ domains: ["allowances"] }}
                       intentKey={`transfer-assets:v1:approval:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
@@ -1054,26 +1047,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
         </div>
         ) : (
         <div className="space-y-4">
-          <div className="text-sm break-all bg-muted p-2 rounded-md">
-            {resolvedAddress ? (
-              <>
-                <div className="font-mono">{resolvedAddress}</div>
-                <div className="text-xs text-muted-foreground">({destination})</div>
-              </>
-            ) : (
-              <div className="font-mono">{destination}</div>
-            )}
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Plants</span>
-              <span className="font-medium">{selectedPlantsCount} / {counts.plants}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Lands</span>
-              <span className="font-medium">{selectedLandsCount} / {counts.lands}</span>
-            </div>
-          </div>
+          {activePlan && <TransferPlanReview plan={activePlan} />}
           {activePlan && activePlan.steps.length > 1 && (
             <div className="rounded-[var(--radius-control)] border border-border/60 bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               This transfer will send one NFT at a time. Step {activePlan.nextStepIndex + 1} of {activePlan.steps.length}.
@@ -1152,33 +1126,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
 
                   return (
                     <Button
-                      onClick={() => {
-                        if (status === "success" || isCheckOnly) {
-                          onSubmit();
-                          return;
-                        }
-                        const plan = activePlanRef.current;
-                        if (
-                          !plan
-                          || plan.planId !== activePlan.planId
-                          || plan.nextStepIndex !== activePlan.nextStepIndex
-                          || plan.phase !== "ready"
-                        ) {
-                          return;
-                        }
-                        const startedPlan: TransferPlan = {
-                          ...plan,
-                          phase: "submission-started",
-                        };
-                        if (!writeTransferPlan(startedPlan, plan)) {
-                          toast.error("Safe transfer tracking could not be committed. Nothing was sent.");
-                          return;
-                        }
-                        activePlanRef.current = startedPlan;
-                        setActivePlan(startedPlan);
-                        setUncertainPlanStep(false);
-                        onSubmit();
-                      }}
+                      onClick={onSubmit}
                       disabled={isDisabled}
                       loading={context.isExecuting}
                       loadingText="Transferring..."
@@ -1206,6 +1154,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
     <>
       {!approvals.plants && plantApprovalCall && BATCH_ROUTER_ADDRESS && (
         <Transaction
+          canSubmit={false}
           calls={[plantApprovalCall]}
           effects={{ domains: ["allowances"] }}
           intentKey={`transfer-assets:v1:approval:${PIXOTCHI_NFT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
@@ -1217,6 +1166,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       )}
       {!approvals.lands && landApprovalCall && BATCH_ROUTER_ADDRESS && (
         <Transaction
+          canSubmit={false}
           calls={[landApprovalCall]}
           effects={{ domains: ["allowances"] }}
           intentKey={`transfer-assets:v1:approval:${LAND_CONTRACT_ADDRESS.toLowerCase()}:${BATCH_ROUTER_ADDRESS.toLowerCase()}`}
@@ -1241,6 +1191,20 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
   return (
     <Transaction
       key={`${activePlan.planId}:${activePlan.nextStepIndex}`}
+      canSubmit={open && ack && !loading && planOwnershipVerified && !uncertainPlanStep && activePlan.phase === "ready"}
+      onBeforeSubmit={() => {
+        const plan = activePlanRef.current;
+        if (!plan || plan.planId !== activePlan.planId || plan.nextStepIndex !== activePlan.nextStepIndex || plan.phase !== "ready") {
+          throw new Error("This transfer changed. Review the assets before continuing.");
+        }
+        const startedPlan: TransferPlan = { ...plan, phase: "submission-started" };
+        if (!writeTransferPlan(startedPlan, plan)) {
+          throw new Error("Safe transfer tracking could not be committed. Nothing was sent.");
+        }
+        activePlanRef.current = startedPlan;
+        setActivePlan(startedPlan);
+        setUncertainPlanStep(false);
+      }}
       calls={[activeStepCall]}
       effects={{ domains: ["plants", "lands", "balances"] }}
       intentKey={activeStepIntentKey}

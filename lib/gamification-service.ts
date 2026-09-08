@@ -10,6 +10,7 @@ import {
 } from '@/lib/redis';
 import { isGamificationDisabled } from './gamification-feature';
 import type { GmDay,GmLeaderEntry,GmMissionDay,GmProgressProof,GmStreak,GmTaskId } from './gamification-types';
+import { GM_SECTION_REWARDS } from './gamification-types';
 
 const PX = 'pixotchi:gm:';
 
@@ -333,10 +334,10 @@ function sectionCompleteS4(s4: GmMissionDay['s4']): boolean {
 
 function awardPoints(m: GmMissionDay): number {
   let award = 0;
-  if (!m.s1.done && sectionCompleteS1(m.s1)) { m.s1.done = true; award += 30; }
-  if (!m.s2.done && sectionCompleteS2(m.s2)) { m.s2.done = true; award += 20; }
-  if (!m.s3.done && sectionCompleteS3(m.s3)) { m.s3.done = true; award += 25; }
-  if (!m.s4.done && sectionCompleteS4(m.s4)) { m.s4.done = true; award += 25; }
+  if (!m.s1.done && sectionCompleteS1(m.s1)) { m.s1.done = true; award += GM_SECTION_REWARDS.s1; }
+  if (!m.s2.done && sectionCompleteS2(m.s2)) { m.s2.done = true; award += GM_SECTION_REWARDS.s2; }
+  if (!m.s3.done && sectionCompleteS3(m.s3)) { m.s3.done = true; award += GM_SECTION_REWARDS.s3; }
+  if (!m.s4.done && sectionCompleteS4(m.s4)) { m.s4.done = true; award += GM_SECTION_REWARDS.s4; }
   const before = m.pts;
   m.pts = Math.min(100, m.pts + award);
   if (m.pts === 100 && !m.completedAt) m.completedAt = Date.now();

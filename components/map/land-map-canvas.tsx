@@ -1,7 +1,9 @@
 "use client";
+import { drawMapPlotMarkers } from '@/lib/land-map-markers';
 
 import { getTerrainNoise,getTokenIdFromCoordinate,getVisualTerrainType,visualToContract } from '@/lib/land-utils';
 import { Land } from "@/lib/types";
+import { applyMapPinch, getMapPlotStatus } from '@/lib/land-map-state';
 import React,{ useEffect,useId,useMemo,useRef,useState } from 'react';
 
 interface LandMapCanvasProps {
@@ -9,16 +11,18 @@ interface LandMapCanvasProps {
   zoom: number;
   userLands: Land[];
   selectedLand: Land | null;
-  totalSupply: number;
+  totalSupply: number | null;
+  supplyIsCurrent?: boolean;
+  knownMintedIds?: ReadonlySet<number>;
   onLandClick: (tokenId: number | null, visualData?: { x: number, y: number, type: string }) => void;
   onCenterChange: (center: { x: number; y: number }) => void;
   /** Enables pinch-to-zoom on touch (the canvas sets touch-none, so native pinch is suppressed). */
   onZoomChange?: (zoom: number) => void;
+  /** Controls and legends positioned within the measured map viewport. */
+  children?: React.ReactNode;
 }
 
-function isNormalMintedLandId(tokenId: number, totalSupply: number): boolean {
-  return tokenId > 0 && tokenId < totalSupply;
-}
+const NO_KNOWN_IDS = new Set<number>();
 
 export function LandMapCanvas({
   center,
@@ -26,9 +30,12 @@ export function LandMapCanvas({
   userLands,
   selectedLand,
   totalSupply,
+  supplyIsCurrent = true,
+  knownMintedIds = NO_KNOWN_IDS,
   onLandClick,
   onCenterChange,
-  onZoomChange
+  onZoomChange,
+  children
 }: LandMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +43,7 @@ export function LandMapCanvas({
   const instructionsId = useId();
   const statusId = useId();
   const centerRef = useRef(center);
+  const zoomRef = useRef(zoom);
   const isDraggingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
   const pendingCenterRef = useRef(center);
@@ -43,7 +51,8 @@ export function LandMapCanvas({
   const dragDistanceRef = useRef(0);
   const didDragRef = useRef(false);
   const activePointersRef = useRef(new Map<number, { x: number; y: number }>());
-  const pinchDistanceRef = useRef<number | null>(null);
+  const [failedSprites, setFailedSprites] = useState(false);
+  const [spriteRetry, setSpriteRetry] = useState(0);
 
   // Image assets
   const [sprites, setSprites] = useState<{
@@ -51,15 +60,13 @@ export function LandMapCanvas({
     unminted: HTMLImageElement | null,
     water: HTMLImageElement | null,
     forest: HTMLImageElement | null,
-    mountain: HTMLImageElement | null,
-    avatar: HTMLImageElement | null
+    mountain: HTMLImageElement | null
   }>({
     taken: null,
     unminted: null,
     water: null,
     forest: null,
-    mountain: null,
-    avatar: null
+    mountain: null
   });
 
   // Constants for rendering
@@ -69,11 +76,14 @@ export function LandMapCanvas({
   const ownedTokenIds = useMemo(() => {
     return new Set(userLands.map((land) => Number(land.tokenId)));
   }, [userLands]);
+  const verifiedMintedIds = useMemo(() => new Set([...knownMintedIds, ...ownedTokenIds]), [knownMintedIds, ownedTokenIds]);
 
   useEffect(() => {
     centerRef.current = center;
     pendingCenterRef.current = center;
   }, [center]);
+
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
   useEffect(() => {
     return () => {
@@ -90,15 +100,13 @@ export function LandMapCanvas({
     let cancelled = false;
 
     const loadSprites = async () => {
-      const loadedSprites: UntypedValue = {};
-
       // Load helper
-      const loadImage = (src: string): Promise<HTMLImageElement> => {
+      const loadImage = (src: string): Promise<HTMLImageElement | null> => {
         return new Promise((resolve) => {
           const img = new Image();
+          img.onload = () => resolve(img.complete && img.naturalWidth > 0 ? img : null);
+          img.onerror = () => resolve(null);
           img.src = src;
-          img.onload = () => resolve(img);
-          img.onerror = () => resolve(img); // Fallback, don't crash
         });
       };
 
@@ -111,40 +119,14 @@ export function LandMapCanvas({
           loadImage('/icons/map/mountains.webp')
         ]);
 
-        loadedSprites.taken = taken;
-        loadedSprites.unminted = unminted;
-        loadedSprites.water = water;
-        loadedSprites.forest = forest;
-        loadedSprites.mountain = mountain;
+        if (cancelled) return;
+        setSprites({ taken, unminted, water, forest, mountain });
+        setFailedSprites([taken, unminted, water, forest, mountain].some(sprite => sprite === null));
 
       } catch (e) {
         console.error("Failed to load map sprites", e);
+        if (!cancelled) setFailedSprites(true);
       }
-
-      if (cancelled) return;
-
-      // Simple Avatar Placeholder (keep procedural for now or load if exists)
-      const avCanvas = document.createElement('canvas');
-      avCanvas.width = 20;
-      avCanvas.height = 20;
-      const avCtx = avCanvas.getContext('2d');
-      if (avCtx) {
-        avCtx.fillStyle = '#ef4444';
-        avCtx.beginPath();
-        avCtx.arc(10, 10, 8, 0, Math.PI * 2);
-        avCtx.fill();
-        avCtx.strokeStyle = 'white';
-        avCtx.lineWidth = 2;
-        avCtx.stroke();
-
-        const img = new Image();
-        img.src = avCanvas.toDataURL();
-        loadedSprites.avatar = img;
-      }
-
-      if (cancelled) return;
-
-      setSprites(prev => ({ ...prev, ...loadedSprites }));
     };
 
     loadSprites();
@@ -152,7 +134,7 @@ export function LandMapCanvas({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [spriteRetry]);
 
   // Resize handler
   useEffect(() => {
@@ -197,6 +179,20 @@ export function LandMapCanvas({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // A successfully loaded image can still become unusable in a browser.
+    // Keep that failure local to its tile and let the colored fallback draw.
+    let drawingFailed = false;
+    const drawSprite = (sprite: HTMLImageElement | null, x: number, y: number, size: number) => {
+      if (!sprite || !sprite.complete || sprite.naturalWidth === 0) return false;
+      try {
+        ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+        return true;
+      } catch {
+        drawingFailed = true;
+        return false;
+      }
+    };
 
     // Handle high DPI displays
     const dpr = window.devicePixelRatio || 1;
@@ -255,32 +251,22 @@ export function LandMapCanvas({
           const tokenId = getTokenIdFromCoordinate(cx, cy);
 
           // Determine Status
-          const isMinted = isNormalMintedLandId(tokenId, totalSupply);
+          const plotStatus = getMapPlotStatus(tokenId, totalSupply, verifiedMintedIds, supplyIsCurrent);
           const isUserOwned = ownedTokenIds.has(tokenId);
           const isSelected = selectedLand && Number(selectedLand.tokenId) === tokenId;
           // Terrain Generation (Deterministic Noise) for variety
           const noise = getTerrainNoise(cx, cy); // Use contract coords for consistent land look
 
-          if (isMinted) {
+          if (plotStatus === 'unknown') {
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(screenX - size / 2 + 1, screenY - size / 2 + 1, size - 2, size - 2);
+          } else if (plotStatus === 'minted') {
             // MINTED LAND -> taken.png
-            if (sprites.taken) {
-              ctx.drawImage(sprites.taken, screenX - size / 2, screenY - size / 2, size, size);
-            } else {
+            if (!drawSprite(sprites.taken, screenX, screenY, size)) {
               // Fallback
               ctx.fillStyle = '#4ade80';
               ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
             }
-
-            if (isUserOwned) {
-              // Add a blue tint or border for user owned
-              ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
-              ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
-              ctx.strokeStyle = '#3b82f6';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(screenX - size / 2, screenY - size / 2, size, size);
-            }
-
-            // REMOVED: Red dot avatar indicator
 
           } else {
             // UNMINTED LAND -> Randomly pick from other assets (Cemetery, Jungle, Lake, Mountain)
@@ -290,75 +276,51 @@ export function LandMapCanvas({
 
             if (noise < 0.25) {
               // 25% Chance: Cemetery (Original Unminted Look)
-              if (sprites.unminted) {
-                ctx.drawImage(sprites.unminted, screenX - size / 2, screenY - size / 2, size, size);
-              } else {
+              if (!drawSprite(sprites.unminted, screenX, screenY, size)) {
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
                 ctx.fillRect(screenX - size / 2 + 1, screenY - size / 2 + 1, size - 2, size - 2);
               }
             } else if (noise < 0.50) {
               // 25% Chance: Jungle
-              if (sprites.forest) {
-                ctx.drawImage(sprites.forest, screenX - size / 2, screenY - size / 2, size, size);
-              } else {
+              if (!drawSprite(sprites.forest, screenX, screenY, size)) {
                 ctx.fillStyle = '#14532d';
                 ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
               }
             } else if (noise < 0.75) {
               // 25% Chance: Lake
-              if (sprites.water) {
-                ctx.drawImage(sprites.water, screenX - size / 2, screenY - size / 2, size, size);
-              } else {
+              if (!drawSprite(sprites.water, screenX, screenY, size)) {
                 ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
                 ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
               }
             } else {
               // 25% Chance: Mountain
-              if (sprites.mountain) {
-                ctx.drawImage(sprites.mountain, screenX - size / 2, screenY - size / 2, size, size);
-              } else {
+              if (!drawSprite(sprites.mountain, screenX, screenY, size)) {
                 ctx.fillStyle = '#78716c';
                 ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
               }
             }
           }
 
-          // Highlight selection
-          if (isSelected) {
-            ctx.strokeStyle = '#fbbf24'; // Amber ring
-            ctx.lineWidth = 3 * zoom;
-            ctx.strokeRect(
-              screenX - size / 2,
-              screenY - size / 2,
-              size,
-              size
-            );
-          }
+          drawMapPlotMarkers(ctx, screenX, screenY, size, isUserOwned, Boolean(isSelected));
         } else {
           // GAP / WILDERNESS SLOT
           const terrainType = getVisualTerrainType(x, y);
 
           if (terrainType === 'water') {
             // Lake
-            if (sprites.water) {
-              ctx.drawImage(sprites.water, screenX - size / 2, screenY - size / 2, size, size);
-            } else {
+            if (!drawSprite(sprites.water, screenX, screenY, size)) {
               ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
               ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
             }
           } else if (terrainType === 'forest') {
             // Jungle
-            if (sprites.forest) {
-              ctx.drawImage(sprites.forest, screenX - size / 2, screenY - size / 2, size, size);
-            } else {
+            if (!drawSprite(sprites.forest, screenX, screenY, size)) {
               ctx.fillStyle = '#14532d';
               ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
             }
           } else if (terrainType === 'mountain') {
             // Mountain
-            if (sprites.mountain) {
-              ctx.drawImage(sprites.mountain, screenX - size / 2, screenY - size / 2, size, size);
-            } else {
+            if (!drawSprite(sprites.mountain, screenX, screenY, size)) {
               ctx.fillStyle = '#78716c';
               ctx.fillRect(screenX - size / 2, screenY - size / 2, size, size);
             }
@@ -367,90 +329,81 @@ export function LandMapCanvas({
       }
     }
 
-  }, [dimensions, center, zoom, ownedTokenIds, selectedLand, totalSupply, sprites]);
+    if (drawingFailed) setFailedSprites(true);
+  }, [dimensions, center, zoom, ownedTokenIds, verifiedMintedIds, selectedLand, totalSupply, supplyIsCurrent, sprites]);
 
-  // Interaction Handlers
-  const handlePointerDown = (e: React.PointerEvent) => {
-    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  // Capture both fingers. Pending values update on every event, while React
+  // receives one coherent center/zoom update per animation frame.
+  const localPoint = (e: React.PointerEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0 || activePointersRef.current.size >= 2) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const point = localPoint(e);
+    activePointersRef.current.set(e.pointerId, point);
     if (activePointersRef.current.size === 2) {
-      // Second finger down: switch from pan to pinch.
-      const [a, b] = [...activePointersRef.current.values()];
-      pinchDistanceRef.current = Math.hypot(a.x - b.x, a.y - b.y);
       isDraggingRef.current = false;
-      didDragRef.current = true; // suppress the synthetic click after a pinch
+      didDragRef.current = true;
       return;
     }
     isDraggingRef.current = true;
-    lastPosRef.current = { x: e.clientX, y: e.clientY };
+    lastPosRef.current = point;
     pendingCenterRef.current = centerRef.current;
     dragDistanceRef.current = 0;
     didDragRef.current = false;
-    canvasRef.current?.setPointerCapture(e.pointerId);
   };
 
   const scheduleCenterChange = () => {
     if (centerChangeFrameRef.current !== null) return;
-
     centerChangeFrameRef.current = requestAnimationFrame(() => {
       centerChangeFrameRef.current = null;
-      const nextCenter = pendingCenterRef.current;
-      centerRef.current = nextCenter;
-      onCenterChange(nextCenter);
+      centerRef.current = pendingCenterRef.current;
+      onCenterChange(pendingCenterRef.current);
+      onZoomChange?.(zoomRef.current);
     });
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (activePointersRef.current.has(e.pointerId)) {
-      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    }
-
-    // Two-finger pinch drives zoom (touch-action: none suppresses the native one).
-    if (activePointersRef.current.size === 2 && onZoomChange) {
-      const [a, b] = [...activePointersRef.current.values()];
-      const distance = Math.hypot(a.x - b.x, a.y - b.y);
-      const previous = pinchDistanceRef.current;
-      pinchDistanceRef.current = distance;
-      if (previous && previous > 0) {
-        onZoomChange(zoom * (distance / previous));
+    if (!activePointersRef.current.has(e.pointerId)) return;
+    const previous = [...activePointersRef.current.values()];
+    const point = localPoint(e);
+    activePointersRef.current.set(e.pointerId, point);
+    if (activePointersRef.current.size === 2) {
+      const next = [...activePointersRef.current.values()];
+      const view = applyMapPinch(
+        { center: pendingCenterRef.current, zoom: zoomRef.current },
+        [previous[0], previous[1]], [next[0], next[1]], dimensions,
+      );
+      if (onZoomChange) {
+        pendingCenterRef.current = view.center;
+        zoomRef.current = view.zoom;
+        scheduleCenterChange();
       }
       return;
     }
-
     if (!isDraggingRef.current) return;
-
-    const dx = e.clientX - lastPosRef.current.x;
-    const dy = e.clientY - lastPosRef.current.y;
-
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    dragDistanceRef.current += distance;
-    if (dragDistanceRef.current > DRAG_CANCEL_THRESHOLD) {
-      didDragRef.current = true;
-    }
-
-    // Convert pixel delta to coordinate delta
-    const effectiveTileSize = TILE_SIZE * zoom;
-    const coordDx = dx / effectiveTileSize;
-    const coordDy = -dy / effectiveTileSize; // Invert Y
-
-    const currentCenter = pendingCenterRef.current;
+    const dx = point.x - lastPosRef.current.x;
+    const dy = point.y - lastPosRef.current.y;
+    dragDistanceRef.current += Math.hypot(dx, dy);
+    if (dragDistanceRef.current > DRAG_CANCEL_THRESHOLD) didDragRef.current = true;
     pendingCenterRef.current = {
-      x: currentCenter.x - coordDx,
-      y: currentCenter.y - coordDy
+      x: pendingCenterRef.current.x - dx / (TILE_SIZE * zoomRef.current),
+      y: pendingCenterRef.current.y + dy / (TILE_SIZE * zoomRef.current),
     };
     scheduleCenterChange();
-
-    lastPosRef.current = { x: e.clientX, y: e.clientY };
+    lastPosRef.current = point;
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size < 2) {
-      pinchDistanceRef.current = null;
-    }
-    isDraggingRef.current = false;
-    try {
-      canvasRef.current?.releasePointerCapture(e.pointerId);
-    } catch {}
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!activePointersRef.current.delete(e.pointerId)) return;
+    const remaining = [...activePointersRef.current.values()];
+    isDraggingRef.current = remaining.length === 1;
+    if (remaining.length === 1) lastPosRef.current = remaining[0];
+    if (e.type !== 'pointerup') didDragRef.current = true;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
   // Keyboard access: the canvas is otherwise a pointer-only surface.
@@ -543,24 +496,35 @@ export function LandMapCanvas({
     const tokenId = getTokenIdFromCoordinate(contractX, contractY);
     const ownership = ownedTokenIds.has(tokenId)
       ? 'You own this plot.'
-      : isNormalMintedLandId(tokenId, totalSupply)
+      : getMapPlotStatus(tokenId, totalSupply, verifiedMintedIds, supplyIsCurrent) === 'minted'
         ? 'This plot is owned.'
-        : 'This plot is available.';
+        : getMapPlotStatus(tokenId, totalSupply, verifiedMintedIds, supplyIsCurrent) === 'unknown'
+          ? 'Ownership data is unavailable for this plot.'
+          : 'This plot is unminted.';
     const selection = selectedLand && Number(selectedLand.tokenId) === tokenId
       ? ' Selected.'
       : '';
 
     return `Centre coordinates ${x}, ${y}. Plot ${tokenId}. ${ownership}${selection}`;
-  }, [center.x, center.y, ownedTokenIds, selectedLand, totalSupply]);
+  }, [center.x, center.y, ownedTokenIds, verifiedMintedIds, selectedLand, totalSupply, supplyIsCurrent]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative overflow-hidden cursor-move">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <p id={instructionsId} className="sr-only">
         Use the arrow keys to pan. Hold Shift to move five plots at a time. Press Enter or Space to select the centre plot.
       </p>
       <p id={statusId} className="sr-only" aria-live="polite" aria-atomic="true">
         {mapStatus}
       </p>
+      {/* Reserve a bounded, scrollable row so enlarged text cannot cover the
+          map overlays. Only the inner viewport participates in map coordinates. */}
+      {failedSprites && (
+        <div role="status" className="m-[8px] flex max-h-[40%] shrink-0 flex-wrap items-center justify-between gap-[8px] overflow-y-auto overscroll-contain rounded-[var(--radius-control)] border border-border bg-card p-[8px] text-xs touch-pan-y">
+          <span>Some map artwork is unavailable. Plots remain interactive.</span>
+          <button type="button" className="min-h-[44px] max-w-full whitespace-normal px-[12px] text-left underline" onClick={() => setSpriteRetry(value => value + 1)}>Retry map artwork</button>
+        </div>
+      )}
+      <div ref={containerRef} className="relative min-h-0 w-full flex-1 overflow-hidden cursor-move">
       {/* pointercancel: OS gestures / browser back-swipes end a captured drag
           with neither pointerup nor pointerleave — without the handler the map
           kept panning with no button pressed. */}
@@ -577,10 +541,12 @@ export function LandMapCanvas({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onLostPointerCapture={handlePointerUp}
         onPointerCancel={handlePointerUp}
         onClick={handleClick}
       />
+      {children}
+      </div>
     </div>
   );
 }

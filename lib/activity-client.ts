@@ -24,7 +24,8 @@ async function fetchActivityPayload(endpoint: string): Promise<UntypedValue> {
 }
 
 function toActivityList(value: UntypedValue): ActivityEvent[] {
-  return Array.isArray(value) ? value : [];
+  if (!Array.isArray(value)) throw new Error('Activity response is unavailable');
+  return value.filter(event => event && typeof event === 'object' && typeof event.__typename === 'string' && (typeof event.id === 'string' || typeof event.id === 'number'));
 }
 
 function toIdList(value: UntypedValue): string[] {

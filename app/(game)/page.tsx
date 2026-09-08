@@ -1,14 +1,14 @@
 "use client";
 
+import { useSelectionIndicator } from "@/components/hooks/use-selection-indicator";
+import { getRovingIndex } from "@/lib/roving-index";
 import { ChatButton } from "@/components/chat";
 import { AppUpdateBanner } from "@/components/app-update-banner";
 import StatusBar from "@/components/status-bar";
 import { useIsSolanaWallet } from "@/components/solana";
 import { ThemeSelector } from "@/components/theme-selector";
-import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { BasePageLoader } from "@/components/ui/loading";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { LoginHero, LoginIntro } from "@/components/login-hero";
@@ -16,12 +16,11 @@ import { LoginHero, LoginIntro } from "@/components/login-hero";
 import { FarmViewProvider, useFarmView } from "@/lib/farm-view-context";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
-import { History,Info,KeyRound,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
+import { History,Info,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type ComponentType,type CSSProperties,type KeyboardEvent } from "react";
-import toast from "react-hot-toast";
+import { Activity,memo,useCallback,useEffect,useMemo,useRef,useState,type ComponentType,type CSSProperties,type KeyboardEvent } from "react";
 
 let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
 
@@ -31,22 +30,20 @@ function loadFarcasterSdk() {
 }
 
 // Import custom hooks
-import {
-BaseAccountSurfaceButton,
-SolanaSurfaceButton,
-} from "@/components/auth/surface-switch-buttons";
 import { useAppAuthController } from "@/hooks/useAppAuthController";
 import { useAutoConnect } from "@/hooks/useAutoConnect";
 import { useBroadcastMessages } from "@/hooks/useBroadcastMessages";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { DESKTOP_MEDIA_QUERY, TABLET_MEDIA_QUERY, useMediaQuery } from "@/hooks/useMediaQuery";
-import { useWebQueryState, WEB_QUERY_STATE_EVENT } from "@/hooks/useWebQueryState";
+import { useGameNavigation } from "@/hooks/useGameNavigation";
+import { createRetryableTab } from "@/components/retryable-tab";
+import { createRetryableResource } from "@/lib/retryable-resource";
 import { requestBalanceRefresh } from "@/lib/app-events";
-import type { AuthSurface } from "@/lib/auth-surface";
+import { readMiniAppPresentation } from "@/lib/auth-presentation-data";
+import { LoginAuthActions } from "@/components/auth/login-auth-actions";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
 import { isLocalTestAuthAllowed } from "@/lib/local-test-mode";
-import { isSolanaAuthAvailable } from "@/lib/solana-auth-availability";
 import { cn } from "@/lib/utils";
 
 // Broadcast + wallet-profile dialogs load on first use, not at boot.
@@ -61,19 +58,9 @@ type WalletProfileProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
-let walletProfileModulePromise: Promise<ComponentType<WalletProfileProps>> | null = null;
-
-function loadWalletProfileModule() {
-  if (!walletProfileModulePromise) {
-    walletProfileModulePromise = import("@/components/wallet-profile")
-      .then((module) => module.WalletProfile as ComponentType<WalletProfileProps>)
-      .catch((error) => {
-        walletProfileModulePromise = null;
-        throw error;
-      });
-  }
-  return walletProfileModulePromise;
-}
+const loadWalletProfileModule = createRetryableResource(() =>
+  import("@/components/wallet-profile").then((module) => module.WalletProfile),
+);
 // Developer-only viewport instrumentation. Loaded on demand and only rendered when
 // ?viewportDebug=1 is present, so it stays out of the app-shell chunk. (Not gated on
 // NODE_ENV: the whole point is reading visualViewport / safe-area insets inside the
@@ -83,79 +70,29 @@ const ViewportDebugOverlay = dynamic(
   { ssr: false }
 );
 
-// Tab load error fallback component
-function TabLoadError({ tabName }: { tabName: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
-      <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-        <Info className="w-6 h-6 text-destructive" />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-destructive">Failed to load {tabName}</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Please check your connection and try again
-        </p>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => window.location.reload()}
-      >
-        <Repeat className="w-4 h-4 mr-2" />
-        Retry
-      </Button>
-    </div>
-  );
-}
-
-// Factory function to create dynamic imports with error handling
-const createDynamicTab = (
-  importFn: () => Promise<UntypedValue>,
-  tabName: string
-) => {
-  const LazyTab = dynamic(
-    () => importFn().catch((error) => {
-      console.error(`Failed to load ${tabName} tab:`, error);
-      // Return a module with default export as the error component
-      return {
-        default: () => <TabLoadError tabName={tabName} />
-      };
-    }),
-    {
-      loading: () => <BasePageLoader />,
-      ssr: false // Disable SSR for tab components to avoid hydration issues
-    }
-  );
-
-  LazyTab.displayName = `DynamicTab(${tabName})`;
-  // Memoized once here rather than in each of the six tab modules: these take no
-  // props, so without memo every App render reconciles all six subtrees.
-  return memo(LazyTab);
-};
-
 // Tab content components with optimized code splitting and error handling
 const tabComponents = {
-  dashboard: createDynamicTab(
+  dashboard: createRetryableTab(
     () => import(/* webpackChunkName: "dashboard-tab" */ "@/components/tabs/dashboard-tab"),
     "Farm"
   ),
-  mint: createDynamicTab(
+  mint: createRetryableTab(
     () => import(/* webpackChunkName: "mint-tab" */ "@/components/tabs/mint-tab"),
     "Mint"
   ),
-  about: createDynamicTab(
+  about: createRetryableTab(
     () => import(/* webpackChunkName: "about-tab" */ "@/components/tabs/about-tab"),
     "About"
   ),
-  swap: createDynamicTab(
+  swap: createRetryableTab(
     () => import(/* webpackChunkName: "swap-tab" */ "@/components/tabs/swap-tab"),
     "Swap"
   ),
-  activity: createDynamicTab(
+  activity: createRetryableTab(
     () => import(/* webpackChunkName: "activity-tab" */ "@/components/tabs/activity-tab"),
     "Activity"
   ),
-  leaderboard: createDynamicTab(
+  leaderboard: createRetryableTab(
     () => import(/* webpackChunkName: "leaderboard-tab" */ "@/components/tabs/leaderboard-tab"),
     "Ranking"
   ),
@@ -181,34 +118,6 @@ const LOGIN_THEME_LAYER_STYLE: CSSProperties = {
   backgroundPosition: "center top",
   backgroundSize: "100% 100%",
 };
-const MANAGED_GAME_QUERY_KEYS = new Set([
-  "tab",
-  "dashboardView",
-  "mintType",
-  "activityView",
-  "activityPage",
-  "activityFilter",
-  "activityDirection",
-  "leaderboardPage",
-  "leaderboardFilter",
-  "leaderboardMine",
-  "leaderboardBoard",
-]);
-const TAB_QUERY_KEY_ALLOWLIST: Record<Tab, ReadonlySet<string>> = {
-  dashboard: new Set(["tab", "dashboardView"]),
-  mint: new Set(["tab", "mintType"]),
-  activity: new Set(["tab", "activityView", "activityPage", "activityFilter", "activityDirection"]),
-  leaderboard: new Set([
-    "tab",
-    "leaderboardPage",
-    "leaderboardFilter",
-    "leaderboardMine",
-    "leaderboardBoard",
-  ]),
-  swap: new Set(["tab"]),
-  about: new Set(["tab"]),
-};
-
 /**
  * Warm the chunks for tabs the user is likely to open next.
  *
@@ -226,7 +135,7 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
   useEffect(() => {
     if (!isConnected) return;
 
-    const connection = (navigator as UntypedValue).connection;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
     if (
       connection?.saveData ||
       connection?.effectiveType === "slow-2g" ||
@@ -258,10 +167,10 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
       });
     };
 
-    const requestIdleCallback = (window as UntypedValue).requestIdleCallback;
+    const requestIdleCallback = window.requestIdleCallback;
     if (typeof requestIdleCallback === "function") {
       const id = requestIdleCallback(runPrefetch, { timeout: 2500 }) as number;
-      return () => (window as UntypedValue).cancelIdleCallback?.(id);
+      return () => window.cancelIdleCallback(id);
     }
 
     const id = window.setTimeout(runPrefetch, 750);
@@ -272,116 +181,6 @@ const useTabPrefetching = (activeTab: Tab, isConnected: boolean) => {
 import { useSlideshow } from "@/components/tutorial";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { useViewportInsets } from "@/hooks/useKeyboardAware";
-
-type LoginAuthActionsProps = {
-  className: string;
-  handleMiniAppReconnect: () => void;
-  isInMiniApp: boolean;
-  isMiniConnectRetrying: boolean;
-  isRestoringBaseSession: boolean;
-  localTestAuthAvailable: boolean;
-  privyReady: boolean;
-  switchAuthSurface: (surface: AuthSurface) => Promise<void>;
-};
-
-function LoginAuthActions({
-  className,
-  handleMiniAppReconnect,
-  isInMiniApp,
-  isMiniConnectRetrying,
-  isRestoringBaseSession,
-  localTestAuthAvailable,
-  privyReady,
-  switchAuthSurface,
-}: LoginAuthActionsProps) {
-  if (isRestoringBaseSession) {
-    return (
-      <div className={className}>
-        <BasePageLoader text="Restoring your Base session..." />
-      </div>
-    );
-  }
-
-  if (isInMiniApp) {
-    return (
-      <div className={className}>
-        <div className="space-y-2">
-          <div className="text-muted-foreground text-sm text-center md:text-left">Connecting...</div>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleMiniAppReconnect}
-            disabled={isMiniConnectRetrying}
-          >
-            {isMiniConnectRetrying ? "Retrying..." : "Retry Connection"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={className}>
-      <Alert className="login-web-app-alert !bg-[hsl(var(--card)/0.86)] !bg-none">
-        <Info className="h-4 w-4" />
-        <AlertTitle>Web App</AlertTitle>
-        <AlertDescription>
-          You are in web app mode. For the best experience, sign in with Base or open the game from Farcaster.
-        </AlertDescription>
-      </Alert>
-      <Button
-        className="w-full text-base"
-        variant="special"
-        onClick={async () => {
-          try {
-            await switchAuthSurface('privy');
-          } catch (error) {
-            console.error('Failed to switch to Privy surface:', error);
-            toast.error('Failed to switch to Privy sign-in. Please try again.');
-          }
-        }}
-        disabled={!privyReady}
-      >
-        {privyReady ? 'Continue with Privy' : 'Loading Privy...'}
-      </Button>
-      <BaseAccountSurfaceButton onSwitchSurface={switchAuthSurface} />
-      {isSolanaAuthAvailable() && (
-        <>
-          <div className="flex items-center gap-2 my-2">
-            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
-            <span className="text-xs text-muted-foreground">or bridge from Solana</span>
-            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
-          </div>
-          <SolanaSurfaceButton onSwitchSurface={switchAuthSurface} />
-        </>
-      )}
-      {localTestAuthAvailable && (
-        <>
-          <div className="flex items-center gap-2 my-2">
-            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
-            <span className="text-xs text-muted-foreground">or local testing</span>
-            <div className="h-px flex-1 bg-[hsl(var(--divider)/0.72)]" />
-          </div>
-          <Button
-            className="h-11 w-full rounded-[var(--radius-control)] text-base font-semibold"
-            variant="outline"
-            onClick={async () => {
-              try {
-                await switchAuthSurface('test');
-              } catch (error) {
-                console.error('Failed to switch to local test auth:', error);
-                toast.error('Local test auth is only available on localhost.');
-              }
-            }}
-          >
-            <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
-            Local Test Wallet
-          </Button>
-        </>
-      )}
-    </div>
-  );
-}
 
 function SharedFarmMintMobileToggle({
   activeTab,
@@ -474,37 +273,12 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const selectedIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab));
-  const [indicatorStyle, setIndicatorStyle] = useState<CSSProperties>({
-    opacity: 0,
+  const selectedIndex = tabs.findIndex((tab) => tab.id === activeTab);
+  const indicatorRef = useRef<HTMLSpanElement | null>(null);
+  useSelectionIndicator({
+    containerRef, indicatorRef, itemRefs: tabRefs, selectedIndex,
+    itemCount: tabs.length, layoutKey: mode, animate: animateIndicator,
   });
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const selectedTab = tabRefs.current[selectedIndex];
-    if (!container || !selectedTab) return;
-
-    const updateIndicator = () => {
-      setIndicatorStyle({
-        height: selectedTab.offsetHeight,
-        opacity: 1,
-        transform: `translate3d(${selectedTab.offsetLeft}px, ${selectedTab.offsetTop}px, 0)`,
-        width: selectedTab.offsetWidth,
-      });
-    };
-
-    updateIndicator();
-
-    if (typeof ResizeObserver === "undefined") return;
-
-    const resizeObserver = new ResizeObserver(updateIndicator);
-    resizeObserver.observe(container);
-    tabRefs.current.forEach((tab) => {
-      if (tab) resizeObserver.observe(tab);
-    });
-
-    return () => resizeObserver.disconnect();
-  }, [mode, selectedIndex, tabs.length]);
 
   const focusTab = (index: number) => {
     tabRefs.current[index]?.focus();
@@ -519,28 +293,9 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (tabs.length === 0) return;
-
-    const isVertical = mode === "desktop";
-    const previousKey = isVertical ? "ArrowUp" : "ArrowLeft";
-    const nextKey = isVertical ? "ArrowDown" : "ArrowRight";
-    let nextIndex = index;
-
-    if (event.key === previousKey) {
-      event.preventDefault();
-      nextIndex = (index - 1 + tabs.length) % tabs.length;
-    } else if (event.key === nextKey) {
-      event.preventDefault();
-      nextIndex = (index + 1) % tabs.length;
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      event.preventDefault();
-      nextIndex = tabs.length - 1;
-    } else {
-      return;
-    }
+    const nextIndex = getRovingIndex(event.key, index, tabs.length, mode === "desktop" ? "vertical" : "horizontal");
+    if (nextIndex === null) return;
+    event.preventDefault();
 
     selectTab(nextIndex);
   };
@@ -560,14 +315,12 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
     >
       <span
         aria-hidden="true"
+        ref={indicatorRef}
         data-main-nav-indicator={mode}
         className={cn(
           "surface-control-selected pointer-events-none absolute left-0 top-0 z-0 rounded-[var(--radius-nav)] border",
-          animateIndicator
-            ? "transition-[transform,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
-            : "transition-none",
+
         )}
-        style={indicatorStyle}
       />
       {tabs.map((tab, index) => {
         const isActive = activeTab === tab.id;
@@ -637,26 +390,13 @@ export default function App() {
     isConnected,
     isMiniApp,
     isRestoringBaseSession,
+    isWalletConnecting,
+    isWalletReconnecting,
     privyReady,
     state,
     switchAuthSurface,
   } = useAppAuthController();
-  const [activeTab, setActiveTab] = useWebQueryState<Tab>({
-    key: "tab",
-    defaultValue: "dashboard",
-    enabled: !isMiniApp,
-    // The only push-history call site: Back should step between tabs rather than
-    // leaving the app. All other query state stays on replace.
-    history: "push",
-    parse: (rawValue) => {
-      if (!rawValue) {
-        return null;
-      }
-
-      return TAB_VALUES.includes(rawValue as Tab) ? (rawValue as Tab) : null;
-    },
-    serialize: (value) => (value === "dashboard" ? null : value),
-  });
+  const { activeTab, setActiveTab, contentScrollRef, onContentScroll } = useGameNavigation(isMiniApp);
   const [keyboardSelectedTab, setKeyboardSelectedTab] = useState<Tab | null>(null);
   const handleTabChange = useCallback((tab: Tab, source: TabChangeSource) => {
     setKeyboardSelectedTab(source === "keyboard" ? tab : null);
@@ -683,9 +423,6 @@ export default function App() {
     previous: 0,
     activeLayer: 0,
   });
-  const contentScrollRef = useRef<HTMLDivElement>(null);
-  const previousActiveTabRef = useRef<Tab>(activeTab);
-  const tabScrollPositionsRef = useRef<Partial<Record<Tab, number>>>({});
   const lastDismissedRef = useRef<string | null>(null);
   const broadcastEverShownRef = useRef(false);
 
@@ -794,50 +531,14 @@ export default function App() {
     };
   }, [isConnected, performanceModeEnabled]);
 
-  useEffect(() => {
-    if (isMiniApp || typeof window === "undefined") {
-      return;
-    }
-
-    const allowedKeys = TAB_QUERY_KEY_ALLOWLIST[activeTab];
-    const currentUrl = new URL(window.location.href);
-    let didChange = false;
-
-    for (const key of MANAGED_GAME_QUERY_KEYS) {
-      if (!currentUrl.searchParams.has(key) || allowedKeys.has(key)) {
-        continue;
-      }
-
-      currentUrl.searchParams.delete(key);
-      didChange = true;
-    }
-
-    if (!didChange) {
-      return;
-    }
-
-    const nextSearch = currentUrl.searchParams.toString();
-    const nextUrl = `${currentUrl.pathname}${nextSearch ? `?${nextSearch}` : ""}${currentUrl.hash}`;
-    const currentPathWithSearch =
-      `${window.location.pathname}${window.location.search}${window.location.hash}`;
-
-    if (nextUrl !== currentPathWithSearch) {
-      window.history.replaceState(window.history.state, "", nextUrl);
-      // Announce the rewrite like every other URL writer does. Without this, any
-      // mounted useWebQueryState keeps its old value while the URL no longer
-      // carries it, and the divergence only surfaces on an unrelated later write.
-      window.dispatchEvent(new Event(WEB_QUERY_STATE_EVENT));
-    }
-  }, [activeTab, isMiniApp]);
-
   // Broadcast messages system
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
-  const [currentBroadcast, setCurrentBroadcast] = useState<UntypedValue>(null);
+  const [currentBroadcast, setCurrentBroadcast] = useState<(typeof broadcastMessages)[number] | null>(null);
 
   // Keep CSS safe-area and keyboard-inclusive viewport variables in sync.
   useViewportInsets();
   const isNeynarNotifications = CLIENT_ENV.NOTIFICATION_PROVIDER === 'neynar';
-  const miniAppContext = (fc?.context as UntypedValue) ?? null;
+  const miniAppContext = useMemo(() => readMiniAppPresentation(fc?.context), [fc?.context]);
   const miniAppAdded = Boolean(miniAppContext?.client?.added);
 
   // Start tutorial only after wallet connect
@@ -880,7 +581,7 @@ export default function App() {
 
     (async () => {
       try {
-        const fid = typeof fc?.context === 'object' ? (fc?.context as UntypedValue)?.user?.fid : undefined;
+        const fid = readMiniAppPresentation(fc?.context)?.user.fid;
         if (!fid || !address || !mounted) return;
 
         const requestController = new AbortController();
@@ -917,27 +618,6 @@ export default function App() {
       void requestBalanceRefresh();
     }
   }, [isConnected]);
-
-  useEffect(() => {
-    if (previousActiveTabRef.current === activeTab) {
-      return;
-    }
-
-    // All six tabpanels share this one scroller, so <Activity> alone cannot
-    // preserve scroll. Save the outgoing tab's position and restore the
-    // incoming one's, so Farm -> Swap -> Farm returns to the marketplace
-    // instead of the top.
-    const scroller = contentScrollRef.current;
-    if (scroller) {
-      tabScrollPositionsRef.current[previousActiveTabRef.current] = scroller.scrollTop;
-    }
-    previousActiveTabRef.current = activeTab;
-    scroller?.scrollTo({
-      left: 0,
-      top: tabScrollPositionsRef.current[activeTab] ?? 0,
-      behavior: "auto",
-    });
-  }, [activeTab]);
 
   // Balance refreshes after transactions are handled via events in balance-context.tsx
   // No need to refresh on every tab change - balances are already in context
@@ -1050,7 +730,7 @@ export default function App() {
                   </h1>
                 </div>
 
-                <div className="flex min-w-0 items-center space-x-2">
+                <div className={cn("flex items-center gap-[8px]", isHeaderStatusPlacement ? "min-w-0 shrink" : "shrink-0")}>
                   {isHeaderStatusPlacement && (
                     <ErrorBoundary
                       variant="inline"
@@ -1067,7 +747,7 @@ export default function App() {
                     <Button
                       type="button"
                       variant="headerIcon"
-                      size="sm"
+                      size="headerIcon"
                       onClick={handleAddFrame}
                       aria-label="Add Pixotchi Mini to your app"
                       title="Add Pixotchi Mini to your app"
@@ -1081,7 +761,7 @@ export default function App() {
                   <Button
                     type="button"
                     variant="headerIcon"
-                    size="icon"
+                    size="headerIcon"
                     onClick={() => {
                       setShowWalletProfile(true);
                       void ensureWalletProfileLoaded();
@@ -1145,7 +825,8 @@ export default function App() {
                 className="login-auth-actions w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
-                isMiniConnectRetrying={state.isMiniConnectRetrying}
+                state={state}
+                isWalletPending={isWalletConnecting || isWalletReconnecting}
                 isRestoringBaseSession={isRestoringBaseSession}
                 localTestAuthAvailable={localTestAuthAvailable}
                 privyReady={privyReady}
@@ -1167,6 +848,7 @@ export default function App() {
               {/* Tab Content */}
               <div
                 ref={contentScrollRef}
+                onScroll={onContentScroll}
                 data-viewport-shell="content"
                 className="flex-1 overflow-y-auto overscroll-contain touch-pan-y"
                 style={{

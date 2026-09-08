@@ -7,7 +7,7 @@ const projectFile = (relativePath: string) => fs.readFileSync(
   "utf8",
 );
 
-const authController = projectFile("hooks/useAppAuthController.ts");
+const authController = projectFile("hooks/useBaseAuthAdapter.ts");
 const localTestConnector = projectFile("lib/local-test-connector.ts");
 
 assert.match(

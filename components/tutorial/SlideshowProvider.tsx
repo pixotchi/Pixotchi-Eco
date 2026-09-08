@@ -1,121 +1,167 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
+import {
+  QUICK_START_SLIDE_IDS,
   TASKS_TUTORIAL_SLIDE_ID,
   TUTORIAL_SLIDE_IDS,
   TUTORIAL_VERSION,
   type TutorialSlideId,
 } from "./config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
+import {
+  clampTutorialIndex,
+  readTutorialProgress,
+  type TutorialMode,
+  type TutorialProgress,
+} from "@/lib/tutorial-progress";
 
 type SlideshowContextType = {
   open: boolean;
   index: number;
+  mode: TutorialMode;
   slideIds: readonly TutorialSlideId[];
   enabled: boolean;
   start: (opts?: { reset?: boolean }) => void;
   startIfFirstVisit: () => void;
   close: () => void;
+  finish: () => void;
   next: () => void;
   prev: () => void;
   goto: (i: number) => void;
 };
-
 const SlideshowContext = createContext<SlideshowContextType | null>(null);
-
 const STORAGE_KEY = "pixotchi:tutorial";
 
 export function SlideshowProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
-  const gamificationPolicy = getClientGamificationPolicy();
-  const slideIds = useMemo(
+  const [mode, setMode] = useState<TutorialMode>("quick");
+  const policy = getClientGamificationPolicy();
+  const fullIds = useMemo(
     () =>
-      gamificationPolicy.visible
+      policy.visible && policy.enabled
         ? TUTORIAL_SLIDE_IDS
-        : TUTORIAL_SLIDE_IDS.filter((slideId) => slideId !== TASKS_TUTORIAL_SLIDE_ID),
-    [gamificationPolicy.visible],
+        : TUTORIAL_SLIDE_IDS.filter((id) => id !== TASKS_TUTORIAL_SLIDE_ID),
+    [policy.visible, policy.enabled],
   );
-
-  const envEnabled = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_TUTORIAL_SLIDESHOW || "on") === "on" : true;
-
-  // Defer auto-start until explicitly requested by the app after wallet connect
-  const startIfFirstVisit = useCallback(() => {
-    if (!envEnabled) return;
+  const slideIds = mode === "quick" ? QUICK_START_SLIDE_IDS : fullIds;
+  const envEnabled =
+    (process.env.NEXT_PUBLIC_TUTORIAL_SLIDESHOW || "on") === "on";
+  const read = useCallback(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const now = Date.now();
-      const stored = raw ? JSON.parse(raw) as { version: string; lastIndex?: number; completed?: boolean; firstSeenAt?: number } : null;
-      if (!stored) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: TUTORIAL_VERSION, lastIndex: 0, completed: false, firstSeenAt: now }));
-        setIndex(0);
-        setOpen(true);
-        return;
-      }
-      if (stored.version !== TUTORIAL_VERSION) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: TUTORIAL_VERSION, lastIndex: 0, completed: false, firstSeenAt: stored.firstSeenAt ?? now }));
-        setIndex(0);
-        setOpen(true);
-        return;
-      }
-      if (!stored.completed) {
-        setIndex(Math.min(stored.lastIndex ?? 0, slideIds.length - 1));
-        setOpen(true);
-      }
-    } catch {}
-  }, [envEnabled, slideIds.length]);
-
-  const persist = useCallback((data: Partial<{ lastIndex: number; completed: boolean }>) => {
+      return readTutorialProgress(
+        localStorage.getItem(STORAGE_KEY),
+        QUICK_START_SLIDE_IDS.length,
+        fullIds.length,
+      );
+    } catch {
+      return null;
+    }
+  }, [fullIds.length]);
+  const persist = useCallback((progress: TutorialProgress) => {
     try {
-      const currentRaw = localStorage.getItem(STORAGE_KEY);
-      const current = currentRaw ? JSON.parse(currentRaw) : {};
-      const merged = { version: TUTORIAL_VERSION, ...current, ...data };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    } catch {}
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ version: TUTORIAL_VERSION, ...progress }),
+      );
+    } catch {
+      /* The guide remains usable when storage is unavailable. */
+    }
   }, []);
 
-  const start = useCallback((opts?: { reset?: boolean }) => {
-    // Allow manual start even if env is disabled? We keep env gate to avoid surprises in prod.
+  const startIfFirstVisit = useCallback(() => {
     if (!envEnabled) return;
+    const saved = read();
+    if (saved?.completed || saved?.skipped) return;
+    const nextMode = saved?.mode ?? "quick";
+    const nextIndex = saved?.lastIndex ?? 0;
+    setMode(nextMode);
+    setIndex(nextIndex);
     setOpen(true);
-    const newIndex = opts?.reset ? 0 : index;
-    setIndex(newIndex);
-    persist({ lastIndex: newIndex, completed: false });
-  }, [envEnabled, index, persist]);
+    persist({
+      mode: nextMode,
+      lastIndex: nextIndex,
+      completed: false,
+      skipped: false,
+    });
+  }, [envEnabled, read, persist]);
 
+  // About opens the full guide and resumes a previously paused full guide.
+  const start = useCallback(
+    (opts?: { reset?: boolean }) => {
+      if (!envEnabled) return;
+      const saved = read();
+      const nextIndex =
+        !opts?.reset && saved?.mode === "full" && !saved.completed
+          ? saved.lastIndex
+          : 0;
+      setMode("full");
+      setIndex(nextIndex);
+      setOpen(true);
+      persist({
+        mode: "full",
+        lastIndex: nextIndex,
+        completed: false,
+        skipped: false,
+      });
+    },
+    [envEnabled, read, persist],
+  );
   const close = useCallback(() => {
     setOpen(false);
-    persist({ completed: true });
-  }, [persist]);
-
-  const next = useCallback(() => {
-    setIndex((i) => {
-      const ni = Math.min(i + 1, slideIds.length - 1);
-      persist({ lastIndex: ni, completed: ni === slideIds.length - 1 });
-      if (ni === slideIds.length - 1) {
-        // keep open; user can close at the end
-      }
-      return ni;
-    });
-  }, [slideIds.length, persist]);
-
-  const prev = useCallback(() => {
-    setIndex((i) => {
-      const ni = Math.max(i - 1, 0);
-      persist({ lastIndex: ni });
-      return ni;
-    });
-  }, [persist]);
-
-  const goto = useCallback((i: number) => {
-    const clamped = Math.min(Math.max(i, 0), slideIds.length - 1);
-    setIndex(clamped);
-    persist({ lastIndex: clamped });
-  }, [slideIds.length, persist]);
-
-  const value = useMemo(() => ({ open, index, slideIds, enabled: envEnabled, start, startIfFirstVisit, close, next, prev, goto }), [open, index, slideIds, envEnabled, start, startIfFirstVisit, close, next, prev, goto]);
-
+    persist({ mode, lastIndex: index, completed: false, skipped: true });
+  }, [index, mode, persist]);
+  const finish = useCallback(() => {
+    setOpen(false);
+    persist({ mode, lastIndex: index, completed: true, skipped: false });
+  }, [index, mode, persist]);
+  const goto = useCallback(
+    (value: number) => {
+      const nextIndex = clampTutorialIndex(value, slideIds.length);
+      setIndex(nextIndex);
+      persist({ mode, lastIndex: nextIndex, completed: false, skipped: false });
+    },
+    [slideIds.length, mode, persist],
+  );
+  const next = useCallback(() => goto(index + 1), [goto, index]);
+  const prev = useCallback(() => goto(index - 1), [goto, index]);
+  const value = useMemo(
+    () => ({
+      open,
+      index: clampTutorialIndex(index, slideIds.length),
+      mode,
+      slideIds,
+      enabled: envEnabled,
+      start,
+      startIfFirstVisit,
+      close,
+      finish,
+      next,
+      prev,
+      goto,
+    }),
+    [
+      open,
+      index,
+      mode,
+      slideIds,
+      envEnabled,
+      start,
+      startIfFirstVisit,
+      close,
+      finish,
+      next,
+      prev,
+      goto,
+    ],
+  );
   return (
     <SlideshowContext.Provider value={value}>
       {children}
@@ -124,7 +170,8 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useSlideshow() {
-  const ctx = useContext(SlideshowContext);
-  if (!ctx) throw new Error("useSlideshow must be used within SlideshowProvider");
-  return ctx;
+  const value = useContext(SlideshowContext);
+  if (!value)
+    throw new Error("useSlideshow must be used within SlideshowProvider");
+  return value;
 }

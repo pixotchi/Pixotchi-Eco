@@ -31,6 +31,7 @@ interface KillTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  onButtonClick?: () => void | Promise<void>;
   feedbackMode?: TransactionFeedbackMode;
   showToast?: boolean;
   onStatusUpdate?: (status: LifecycleStatus) => void;
@@ -44,6 +45,7 @@ export default function KillTransaction({
   buttonText = "Confirm Kill",
   buttonClassName,
   disabled = false,
+  onButtonClick,
   feedbackMode,
   showToast = true,
   onStatusUpdate,
@@ -85,6 +87,7 @@ export default function KillTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      onButtonClick={onButtonClick}
       feedbackMode={feedbackMode}
       showToast={showToast}
       onStatusUpdate={onStatusUpdate}

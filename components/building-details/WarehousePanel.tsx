@@ -1,19 +1,19 @@
 "use client";
 
-import CountdownTimer from '@/components/countdown-timer';
-import PlantImage from '@/components/PlantImage';
+import { PlantResourcePicker } from './plant-resource-picker';
+
 import WarehouseApplyTransaction from '@/components/transactions/warehouse-apply-transaction';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AmountField } from '@/components/ui/amount-field';
+import { Button } from '@/components/ui/button';
 import { ResourceState } from '@/components/ui/resource-state';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { getPlantsByOwner } from '@/lib/contracts';
+import { useFarmView } from '@/lib/farm-view-context';
+import { navigateToGameTab } from '@/lib/game-navigation';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { Plant } from '@/lib/types';
 import { getFriendlyErrorMessage } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
@@ -32,6 +32,7 @@ export default function WarehousePanel({
   onApplySuccess
 }: WarehousePanelProps) {
   const { address } = useAccount();
+  const { setMintType } = useFarmView();
   const [plantsLoading, setPlantsLoading] = useState(false);
   const [plantsError, setPlantsError] = useState<string | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -101,7 +102,32 @@ export default function WarehousePanel({
   const plantsAreCurrent = normalizedOwner !== null && plantsOwner === normalizedOwner;
   const currentPlants = plantsAreCurrent ? plants : [];
   const currentSelectedPlantId = plantsAreCurrent ? selectedPlantId : null;
-  const selectedPlant = currentPlants.find(plant => plant.id === currentSelectedPlantId);
+  const draftRef = useRef({ owner: normalizedOwner, landId, plantId: currentSelectedPlantId,
+    points: applyPts, lifetime: applyTodMinutes, pointsRevision: 0, lifetimeRevision: 0 });
+  const previousDraft = draftRef.current;
+  const scopeChanged = previousDraft.owner !== normalizedOwner || previousDraft.landId !== landId
+    || previousDraft.plantId !== currentSelectedPlantId;
+  const pointsRevision = previousDraft.pointsRevision + (scopeChanged || previousDraft.points !== applyPts ? 1 : 0);
+  const lifetimeRevision = previousDraft.lifetimeRevision + (scopeChanged || previousDraft.lifetime !== applyTodMinutes ? 1 : 0);
+  draftRef.current = { owner: normalizedOwner, landId, plantId: currentSelectedPlantId,
+    points: applyPts, lifetime: applyTodMinutes, pointsRevision, lifetimeRevision };
+
+  const completeApply = (mode: 'points' | 'lifetime', tx: unknown) => {
+    const current = draftRef.current;
+    if (current.owner !== normalizedOwner) return;
+    if (current.landId === landId) {
+      // Returning to the same plant or amount still creates a new draft revision.
+      if (mode === 'points' && current.pointsRevision === pointsRevision) setApplyPts('');
+      if (mode === 'lifetime' && current.lifetimeRevision === lifetimeRevision) setApplyTodMinutes('');
+      onApplySuccess();
+    }
+    try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
+    try {
+      const txHash = extractTransactionHash(tx);
+      postMissionProgress({ address: normalizedOwner, taskId: 's3_apply_resources',
+        ...(txHash ? { proof: { txHash } } : {}) });
+    } catch {}
+  };
 
   const availablePtsHuman = useMemo(() => {
     const v = typeof warehousePoints === 'bigint' ? warehousePoints : BigInt(0);
@@ -151,123 +177,58 @@ export default function WarehousePanel({
   }, [minutesParsed, warehouseLifetime]);
 
   return (
-    <div className="space-y-3 pt-4 border-t border-border">
-      <h4 className="font-semibold text-sm text-center">Apply Warehouse to Plant</h4>
-      <p id={availableDescriptionId} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground text-center">
+    <div className="space-y-4">
+      <h4 className="font-semibold text-sm">Apply stored resources</h4>
+      <p id={availableDescriptionId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
         <span>Available:</span>
         <ResourceValue resource="points">{availablePtsHuman} PTS</ResourceValue>
-        <ResourceValue resource="lifetime">{availableMinutes} min lifetime</ResourceValue>
+        <ResourceValue resource="lifetime">{availableMinutes} min plant lifetime</ResourceValue>
       </p>
 
       {plantsError ? <ResourceState status="error" title="Plants unavailable" description={plantsError} onRetry={() => void loadPlants()} />
         : plantsLoading ? <ResourceState status="loading" title="Loading your plants…" />
-        : plantsAreCurrent && currentPlants.length === 0 ? <ResourceState status="empty" title="No plants in this wallet" description="Mint a plant to use your warehouse resources." /> : null}
+        : plantsAreCurrent && currentPlants.length === 0 ? <div className="space-y-3">
+          <ResourceState status="empty" title="No plants in this wallet" description="Your resources will stay in the warehouse until you have a plant to use them." />
+          <Button className="w-full" onClick={() => { setMintType('plant'); navigateToGameTab('mint'); }}>Get your first plant</Button>
+        </div> : null}
 
-      {/* Plant Selector */}
-      <div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" disabled={!plantsAreCurrent || currentPlants.length === 0} className="w-full justify-between h-12 text-sm">
-              {selectedPlant ? (
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <PlantImage selectedPlant={selectedPlant} width={28} height={28} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{selectedPlant.name || `Plant #${selectedPlant.id}`}</div>
-                    {selectedPlant.name && <div className="text-xs text-muted-foreground">#{selectedPlant.id}</div>}
-                  </div>
-                  <div className="flex-shrink-0">
-                    <CountdownTimer 
-                      timeUntilStarving={currentPlants.find(pl => pl.id === currentSelectedPlantId)?.timeUntilStarving || 0}
-                      noBackground={true} 
-                      className="text-xs"
-                      showSeconds={false}
-                    />
-                  </div>
-                </div>
-              ) : 'Select Plant'}
-              <ChevronDown className="w-4 h-4 flex-shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
-            {currentPlants.map(p => (
-              <DropdownMenuItem key={p.id} onSelect={() => setSelectedPlantId(p.id)} className="h-16">
-                <div className="flex items-center gap-2 w-full">
-                  <PlantImage selectedPlant={p} width={20} height={20} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{p.name || `Plant #${p.id}`}</div>
-                    {p.name && <div className="text-xs text-muted-foreground">#{p.id}</div>}
-                  </div>
-                  <div className="flex-shrink-0">
-                    <CountdownTimer 
-                      timeUntilStarving={p.timeUntilStarving} 
-                      noBackground={true} 
-                      className="text-xs"
-                      showSeconds={false}
-                    />
-                  </div>
-                </div>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <div hidden={!plantsAreCurrent || currentPlants.length === 0} className="space-y-3">
+      <PlantResourcePicker plants={currentPlants} selectedId={currentSelectedPlantId}
+        onChange={setSelectedPlantId} disabled={!plantsAreCurrent || currentPlants.length === 0} />
 
       {/* Apply PTS */}
       <div className="space-y-3">
-        <AmountField id={pointsInputId} label="Points to add" unit="PTS" value={applyPts} onChange={e => setApplyPts(e.target.value)} onMax={() => setApplyPts(availablePtsHuman)} balance={availablePtsHuman} error={ptsTooHigh ? 'Amount exceeds available PTS.' : ptsInvalid ? 'Enter a positive amount with up to 4 decimal places.' : undefined} />
+        <AmountField id={pointsInputId} label="Plant points to apply" unit="PTS" value={applyPts} onChange={e => setApplyPts(e.target.value)} onMax={() => setApplyPts(availablePtsHuman)} balance={availablePtsHuman} error={ptsTooHigh ? 'Amount exceeds available PTS.' : ptsInvalid ? 'Enter a positive amount with up to 4 decimal places.' : undefined} />
         <WarehouseApplyTransaction
           landId={landId}
           plantId={currentSelectedPlantId || 0}
           amount={applyPts}
           mode="points"
-          buttonText="Apply PTS"
+          buttonText="Apply points"
           buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyPts || ptsTooHigh || ptsInvalid}
-          onSuccess={(tx: UntypedValue) => {
-            setApplyPts('');
-            onApplySuccess();
-            try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
-            try {
-              const payload: Record<string, UntypedValue> = { address, taskId: 's3_apply_resources' };
-              const txHash = extractTransactionHash(tx);
-              if (txHash) {
-                payload.proof = { txHash };
-              }
-              postMissionProgress(payload);
-            } catch {}
-          }}
+          onSuccess={(tx) => completeApply('points', tx)}
           onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
 
       {/* Apply TOD (minutes) */}
       <div className="space-y-3">
-        <AmountField id={lifetimeInputId} label="Lifetime to add" unit="minutes" value={applyTodMinutes} onChange={e => setApplyTodMinutes(e.target.value)} inputMode="numeric" onMax={() => setApplyTodMinutes(availableMinutes)} balance={availableMinutes} error={minutesTooHigh ? 'Amount exceeds available lifetime.' : minutesInvalid ? 'Enter a positive whole number of minutes.' : undefined} />
+        <AmountField id={lifetimeInputId} label="Plant lifetime to apply" unit="minutes" value={applyTodMinutes} onChange={e => setApplyTodMinutes(e.target.value)} inputMode="numeric" onMax={() => setApplyTodMinutes(availableMinutes)} balance={availableMinutes} error={minutesTooHigh ? 'Amount exceeds available lifetime.' : minutesInvalid ? 'Enter a positive whole number of minutes.' : undefined} />
         <WarehouseApplyTransaction
           landId={landId}
           plantId={currentSelectedPlantId || 0}
           amount={applyTodMinutes}
           mode="lifetime"
-          buttonText="Add time"
+          buttonText="Apply lifetime"
           buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyTodMinutes || minutesTooHigh || minutesInvalid}
-          onSuccess={(tx: UntypedValue) => {
-            setApplyTodMinutes('');
-            onApplySuccess();
-            try { window.dispatchEvent(new Event('buildings:refresh')); } catch {}
-            try {
-              const payload: Record<string, UntypedValue> = { address, taskId: 's3_apply_resources' };
-              const txHash = extractTransactionHash(tx);
-              if (txHash) {
-                payload.proof = { txHash };
-              }
-              postMissionProgress(payload);
-            } catch {}
-          }}
+          onSuccess={(tx) => completeApply('lifetime', tx)}
           onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
-      <p className="text-xs text-muted-foreground text-center">Add points with up to 4 decimal places, or lifetime in whole minutes.</p>
+      <p className="text-xs text-muted-foreground">Apply plant points with up to 4 decimal places, or plant lifetime in whole minutes.</p>
+      </div>
     </div>
   );
 }

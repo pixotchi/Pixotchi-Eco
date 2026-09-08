@@ -1,7 +1,7 @@
 "use client";
 
-import { useCountdown } from '@/hooks/useCountdown';
-import Image from 'next/image';
+import { useCountdown } from "@/hooks/useCountdown";
+import Image from "next/image";
 
 interface CountdownTimerProps {
   timeUntilStarving: number; // Unix timestamp
@@ -10,23 +10,36 @@ interface CountdownTimerProps {
   showSeconds?: boolean;
 }
 
-export default function CountdownTimer({ 
-  timeUntilStarving, 
+export default function CountdownTimer({
+  timeUntilStarving,
   className = "",
   noBackground = false,
-  showSeconds = true
+  showSeconds = true,
 }: CountdownTimerProps) {
   const timeRemaining = useCountdown(timeUntilStarving, showSeconds);
 
   const baseClasses = `flex items-center rounded-full font-semibold space-x-1`;
-  const backgroundClasses = noBackground 
-    ? "text-foreground" 
+  const backgroundClasses = noBackground
+    ? "text-foreground"
     : "bg-primary/10 text-primary p-3 border border-primary/20 rounded-md";
 
   return (
     <div className={`${baseClasses} ${backgroundClasses} ${className}`}>
-      <Image src="/icons/tod.svg" alt="Lifetime" width={16} height={16} className="w-4 h-4" />
-      <span>{timeRemaining}</span>
+      <Image
+        src="/icons/tod.svg"
+        alt="Lifetime"
+        width={16}
+        height={16}
+        className="w-4 h-4 shrink-0"
+      />
+      <span
+        role="timer"
+        aria-label="Remaining lifetime"
+        aria-live="off"
+        className="min-w-0 tabular-nums [overflow-wrap:anywhere]"
+      >
+        {timeRemaining}
+      </span>
     </div>
   );
-} 
+}

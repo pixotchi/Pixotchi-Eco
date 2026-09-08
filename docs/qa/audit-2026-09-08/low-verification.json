@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "auditDate": "2026-09-08",
+  "recordedAt": "2026-09-08T14:17:41.529Z",
+  "status": "low-round-complete-with-original-ARC-06-acceptance-open",
+  "scope": "Revalidation and remediation of the 33 original low-priority finding groups, integrated with the previous high/medium fixes. Finding counts are not an application coverage percentage.",
+  "lowRound": {
+    "total": 33,
+    "implementedAndVerified": 31,
+    "priorRoundFixesRevalidated": [
+      "G17",
+      "G19"
+    ],
+    "unresolvedLowFindings": []
+  },
+  "initialAudit": {
+    "total": 150,
+    "resolvedWithinRecordedScope": 149,
+    "remainingOpen": [
+      "ARC-06"
+    ]
+  },
+  "sourceCheckpoints": {
+    "primary": {
+      "head": "2d2128049d75bd79c0b8b27d42d9edbbd08933f0",
+      "timestamp": "2026-09-08T13:28:27.510Z",
+      "sha256": "1e2f14bcf8b3efa45a660d3bc86e390fae73b19778a38702004566bf8769171b",
+      "fileCount": 846,
+      "evidence": "../../../output/low-primary-source-checkpoint.json"
+    },
+    "final": {
+      "head": "2d2128049d75bd79c0b8b27d42d9edbbd08933f0",
+      "timestamp": "2026-09-08T14:12:52.121Z",
+      "sha256": "81dabdcaa4098e96aefc965e793efd11ef53d0d01c00940ec3daf7eb7cd3aa8e",
+      "fileCount": 848,
+      "evidence": "../../../output/low-source-checkpoint.json",
+      "unchangedAfterBuild": true
+    },
+    "scope": "Tracked and untracked non-ignored source/config/test text. Excludes generated next-env.d.ts, docs, output, tmp, environment files and binary assets.",
+    "changedSincePrimary": [
+      "components/activity/activity-record.tsx",
+      "components/activity/event-renderers.tsx",
+      "components/mint/mint-presentation.tsx",
+      "lib/activity-metadata.ts",
+      "lib/activity-service.ts",
+      "smoke/activity-filters-smoke.ts",
+      "tests/frontend/base-mark-lifecycle.spec.ts",
+      "tests/frontend/economy-low-layout.spec.ts",
+      "tests/frontend/activity-identity.spec.ts",
+      "tests/frontend/fixtures/activity-identity.tsx"
+    ],
+    "note": "The primary matrix ran on its own frozen source. The final tree has targeted verification for the listed later corrections; no second complete matrix is claimed."
+  },
+  "primaryMatrix": {
+    "command": "npx playwright test --config output/playwright-low-final.config.ts",
+    "exitCode": 1,
+    "specificationFiles": 29,
+    "combinations": 3878,
+    "projects": 14,
+    "startTime": "2026-09-08T13:28:29.117Z",
+    "duration": 2049218.518,
+    "expected": 3767,
+    "skipped": 110,
+    "unexpected": 1,
+    "flaky": 0,
+    "evidence": "../../../output/low-final-matrix-verified.json",
+    "log": "../../../output/low-final-matrix-verified.log",
+    "skippedCombinations": {
+      "fullPaletteFocusOutsideThreeRepresentativeProjects": 88,
+      "paletteContrastOutsideThreeRepresentativeProjects": 11,
+      "windowsDenseBaselinesOutsideThreeReferenceProjects": 11
+    },
+    "failure": {
+      "file": "tests/frontend/base-mark-lifecycle.spec.ts",
+      "project": "webkit-390-light",
+      "originalLine": 44,
+      "cause": "A raw SVG read raced React’s color-state commit after the fake timer callback. Instrumentation reproduced 5 failures in 20 runs with callback execution before the late DOM commit.",
+      "correction": "Await the visible initial/resumed SVG commit. Preserve the exact 4500ms pause, random-work counter and unmount assertions; production code is unchanged.",
+      "status": "resolved-by-targeted-correction",
+      "review": "../../../output/base-mark-lifecycle-final-review.md"
+    },
+    "fullMatrixRerunAfterCorrections": false
+  },
+  "correctiveChecks": {
+    "mintAllProjects": {
+      "evidence": "../../../output/mint-status-layout-final-results.json",
+      "startTime": "2026-09-08T14:04:04.542Z",
+      "duration": 36524.117,
+      "expected": 42,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "baseLifecycleAllProjects": {
+      "evidence": "../../../output/base-mark-final.json",
+      "startTime": "2026-09-08T14:06:55.836Z",
+      "duration": 53151.28,
+      "expected": 42,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "baseLifecycleWebKitStability": {
+      "evidence": "../../../output/base-mark-final-repeat.json",
+      "startTime": "2026-09-08T14:08:36.335Z",
+      "duration": 37562.916000000005,
+      "expected": 30,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0,
+      "note": "Thirty repeats of the originally failing case; retries 0, workers 3. Not thirty unique scenarios."
+    },
+    "activityAffectedChecks": {
+      "kind": "Line-reporter completion summary, not raw JSON-reporter output",
+      "passed": 112,
+      "failed": 0,
+      "skipped": 0,
+      "projects": 14,
+      "summary": "../../../output/activity-identity-final-matrix/results-summary.json",
+      "completionExcerpt": "../../../output/activity-identity-final-matrix/completion.log",
+      "nativeRunnerStatus": "../../../output/activity-identity-final-matrix/.last-run.json",
+      "scope": "Before the subsequent fixture-only quantity/item-map type correction; the two new tests were then rerun below."
+    },
+    "activityTypedFixturesAllProjects": {
+      "evidence": "../../../output/activity-identity-fixture-final/results.json",
+      "startTime": "2026-09-08T14:12:00.993Z",
+      "duration": 15858.057999999999,
+      "expected": 28,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "note": "These focused passes overlap primary cases and each other. They must not be summed as a count of unique application journeys."
+  },
+  "finalRealAppJourneys": {
+    "evidence": "../../../output/low-post-correction-app.json",
+    "startTime": "2026-09-08T14:08:56.751Z",
+    "duration": 93122.151,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0,
+    "log": "../../../output/low-post-correction-app.log",
+    "report": "verification-final-post-correction-app.md",
+    "projects": [
+      "390x844",
+      "820x1180",
+      "1440x900"
+    ],
+    "scope": "Two unchanged real Local Test Wallet journeys at three Chromium widths: signed-session connect/reconnect, signed-out recovery/reload, six tabs, selected app themes, safe staking drafts and cancelled self-transfer review.",
+    "uncaughtPageErrors": 0,
+    "observedSubmissionMethodsInThreeNormalJourneys": 0,
+    "recoveryMethodCensus": "The three recovery-only cases perform no financial action and do not record a separate RPC-method census.",
+    "consoleObservations": "Each normal journey recorded 4 GET /api/chat/auth/session 401 responses (12 total) and the generic 401 console message; no failed auth POST or other API failure. No phase timestamps were recorded. Signed-session assertions passed before and after reconnect.",
+    "tracesAndVideos": false,
+    "paidTransactionsSubmitted": false
+  },
+  "settledVisualChecks": {
+    "mint": {
+      "captures": 6,
+      "widths": [
+        390,
+        820,
+        1440
+      ],
+      "textPercent": [
+        100,
+        200
+      ],
+      "status": "passed",
+      "evidence": "../../../output/playwright/mint-status-final/public-results.json",
+      "note": "Sold stays on one line, fits within the card, remains disabled and causes no page overflow."
+    },
+    "activity": {
+      "widths": [
+        390,
+        820,
+        1440
+      ],
+      "status": "passed",
+      "evidence": "../../../output/playwright/activity-identity-final/results.json",
+      "note": "Two fresh HTTP 200 reads per width, 138 affected public records, zero missing nftId. Settled Plants-filter BoxGame rows inspected collapsed and expanded."
+    },
+    "otherSettledTabs": {
+      "evidence": "../../../output/final-tab-screenshot-review.md",
+      "note": "Swap ETH icon, Ranking and Chart rendered after settling. Chart screenshots show the widget; the automated detector looked for the wrong frame host and timed out, so no chart-load timing claim is made."
+    },
+    "denseVisualReferences": {
+      "changedInLowRound": false,
+      "count": 9,
+      "evidence": "../../../output/low-golden-preservation.json",
+      "note": "Byte-identical to the medium-round checkpoint. The three configured baseline cases passed in the primary matrix; 11 other project combinations were intentionally skipped."
+    }
+  },
+  "gates": [
+    {
+      "command": "npm run frontend:p1",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Primary checkpoint; subsequent correction files do not change this gate’s exercised behavior.",
+      "log": "../../../output/low-final-p1-verified.log"
+    },
+    {
+      "command": "npm run frontend:p2",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Primary checkpoint; subsequent correction files do not change this gate’s exercised behavior.",
+      "log": "../../../output/low-final-p2-verified.log"
+    },
+    {
+      "command": "npm run frontend:p3",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Primary checkpoint; subsequent correction files do not change this gate’s exercised behavior.",
+      "log": "../../../output/low-final-p3.log"
+    },
+    {
+      "command": "npm run app-fixes:smoke",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Primary checkpoint; subsequent correction files do not change this gate’s exercised behavior.",
+      "log": "../../../output/low-final-app-fixes.log"
+    },
+    {
+      "command": "npm run frontend:smoke",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Primary checkpoint; subsequent correction files do not change this gate’s exercised behavior.",
+      "log": "../../../output/low-final-frontend-smoke.log"
+    },
+    {
+      "command": "npm run activity:smoke",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final Activity source and corrected per-collection/window/route smoke assertions.",
+      "log": "../../../output/activity-identity-smoke.log"
+    },
+    {
+      "command": "npx tsx smoke/social-p1-reliability-smoke.ts",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final Activity production source.",
+      "log": "../../../output/activity-identity-social-p1-smoke.log"
+    },
+    {
+      "command": "npm run lint",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Full lint after production corrections. Later fixture/smoke-only changes also passed scoped lint, recorded in fixes-low-social.md.",
+      "log": "../../../output/low-post-correction-lint.log"
+    },
+    {
+      "command": "npm run frontend:types",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "611 legacy escape hatches across 115 files; no ceiling increase. Later changes are typed fixtures/smoke assertions.",
+      "log": "../../../output/low-post-correction-types.log"
+    },
+    {
+      "command": "npm run build",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final frozen source; 21.8s compilation, 23.5s TypeScript, 72 generated pages.",
+      "log": "../../../output/low-final-build.log"
+    },
+    {
+      "command": "npm run frontend:release-check",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final production build: all 7 QA routes 404, root 200 and production CSP intact; temporary owned release server stopped.",
+      "log": "../../../output/low-final-release.log"
+    },
+    {
+      "command": "npm run typecheck",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final tree after production build and generated route types.",
+      "log": "../../../output/low-final-typecheck-after-build.log"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Final production/test changes; documentation receives a final check at closure.",
+      "log": "../../../output/low-post-correction-whitespace.log"
+    }
+  ],
+  "textValidation": {
+    "status": "passed",
+    "evidence": "../../../output/final-changed-text-check.json",
+    "note": "Read-only strict UTF-8/BOM/NUL/replacement and introduced-whitespace checks; historical untouched whitespace is informational. Docs/output changes do not alter the source checkpoint."
+  },
+  "retainedFailedAttempts": [
+    {
+      "evidence": "../../../output/low-final-matrix.log",
+      "disposition": "Earlier attempt to run the complete matrix was intentionally interrupted after a stale catalog +12h TOD expectation; changed to the intended +12h lifetime and focused 2 cases passed before the primary matrix."
+    },
+    {
+      "evidence": "../../../output/low-catalog-correction.json",
+      "disposition": "Two-case catalog correction pass; not a complete matrix."
+    },
+    {
+      "evidence": "../../../output/low-post-correction-typecheck.log",
+      "disposition": "Two new Activity fixture prop mismatches. Added the production single-event quantity and required maps; corrected 28 tests and final TypeScript/build pass."
+    },
+    {
+      "evidence": "../../../output/low-final-p1.log",
+      "disposition": "Stale rename normalization fixture expectation corrected; final P1 runner passed."
+    },
+    {
+      "evidence": "../../../output/low-final-p2.log",
+      "disposition": "Fixture CSS bundling/name-length expectations corrected; final P2 runner passed."
+    },
+    {
+      "evidence": "cross-review-low-gameplay-buildings.md",
+      "disposition": "Original race/observer failures and separate ad hoc timeout remain documented alongside their scoped corrections."
+    },
+    {
+      "evidence": "fixes-low-social.md",
+      "disposition": "Initial Activity fixture typing/lint and stale smoke assertions are retained with their corrections; no failed attempt is relabeled as green."
+    }
+  ],
+  "remainingAcceptance": {
+    "finding": "ARC-06",
+    "status": "open-partially-addressed",
+    "register": "final-coverage-register.md",
+    "required": [
+      "Seeded full-provider gameplay/financial journeys and interruption states",
+      "External-wallet and native Mini App host handoff",
+      "Physical phone/tablet keyboard, safe areas, assistive technology and device performance acceptance"
+    ],
+    "note": "Viewport, WebKit, controlled component/SDK and source tests do not establish complete live/native/physical coverage."
+  },
+  "delivery": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "note": "All changes remain local; the user owns the push. Local output evidence is ignored by Git; tracked reports summarize its scope."
+  }
+}

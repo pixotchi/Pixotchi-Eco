@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { warehouseActivityQuery } from '../lib/warehouse-activity';
 
 import {
   ACTIVITY_CATEGORY_IDS,
@@ -284,15 +285,28 @@ for (const { limitToken, name } of QUERY_REGIONS) {
   const bodyEnd = activityService.indexOf('`;', bodyStart);
   const body = activityService.slice(bodyStart, bodyEnd);
 
-  const collections = (body.match(/orderBy: "timestamp"/g) ?? []).length;
-  const windowFilters = (body.match(/\$\{ACTIVITY_WINDOW_FILTER\}/g) ?? []).length;
-  const limits = (body.match(new RegExp(`limit: \\$\\{${limitToken.slice(2, -1)}\\}`, 'g')) ?? []).length;
-
-  assert.ok(collections > 0, `${name}: no collections found`);
-  assert.equal(windowFilters, collections, `${name}: ${windowFilters}/${collections} collections are window-bounded`);
-  assert.equal(limits, collections, `${name}: ${limits}/${collections} collections use ${limitToken}`);
+  // Inspect each actual collection declaration. The warehouse interpolation
+  // also contains a window token, but is not itself a GraphQL collection.
+  const collections = body.match(/\b\w+\(\s*orderBy: "timestamp"[\s\S]*?\)\s*\{/g) ?? [];
+  assert.ok(collections.length > 0, `${name}: no collections found`);
+  for (const collection of collections) {
+    assert.ok(collection.includes('${ACTIVITY_WINDOW_FILTER}'), `${name}: collection is not window-bounded: ${collection.trim()}`);
+    assert.ok(collection.includes(`limit: ${limitToken}`), `${name}: collection does not use ${limitToken}: ${collection.trim()}`);
+  }
   // GraphQL rejects a declared-but-unused variable, so this must hold at runtime too.
   assert.match(body, /\$cutoff: BigInt!/, `${name} must declare the $cutoff variable`);
+}
+
+for (const limit of [100, 1000]) {
+  const filter = 'timestamp_gt: $cutoff, OR: [{ landId_in: $landIds }, { plantId_in: $plantIds }]';
+  const warehouse = warehouseActivityQuery(limit, filter);
+  const collections = warehouse.match(/^\s*\w+\(orderBy: "timestamp"[^\n]*/gm) ?? [];
+  assert.equal(collections.length, 2, 'Both Warehouse resource collections must remain queried');
+  for (const collection of collections) {
+    assert.ok(collection.includes(`limit: ${limit}`));
+    assert.ok(collection.includes(`where: { ${filter} }`), 'Warehouse scope and window must be preserved');
+  }
+  assert.equal((warehouse.match(/items \{ id timestamp blockHeight landId plantId/g) ?? []).length, 2, 'Both Warehouse resources must retain source and destination identity');
 }
 
 assert.doesNotMatch(activityService, /limit: 100/, 'Row limits must come from the named constants, not literals.');
@@ -319,13 +333,17 @@ const myActivityRoute = projectFile('app/api/activity/my/route.ts');
 assert.match(myActivityRoute, /getCachedMyActivityFeed\(address\)/);
 assert.match(myActivityRoute, /\{ activities, count: activities\.length, landIds, plantIds \}/);
 
-// The URL keys the Activity tab owns must be registered on the shell, otherwise
-// they are stripped when switching tabs.
+// The shell delegates navigation to the query-state hook, which edits only its
+// own key. Activity keys no longer need a central allowlist to survive a switch.
 const gameShell = projectFile('app/(game)/page.tsx');
-assert.match(gameShell, /"activityFilter",\s+"activityDirection",/);
-assert.match(
-  gameShell,
-  /activity: new Set\(\["tab", "activityView", "activityPage", "activityFilter", "activityDirection"\]\)/,
-);
+assert.match(gameShell, /useGameNavigation\(isMiniApp\)/);
+const navigation = projectFile('hooks/useGameNavigation.ts');
+assert.match(navigation, /key: 'tab'/);
+assert.match(navigation, /useWebQueryState<Tab>/);
+assert.doesNotMatch(navigation, /searchParams\.delete/, 'Tab navigation must not strip other views\' query keys');
+const queryState = projectFile('hooks/useWebQueryState.ts');
+assert.match(queryState, /new URL\(window\.location\.href\)/);
+assert.match(queryState, /url\.searchParams\.set\(keyRef\.current, serialized\)/);
+assert.match(queryState, /url\.searchParams\.delete\(keyRef\.current\)/);
 
 console.log('Activity filters smoke passed');

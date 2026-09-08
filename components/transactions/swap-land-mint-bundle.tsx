@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
+import type { LifecycleStatus } from './transaction-kit';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { buildSwapAndApproveCalls, useSwapDeadline } from "@/lib/swap/bundle-calls";
 import { landAbi as LAND_ABI } from '@/public/abi/pixotchi-v3-abi';
@@ -12,6 +13,8 @@ interface SwapLandMintBundleProps {
     minSeedOut: bigint; // Minimum SEED to receive (land mint price)
     onSuccess?: (tx: UntypedValue) => void;
     onError?: (error: UntypedValue) => void;
+    onButtonClick?: () => void | boolean | Promise<void | boolean>;
+    onStatusUpdate?: (status: LifecycleStatus) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
@@ -33,6 +36,8 @@ export default function SwapLandMintBundle({
     minSeedOut,
     onSuccess,
     onError,
+    onButtonClick,
+    onStatusUpdate,
     buttonText = 'Mint Land with ETH',
     buttonClassName = 'w-full',
     disabled = false,
@@ -76,6 +81,8 @@ export default function SwapLandMintBundle({
             intentKey="swap:mint-land"
             onSuccess={onSuccess}
             onError={onError}
+            onButtonClick={onButtonClick}
+            onStatusUpdate={onStatusUpdate}
             buttonText={buttonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}

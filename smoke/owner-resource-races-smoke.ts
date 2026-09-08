@@ -204,7 +204,7 @@ assert.match(
 const casinoPanel = projectFile('components/building-details/CasinoPanel.tsx');
 assert.match(
   casinoPanel,
-  /requestId !== casinoStateRequestRef\.current[\s\S]*currentCasinoIdentityRef\.current !== requestIdentity/,
+  /requestId === casinoStateRequestRef\.current && currentCasinoIdentityRef\.current === requestIdentity/,
   'casino state must reject stale land and account reads',
 );
 assert.match(
@@ -226,7 +226,7 @@ assert.match(
 );
 assert.match(
   barracksPanel,
-  /const currentBuildAllowance = allowancesAreCurrent \? buildAllowance : ZERO_BIGINT;/,
+  /const currentBuildAllowance = allowancesAreCurrent \? buildAllowance : undefined;/,
   'barracks approvals must fail closed until allowance data belongs to the current account',
 );
 

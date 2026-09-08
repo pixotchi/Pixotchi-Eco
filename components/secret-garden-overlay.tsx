@@ -319,7 +319,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
       grid.removeEventListener("pointerup", handlePointerUp);
       grid.removeEventListener("pointercancel", handlePointerCancel);
     };
-  }, [open, handleRevealStart, updateHoverFromPoint, clearHover]);
+  }, [open, shouldRender, handleRevealStart, updateHoverFromPoint, clearHover]);
 
   useEffect(() => {
     initialRevealRef.current = initialReveal;
@@ -437,13 +437,13 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
         aria-describedby={descriptionId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`relative z-10 flex h-full w-full items-center justify-center px-4 py-6 transition-opacity duration-[var(--motion-modal)] ease-[var(--ease-standard)] ${
+        className={`relative z-10 flex h-full w-full flex-col overflow-y-auto px-4 py-[max(1rem,env(safe-area-inset-top),env(safe-area-inset-bottom))] transition-opacity duration-[var(--motion-modal)] ease-[var(--ease-standard)] ${
           open && artVisible ? "pointer-events-auto" : ""
         } ${
           open && artVisible ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="flex w-full max-w-md flex-col items-center gap-6 text-center">
+        <div className="m-auto flex w-full max-w-md shrink-0 flex-col items-center gap-4 text-center">
           <div className="space-y-3 px-2">
             <p className="text-xs uppercase tracking-[0.35em] text-white/70 sm:text-sm">
               Secret Garden Unlocked
@@ -490,7 +490,7 @@ export function SecretGardenOverlay({ open, onClose }: SecretGardenOverlayProps)
           display: grid;
           justify-content: center;
           grid-template-columns: repeat(${GRID_COLUMNS}, 1fr);
-          width: min(82vw, 18rem);
+          width: min(82vw, 18rem, max(8rem, calc(100dvh - 16rem)));
           gap: clamp(0.18rem, 0.7vw, 0.25rem);
           margin: 0 auto;
           touch-action: none;

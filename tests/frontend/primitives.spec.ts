@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { openFrontendFixture } from './helpers/bootstrap';
 
 test.beforeEach(async ({ page }, testInfo) => {
-  await page.goto('/qa/frontend');
-  await expect(page.locator('[data-fixtures-ready=true]')).toBeVisible();
+  await openFrontendFixture(page, testInfo, 'primitives');
   await page.evaluate(theme => { document.documentElement.classList.add(theme); }, testInfo.project.name.endsWith('dark') ? 'dark' : 'light');
 });
 
@@ -61,7 +61,7 @@ test('catalog cards fit without overflow or quantity controls', async ({ page })
   const choices = catalog.getByLabel('Care choices', { exact: true });
   expect(Math.abs((await choices.boundingBox())!.width - (await catalog.boundingBox())!.width)).toBeLessThan(2);
   await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('25.87 SEED');
-  await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('+12h TOD');
+  await expect(catalog.getByRole('button', { name: 'Select Water' })).toContainText('+12h lifetime');
   await catalog.getByRole('button', { name: 'Select Water' }).scrollIntoViewIfNeeded();
   const scrollTop = await page.evaluate(() => scrollY);
   await catalog.getByRole('button', { name: 'Select Water' }).click();
@@ -80,28 +80,28 @@ test('catalog cards fit without overflow or quantity controls', async ({ page })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('care quantities are compact, edited in the popup and retained per item', async ({ page }) => {
+test('care quantities are touch sized, editable in the popup and retained per item', async ({ page }) => {
   const catalog = page.getByRole('region', { name: 'Care catalog' });
   await catalog.getByRole('button', { name: 'Select Water' }).click();
   const review = page.getByRole('dialog', { name: 'Care item review' });
   const increase = review.getByRole('button', { name: 'Increase quantity' });
-  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('1');
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveValue('1');
   await expect(review.getByRole('button', { name: 'Decrease quantity' })).toBeDisabled();
   const bounds = (await increase.boundingBox())!;
-  expect(bounds.width).toBe(32);
-  expect(bounds.height).toBe(32);
-  expect(bounds.height).toBeLessThan((await review.getByRole('button', { name: 'Close dialog' }).boundingBox())!.height);
+  expect(bounds.width).toBe(44);
+  expect(bounds.height).toBe(44);
+  expect((await review.getByRole('button', { name: 'Close dialog' }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await increase.focus();
   await increase.press('Space');
   await expect(increase).toBeFocused();
-  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('2');
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveValue('2');
   await page.keyboard.press('Escape');
   await expect(catalog.getByRole('button', { name: /quantity/ })).toHaveCount(0);
   await catalog.getByRole('button', { name: 'Select Sunlight' }).click();
-  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('1');
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveValue('1');
   await page.keyboard.press('Escape');
   await catalog.getByRole('button', { name: 'Select Water' }).click();
-  await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('2');
+  await expect(review.getByLabel('Quantity', { exact: true })).toHaveValue('2');
 });
 
 test('selecting the same care item reopens its review', async ({ page }) => {
@@ -144,8 +144,9 @@ test('care sheet and form dialog stay above the keyboard and follow viewport pan
   }
 });
 
-test('roulette number centers always select that straight number', async ({ page }) => {
-  for (let number = 0; number <= 36; number++) {
+for (const start of [0, 13, 26]) {
+test(`roulette number centers always select that straight number (${start}–${Math.min(start + 12, 36)})`, async ({ page }) => {
+  for (let number = start; number <= Math.min(start + 12, 36); number++) {
     const button = page.getByRole('button', { name: `Bet straight on ${number}`, exact: true });
     await button.scrollIntoViewIfNeeded();
     const box = (await button.boundingBox())!;
@@ -157,6 +158,7 @@ test('roulette number centers always select that straight number', async ({ page
   await page.getByRole('button', { name: 'Split 3–6', exact: true }).click();
   await expect(page.getByLabel('Selected bet')).toHaveText('1:Split 3–6:3,6');
 });
+}
 
 test('roulette combinations occupy their table edges without covering number centers', async ({ page }) => {
   const table = page.getByRole('group', { name: 'Roulette betting table', exact: true });
@@ -205,6 +207,50 @@ test('roulette combinations occupy their table edges without covering number cen
   await page.getByLabel('Lock roulette betting', { exact: true }).check();
   for (const button of await table.getByRole('button').all()) await expect(button).toBeDisabled();
   await expect(page.getByText('Combination bets', { exact: true })).toHaveCount(0);
+});
+
+test('roulette touch picker provides complete large combination choices without page overflow', async ({ page }, testInfo) => {
+  const width = testInfo.project.use.viewport!.width;
+  if (width >= 768) await page.getByText('Choose bets from a list', { exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Roulette bet picker' });
+  const type = picker.getByRole('combobox', { name: 'Bet type' });
+  expect((await type.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const [kind, name, expected] of [
+    ['split', 'Add Split 1–2 bet', '1:Split 1–2:1,2'],
+    ['street', 'Add Street 1–3 bet', '2:Street 1–3:1,2,3'],
+    ['corner', 'Add Corner 1, 2, 4, 5 bet', '3:Corner 1, 2, 4, 5:1,2,4,5'],
+    ['six-line', 'Add 6-Line 1–6 bet', '4:6-Line 1–6:1,2,3,4,5,6'],
+  ]) {
+    await type.selectOption(kind);
+    const row = picker.getByRole('button', { name, exact: true });
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await row.click();
+    await expect(page.getByLabel('Selected bet')).toHaveText(expected);
+    await expect(row).toHaveAttribute('aria-pressed', 'true');
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  const dimensions = await picker.evaluate(node => ({ left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right, viewport: innerWidth }));
+  expect(dimensions.left).toBeGreaterThanOrEqual(0);
+  expect(dimensions.right).toBeLessThanOrEqual(dimensions.viewport);
+  await page.getByLabel('Lock roulette betting', { exact: true }).check();
+  await expect(type).toBeDisabled();
+  for (const row of await picker.getByRole('button').all()) await expect(row).toBeDisabled();
+});
+
+test('roulette board has one Tab stop and announces every selection category', async ({ page }) => {
+  const table = page.getByRole('group', { name: 'Roulette betting table', exact: true });
+  await expect(table.locator('button[tabindex="0"]')).toHaveCount(1);
+  const zero = table.getByRole('button', { name: 'Bet straight on 0', exact: true });
+  await zero.focus();await page.keyboard.press('ArrowRight');
+  await expect(zero).not.toBeFocused();await page.keyboard.press('Home');await expect(zero).toBeFocused();
+  await page.keyboard.press('Enter');await expect(zero).toHaveAttribute('aria-pressed', 'true');
+  await expect(table.locator('button[tabindex="0"]')).toHaveCount(1);
+  await page.keyboard.press('Tab');
+  expect(await table.evaluate(node => node.contains(document.activeElement))).toBe(false);
+  for (const label of ['Bet third column', 'Bet first twelve', 'Bet red numbers']) {
+    const button = table.getByRole('button', { name: label, exact: true });
+    await button.click();await expect(button).toHaveAttribute('aria-pressed', 'true');
+  }
 });
 
 test('failed reads have a retry and distinct empty state', async ({ page }) => {
@@ -293,10 +339,14 @@ test('first care persists by wallet and urgent plants retain guidance', async ({
   await guide.getByText('Your next steps', { exact: true }).click();
   await guide.getByRole('button', { name: "Farmer's Tasks" }).click();
   await guide.getByRole('button', { name: 'Confirm fixture care' }).click();
+  await expect(guide.locator('details')).toHaveCount(1);
+  await guide.getByRole('button', { name: 'Confirm fixture Tasks opened' }).click();
   await expect(guide.locator('details')).toHaveCount(0);
   await page.reload();
+  await expect(page.locator('[data-fixtures-ready=true]')).toBeVisible({ timeout: 20_000 });
   await expect(guide.locator('details')).toHaveCount(0);
   await guide.getByRole('button', { name: 'Switch fixture wallet' }).click();
+  await expect(guide.getByLabel('Fixture owner')).toHaveText('fixture-wallet-b');
   await expect(guide.getByText('Your next steps', { exact: true })).toBeVisible();
   await guide.getByRole('button', { name: 'Switch fixture wallet' }).click();
   await expect(guide.locator('details')).toHaveCount(0);
@@ -399,7 +449,8 @@ test('named dialog layouts keep long content and actions reachable at enlarged t
         const style = getComputedStyle(button.parentElement!);
         return { background: style.backgroundColor, border: style.borderBottomWidth };
       });
-      expect(headingSurface).toEqual({ background: 'rgba(0, 0, 0, 0)', border: '0px' });
+      expect(headingSurface).toEqual({ background: 'rgb(0, 0, 0)', border: '1px' });
+      await expect(dialog.getByRole('heading', { name: 'game layout', exact: true })).toBeVisible();
       const close = (await dialog.getByRole('button', { name: 'Close game layout dialog' }).boundingBox())!;
       const field = (await dialog.getByRole('textbox', { name: 'Layout amount (SEED)' }).boundingBox())!;
       expect(close.y + close.height).toBeLessThanOrEqual(field.y);
@@ -426,7 +477,7 @@ test('roulette removal targets stay distinct and preserve long amounts', async (
   await expect(bets.getByText('0.000000000000000001')).toHaveCount(0);
   await expect(bets.getByText('999999999999999999.99')).toBeVisible();
   await bets.getByRole('button', { name: 'Clear bets' }).click();
-  await expect(bets.getByText('Tap the table to add bets')).toBeVisible();
+  await expect(bets.getByText('Choose a bet type or use the table to add bets')).toBeVisible();
 });
 
 test('tiny and very large token amounts expose exact values without overflow', async ({ page }) => {
@@ -471,16 +522,16 @@ test('production readouts retain tiny points and total lifetime without looking 
   const production = page.getByRole('region', { name: 'Production readouts fixture' });
   await expect(production).toContainText('<0.01 PTS');
   await expect(production).toContainText('400d 1h');
-  await expect(production.getByText('Lifetime per day')).toHaveCount(0);
+  await expect(production.getByText('Plant lifetime per day', { exact: true })).toHaveCount(0);
   await expect(production.getByRole('button')).toHaveCount(0);
   expect(await production.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
 });
 
 test('quest difficulty has distinct colors and retains arrow-key selection', async ({ page }) => {
   const group = page.getByRole('radiogroup', { name: 'Quest difficulty', exact: true });
-  const easy = group.getByRole('radio', { name: 'Easy 3h', exact: true });
-  const medium = group.getByRole('radio', { name: 'Med 6h', exact: true });
-  const hard = group.getByRole('radio', { name: 'Hard 12h', exact: true });
+  const easy = group.getByRole('radio', { name: 'Easy ~3h', exact: true });
+  const medium = group.getByRole('radio', { name: 'Medium ~6h', exact: true });
+  const hard = group.getByRole('radio', { name: 'Hard ~12h', exact: true });
   const colors = await group.getByRole('radio').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).color));
   expect(new Set(colors).size).toBe(3);
   await expect(easy).toHaveAttribute('aria-checked', 'true');

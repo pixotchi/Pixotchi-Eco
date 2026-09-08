@@ -26,16 +26,16 @@ export function AmountField({ id, label, unit, balance, error, hint, onMax, maxD
   const descriptionId = `${fieldId}-description`;
   const hasDescription = Boolean(error || hint || balance != null);
   return (
-    <div className={cn('min-w-0 space-y-2', surface === 'game' && 'text-white', containerClassName)}>
-      <label htmlFor={fieldId} className="block text-sm font-medium">{label} <span className={surface === 'game' ? 'text-white/75' : 'text-muted-foreground'}>({unit})</span></label>
-      <div className="flex items-stretch gap-2">
+    <div className={cn('min-w-0 space-y-2 [overflow-wrap:anywhere]', surface === 'game' && 'text-white', containerClassName)}>
+      <label htmlFor={fieldId} className="type-label block">{label} <span className={surface === 'game' ? 'text-white/75' : 'text-muted-foreground'}>({unit})</span></label>
+      <div className="flex flex-wrap items-stretch gap-2">
         <Input {...input} id={fieldId} inputMode={input.inputMode ?? 'decimal'} autoComplete="off"
           aria-invalid={Boolean(error) || input['aria-invalid']}
           aria-describedby={[input['aria-describedby'], hasDescription ? descriptionId : undefined].filter(Boolean).join(' ') || undefined}
-          className={cn('min-w-0 flex-1 tabular-nums', surface === 'game' && 'border-white/25 !bg-black/55 !text-white placeholder:text-white/60 caret-white selection:bg-white/20 focus-visible:!border-white/60 focus-visible:!ring-white/40 focus-visible:!ring-offset-0', error && (surface === 'game' ? 'border-red-300' : 'border-destructive'), className)} />
-        {onMax && <Button type="button" variant="outline" onClick={onMax} disabled={input.disabled || maxDisabled} aria-label={maxLabel ?? `Use maximum ${unit}`}>Max</Button>}
+          className={cn('min-w-0 flex-1 basis-[8ch] tabular-nums', surface === 'game' && 'border-white/25 !bg-black/55 !text-white placeholder:text-white/60 caret-white selection:bg-white/20 focus-visible:!border-white/60 focus-visible:!ring-white/40 focus-visible:!ring-offset-0', error && (surface === 'game' ? 'border-red-300' : 'border-destructive'), className)} />
+        {onMax && <Button type="button" variant="outline" className="ml-auto" onClick={onMax} disabled={input.disabled || maxDisabled} aria-label={maxLabel ?? `Use maximum ${unit}`}>Max</Button>}
       </div>
-      {hasDescription && <div id={descriptionId} className={cn('space-y-1 text-xs leading-relaxed', surface === 'game' ? 'text-white/75' : 'text-muted-foreground')}>
+      {hasDescription && <div id={descriptionId} className={cn('type-secondary space-y-1', surface === 'game' ? 'text-white/75' : 'text-muted-foreground')}>
         {balance != null && <p>Available: <ResourceValue unit={unit}>{balance} {unit}</ResourceValue></p>}
         {error ? <p role="alert" className={surface === 'game' ? 'text-red-200' : 'text-destructive'}>{error}</p> : hint}
       </div>}

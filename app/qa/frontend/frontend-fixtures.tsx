@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { AmountField } from '@/components/ui/amount-field';
 import { Card } from '@/components/ui/card';
@@ -20,11 +21,12 @@ import type { GardenItem, ShopItem } from '@/lib/types';
 import { ActionFixtures } from './action-fixtures';
 import { QuestQueryFixtures } from './quest-query-fixtures';
 import { DialogLayoutFixtures } from './dialog-layout-fixtures';
-import { DenseSurfaceFixtures } from './dense-surface-fixtures';
-import { RankingQueryFixtures } from './ranking-query-fixtures';
-import { ControllerFixtures } from './controller-fixtures';
-import { PlantAttackFixtures } from './plant-attack-fixtures';
 import { SeedPurchaseQuoteFixtures } from './seed-purchase-quote-fixtures';
+
+const DenseSurfaceFixtures = dynamic(() => import('./dense-surface-fixtures').then(module => module.DenseSurfaceFixtures));
+const RankingQueryFixtures = dynamic(() => import('./ranking-query-fixtures').then(module => module.RankingQueryFixtures));
+const ControllerFixtures = dynamic(() => import('./controller-fixtures').then(module => module.ControllerFixtures));
+const PlantAttackFixtures = dynamic(() => import('./plant-attack-fixtures').then(module => module.PlantAttackFixtures));
 
 const gardenItems: GardenItem[] = [
   { id: '0', name: 'Sunlight', price: BigInt('17250000000000000000'), points: 48000000000000, timeExtension: 0 },
@@ -42,7 +44,7 @@ const gardenItems: GardenItem[] = [
   { id: '11', name: 'Raincloud', price: BigInt('200000000000000000000'), points: 0, timeExtension: 604800 },
 ];
 
-export function FrontendFixtures() {
+export function FrontendFixtures({ includeSecondary = true }: { includeSecondary?: boolean }) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
   const [amount, setAmount] = useState('');
@@ -68,8 +70,8 @@ export function FrontendFixtures() {
     <ActionFixtures />
     <QuestQueryFixtures />
     <DialogLayoutFixtures />
-    <DenseSurfaceFixtures />
-    <RankingQueryFixtures />
+    {includeSecondary && <DenseSurfaceFixtures />}
+    {includeSecondary && <RankingQueryFixtures />}
     <section aria-label="Resource amount" className="max-w-md">
       <Card><AmountField label="Points to add" unit="PTS" value={amount} onChange={e => setAmount(e.target.value)} balance="70.5022" onMax={() => setAmount('70.5022')} error={Number(amount) > 70.5022 ? 'Amount exceeds available PTS.' : undefined} />
         <Button className="mt-3" disabled={!amount || Number(amount) > 70.5022}>Apply PTS</Button></Card>
@@ -86,7 +88,7 @@ export function FrontendFixtures() {
         </div>} />
     </section>
     <section aria-label="Quest difficulty fixture" className="max-w-sm">
-      <QuestDifficultySelector label="Quest difficulty" value={questDifficulty} onChange={setQuestDifficulty} />
+      <QuestDifficultySelector label="Quest difficulty" value={questDifficulty} onChange={setQuestDifficulty} durationLabels={['~3h', '~6h', '~12h']} />
     </section>
     <section aria-label="Read failure" className="max-w-md">
       <ResourceState status={resource} title={resource === 'error' ? 'Production unavailable' : 'Nothing ready to collect'} description={resource === 'error' ? 'The network read failed.' : 'Your next production is still growing.'} onRetry={resource === 'error' ? () => setResource('empty') : undefined} />
@@ -120,8 +122,8 @@ export function FrontendFixtures() {
       {['idle', 'buildingTransaction', 'transactionPending', 'submissionAmbiguous', 'transactionStale', 'confirmedSyncing', 'success', 'rejected', 'reverted'].map(state => <option key={state}>{state}</option>)}
     </select>
     {feedback && <TransactionFeedbackCard feedback={feedback} onDismiss={() => setFeedbackState('idle')} />}
-    <PlantAttackFixtures />
+    {includeSecondary && <PlantAttackFixtures />}
     <SeedPurchaseQuoteFixtures />
-    <ControllerFixtures />
+    {includeSecondary && <ControllerFixtures />}
   </main>;
 }

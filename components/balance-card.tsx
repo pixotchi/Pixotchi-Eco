@@ -7,9 +7,8 @@ import { RefreshIcon } from "@/components/ui/refresh-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
 import { getLandsByOwner,getPlantsByOwner,getStakeInfo } from "@/lib/contracts";
-import { formatSolAmount } from "@/lib/solana-bridge-executor";
-import { cn,formatLargeNumber } from "@/lib/utils";
-import { formatTokenDisplay } from '@/lib/token-display';
+import { cn } from "@/lib/utils";
+import { TokenAmount } from '@/components/ui/token-amount';
 import Image from "next/image";
 import { type ReactNode,useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { useAccount,useBalance } from "wagmi";
@@ -250,12 +249,12 @@ export default function BalanceCard({ className = "", variant = "default", onRef
 
   if (variant === "wallet-profile") {
     const walletRowClassName =
-      "flex min-h-11 items-center justify-between gap-3 py-2.5";
-    const walletLabelClassName = "flex min-w-0 items-center gap-2.5";
+      "flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5";
+    const walletLabelClassName = "flex min-w-0 items-center gap-[10px]";
     const walletValueClassName = "text-xs font-semibold tabular-nums text-foreground";
-    const walletIconClassName = "h-5 w-5 shrink-0 object-contain";
+    const walletIconClassName = "h-[20px] w-[20px] shrink-0 object-contain";
     const walletGroupLabelClassName =
-      "px-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
+      "px-0 text-xs font-semibold text-muted-foreground";
     const renderBalanceRow = ({
       label,
       iconSrc,
@@ -284,20 +283,20 @@ export default function BalanceCard({ className = "", variant = "default", onRef
             <span className="min-w-0">
               <span className="block truncate text-xs font-semibold text-foreground">{label}</span>
               {hasSubValue ? (
-                <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
                   {subLabel}
                 </span>
               ) : null}
             </span>
           </div>
-          <div className={cn("flex min-w-0 max-w-[48%] flex-col items-end text-right", hasSubValue ? "gap-0.5" : "justify-center")}>
+          <div className={cn("ml-auto flex min-w-0 max-w-full flex-col items-end text-right", hasSubValue ? "gap-0.5" : "justify-center")}>
             {isLoading ? (
               <Skeleton className={cn(skeletonClassName, "rounded-[var(--radius-control)]")} />
             ) : (
               <span className={walletValueClassName}>{value}</span>
             )}
             {hasSubValue ? (
-              <span className="max-w-full truncate text-[10px] font-semibold leading-none text-muted-foreground tabular-nums">
+              <span className="max-w-full text-xs font-semibold text-muted-foreground tabular-nums">
                 {subValue}
               </span>
             ) : null}
@@ -316,12 +315,12 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </div>
           <Button
             variant="surfaceControl"
-            size="iconCompact"
+            size="headerIcon"
             onClick={handleRefresh}
             disabled={ethLoading || tokenBalancePending || manualRefreshing}
             aria-label="Refresh balances"
             aria-busy={ethLoading || tokenBalancePending || manualRefreshing || undefined}
-            className="h-8 min-h-8 w-8 min-w-8 p-0"
+            className="p-0"
           >
             <RefreshIcon refreshing={ethLoading || tokenBalancePending || manualRefreshing} className="h-4 w-4" />
           </Button>
@@ -338,7 +337,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
           </p>
         ) : null}
 
-        <StandardContainer className="chromatic-white-surface space-y-3 overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-3 shadow-[var(--shadow-raised)]">
+        <StandardContainer className="surface-panel space-y-3 overflow-hidden rounded-[var(--radius-panel)] p-[12px]">
           <div className="space-y-1">
             <div className={walletGroupLabelClassName}>Tokens</div>
             <div className="divide-y divide-border/55 border-b border-border/55">
@@ -348,14 +347,14 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                   label: "Solana",
                   iconSrc: "/icons/solana.svg",
                   iconAlt: "SOL",
-                  value: solanaError ? 'Unavailable' : formatSolAmount(solBalance),
+                  value: solanaError ? 'Unavailable' : <TokenAmount amount={solBalance} decimals={9} unit="SOL" precision={6} withIcon={false} />,
                   isLoading: solanaLoading,
                 })}
                 {renderBalanceRow({
                   label: "SOL (Base)",
                   iconSrc: "/icons/solana.svg",
                   iconAlt: "wSOL",
-                  value: solanaError ? 'Unavailable' : twinInfo?.wsolBalance !== undefined ? formatSolAmount(twinInfo.wsolBalance) : 'Checking…',
+                  value: solanaError ? 'Unavailable' : twinInfo?.wsolBalance !== undefined ? <TokenAmount amount={twinInfo.wsolBalance} decimals={9} unit="wSOL" precision={6} withIcon={false} /> : 'Checking…',
                   isLoading: solanaLoading,
                 })}
                 </>
@@ -364,7 +363,7 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                   label: "Ethereum",
                   iconSrc: "/icons/ethlogo.svg",
                   iconAlt: "ETH",
-                  value: ethBalanceReady ? formatTokenDisplay(ethBalance.value, ethBalance.decimals, 6) : ethBalanceUnavailable ? 'Unavailable' : 'Checking…',
+                  value: ethBalanceReady ? <TokenAmount amount={ethBalance.value} decimals={ethBalance.decimals} unit="ETH" precision={6} withIcon={false} /> : ethBalanceUnavailable ? 'Unavailable' : 'Checking…',
                   isLoading: ethLoading,
                 })
               )}
@@ -373,25 +372,25 @@ export default function BalanceCard({ className = "", variant = "default", onRef
                 label: "SEED",
                 iconSrc: "/PixotchiKit/COIN.svg",
                 iconAlt: "SEED",
-                value: formatReadValue(seedBalanceStatus, formatLargeNumber(tokenBalance)),
+                value: formatReadValue(seedBalanceStatus, <TokenAmount amount={tokenBalance} unit="SEED" mode="compact" withIcon={false} />),
                 isLoading: loading || seedBalanceStatus === 'unknown',
                 subLabel: stakeInfo && stakeInfo.staked > BigInt(0) ? "Staked" : undefined,
-                subValue: stakeInfo && stakeInfo.staked > BigInt(0) ? formatLargeNumber(stakeInfo.staked) : undefined,
+                subValue: stakeInfo && stakeInfo.staked > BigInt(0) ? <TokenAmount amount={stakeInfo.staked} unit="SEED" mode="compact" withIcon={false} /> : undefined,
               })}
               {renderBalanceRow({
                 label: "LEAF",
                 iconSrc: "/icons/leaf.png",
                 iconAlt: "LEAF",
-                value: formatReadValue(leafBalanceStatus, formatLargeNumber(leafBalance)),
+                value: formatReadValue(leafBalanceStatus, <TokenAmount amount={leafBalance} unit="LEAF" mode="compact" withIcon={false} />),
                 isLoading: loading || leafBalanceStatus === 'unknown',
                 subLabel: stakeInfo && stakeInfo.rewards > BigInt(0) ? "Claimable" : undefined,
-                subValue: stakeInfo && stakeInfo.rewards > BigInt(0) ? formatLargeNumber(stakeInfo.rewards) : undefined,
+                subValue: stakeInfo && stakeInfo.rewards > BigInt(0) ? <TokenAmount amount={stakeInfo.rewards} unit="LEAF" mode="compact" withIcon={false} /> : undefined,
               })}
               {renderBalanceRow({
                 label: "PIXOTCHI",
                 iconSrc: "/icons/cc.png",
                 iconAlt: "PIXOTCHI",
-                value: formatReadValue(pixotchiBalanceStatus, formatLargeNumber(pixotchiBalance)),
+                value: formatReadValue(pixotchiBalanceStatus, <TokenAmount amount={pixotchiBalance} unit="PIXOTCHI" mode="compact" withIcon={false} />),
                 isLoading: loading || pixotchiBalanceStatus === 'unknown',
               })}
             </div>
@@ -440,13 +439,13 @@ export default function BalanceCard({ className = "", variant = "default", onRef
         <div className="flex items-center space-x-2">
           <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading || seedBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : seedBalanceStatus === 'error' ? 'SEED balance unavailable' : `${formatLargeNumber(tokenBalance)} SEED`}
+            {loading || seedBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : seedBalanceStatus === 'error' ? 'SEED balance unavailable' : <TokenAmount amount={tokenBalance} unit="SEED" mode="compact" withIcon={false} />}
           </span>
         </div>
         <div className="flex items-center space-x-2">
           <Image src="/icons/leaf.png" alt="LEAF" width={20} height={20} />
           <span className="text-xl md:text-lg font-bold">
-            {loading || leafBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : leafBalanceStatus === 'error' ? 'LEAF balance unavailable' : `${formatLargeNumber(leafBalance)} LEAF`}
+            {loading || leafBalanceStatus === 'unknown' ? <Skeleton className="h-6 w-40" /> : leafBalanceStatus === 'error' ? 'LEAF balance unavailable' : <TokenAmount amount={leafBalance} unit="LEAF" mode="compact" withIcon={false} />}
           </span>
         </div>
       </CardContent>

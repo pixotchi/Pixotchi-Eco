@@ -13,7 +13,7 @@ const alertVariants = cva(
            72-98% opaque and painted the tint invisible (tailwind-merge keeps
            bg-[image:…] alongside a bg-color override — different groups). */
         info:
-          "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] bg-none [&>svg]:text-[hsl(var(--info))]",
+          "border-[hsl(var(--info)/0.28)] bg-[hsl(var(--info)/0.1)] bg-none [&>svg]:text-info-strong",
         success:
           "border-[hsl(var(--success)/0.3)] bg-[hsl(var(--success)/0.1)] bg-none [&>svg]:text-[hsl(var(--success-strong))]",
         warning:

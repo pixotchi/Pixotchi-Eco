@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DESKTOP_MEDIA_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
-import { useChat } from './chat-context';
+import { useChatControls, useChatComposer } from './chat-view-context';
 import ChatMessages from './chat-messages';
 import ChatInput from './chat-input';
 import AITypingIndicator from './ai-typing-indicator';
@@ -30,7 +30,7 @@ function DesktopChatPane({
   draft: string;
   onDraftChange: (value: string) => void;
 }) {
-  const { fetchHistoryForMode, isAITypingForMode, publicChatAuthenticated } = useChat();
+  const { fetchHistoryForMode, isAITyping, publicChatAuthenticated } = useChatComposer(mode);
 
   useEffect(() => {
     if (!publicChatAuthenticated) {
@@ -51,7 +51,7 @@ function DesktopChatPane({
       </div>
       <div className="surface-footer-divider dialog-footer-surface p-3">
         <div className="space-y-2">
-          {isAITypingForMode(mode) && <AITypingIndicator />}
+          {isAITyping && <AITypingIndicator />}
           <ChatInput modeOverride={mode} message={draft} onMessageChange={onDraftChange} />
         </div>
       </div>
@@ -60,7 +60,7 @@ function DesktopChatPane({
 }
 
 function ChatDialogContent() {
-  const { mode, setMode, isAITyping } = useChat();
+  const { mode, setMode } = useChatControls();
   const [drafts, setDrafts] = useState<Record<ChatMode, string>>({ public: '', ai: '' });
   const updateDraft = (pane: ChatMode, value: string) => setDrafts(current => ({ ...current, [pane]: value }));
   // Real gate, not CSS hiding: the two desktop panes used to mount (and fetch
@@ -121,13 +121,18 @@ function ChatDialogContent() {
       {!isDesktopChat && (
         <DialogFooter sticky className="pt-3">
           <div className="w-full space-y-2">
-            {isAITyping && <AITypingIndicator />}
+            <MobileTypingIndicator />
             <ChatInput modeOverride={mode} message={drafts[mode]} onMessageChange={value => updateDraft(mode, value)} />
           </div>
         </DialogFooter>
       )}
     </DialogContent>
   );
+}
+
+function MobileTypingIndicator() {
+  const { isAITyping } = useChatComposer();
+  return isAITyping ? <AITypingIndicator /> : null;
 }
 
 export default function ChatDialog({ open, onOpenChange }: ChatDialogProps) {

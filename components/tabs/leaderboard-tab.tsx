@@ -7,11 +7,13 @@ import { PIXOTCHI_NFT_ADDRESS } from "@/lib/contracts";
 import { useStakeLeaderboard, useRocksLeaderboard, usePlayerLeaderboard } from "@/hooks/useApiLeaderboards";
 import { PlayerRankingRow } from '@/components/player-ranking-row';
 import { TokenAmount } from '@/components/ui/token-amount';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatPointsShare, type PlayerRankingRow as PlayerRow } from '@/lib/player-ranking';
 import type { StakeLeaderboardEntry, RocksLeaderboardEntry } from "@/lib/ranking-response";
 import { useLandLeaderboard } from "@/hooks/useLandLeaderboard";
 import type { LandLeaderboardRow } from "@/lib/land-ranking";
 import { ResourceState } from "@/components/ui/resource-state";
+import { RankingPlantFilters } from '@/components/ranking-plant-filters';
 import { RankingPlantSummary } from "@/components/ranking-plant-summary";
 import { PlantAttackEmptyState } from "@/components/plant-attack-empty-state";
 import { useDeadlineClock } from "@/hooks/useDeadlineClock";
@@ -46,6 +48,8 @@ import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useOwnerOperationScope } from "@/hooks/useOwnerOperationScope";
+import { assertKillReadiness, assertReviveReadiness, readReviveReadiness, type ReviveRead } from "@/lib/ranking-action-readiness";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
 import { getAliveTokenIds,getKillCooldown,getPlantsByOwner,getPlantsInfoExtended,getRevivePrice,getTokenBalance } from "@/lib/contracts";
 import { CLIENT_ENV } from "@/lib/env-config";
@@ -57,7 +61,7 @@ import { Plant } from "@/lib/types";
 import { cn,formatAddress,formatEthShort,formatScoreShort,formatTokenAmount,getFenceStatus } from "@/lib/utils";
 import { ChevronDown,ChevronRight,Skull,Terminal,Flower2,LandPlot,Coins } from "lucide-react";
 import Image from "next/image";
-import React,{ useCallback,useEffect,useMemo,useRef,useState } from "react";
+import React,{ useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
 import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 import { useAccount } from "wagmi";
@@ -80,8 +84,6 @@ const ITEMS_PER_PAGE = 12;
 const LAND_ITEMS_PER_PAGE = DESKTOP_ITEMS_PER_PAGE;
 const NO_PLANTS: Plant[] = [];
 
-// Client-side cache duration for stake data (24 hours since cron runs once at midnight)
-const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 const ATTACK_SCORE_TRANSFER_RATE = 0.005; // on-chain pct=5 means 0.5% of the loser score
 const ATTACK_WIN_CHANCE_PERCENT = 31; // random 0..99 wins when <= 30
 const ATTACK_LOSS_CHANCE_PERCENT = 100 - ATTACK_WIN_CHANCE_PERCENT;
@@ -195,8 +197,13 @@ export default function LeaderboardTab() {
   const [killMenuPortalContainer, setKillMenuPortalContainer] = useState<HTMLElement | null>(null);
   const [reviveDialogOpen, setReviveDialogOpen] = useState(false);
   const [selectedKillerId, setSelectedKillerId] = useState<number | null>(null);
-  const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
-  const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
+  const ownerKey = address?.toLowerCase() ?? null;
+  const actionScope = useOwnerOperationScope(ownerKey);
+  const [reviveRead, setReviveRead] = useState<{
+    owner: string | null; status: 'loading' | 'ready' | 'error'; data: ReviveRead | null;
+  }>({ owner: null, status: 'loading', data: null });
+  const currentReviveRead = reviveRead.owner === ownerKey ? reviveRead : null;
+  const reviveReady = currentReviveRead?.status === 'ready' && currentReviveRead.data !== null;
   const [filterMode, setFilterMode] = useWebQueryState<'all' | 'attackable' | 'dead'>({
     key: 'leaderboardFilter',
     defaultValue: 'all',
@@ -252,8 +259,19 @@ export default function LeaderboardTab() {
   }, []);
 
   // Kill cooldown state (1 kill per hour per wallet)
-  const [killCooldown, setKillCooldown] = useState<{ canKill: boolean; remainingSeconds: number }>({ canKill: true, remainingSeconds: 0 });
+  const [killCooldownRead, setKillCooldown] = useState<{ owner: string | null; status: 'loading' | 'ready' | 'error'; canKill: boolean; remainingSeconds: number }>({ owner: null, status: 'loading', canKill: false, remainingSeconds: 0 });
+  const killCooldown = killCooldownRead.owner === ownerKey ? killCooldownRead : { status: 'loading', canKill: false, remainingSeconds: 0 };
+  const killRequestRef = useRef(0);
+  const reviveRequestRef = useRef(0);
   const [cooldownDialogOpen, setCooldownDialogOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    setKillDialogOpen(false);
+    setReviveDialogOpen(false);
+    setCooldownDialogOpen(false);
+    setSelectedKillerId(null);
+    setTargetPlant(null);
+  }, [ownerKey]);
 
   // Timer for cooldown countdown
   useEffect(() => {
@@ -262,7 +280,7 @@ export default function LeaderboardTab() {
       setKillCooldown(prev => {
         const next = prev.remainingSeconds - 1;
         if (next <= 0) {
-          return { canKill: true, remainingSeconds: 0 };
+          return { ...prev, canKill: true, remainingSeconds: 0 };
         }
         return { ...prev, remainingSeconds: next };
       });
@@ -377,17 +395,29 @@ export default function LeaderboardTab() {
   useEffect(() => { void fetchMyPlants(); }, [fetchMyPlants]);
 
   // Kill cooldown functions - reads from onchain KillCooldown extension
-  const fetchKillCooldown = useCallback(async () => {
+  const fetchKillCooldown = useCallback(async (preflight = false) => {
     if (!address) return;
+    const operation = actionScope.capture();
+    const request = ++killRequestRef.current;
+    if (!preflight) setKillCooldown({ owner: ownerKey, status: 'loading', canKill: false, remainingSeconds: 0 });
     try {
       const data = await getKillCooldown(address);
-      setKillCooldown({ canKill: data.canKill, remainingSeconds: data.remainingSeconds });
+      if (!operation.isCurrent() || request !== killRequestRef.current) return;
+      setKillCooldown({ owner: ownerKey, status: 'ready', ...data });
+      return data;
     } catch (error) {
       console.error('Failed to fetch kill cooldown from contract:', error);
-      // On error, allow kills (graceful degradation)
-      setKillCooldown({ canKill: true, remainingSeconds: 0 });
+      if (operation.isCurrent() && request === killRequestRef.current) {
+        setKillCooldown({ owner: ownerKey, status: 'error', canKill: false, remainingSeconds: 0 });
+      }
     }
-  }, [address]);
+  }, [actionScope, address, ownerKey]);
+
+  const preflightKill = async () => {
+    const data = await fetchKillCooldown(true);
+    if (!data) throw new Error('Kill cooldown is unavailable. Check again before collecting a star.');
+    assertKillReadiness(data);
+  };
 
   // Fetch kill cooldown on mount and when address changes
   useEffect(() => {
@@ -411,21 +441,34 @@ export default function LeaderboardTab() {
     }
   }, [isVisible, boardType, fetchLeaderboardData, fetchMyPlants]);
 
-  // Refresh SEED balance when opening revive dialog
-  useEffect(() => {
-    (async () => {
-      if (reviveDialogOpen && address) {
-        try {
-          const [bal, price] = await Promise.all([
-            getTokenBalance(address),
-            getRevivePrice().catch(() => DEFAULT_REVIVE_PRICE),
-          ]);
-          setSeedBalance(bal || BigInt(0));
-          setRevivePrice(price || DEFAULT_REVIVE_PRICE);
-        } catch { }
+  const refreshReviveRead = useCallback(async (preflight = false) => {
+    if (!address) return;
+    const operation = actionScope.capture();
+    const request = ++reviveRequestRef.current;
+    if (!preflight) setReviveRead({ owner: ownerKey, status: 'loading', data: null });
+    try {
+      const data = await readReviveReadiness(address, getTokenBalance, getRevivePrice);
+      if (!operation.isCurrent() || request !== reviveRequestRef.current) return;
+      setReviveRead({ owner: ownerKey, status: 'ready', data });
+      return data;
+    } catch {
+      if (operation.isCurrent() && request === reviveRequestRef.current) {
+        setReviveRead({ owner: ownerKey, status: 'error', data: null });
       }
-    })();
-  }, [reviveDialogOpen, address]);
+    }
+  }, [actionScope, address, ownerKey]);
+
+  useEffect(() => {
+    if (reviveDialogOpen) void refreshReviveRead();
+  }, [reviveDialogOpen, refreshReviveRead]);
+
+  const preflightRevive = async () => {
+    const reviewedPrice = currentReviveRead?.data?.price;
+    if (!reviveReady || reviewedPrice === undefined) throw new Error('Check the revive cost and balance before continuing.');
+    const data = await refreshReviveRead(true);
+    if (!data) throw new Error('Revive cost or SEED balance is unavailable. Try again.');
+    assertReviveReadiness(data, reviewedPrice);
+  };
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -653,7 +696,7 @@ export default function LeaderboardTab() {
         fillDesktop && "tablet:flex tablet:h-auto tablet:min-h-0 tablet:flex-col",
       )}>
         {!isDesktopBoard && (
-          <div
+          <ScrollArea
             data-ranking-scroll
             className={cn(
               "surface-scroll-area min-h-0 space-y-2 divide-y divide-[hsl(var(--divider)/0.62)] rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:hidden",
@@ -661,7 +704,7 @@ export default function LeaderboardTab() {
             )}
           >
             {mobileRows.map((row) => renderRow(row))}
-          </div>
+          </ScrollArea>
         )}
 
         {isDesktopBoard && <RankingColumns rows={desktopRows} renderRow={renderRow} />}
@@ -677,7 +720,7 @@ export default function LeaderboardTab() {
 
     return (
       <div className={cn("flex min-h-0 flex-col", usePageScroll ? "h-auto" : "h-full")}>
-        <div
+        <ScrollArea
           data-ranking-scroll
           className={cn(
             "surface-scroll-area min-h-0 rounded-[var(--radius-panel)] px-3 pb-3 pt-2 tablet:pr-3",
@@ -687,7 +730,7 @@ export default function LeaderboardTab() {
           <div className="flex min-h-full items-center justify-center py-8">
             {content}
           </div>
-        </div>
+        </ScrollArea>
       </div>
     );
   }
@@ -766,69 +809,8 @@ export default function LeaderboardTab() {
               !compact && "min-[520px]:flex min-[520px]:items-center min-[520px]:justify-between min-[520px]:gap-2",
             )}
           >
-            {compact ? (
-              <RankingPlantSummary name={plant.name || `Plant #${plant.id}`} level={plant.level} isMine={isMine}
-                points={formatScoreShort(plant.score)} stars={plant.stars} rewards={formatEthShort(plant.rewards)} />
-            ) : (
-              <>
-                <div className="min-w-0 min-[520px]:flex-1">
-                  <div className="flex items-center space-x-2">
-                    <div className="relative min-w-0">
-                      <h4 className="truncate pr-2 font-pixel text-base">
-                        {plant.name || `Plant #${plant.id}`}
-                        {isMine && (
-                          <span className="ml-2 text-xs text-primary font-medium">(You)</span>
-                        )}
-                      </h4>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                    <span>LvL {plant.level}</span>
-                  </div>
-                </div>
-                {/*
-                  One stat block, not two. This used to be rendered twice per row —
-                  here for <520px and again in the trailing column for >=520px — with
-                  CSS hiding one. Every row therefore built six next/image components
-                  to paint three. The two copies only ever differed in icon size, text
-                  size and stack direction, all of which a min-[520px]: variant covers.
-                */}
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-[520px]:mt-0 min-[520px]:shrink-0 min-[520px]:flex-col min-[520px]:items-end min-[520px]:gap-1 min-[520px]:text-sm">
-                  <div className="flex items-center gap-1 text-foreground min-[520px]:gap-1">
-                    <Image
-                      src="/icons/pts.svg"
-                      alt="Points"
-                      width={16}
-                      height={16}
-                      className="h-[13px] w-[13px] min-[520px]:h-4 min-[520px]:w-4"
-                    />
-                    <span className="font-bold min-[520px]:text-base">{formatScoreShort(plant.score)}</span>
-                  </div>
-                  <div className="flex items-center gap-x-3 gap-y-1">
-                    <div className="flex items-center gap-1">
-                      <Image
-                        src="/icons/Star.svg"
-                        alt="Stars"
-                        width={14}
-                        height={14}
-                        className="h-3 w-3 min-[520px]:h-3.5 min-[520px]:w-3.5"
-                      />
-                      <span>{plant.stars}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Image
-                        src="/icons/ethlogo.svg"
-                        alt="ETH"
-                        width={14}
-                        height={14}
-                        className="h-3 w-3 min-[520px]:h-3.5 min-[520px]:w-3.5"
-                      />
-                      <span>{formatEthShort(plant.rewards)}</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+            <RankingPlantSummary name={plant.name || `Plant #${plant.id}`} level={plant.level} isMine={isMine}
+              points={formatScoreShort(plant.score)} stars={plant.stars} rewards={formatEthShort(plant.rewards)} compact={compact} />
           </div>
 
           {(canShowAttack || canShowKill || canShowRevive) && (
@@ -867,11 +849,12 @@ export default function LeaderboardTab() {
                   !killCooldown.canKill && "opacity-55"
                 )}
                 onClick={() => {
-                  if (!killCooldown.canKill) {
+                  if (killCooldown.status === 'ready' && !killCooldown.canKill) {
                     setCooldownDialogOpen(true);
                   } else {
                     setTargetPlant(plant);
                     setSelectedKillerId(myPlants.find(p => p.status !== 4)?.id ?? null);
+                    setKillCooldown({ owner: ownerKey, status: 'loading', canKill: false, remainingSeconds: 0 });
                     setKillDialogOpen(true);
                   }
                 }}
@@ -889,42 +872,11 @@ export default function LeaderboardTab() {
               </Button>
             )}
             {canShowRevive && (
-              compact ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="rounded-[var(--radius-control)]"
-                  onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
-                  aria-label="Revive your plant"
-                  title="Revive"
-                >
-                  <Image
-                    src="/icons/skull.png"
-                    alt="Revive plant"
-                    width={16}
-                    height={16}
-                    className="h-4 w-4 object-contain"
-                  />
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-[var(--radius-control)]"
-                  onClick={() => { setTargetPlant(plant); setReviveDialogOpen(true); }}
-                  aria-label="Revive your plant"
-                  title="Revive"
-                >
-                  <Image
-                    src="/icons/skull.png"
-                    alt="Revive plant"
-                    width={16}
-                    height={16}
-                    className="h-4 w-4 object-contain"
-                  />
-                </Button>
-              )
+              <Button type="button" variant="outline" size="icon" className="rounded-[var(--radius-control)]"
+                onClick={() => { setTargetPlant(plant); setReviveRead({ owner: ownerKey, status: 'loading', data: null }); setReviveDialogOpen(true); }}
+                aria-label="Revive your plant" title="Revive">
+                <Image src="/icons/skull.png" alt="" width={16} height={16} className="h-4 w-4 object-contain" />
+              </Button>
             )}
           </div>
           )}
@@ -1121,8 +1073,9 @@ export default function LeaderboardTab() {
       // Check if user is in dead mode but no dead plants exist
       if (filterMode === 'dead') {
         return renderRankingState(
-          <div className="text-center text-muted-foreground">
-            <p>No dead plants found. All plants are currently alive!</p>
+          <div className="space-y-3 text-center text-muted-foreground">
+            <p>{showOnlyMyPlants ? 'None of your plants in this ranking are dead.' : 'No dead plants found in this ranking.'}</p>
+            <Button variant="outline" size="touchCompact" onClick={() => { setFilterMode('all'); setShowOnlyMyPlants(false); setCurrentPage(1); }}>Show all plants</Button>
           </div>
         );
       }
@@ -1131,8 +1084,9 @@ export default function LeaderboardTab() {
       return renderRankingState(
         <EmptyState
           icon={Flower2}
-          title="No plants ranked yet"
-          description="Plants appear here once they have earned points. Go to the Mint tab to grow your first one."
+          title={showOnlyMyPlants ? 'No matching plants of yours' : 'No plants ranked yet'}
+          description={showOnlyMyPlants ? 'Your plants have no entries in this ranking yet. View all plants to explore the board.' : 'Plants are ranked by PTS.'}
+          action={showOnlyMyPlants ? <Button variant="outline" size="touchCompact" onClick={() => { setShowOnlyMyPlants(false); setCurrentPage(1); }}>Show all plants</Button> : undefined}
         />
       );
     }
@@ -1156,42 +1110,9 @@ export default function LeaderboardTab() {
               Ranking
             </CardTitle>
             {boardType === 'plants' && isDesktopBoard && (
-              <div className="hidden items-center justify-center gap-4 tablet:flex">
-                <ToggleGroup
-                  ariaLabel="Filter plants by status"
-                  value={filterMode}
-                  onValueChange={(v) => {
-                    if (v !== 'all' && v !== 'attackable' && v !== 'dead') {
-                      return;
-                    }
-
-                    setCurrentPage(1);
-                    setFilterMode(v);
-                    if (v === 'attackable' || v === 'dead') {
-                      setShowOnlyMyPlants(false);
-                    }
-                  }}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'attackable', label: 'Attackable' },
-                    { value: 'dead', label: 'Dead' },
-                  ]}
-                />
-                {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                  <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={showOnlyMyPlants}
-                      onChange={(e) => {
-                        setShowOnlyMyPlants(e.target.checked);
-                        setCurrentPage(1);
-                      }}
-                      className="h-5 w-5 rounded accent-primary"
-                    />
-                    <span className="text-muted-foreground">My Plants</span>
-                  </label>
-                )}
-              </div>
+              <RankingPlantFilters value={filterMode} mine={showOnlyMyPlants} canFilterMine={Boolean(address && myPlants.length > 0)}
+                onChange={(next, mine) => { setCurrentPage(1); setFilterMode(next); setShowOnlyMyPlants(mine); }}
+                className="hidden justify-center gap-4 tablet:flex" />
             )}
             <div className="w-full min-[520px]:w-auto tablet:col-start-3 tablet:justify-self-end">
               <ToggleGroup
@@ -1249,39 +1170,9 @@ export default function LeaderboardTab() {
             </div>
           )}
           {boardType === 'plants' && !isDesktopBoard && (
-            <div className="mt-2 flex items-center justify-between gap-2 flex-wrap tablet:hidden">
-              <ToggleGroup
-                ariaLabel="Filter plants by status"
-                value={filterMode}
-                onValueChange={(v) => {
-                  setCurrentPage(1);
-                  if (v === 'all' || v === 'attackable' || v === 'dead') setFilterMode(v);
-                  // Auto-uncheck "My Plants" when switching to attackable or dead
-                  if (v === 'attackable' || v === 'dead') {
-                    setShowOnlyMyPlants(false);
-                  }
-                }}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'attackable', label: 'Attackable' },
-                  { value: 'dead', label: 'Dead' },
-                ]}
-              />
-              {address && myPlants.length > 0 && (filterMode === 'all' || filterMode === 'dead') && (
-                <label className="flex min-h-11 items-center gap-2 cursor-pointer rounded-[var(--radius-control)] px-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={showOnlyMyPlants}
-                    onChange={(e) => {
-                      setShowOnlyMyPlants(e.target.checked);
-                      setCurrentPage(1);
-                    }}
-                    className="h-5 w-5 rounded accent-primary"
-                  />
-                  <span className="text-muted-foreground">My Plants</span>
-                </label>
-              )}
-            </div>
+            <RankingPlantFilters value={filterMode} mine={showOnlyMyPlants} canFilterMine={Boolean(address && myPlants.length > 0)}
+              onChange={(next, mine) => { setCurrentPage(1); setFilterMode(next); setShowOnlyMyPlants(mine); }}
+              className="mt-2 justify-between tablet:hidden" />
           )}
         </CardHeader>
         <CardContent className={cn("min-h-0 overflow-visible", usesCompactPageScroll ? "flex-none" : "flex-1")}>
@@ -1306,7 +1197,7 @@ export default function LeaderboardTab() {
                 <EmptyState
                   icon={LandPlot}
                   title="No lands ranked yet"
-                  description="Lands appear here once they have been minted and scored."
+                  description="Lands are ranked by XP."
                 />
               )
             ) : (
@@ -1473,7 +1364,7 @@ export default function LeaderboardTab() {
                     side="top"
                     align="start"
                     sideOffset={8}
-                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] [--menu-max-height:15rem] overflow-y-auto"
                   >
                     {attackDialogAttackers.map((attacker) => {
                       const selected = selectedAttackerId === attacker.id;
@@ -1631,9 +1522,16 @@ export default function LeaderboardTab() {
               Target must already be dead. You can only kill once per hour.
             </div>
 
-            {!killCooldown.canKill && (
+            {killCooldown.status === 'loading' ? (
+              <DisabledReason>Checking star collection cooldown...</DisabledReason>
+            ) : killCooldown.status === 'error' ? (
+              <div className="space-y-2" role="alert">
+                <DisabledReason>Cooldown is temporarily unavailable.</DisabledReason>
+                <Button variant="outline" onClick={() => void fetchKillCooldown()}>Check Again</Button>
+              </div>
+            ) : !killCooldown.canKill && (
               <DisabledReason>
-                Cooldown active. Close this dialog to see the timer.
+                Collect a star in {Math.floor(killCooldown.remainingSeconds / 60)}m {killCooldown.remainingSeconds % 60}s.
               </DisabledReason>
             )}
 
@@ -1680,7 +1578,7 @@ export default function LeaderboardTab() {
                     side="top"
                     align="start"
                     sideOffset={8}
-                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto"
+                    className="surface-scroll-fade z-[var(--z-modal-nested)] w-[var(--radix-dropdown-menu-trigger-width)] [--menu-max-height:15rem] overflow-y-auto"
                   >
                     {livingKillerPlants.map((plant) => {
                       const selected = selectedKillerId === plant.id;
@@ -1728,6 +1626,8 @@ export default function LeaderboardTab() {
                   tokenId={selectedKillerId}
                   buttonText="Confirm Kill"
                   buttonClassName="w-full"
+                  disabled={killCooldown.status !== 'ready' || !killCooldown.canKill || killCooldown.remainingSeconds > 0 || myPlantsReadStatus !== 'ready' || !selectedKillerPlant}
+                  onButtonClick={preflightKill}
                   onSuccess={() => {
                     // Close kill dialog and show cooldown dialog
                     setKillDialogOpen(false);
@@ -1761,7 +1661,8 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
-                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>. Cost: <ResourceValue resource="seed">{formatTokenAmount(revivePrice)} SEED</ResourceValue>.
+                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>.
+                {reviveReady && currentReviveRead?.data && <> Cost: <ResourceValue resource="seed">{formatTokenAmount(currentReviveRead.data.price)} SEED</ResourceValue>.</>}
               </div>
             )}
             <div className="pt-2 space-y-2">
@@ -1771,7 +1672,8 @@ export default function LeaderboardTab() {
               {isSolana ? (
                 <SolanaNotSupported feature="Revive action" />
               ) : (() => {
-                const hasEnough = seedBalance >= revivePrice;
+                const data = currentReviveRead?.data;
+                const hasEnough = reviveReady && data !== null && data !== undefined && data.balance >= data.price;
                 return (
                   <>
                     <ReviveTransaction
@@ -1779,16 +1681,24 @@ export default function LeaderboardTab() {
                       buttonText="Confirm Revive"
                       buttonClassName="w-full"
                       showToast={true}
-                      disabled={!targetPlant || !hasEnough}
+                      disabled={!targetPlant || !hasEnough || !reviveReady}
+                      onButtonClick={preflightRevive}
                       onSuccess={() => {
                         setReviveDialogOpen(false);
                         fetchLeaderboardData();
                         void fetchMyPlants();
                       }}
                     />
-                    {!hasEnough && (
+                    {currentReviveRead?.status === 'error' ? (
+                      <div className="space-y-2" role="alert">
+                        <DisabledReason>Revive cost or SEED balance is temporarily unavailable.</DisabledReason>
+                        <Button variant="outline" onClick={() => void refreshReviveRead()}>Check Again</Button>
+                      </div>
+                    ) : !reviveReady ? (
+                      <DisabledReason>Checking revive cost and SEED balance...</DisabledReason>
+                    ) : !hasEnough && data && (
                       <InlineBalanceNotice>
-                        Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                        Not enough SEED. Balance: {formatTokenAmount(data.balance)} • Required: {formatTokenAmount(data.price)}
                       </InlineBalanceNotice>
                     )}
                   </>
@@ -1816,7 +1726,7 @@ export default function LeaderboardTab() {
           <DialogHeader>
             <DialogTitle>Cooldown Active</DialogTitle>
             <DialogDescription>
-              Your attack action is cooling down. Wait until the timer reaches zero before attacking again.
+              Collecting a star is cooling down. Wait until the timer reaches zero before collecting another.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

@@ -3,10 +3,12 @@
 import { ThemeSelector } from "@/components/theme-selector";
 import { Alert,AlertDescription,AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { StatusService,StatusSnapshot } from "@/lib/status-checks";
+import type { StatusSnapshot } from "@/lib/status-snapshot";
+import { useStatusSnapshot } from "@/hooks/useStatusSnapshot";
+import { StatusBadge } from "./StatusBadge";
 import { AlertTriangle,RefreshCcw } from "lucide-react";
 import Image from "next/image";
-import { useCallback,useEffect,useRef,useState,useTransition } from "react";
+import { useEffect } from "react";
 import { StatusCard } from "./StatusCard";
 
 interface StatusPageClientProps {
@@ -16,33 +18,7 @@ interface StatusPageClientProps {
 }
 
 export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRefresh }: StatusPageClientProps) {
-  const [snapshot, setSnapshot] = useState<StatusSnapshot>(initialSnapshot);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const refreshInFlightRef = useRef(false);
-  const lastRefreshAtRef = useRef(Date.now());
-
-  const refresh = useCallback(() => {
-    if (refreshInFlightRef.current) return;
-    refreshInFlightRef.current = true;
-
-    startTransition(async () => {
-      try {
-        setError(null);
-        const response = await fetch("/api/status/checks", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error("Failed to fetch latest status");
-        }
-        const data = (await response.json()) as StatusSnapshot;
-        setSnapshot(data);
-        lastRefreshAtRef.current = Date.now();
-      } catch (err: UntypedValue) {
-        setError(err?.message || "Unable to refresh status");
-      } finally {
-        refreshInFlightRef.current = false;
-      }
-    });
-  }, []);
+  const { snapshot, isPending, error, refresh, isStale, lastRefreshAtRef } = useStatusSnapshot(initialSnapshot);
 
   useEffect(() => {
     if (!refreshMinutes || refreshMinutes <= 0) return;
@@ -88,7 +64,7 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
       window.removeEventListener("online", refreshAfterResume);
       window.removeEventListener("pageshow", refreshAfterResume);
     };
-  }, [refreshMinutes, refresh]);
+  }, [refreshMinutes, refresh, lastRefreshAtRef]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -119,8 +95,8 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi logo" width={28} height={28} preload />
             <div className="min-w-0">
-              <p className="font-pixel text-base leading-tight tracking-wide text-foreground">PIXOTCHI STATUS</p>
-              <p className="text-xs font-medium leading-tight text-muted-foreground">Live ecosystem health</p>
+              <h1 className="font-pixel text-base leading-tight tracking-wide text-foreground">PIXOTCHI STATUS</h1>
+              <p className="text-xs font-medium leading-tight text-muted-foreground">Ecosystem health</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center justify-end gap-2">
@@ -145,17 +121,22 @@ export function StatusPageClient({ initialSnapshot, refreshMinutes, showManualRe
       </header>
 
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 pb-[max(4rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] sm:gap-5 sm:py-8">
+        <section aria-label="Overall ecosystem status" className="space-y-2 rounded-[var(--radius-panel)] border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-3"><span className="font-semibold">Overall status</span><StatusBadge status={snapshot.overall} /></div>
+          <p className="text-sm text-muted-foreground">Last checked <time dateTime={snapshot.generatedAt}>{new Date(snapshot.generatedAt).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'}</time></p>
+          {(isStale || error) && <p className="text-sm text-[hsl(var(--warning))]" role="status">{isStale ? 'Status is out of date.' : 'Showing the last known status.'} Refresh to look for a newer update.</p>}
+        </section>
         {error && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
             <AlertTitle>Refresh failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error}<Button variant="outline" className="mt-3" disabled={isPending} onClick={() => void refresh()}>Retry status check</Button></AlertDescription>
           </Alert>
         )}
 
         <section>
           <div className="grid gap-3 md:grid-cols-2">
-          {snapshot.services.map((service: StatusService) => (
+          {snapshot.services.map((service) => (
             <StatusCard key={service.id} service={service} />
           ))}
           </div>

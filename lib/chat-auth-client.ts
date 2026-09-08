@@ -8,14 +8,8 @@ import {
 import { FARCASTER_CONNECTED_WALLET_HEADER } from '@/lib/farcaster-miniapp-auth-headers';
 import { getHostEnvironmentSnapshot } from '@/lib/host-environment';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
-
-export type PublicChatSession = {
-  address: string;
-  authenticated: true;
-  method: 'privy-ethereum' | 'privy-solana' | 'farcaster-miniapp' | 'base-siwe';
-  provider: 'privy' | 'farcaster' | 'base';
-  sourceAddress?: string;
-};
+import { parsePublicChatSession, type PublicChatSession } from '@/lib/auth/public-session-boundary';
+export type { PublicChatSession } from '@/lib/auth/public-session-boundary';
 
 export const PUBLIC_CHAT_SESSION_EVENT = 'pixotchi:public-chat-session';
 const PUBLIC_CHAT_SESSION_CACHE_TTL_MS = 1000;
@@ -83,7 +77,9 @@ async function parseSessionResponse(response: Response): Promise<PublicChatSessi
     throw new Error(await parseError(response));
   }
 
-  return response.json() as Promise<PublicChatSession>;
+  const session = parsePublicChatSession(await response.json());
+  if (!session) throw new Error('The sign-in service returned an invalid session. Please sign in again.');
+  return session;
 }
 
 function emitPublicChatSessionEvent(session: PublicChatSession | null) {
@@ -244,7 +240,9 @@ export async function createFarcasterPublicChatSession(payload: Omit<FarcasterCh
   return session;
 }
 
-export async function createBasePublicChatSession(payload: Omit<BaseChatSessionRequest, 'provider'>): Promise<PublicChatSession> {
+export async function createBasePublicChatSession(payload: Omit<BaseChatSessionRequest, 'provider'>, signal?: AbortSignal, assertCurrent?: () => void): Promise<PublicChatSession> {
+  assertCurrent?.();
+  signal?.throwIfAborted();
   const response = await fetch('/api/chat/auth/session', {
     body: JSON.stringify({
       ...payload,
@@ -256,20 +254,26 @@ export async function createBasePublicChatSession(payload: Omit<BaseChatSessionR
       'Content-Type': 'application/json',
     },
     method: 'POST',
+    signal,
   });
 
   const session = await parseSessionResponse(response);
+  assertCurrent?.();
+  signal?.throwIfAborted();
   syncConfirmedMiniAppSession(session, 'chat-session');
   emitPublicChatSessionEvent(session);
   return session;
 }
 
-export async function clearPublicChatSession(): Promise<void> {
+export async function clearPublicChatSession(signal?: AbortSignal): Promise<void> {
   const response = await fetch('/api/chat/auth/session', {
       cache: 'no-store',
       credentials: 'same-origin',
       method: 'DELETE',
+      signal,
   });
+
+  signal?.throwIfAborted();
 
   if (!response.ok) {
     throw new Error(await parseError(response));

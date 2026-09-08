@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import GameTransaction from "./game-transaction";
 import { PIXOTCHI_NFT_ADDRESS, SPIN_GAME_ABI } from "@/lib/contracts";
 import { toast } from "react-hot-toast";
 import type { LifecycleStatus, TransactionFeedbackMode } from "./transaction-kit";
 import { formatDuration, formatScore, formatTokenAmount } from "@/lib/utils";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
+import { verifySpinReveal } from '@/lib/spin-reveal-state';
+import type { TransactionPreflight } from './transaction-kit';
 import { extractTransactionHash } from '@/lib/transaction-utils';
-import { extractBestSpinRewardFromLogs } from "@/lib/spin-game-events";
+import { extractBestSpinRewardFromLogs, type SpinRewardResult } from "@/lib/spin-game-events";
+import { getBaseTransactionReceipt } from "@/lib/base-rpc";
+import { formatSignedSpinValue, storeSpinResultRecovery, clearSpinResultRecovery } from "@/lib/spin-result-recovery";
+import type { Hex } from "viem";
+
+export type SpinCompletion = { state: "resolved"; reward: SpinRewardResult; transactionHash: Hex | null } | { state: "unavailable"; transactionHash: Hex | null };
 import { postMissionProgress } from "@/lib/mission-tracking";
 
 const FUNCTION_MAP = {
@@ -21,18 +28,16 @@ interface SpinGameTransactionProps {
   plantId: number;
   commitment?: `0x${string}`;
   secret?: `0x${string}`;
+  commitBlock?: number;
   disabled?: boolean;
   buttonText?: string;
   buttonClassName?: string;
   feedbackMode?: TransactionFeedbackMode;
   onStatusUpdate?: (status: LifecycleStatus) => void;
-  onComplete?: (result?: {
-    rewardIndex?: number;
-    pointsDelta?: number;
-    timeAdded?: number;
-    leafAmount?: bigint;
-  }) => void;
-  onButtonClick?: () => void;
+  onComplete?: (result: SpinCompletion) => void;
+  /** Awaited preflight: returning false or throwing prevents wallet execution. */
+  onButtonClick?: TransactionPreflight;
+  /** @deprecated Reward configuration is read by ArcadeDialog; retained for source compatibility. */
   onRewardConfigUpdate?: (index: number, reward: {
     pointDelta: bigint;
     timeExtension: bigint;
@@ -45,6 +50,7 @@ export default function SpinGameTransaction({
   plantId,
   commitment,
   secret,
+  commitBlock,
   disabled = false,
   buttonText,
   buttonClassName,
@@ -54,6 +60,20 @@ export default function SpinGameTransaction({
   onButtonClick,
 }: SpinGameTransactionProps) {
   const { address } = useAccount();
+  const publicClient = usePublicClient();
+  const preflight: TransactionPreflight = async () => {
+    if (mode === 'reveal') {
+      if (!publicClient || !address || !secret) throw new Error('Reconnect the wallet and reload the spin before revealing.');
+      // The contract is the final authority: never send a premature/invalid reveal
+      // merely because a local timer or previously observed head advanced.
+      await verifySpinReveal({
+        commitBlock,
+        readBlock: () => publicClient.getBlockNumber({ cacheTime: 0 }),
+        simulate: () => publicClient.simulateContract({ account: address, address: PIXOTCHI_NFT_ADDRESS, abi: SPIN_GAME_ABI, functionName: 'spinGameV2Play', args: [BigInt(plantId), secret] }),
+      });
+    }
+    return onButtonClick?.();
+  };
   const calls = useMemo(() => {
     const fn = FUNCTION_MAP[mode];
 
@@ -84,99 +104,50 @@ export default function SpinGameTransaction({
     return [];
   }, [mode, plantId, commitment, secret]);
 
-  const handleStatus = (status: LifecycleStatus) => {
+  const handledProof = useRef<string | null>(null);
+  const handleStatus = async (status: LifecycleStatus) => {
     onStatusUpdate?.(status);
 
     // Parent already handles reveal failures through onStatusUpdate. Calling
     // onComplete on failure clears the pending secret and prevents a retry.
-    const failureStatuses = new Set([
-      "error", "failed", "reverted", "cancelled", "canceled", "rejected",
-      "transactionRejected", "userRejected", "buildError"
-    ]);
-    if (failureStatuses.has(status.statusName ?? "")) {
-      return;
-    }
-
     if (status.statusName !== "success") return;
 
     if (mode === "commit") {
       toast.success("Spin committed! Reveal after the next block.", {
         id: "spin-leaf-commit",
       });
-      } else if (mode === "reveal") {
-        const receipts: UntypedValue[] = (status?.statusData?.transactionReceipts as UntypedValue[]) || [];
-        if (address) {
-        const txHash = extractTransactionHash(receipts[0]);
-        if (txHash) {
-          try {
-            postMissionProgress({
-              address,
-              taskId: 's4_play_arcade',
-              proof: { txHash },
-            }).catch((err) => console.warn('Gamification tracking failed (non-critical):', err));
-          } catch (error) {
-            console.warn('Failed to dispatch gamification mission (spin arcade):', error);
-          }
-        } else {
-            console.warn('Spin reveal completed without transaction hash; skipping mission update');
-          }
-        }
-      let revealResult:
-        | {
-            rewardIndex?: number;
-            pointsDelta?: number;
-            timeAdded?: number;
-            leafAmount?: bigint;
-          }
-        | undefined;
-
-      try {
-        const rewardLogs = receipts.flatMap((receipt) => receipt?.logs || []);
-        revealResult = extractBestSpinRewardFromLogs(rewardLogs);
-      } catch (error) {
-        console.warn("Failed to decode spin event", error);
+    } else if (mode === "reveal") {
+      const receipts = status.statusData?.transactionReceipts ?? [];
+      const txHash = (receipts.map(extractTransactionHash).find(Boolean) ?? extractTransactionHash(status.statusData)) as Hex | undefined;
+      const proof = txHash ?? status.statusData?.transactionId ?? "confirmed";
+      if (handledProof.current === proof) return;
+      handledProof.current = proof;
+      if (address && txHash) {
+        void postMissionProgress({ address, taskId: 's4_play_arcade', proof: { txHash } })
+          .catch(error => console.warn('Gamification tracking failed (non-critical):', error));
       }
-
-      if (revealResult) {
+      if (address) storeSpinResultRecovery({ account: address, plantId, transactionHash: txHash ?? null });
+      const subject = address ? { player: address, plantId, contract: PIXOTCHI_NFT_ADDRESS } : null;
+      let reward = subject ? extractBestSpinRewardFromLogs(receipts.flatMap(receipt => Array.isArray(receipt?.logs) ? receipt.logs : []), subject) : undefined;
+      if (!reward && txHash && subject) {
+        try {
+          const receipt = await getBaseTransactionReceipt(txHash);
+          reward = extractBestSpinRewardFromLogs(receipt.logs, subject);
+        } catch { /* Confirmed transaction remains recoverable through its public receipt. */ }
+      }
+      if (reward) {
         const parts: string[] = [];
-
-        if ((revealResult.pointsDelta ?? 0) !== 0) {
-          parts.push(
-            `${revealResult.pointsDelta! > 0 ? "+" : ""}${formatScore(
-              Math.abs(revealResult.pointsDelta!),
-            )} PTS`,
-          );
-        }
-        if ((revealResult.timeAdded ?? 0) !== 0) {
-          parts.push(
-            `${revealResult.timeAdded! > 0 ? "+" : ""}${formatDuration(
-              Math.abs(revealResult.timeAdded!),
-            )} lifetime`,
-          );
-        }
-        if ((revealResult.leafAmount ?? BigInt(0)) !== BigInt(0)) {
-          const leafFormatted = formatTokenAmount(revealResult.leafAmount!);
-          parts.push(
-            `${revealResult.leafAmount! > BigInt(0) ? "+" : ""}${leafFormatted} LEAF`,
-          );
-        }
-
-        toast.success(
-          parts.length
-            ? `Spin result: ${parts.join(" • ")}`
-            : "Spin result: no reward this time",
-          {
-            id: "spin-leaf-result",
-          },
-        );
+        if (reward.pointsDelta !== 0) parts.push(`${formatSignedSpinValue(reward.pointsDelta, formatScore)} PTS`);
+        if (reward.timeAdded !== 0) parts.push(`${formatSignedSpinValue(reward.timeAdded, formatDuration)} lifetime`);
+        if (reward.leafAmount !== BigInt(0)) parts.push(`${reward.leafAmount > BigInt(0) ? '+' : ''}${formatTokenAmount(reward.leafAmount)} LEAF`);
+        const message = parts.length ? `Spin result: ${parts.join(' • ')}` : 'Spin result: no reward this time';
+        if (reward.pointsDelta > 0 || reward.timeAdded > 0 || reward.leafAmount > BigInt(0)) toast.success(message, { id: 'spin-leaf-result' });
+        else toast(message, { id: 'spin-leaf-result' });
+        if (address) clearSpinResultRecovery(address, plantId, txHash ?? null);
+        onComplete?.({ state: 'resolved', reward, transactionHash: txHash ?? null });
       } else {
-        toast.success("Spin complete!", { id: "spin-leaf-result" });
-      }
-
-      try {
-        onComplete?.(revealResult);
-      } catch (error) {
-        console.warn("Spin transaction completion callback failed", error);
+        toast('Spin confirmed. The reward is not available yet; retry the receipt below.', { id: 'spin-leaf-result' });
+        onComplete?.({ state: 'unavailable', transactionHash: txHash ?? null });
       }
 
       return;
@@ -184,8 +155,8 @@ export default function SpinGameTransaction({
   };
 
   let defaultText = "Submit";
-  if (mode === "commit") defaultText = "Commit Spin";
-  if (mode === "reveal") defaultText = "Reveal Spin";
+  if (mode === "commit") defaultText = "Start SpinLeaf";
+  if (mode === "reveal") defaultText = "Reveal result";
 
   const finalDisabled = disabled || calls.length === 0;
   // Commit and reveal are distinct transaction intents. Scope recovery by the
@@ -199,14 +170,14 @@ export default function SpinGameTransaction({
     <GameTransaction
       successFeedback="feature"
       effects={{ domains: ["arcade", "balances"] }}
-      calls={calls as UntypedValue}
+      calls={calls}
       intentKey={intentKey}
       buttonText={buttonText ?? defaultText}
       buttonClassName={buttonClassName}
       disabled={finalDisabled}
       feedbackMode={feedbackMode}
-      onStatusUpdate={handleStatus as UntypedValue}
-      onButtonClick={onButtonClick}
+      onStatusUpdate={handleStatus}
+      onButtonClick={preflight}
     />
   );
 }

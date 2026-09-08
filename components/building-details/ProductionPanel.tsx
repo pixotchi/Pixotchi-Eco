@@ -19,14 +19,14 @@ interface ProductionPanelProps {
 export default function ProductionPanel({ building, landId, onClaimSuccess }: ProductionPanelProps) {
   const { address } = useAccount();
   return (
-    <>
+    <div className="space-y-4">
       <ProductionSummary building={building} />
 
       {/* Claim button */}
       {(building.accumulatedPoints > BigInt(0) || building.accumulatedLifetime > BigInt(0)) && (
-        <div className="pt-2">
+        <div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-            <div className="text-xs sm:text-sm text-muted-foreground">Collect accumulated production into Warehouse</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">Collect stored plant resources into Warehouse</div>
             <BuildingClaimTransaction
               key={`${landId.toString()}-${building.id}`}
               landId={landId}
@@ -51,6 +51,6 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -53,8 +53,9 @@ function BarracksControllerFixture() {
   return <section aria-label="Barracks controller fixture" className={sectionClass}>
     <output aria-label="Barracks land">Land {landId.toString()}</output>
     <output aria-label="Barracks reads">{reads}</output>
-    {snapshot.loading ? <p role="status">Loading army</p> : !snapshot.landState ? <ResourceState status="error" title="Army unavailable" onRetry={() => { void snapshot.loadState(); }} />
-      : <output aria-label="Stationed army">{snapshot.landState.stationedSwordsmanTroops.toString()} swordsmen</output>}
+    {snapshot.loading && <p role="status">Loading army</p>}
+    {snapshot.error && <ResourceState status="error" title="Army unavailable" onRetry={() => { void snapshot.loadState(); }} />}
+    {snapshot.landState && <output aria-label="Stationed army">{snapshot.landState.stationedSwordsmanTroops.toString()} swordsmen{snapshot.error ? ' (last known)' : ''}</output>}
     <div className="flex flex-wrap gap-2">
       <Button onClick={() => setLandId(BigInt(2))}>Change Barracks land</Button>
       <Button onClick={() => { pending.current.filter(request => request.landId === BigInt(1)).forEach(request => request.resolve(fixtureBarracks(request.landId))); }}>Resolve first army</Button>

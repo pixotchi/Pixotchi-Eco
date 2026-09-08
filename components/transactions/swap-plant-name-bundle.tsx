@@ -26,6 +26,7 @@ interface SwapPlantNameBundleProps {
     minSeedOut: bigint; // Minimum SEED to receive (350 SEED for name change)
     onSuccess?: (tx: UntypedValue) => void;
     onError?: (error: UntypedValue) => void;
+    onButtonClick?: () => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
@@ -48,6 +49,7 @@ export default function SwapPlantNameBundle({
     minSeedOut,
     onSuccess,
     onError,
+    onButtonClick,
     buttonText = 'Change Name with ETH',
     buttonClassName = 'w-full',
     disabled = false,
@@ -90,6 +92,7 @@ export default function SwapPlantNameBundle({
             intentKey={`swap:set-plant-name:${plantId}`}
             onSuccess={onSuccess}
             onError={onError}
+            onButtonClick={onButtonClick}
             buttonText={buttonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}

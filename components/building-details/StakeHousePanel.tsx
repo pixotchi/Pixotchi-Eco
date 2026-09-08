@@ -13,12 +13,12 @@ export default function StakeHousePanel() {
   };
 
   return (
-    <div className="text-center py-4 space-y-2">
+    <div className="space-y-4">
       <div className="text-muted-foreground text-sm">
         Stake your SEED to earn LEAF.
       </div>
       <Button
-        className="px-4 text-sm"
+        className="w-full text-sm"
         onClick={handleOpenStaking}
       >
         Stake

@@ -75,13 +75,13 @@ function getTokenInfoSections(
         </span>
       )
       : section.key === 'seed-rewards' && rewardsData
-        ? `$${rewardsData.rewards.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Rewards Distributed Today`
+        ? `$${rewardsData.rewards.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Estimated Rewards (24h)`
         : section.title;
     const body = section.key === 'seed-rewards' && rewardsData
       ? (
         <>
           {section.body}
-          {` Based on $${rewardsData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })} volume in the last 24h.`}
+          {` The estimate is 2% of $${rewardsData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })} in reported SEED trading volume over the last 24 hours. It does not measure confirmed payouts.`}
         </>
       )
       : section.body;
@@ -193,7 +193,7 @@ function TokenInfoPanel({
           })}
         </div>
 
-        <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+        <div className="surface-lifted rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
           <div className="flex items-start gap-3">
             <Image
               src={activeTokenInfo.iconSrc}
@@ -400,7 +400,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h4 className="text-sm font-semibold leading-tight text-foreground">SEED market pulse</h4>
-          <p className="mt-0.5 text-[11px] font-medium leading-tight text-muted-foreground">Live BaseSwap quote data</p>
+          <p className="mt-0.5 text-[11px] font-medium leading-tight text-muted-foreground">BaseSwap market data via DexScreener</p>
         </div>
         <a
           href={pairUrl}
@@ -413,7 +413,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
         </a>
       </div>
 
-      <div className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
+      <div className="surface-lifted rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
         <div className="flex items-start justify-between gap-3 border-b border-border/45 px-3 py-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
@@ -460,7 +460,7 @@ function SeedMarketStats({ marketData }: { marketData: SeedMarketData | null }) 
         ] as const).map(([label, change, txns]) => (
           <div
             key={label}
-            className="chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1.5 text-center shadow-[var(--shadow-hairline)]"
+            className="surface-lifted rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-2 py-1.5 text-center shadow-[var(--shadow-hairline)]"
           >
             <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
             <p className={`mt-0.5 text-xs font-semibold tabular-nums ${

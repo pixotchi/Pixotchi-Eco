@@ -1125,8 +1125,7 @@ export const buildApproveStakeCall = (): { address: `0x${string}`; abi: UntypedV
   } as const;
 };
 
-export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
-  const amountWei = parseUnits(amount || '0', 18);
+export const buildStakeCall = (amountWei: bigint): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   return {
     address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
@@ -1135,8 +1134,7 @@ export const buildStakeCall = (amount: string): { address: `0x${string}`; abi: U
   } as const;
 };
 
-export const buildUnstakeCall = (amount: string): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
-  const amountWei = parseUnits(amount || '0', 18);
+export const buildUnstakeCall = (amountWei: bigint): { address: `0x${string}`; abi: UntypedValue; functionName: string; args: UntypedValue[] } => {
   return {
     address: STAKE_CONTRACT_ADDRESS,
     abi: stakingAbi,
@@ -1242,7 +1240,15 @@ export const getStakeComposite = async (
       stake = { staked: (sr.staked ?? sr[0]) as bigint, rewards: (sr.rewards ?? sr[1]) as bigint };
     }
 
-    const allowance = (allowanceRes?.result ?? BigInt(0)) as bigint;
+    // These values determine approval and spending eligibility. A failed
+    // multicall entry must never be presented as a successful zero snapshot.
+    if (stakeRes?.status === 'failure' || allowanceRes?.status === 'failure'
+      || !stake || typeof stake.staked !== 'bigint' || typeof stake.rewards !== 'bigint'
+      || stake.staked < BigInt(0) || stake.rewards < BigInt(0)
+      || typeof allowanceRes?.result !== 'bigint' || allowanceRes.result < BigInt(0)) {
+      throw new Error('Required staking balances or approval could not be read');
+    }
+    const allowance = allowanceRes.result as bigint;
     const approved = allowance > BigInt(0);
 
     let rewardRatio: { numerator: bigint; denominator: bigint } | null = null;
@@ -1283,7 +1289,7 @@ export const getStakeComposite = async (
     return { stake, approved, rewardRatio, timeUnit, totalStaked };
   } catch (e) {
     console.warn('getStakeComposite failed:', e);
-    return { stake: null, approved: false, rewardRatio: null, timeUnit: null, totalStaked: null };
+    throw e;
   }
 };
 
@@ -1755,17 +1761,9 @@ export const getStrainInfo = async (
     const strainsWithPaymentInfo = await Promise.all(
       strains.map(async (strain: UntypedValue) => {
         const strainId = Number(strain.id);
-        let paymentToken: `0x${string}` | undefined;
-        let paymentPrice: bigint | undefined;
-
-        try {
-          const paymentInfo = await getStrainPaymentInfo(strainId, readClient);
-          paymentToken = paymentInfo.token;
-          paymentPrice = paymentInfo.price;
-        } catch (error) {
-          // If payment info fetch fails, fall back to default SEED token
-          console.warn(`Failed to fetch payment info for strain ${strainId}:`, error);
-        }
+        // Every listed strain uses this deployed payment getter. An unavailable
+        // quote must reach the catalog's error state, never become a SEED price.
+        const paymentInfo = await getStrainPaymentInfo(strainId, readClient);
 
         return {
           id: strainId,
@@ -1777,9 +1775,10 @@ export const getStrainInfo = async (
           maxSupply: Number(strain.maxSupply),
           isActive: Boolean(strain.isActive),
           getStrainTotalLeft: Number(strain.getStrainTotalLeft),
-          strainInitialTOD: Number(strain.strainInitialTOD),
-          paymentToken,
-          paymentPrice,
+          // NFTLogic._mintTo treats an unset lifetime as one day.
+          strainInitialTOD: Number(strain.strainInitialTOD) === 0 ? 86_400 : Number(strain.strainInitialTOD),
+          paymentToken: paymentInfo.token,
+          paymentPrice: paymentInfo.price,
         };
       })
     );
@@ -1831,7 +1830,7 @@ export const getAllShopItems = async (): Promise<ShopItem[]> => {
     }));
   } catch (error) {
     console.error('Error fetching shop items:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -1857,7 +1856,7 @@ export const getAllGardenItems = async (
     }));
   } catch (error) {
     console.error('Error fetching garden items:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -2329,7 +2328,7 @@ export interface LandBuildingsBatchResult {
 
 export const getLandBuildingsBatch = async (
   landIds: bigint[],
-  options: { chunkSize?: number; readClient?: PixotchiReadClient; requireComplete?: boolean } = {},
+  options: { chunkSize?: number; readClient?: PixotchiReadClient; requireComplete?: boolean; blockNumber?: bigint } = {},
 ): Promise<LandBuildingsBatchResult[]> => {
   if (landIds.length === 0) return [];
 
@@ -2356,6 +2355,7 @@ export const getLandBuildingsBatch = async (
     const chunkResults = await retryWithBackoff(async () => {
       return readClient.multicall({
         allowFailure: true,
+        blockNumber: options.blockNumber,
         contracts,
       });
     });
@@ -2570,8 +2570,7 @@ export const createRouterBatchTransferCall = (
  * @param walletAddress The wallet address to check
  * @returns Object with canKill boolean and remainingSeconds
  */
-export const getKillCooldown = async (walletAddress: string): Promise<{ canKill: boolean; remainingSeconds: number }> => {
-  const readClient = getReadClient();
+export const getKillCooldown = async (walletAddress: string, readClient: PixotchiReadClient = getReadClient()): Promise<{ canKill: boolean; remainingSeconds: number }> => {
   try {
     const [canKillResult, remainingResult] = await retryWithBackoff(async () => {
       const results = await readClient.multicall({
@@ -2594,14 +2593,19 @@ export const getKillCooldown = async (walletAddress: string): Promise<{ canKill:
       return results;
     });
 
-    const canKill = canKillResult?.status === 'success' ? (canKillResult.result as boolean) : true;
-    const remainingSeconds = remainingResult?.status === 'success' ? Number(remainingResult.result) : 0;
+    if (canKillResult?.status !== 'success' || remainingResult?.status !== 'success') {
+      throw new Error('Kill cooldown is temporarily unavailable.');
+    }
+    const canKill = canKillResult.result as boolean;
+    const remainingSeconds = Number(remainingResult.result);
+    if (typeof canKill !== 'boolean' || !Number.isSafeInteger(remainingSeconds) || remainingSeconds < 0) {
+      throw new Error('Kill cooldown returned an invalid result.');
+    }
 
     return { canKill, remainingSeconds };
   } catch (error) {
-    console.warn('Failed to fetch kill cooldown from contract, allowing kills:', error);
-    // Graceful degradation: allow kills if contract read fails
-    return { canKill: true, remainingSeconds: 0 };
+    console.warn('Failed to fetch kill cooldown from contract:', error);
+    throw error;
   }
 };
 
@@ -2729,7 +2733,7 @@ export const casinoGetConfig = async (): Promise<CasinoConfig | null> => {
   }
 };
 
-export const casinoGetSupportedTokens = async (): Promise<string[]> => {
+export const casinoGetSupportedTokens = async ({ throwOnError = false }: { throwOnError?: boolean } = {}): Promise<string[]> => {
   const readClient = getReadClient();
   try {
     const result = await retryWithBackoff(async () => {
@@ -2742,6 +2746,7 @@ export const casinoGetSupportedTokens = async (): Promise<string[]> => {
     return result;
   } catch (error) {
     console.warn('Failed to get casino supported tokens:', error);
+    if (throwOnError) throw error;
     return [];
   }
 };
@@ -3747,7 +3752,7 @@ export type QuestSlotSnapshot = QuestSlot & {
  */
 export const getQuestSlotsBatch = async (
   landIds: bigint[],
-  options: { chunkSize?: number; readClient?: PixotchiReadClient } = {},
+  options: { chunkSize?: number; readClient?: PixotchiReadClient; blockNumber?: bigint } = {},
 ): Promise<QuestSlotsBatchEntry[]> => {
   if (landIds.length === 0) return [];
 
@@ -3759,6 +3764,7 @@ export const getQuestSlotsBatch = async (
     const chunkResults = await retryWithBackoff(async () =>
       readClient.multicall({
         allowFailure: true,
+        blockNumber: options.blockNumber,
         contracts: chunk.map((landId) => ({
           address: LAND_CONTRACT_ADDRESS,
           abi: landAbi,

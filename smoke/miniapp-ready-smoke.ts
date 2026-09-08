@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const providersSource = fs.readFileSync(
-  path.join(process.cwd(), 'app/providers.tsx'),
+  path.join(process.cwd(), 'components/auth/host-wallet-boundary.tsx'),
   'utf8',
 );
 
@@ -20,8 +20,9 @@ assert.match(
 
 const hostProviderStart = providersSource.indexOf('<HostEnvironmentProvider>');
 const readySignalMount = providersSource.indexOf('<MiniAppReadySignal />', hostProviderStart);
-const providersContentMount = providersSource.indexOf('<ProvidersContent', hostProviderStart);
+const providersContentMount = providersSource.indexOf('<HostAwareWalletGate', hostProviderStart);
 assert.ok(hostProviderStart >= 0, 'HostEnvironmentProvider must remain mounted');
+assert.match(fs.readFileSync(path.join(process.cwd(), 'app/providers.tsx'), 'utf8'), /<HostWalletBoundary[\s\S]*<ThemedPrivyProvider[\s\S]*<ProvidersContent/, 'host boundary must own provider and wallet initialization');
 assert.ok(
   readySignalMount > hostProviderStart && readySignalMount < providersContentMount,
   'ready must mount inside the host environment and before the lazy Wagmi subtree',

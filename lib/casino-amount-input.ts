@@ -91,10 +91,19 @@ export function formatCasinoLimitForToken(
 ): string {
   if (isLeafCasinoToken(token, decimals)) {
     if (kind === "min" && amount === LEAF_CASINO_UI_MIN_BET) return "100K";
-    if (kind === "max" && amount === LEAF_CASINO_UI_MAX_BET) return "2.99M";
+    if (kind === "max" && amount === LEAF_CASINO_UI_MAX_BET) return "2.999M";
   }
 
-  return formatCasinoLimit(amount, decimals);
+  const compact = formatCasinoLimit(amount, decimals);
+  // A stated constraint must be usable verbatim, including tightly bounded
+  // ranges. Compact only exact values; never round a minimum below the contract.
+  if (kind && parseCasinoAmountInput(compact, decimals) !== amount) return formatUnits(amount, decimals);
+  return compact;
+}
+
+/** Form drafts retain the exact configured amount, independent of display rounding. */
+export function getCasinoBetInputValue(amount: bigint, decimals: number): string {
+  return formatUnits(amount, decimals);
 }
 
 export function formatCasinoLimit(amount: bigint, decimals: number): string {

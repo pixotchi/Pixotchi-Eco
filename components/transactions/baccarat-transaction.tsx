@@ -1,4 +1,5 @@
 "use client";
+import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 
 import { useMemo, useRef, useCallback } from "react";
 import GameTransaction from "./game-transaction";
@@ -7,34 +8,23 @@ import {
   buildBaccaratPlaceBetWithTokenCall,
   buildBaccaratRevealCall,
   BaccaratBetType,
-  BaccaratOutcome,
+  LAND_CONTRACT_ADDRESS,
 } from "@/lib/contracts";
 import { getBaseTransactionReceipt } from "@/lib/base-rpc";
-import { baccaratAbi, getBaccaratOutcomeLabel } from "@/public/abi/baccarat-abi";
+import { getBaccaratOutcomeLabel } from "@/public/abi/baccarat-abi";
 import { toast } from "react-hot-toast";
-import { decodeEventLog, formatUnits, type Hex } from "viem";
+import { type Hex } from "viem";
 import type { LifecycleStatus } from "./transaction-kit";
 import { extractTransactionHash } from "@/lib/transaction-utils";
 import { useAccount } from "wagmi";
 import { postMissionProgress } from "@/lib/mission-tracking";
 
-export type BaccaratRevealResult = {
-  betType?: BaccaratBetType;
-  outcome?: BaccaratOutcome;
-  won?: boolean;
-  playerCards?: number[];
-  bankerCards?: number[];
-  playerTotal?: number;
-  bankerTotal?: number;
-  payout?: string;
-  expired?: boolean;
-  forfeitedAmount?: string;
-  transactionHash?: string;
-  receiptIncomplete?: boolean;
-};
+import { hasCompleteBaccaratResult, parseBaccaratResultFromReceipts, type BaccaratRoundIdentity, type BaccaratRevealResult } from '@/lib/baccarat-result';
+export type { BaccaratRevealResult } from '@/lib/baccarat-result';
 
 interface BaccaratTransactionProps {
   mode: "placeBet" | "reveal";
+  roundIdentity?: BaccaratRoundIdentity;
   landId: bigint;
   betType?: BaccaratBetType;
   betAmount?: bigint;
@@ -45,108 +35,13 @@ interface BaccaratTransactionProps {
   onComplete?: (result?: BaccaratRevealResult) => void;
   onButtonClick?: () => void;
   tokenSymbol?: string;
-  tokenDecimals?: number;
   bettingToken?: string | null;
 }
 
-const FAILURE_STATUSES = new Set([
-  "error",
-  "failed",
-  "reverted",
-  "cancelled",
-  "canceled",
-  "rejected",
-  "transactionRejected",
-  "userRejected",
-  "buildError",
-]);
-
-const NO_CARD = 255;
-
-const compactCards = (card1: number, card2: number, card3: number, count: number) => {
-  const cards = [card1, card2];
-  if (count >= 3 && card3 !== NO_CARD) cards.push(card3);
-  return cards;
-};
-
-const parseBaccaratResultFromReceipts = (
-  receipts: UntypedValue[],
-  tokenDecimals: number
-): BaccaratRevealResult | undefined => {
-  let roundResult: BaccaratRevealResult | undefined;
-  let cards: Pick<BaccaratRevealResult, "playerCards" | "bankerCards"> = {};
-
-  for (const receipt of receipts) {
-    const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
-    const transactionHash = extractTransactionHash(receipt);
-
-    for (const log of logs) {
-      try {
-        const decoded = decodeEventLog({
-          abi: baccaratAbi,
-          data: log.data as `0x${string}`,
-          topics: log.topics as UntypedValue,
-        });
-
-        if (decoded.eventName === "BaccaratRoundResult") {
-          const args = decoded.args as UntypedValue;
-
-          roundResult = {
-            ...roundResult,
-            betType: Number(args.betType) as BaccaratBetType,
-            outcome: Number(args.outcome) as BaccaratOutcome,
-            won: Boolean(args.won),
-            playerTotal: Number(args.playerTotal),
-            bankerTotal: Number(args.bankerTotal),
-            payout: formatUnits(args.payout ?? BigInt(0), tokenDecimals),
-            transactionHash,
-          };
-        }
-
-        if (decoded.eventName === "BaccaratRoundCards") {
-          const args = decoded.args as UntypedValue;
-          const playerCount = Number(args.playerCardCount ?? 2);
-          const bankerCount = Number(args.bankerCardCount ?? 2);
-
-          cards = {
-            playerCards: compactCards(
-              Number(args.playerCard1),
-              Number(args.playerCard2),
-              Number(args.playerCard3),
-              playerCount
-            ),
-            bankerCards: compactCards(
-              Number(args.bankerCard1),
-              Number(args.bankerCard2),
-              Number(args.bankerCard3),
-              bankerCount
-            ),
-          };
-        }
-
-        if (decoded.eventName === "BaccaratBetExpired") {
-          const args = decoded.args as UntypedValue;
-          return {
-            expired: true,
-            forfeitedAmount: formatUnits(args.forfeitedAmount ?? BigInt(0), tokenDecimals),
-            transactionHash,
-          };
-        }
-      } catch {
-        // Continue to next log if decode fails.
-      }
-    }
-  }
-
-  if (roundResult) {
-    return { ...roundResult, ...cards };
-  }
-
-  return undefined;
-};
 
 export default function BaccaratTransaction({
   mode,
+  roundIdentity,
   landId,
   betType,
   betAmount,
@@ -157,7 +52,6 @@ export default function BaccaratTransaction({
   onComplete,
   onButtonClick,
   tokenSymbol = "SEED",
-  tokenDecimals = 18,
   bettingToken = null,
 }: BaccaratTransactionProps) {
   const { address } = useAccount();
@@ -187,7 +81,7 @@ export default function BaccaratTransaction({
       transactionInitiatedRef.current = true;
     }
 
-    if (FAILURE_STATUSES.has(status.statusName ?? "")) {
+    if (isGameTransactionFailure(status.statusName ?? "")) {
       if (transactionInitiatedRef.current) {
         onComplete?.(undefined);
         transactionInitiatedRef.current = false;
@@ -223,25 +117,27 @@ export default function BaccaratTransaction({
       }
     }
 
-    let revealResult = parseBaccaratResultFromReceipts(receipts, tokenDecimals);
+    let revealResult = roundIdentity ? parseBaccaratResultFromReceipts(receipts, roundIdentity, LAND_CONTRACT_ADDRESS) : undefined;
 
-    if (!revealResult && revealTxHash) {
+    if ((!revealResult || !hasCompleteBaccaratResult(revealResult)) && revealTxHash && roundIdentity) {
       try {
         const fetchedReceipt = await getBaseTransactionReceipt(revealTxHash as Hex);
-        revealResult = parseBaccaratResultFromReceipts([...receipts, fetchedReceipt], tokenDecimals);
+        revealResult = parseBaccaratResultFromReceipts([fetchedReceipt, ...receipts], roundIdentity, LAND_CONTRACT_ADDRESS);
       } catch (error) {
         console.warn("Failed to refetch baccarat reveal receipt:", error);
       }
     }
 
-    if (revealResult?.expired) {
-      toast.error(`Baccarat round expired. ${revealResult.forfeitedAmount ?? "0"} ${tokenSymbol} forfeited.`, {
+    if (revealResult && hasCompleteBaccaratResult(revealResult) && revealResult.expired) {
+      toast.error(`Baccarat round expired. ${revealResult.forfeitedAmount === undefined ? 'Verify token details to display the forfeited amount.' : `${revealResult.forfeitedAmount} ${tokenSymbol} forfeited.`}`, {
         id: "baccarat-result",
       });
-    } else if (revealResult?.outcome !== undefined) {
+    } else if (revealResult && hasCompleteBaccaratResult(revealResult) && revealResult.outcome !== undefined) {
       const outcomeLabel = getBaccaratOutcomeLabel(revealResult.outcome);
-      const isPush = !revealResult.won && revealResult.payout && revealResult.payout !== "0";
-      if (revealResult.won) {
+      const isPush = !revealResult.won && (revealResult.payoutWei !== undefined ? revealResult.payoutWei > BigInt(0) : revealResult.payout && revealResult.payout !== "0");
+      if (revealResult.payout === undefined) {
+        toast(`Baccarat ${outcomeLabel}. Round settled; verify token details to display the payout amount.`, { id: 'baccarat-result' });
+      } else if (revealResult.won) {
         toast.success(`Baccarat ${outcomeLabel}. Payout ${revealResult.payout} ${tokenSymbol}.`, {
           id: "baccarat-result",
         });
@@ -255,13 +151,13 @@ export default function BaccaratTransaction({
         });
       }
     } else {
-      toast.success("Baccarat reveal complete. Refreshing state...", {
+      toast("Reveal confirmed. The result is still loading.", {
         id: "baccarat-result",
       });
     }
 
     onComplete?.(revealResult ?? { transactionHash: revealTxHash, receiptIncomplete: true });
-  }, [address, mode, onComplete, onStatusUpdate, tokenDecimals, tokenSymbol]);
+  }, [address, mode, onComplete, onStatusUpdate, tokenSymbol, roundIdentity]);
 
   return (
     <GameTransaction
@@ -272,7 +168,7 @@ export default function BaccaratTransaction({
       onStatusUpdate={handleStatus}
       buttonText={buttonText || (mode === "placeBet" ? "Deal Baccarat" : "Reveal Baccarat")}
       buttonClassName={buttonClassName}
-      disabled={disabled || calls.length === 0}
+      disabled={disabled || calls.length === 0 || (mode === "reveal" && !roundIdentity)}
       onButtonClick={handleButtonClick}
       feedbackMode="toast"
     />

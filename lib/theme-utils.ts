@@ -11,26 +11,10 @@ export const THEMES = {
 } as const;
 
 export type Theme = keyof typeof THEMES;
+export const THEME_NAMES = Object.values(THEMES);
 
 
-/*
- * ONLY the background token per theme — the single value the meta theme-color
- * needs. This used to be a full ~250-line JS copy of the CSS palette, which had
- * already drifted from globals.css (it still held two values the CSS comments
- * explicitly rejected for AA contrast). globals.css is the palette's single
- * source of truth; never mirror more of it here.
- */
-const THEME_BACKGROUNDS: Record<Theme, string> = {
-  light: '210 55% 78%',
-  dark: '216 30% 25%',
-  green: '137 44% 83%',
-  yellow: '45 90% 82%',
-  red: '356 42% 86%',
-  pink: '326 54% 85%',
-  blue: '213 66% 84%',
-  violet: '260 44% 88%',
-};
-
+// CSS is the only palette source. Browser chrome reads its computed token.
 function clampChannel(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
@@ -73,22 +57,17 @@ function hslTokenToHex(token: string): string {
 
 
 
-export function getThemeMetaColor(theme: Theme): string {
-  return hslTokenToHex(THEME_BACKGROUNDS[theme] ?? THEME_BACKGROUNDS.light);
-}
-
-export function updateMetaThemeColor(theme: Theme): void {
+export function updateMetaThemeColor(): void {
   if (typeof document === 'undefined') return;
-
-  // Update every theme-color meta, not just the first match. The layout used to
-  // emit three (a light-media pair from the Viewport API plus a bare one), and a
-  // single querySelector hit the media-scoped light tag — which a device in OS
-  // dark mode never resolves, so the selected theme's colour never applied.
-  const metas = document.querySelectorAll('meta[name="theme-color"]');
-  if (metas.length === 0) return;
-
-  const color = getThemeMetaColor(theme);
-  metas.forEach((meta) => meta.setAttribute('content', color));
+  const token = getComputedStyle(document.documentElement).getPropertyValue('--background').trim();
+  if (!token) return;
+  const color = hslTokenToHex(token);
+  let metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!metas.length) {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+    metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  }
+  metas.forEach(meta => { if (meta.content !== color) meta.content = color; });
 }
-
-

@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 
 import { AIChatMessage } from '@/lib/types';
+import type { AiSendResult } from '@/lib/ai-send-outcome';
 
 /*
  * Shared AI-message shapes and pure converters.
@@ -13,6 +14,7 @@ import { AIChatMessage } from '@/lib/types';
  * imported the first time the chat dialog opens.
  */
 export type AIMessageMetadata = {
+  deliveryStatus?: 'failed' | 'cancelled';
   address?: string;
   continuations?: number;
   conversationId?: string;
@@ -80,6 +82,7 @@ export function uiMessageToAIChatMessage(
     continuations: metadata.continuations,
     conversationId: metadata.conversationId || fallbackConversationId || '',
     displayName: metadata.displayName || (type === 'assistant' ? 'Neural Seed' : 'You'),
+    deliveryStatus: metadata.deliveryStatus,
     finishReason: metadata.finishReason,
     id: metadata.persistedMessageId || message.id,
     message: text,
@@ -98,7 +101,7 @@ export type AiChatHandle = {
   sendMessage: (
     message: { text: string },
     options: { body: Record<string, unknown>; headers: Record<string, string> },
-  ) => Promise<void>;
+  ) => Promise<AiSendResult>;
   setMessages: (messages: AIUIMessage[]) => void;
   stop: () => Promise<void> | void;
 };

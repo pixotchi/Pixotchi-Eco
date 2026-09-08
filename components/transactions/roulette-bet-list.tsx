@@ -3,9 +3,11 @@
 import { Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import type { CasinoBetType } from '@/public/abi/casino-abi';
 
-export function RouletteBetList({ bets, limit, locked, tokenLogo, tokenSymbol, onClear, onRemove }: {
-  bets: readonly { id: string; label: string; amount: string }[];
+export function RouletteBetList({ bets, limit, locked, tokenLogo, tokenSymbol, onClear, onRemove, payouts }: {
+  bets: readonly { id: string; label: string; amount: string; type?: CasinoBetType }[];
+  payouts?: Partial<Record<CasinoBetType, number>>;
   tokenLogo: string; tokenSymbol: string;
   limit: number; locked: boolean; onClear: () => void; onRemove: (id: string) => void;
 }) {
@@ -17,10 +19,12 @@ export function RouletteBetList({ bets, limit, locked, tokenLogo, tokenSymbol, o
         <Trash2 className="h-4 w-4" aria-hidden="true" />Clear bets
       </Button>}
     </div>
-    {bets.length === 0 ? <p className="rounded border border-dashed border-white/15 bg-black/20 p-2 text-center text-xs text-white/70">Tap the table to add bets</p>
+    {bets.length === 0 ? <p className="rounded border border-dashed border-white/15 bg-black/20 p-2 text-center text-xs text-white/70">Choose a bet type or use the table to add bets</p>
       : <ul className="max-h-40 space-y-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]">
         {bets.map(bet => <li key={bet.id} className="flex min-w-0 items-center gap-2 rounded-md border border-white/15 bg-black/40 pl-2 text-xs">
-          <span className="min-w-0 flex-1 break-words font-medium text-white">{bet.label}</span>
+          <span className="min-w-0 flex-1 break-words font-medium text-white">{bet.label}
+            {bet.type !== undefined && payouts?.[bet.type] !== undefined && <span className="block text-[11px] font-normal text-white/70">Pays {payouts[bet.type]}:1 + stake</span>}
+          </span>
           <span className="flex min-w-0 max-w-[45%] items-center gap-1 text-right tabular-nums text-white/80" title={`${bet.amount} ${tokenSymbol}`}>
             <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 shrink-0 rounded-full" />
             <span className="min-w-0 [overflow-wrap:anywhere]">{bet.amount}</span>

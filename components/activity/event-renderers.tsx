@@ -3,210 +3,43 @@
 import { useTokenMetadata } from '@/hooks/useTokenMetadata';
 import type { ActivityPerspective } from '@/lib/activity-filters';
 import type { WarehouseAssignmentEvent } from '@/lib/types';
-import { ITEM_ICONS } from '@/lib/constants';
+import { getActivityAssetId, getActivityAttackOutcome, getActivityItem, getActivitySource, getPlayedRewardSummary, ACTIVITY_GAME_NAMES } from '@/lib/activity-metadata';
+import { ActivityRecord } from './activity-record';
 import {
 ActivityEvent,AttackEvent,BaccaratRoundResultEvent,BarracksBuiltEvent,
 BarracksRaidEvent,BlackjackResultEvent,BundledItemConsumedEvent,CasinoBuiltEvent,KilledEvent,LandMintedEvent,
 LandNameChangedEvent,LandTransferEvent,MintEvent,PlayedEvent,QuestFinalizedEvent,QuestStartedEvent,RouletteSpinResultEvent,ShopItemPurchasedEvent,TownSpeedUpWithSeedEvent,TownUpgradedWithLeafEvent,VillageProductionClaimedEvent,VillageSpeedUpWithSeedEvent,VillageUpgradedWithLeafEvent
 } from '@/lib/types';
 import { formatDuration,formatQuestReward,formatScore,formatTokenAmount,getBuildingName,getQuestDifficulty } from '@/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
-import { HelpCircle } from 'lucide-react';
-import Image from 'next/image';
 import React from 'react';
+import { activityInteger, blackjackActivityOutcome } from '@/lib/activity-presentation';
 
-const SHOP_ITEM_OVERRIDES: Record<string, { name: string; icon: string }> = {
-  '1': { name: 'Fence', icon: '/icons/Fence.png' },
-};
-
-/*
- * One module-level 30s clock shared by every TimeAgo instance. Timestamps were
- * memoized purely on the (fixed) event timestamp, so "less than a minute ago"
- * stayed frozen for the whole session.
- */
-const slowTickSubscribers = new Set<() => void>();
-let slowTickInterval: ReturnType<typeof setInterval> | null = null;
-let slowTickValue = 0;
-function subscribeSlowTick(callback: () => void) {
-  slowTickSubscribers.add(callback);
-  if (slowTickInterval === null) {
-    slowTickInterval = setInterval(() => {
-      slowTickValue += 1;
-      slowTickSubscribers.forEach((subscriber) => subscriber());
-    }, 30_000);
-  }
-  return () => {
-    slowTickSubscribers.delete(callback);
-    if (slowTickSubscribers.size === 0 && slowTickInterval !== null) {
-      clearInterval(slowTickInterval);
-      slowTickInterval = null;
-    }
-  };
-}
-function useSlowTick() {
-  return React.useSyncExternalStore(subscribeSlowTick, () => slowTickValue, () => 0);
-}
-
-const TimeAgo = React.memo(({ timestamp }: { timestamp: string }) => {
-  const tick = useSlowTick();
-  const timeAgo = React.useMemo(() => {
-    const date = new Date(parseInt(timestamp) * 1000);
-    return formatDistanceToNow(date, { addSuffix: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timestamp, tick]);
-
-  return <span className="text-xs text-muted-foreground">{timeAgo}</span>;
-});
-TimeAgo.displayName = 'TimeAgo';
-
-const EventIcon = React.memo(({
-  type,
-  event,
-  shopItemMap,
-  gardenItemMap
-}: {
-  type: ActivityEvent['__typename'],
-  event?: UntypedValue,
-  shopItemMap?: { [key: string]: string },
-  gardenItemMap?: { [key: string]: string }
-}) => {
-  const iconClass = "w-6 h-6 object-contain";
-
-  const { iconSrc, altText } = React.useMemo(() => {
-    switch (type) {
-      case 'Attack':
-        if (event && event.attacker === event.winner) {
-          return { iconSrc: "/icons/Attackwon.png", altText: "Attack Won" };
-        } else {
-          return { iconSrc: "/icons/Attacklost.png", altText: "Attack Lost" };
-        }
-      case 'Killed':
-        return { iconSrc: "/icons/skull.png", altText: "Kill" };
-      case 'Mint':
-        return { iconSrc: "/icons/plant1.svg", altText: "New Plant" };
-      case 'Played':
-        return { iconSrc: "/icons/GAME.png", altText: "Game Played" };
-      case 'ItemConsumed':
-        if (event && gardenItemMap) {
-          const itemName = gardenItemMap[event.itemId];
-          const itemIcon = ITEM_ICONS[itemName?.toLowerCase()] || '/icons/BEE.png';
-          return { iconSrc: itemIcon, altText: itemName || 'Garden Item' };
-        }
-        return { iconSrc: "/icons/BEE.png", altText: "Item Consumed" };
-      case 'ShopItemPurchased':
-        if (event && shopItemMap) {
-          const override = SHOP_ITEM_OVERRIDES[event.itemId];
-          const itemName = override?.name || shopItemMap[event.itemId];
-          const itemIcon = override?.icon || ITEM_ICONS[itemName?.toLowerCase()] || '/icons/BEE.png';
-          return { iconSrc: itemIcon, altText: itemName || override?.name || 'Shop Item' };
-        }
-        return { iconSrc: "/icons/BEE.png", altText: "Shop Item" };
-      // Land Event Icons
-      case 'WarehouseAssignmentEvent':
-        return { iconSrc: '/icons/ware-house.png', altText: 'Warehouse assignment' };
-      case 'LandTransferEvent':
-        return { iconSrc: "/icons/ware-house.png", altText: "Land Transfer" };
-      case 'LandMintedEvent':
-        return { iconSrc: "/icons/farmer-house.png", altText: "Land Minted" };
-      case 'LandNameChangedEvent':
-        return { iconSrc: "/icons/farmer-house.png", altText: "Land Renamed" };
-      case 'VillageUpgradedWithLeafEvent':
-      case 'VillageSpeedUpWithSeedEvent':
-        if (event && event.buildingId !== undefined) {
-          const buildingName = getBuildingName(event.buildingId, false);
-          const buildingIcons: { [key: string]: string } = {
-            "Solar Panels": "/icons/solar-panels.png",
-            "Soil Factory": "/icons/soil-factory.png",
-            "Bee Farm": "/icons/bee-house.png"
-          };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/solar-panels.png", altText: buildingName };
-        }
-        return { iconSrc: "/icons/solar-panels.png", altText: "Village Building" };
-      case 'TownUpgradedWithLeafEvent':
-      case 'TownSpeedUpWithSeedEvent':
-        if (event && event.buildingId !== undefined) {
-          const buildingName = getBuildingName(event.buildingId, true);
-          const buildingIcons: { [key: string]: string } = {
-            "Stake House": "/icons/stake-house.png",
-            "Warehouse": "/icons/ware-house.png",
-            "Marketplace": "/icons/marketplace.png",
-            "Farmer House": "/icons/farmer-house.png"
-          };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/marketplace.png", altText: buildingName };
-        }
-        return { iconSrc: "/icons/marketplace.png", altText: "Town Building" };
-      case 'QuestStartedEvent':
-      case 'QuestFinalizedEvent':
-        return { iconSrc: "/icons/stake-house.png", altText: "Quest" };
-      case 'VillageProductionClaimedEvent':
-        if (event && event.buildingId !== undefined) {
-          const buildingName = getBuildingName(event.buildingId, false);
-          const buildingIcons: { [key: string]: string } = {
-            "Solar Panels": "/icons/solar-panels.png",
-            "Soil Factory": "/icons/soil-factory.png",
-            "Bee Farm": "/icons/bee-house.png"
-          };
-          return { iconSrc: buildingIcons[buildingName] || "/icons/bee-house.png", altText: buildingName };
-        }
-        return { iconSrc: "/icons/bee-house.png", altText: "Production" };
-      case 'BarracksRaidEvent':
-        return {
-          iconSrc: event?.attackerWon ? "/icons/Attackwon.png" : "/icons/Attacklost.png",
-          altText: event?.attackerWon ? "Raid Won" : "Raid Lost"
-        };
-      case 'BarracksBuiltEvent':
-        return { iconSrc: "/icons/barracks.webp", altText: "Barracks Built" };
-      case 'CasinoBuiltEvent':
-        return { iconSrc: "/icons/casino.png", altText: "Casino Built" };
-      case 'RouletteSpinResultEvent':
-        return { iconSrc: "/icons/casino.png", altText: "Roulette Win" };
-      case 'BlackjackResultEvent':
-        return { iconSrc: "/icons/casino.png", altText: "Blackjack" };
-      case 'BaccaratRoundResultEvent':
-        return { iconSrc: "/icons/casino.png", altText: "Baccarat" };
-      default:
-        return { iconSrc: null, altText: "Unknown Event" };
-    }
-  }, [type, event, shopItemMap, gardenItemMap]);
-
-  if (!iconSrc) {
-    return <HelpCircle className="w-6 h-6 text-muted-foreground" />;
-  }
-
-  return (
-    <Image
-      src={iconSrc}
-      alt={altText}
-      width={24}
-      height={24}
-      className={iconClass}
-      loading="lazy"
-      quality={80}
-      sizes="24px"
-    />
-  );
-});
-EventIcon.displayName = 'EventIcon';
+export const ActivityIdentityContext = React.createContext<ActivityPerspective | undefined>(undefined);
 
 const YouBadge = () => (
-  <span className="ml-1 text-xs font-semibold text-[hsl(var(--info))]">(You)</span>
+  <span className="ml-1 text-xs font-semibold text-info-strong">(You)</span>
 );
 
 const activityAssetNameClass = "font-pixel text-[0.86em] leading-normal";
 
-const PlantName = ({ name, id, isYou }: { name?: string, id: string, isYou: boolean }) => (
-  <span className={`${activityAssetNameClass} ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
-    {name || `Plant #${id}`}
-    {isYou && <YouBadge />}
-  </span>
-);
+const PlantName = ({ name, id, isYou }: { name?: string, id: string, isYou: boolean }) => {
+  const plantId = getActivityAssetId(id);
+  const owned = plantId !== null && isYou;
+  return <span className={`${activityAssetNameClass} ${owned ? 'text-info-strong' : ''}`}>
+    {name || (plantId === null ? 'A plant' : `Plant #${plantId}`)}
+    {owned && <YouBadge />}
+  </span>;
+};
 
-const LandName = ({ landId, isYou }: { landId: string | number | bigint, isYou: boolean }) => (
-  <span className={`${activityAssetNameClass} ${isYou ? 'text-[hsl(var(--info))]' : ''}`}>
-    Land #{landId}
-    {isYou && <YouBadge />}
-  </span>
-);
+const LandName = ({ landId, isYou }: { landId: string | number | bigint, isYou: boolean }) => {
+  const perspective = React.useContext(ActivityIdentityContext);
+  const id = getActivityAssetId(landId);
+  const owned = id !== null && (isYou || Boolean(perspective?.landIds.has(id)));
+  return <span className={`${activityAssetNameClass} ${owned ? 'text-info-strong' : ''}`}>
+    {id === null ? 'A land' : `Land #${id}`}
+    {owned && <YouBadge />}
+  </span>;
+};
 
 const EventWrapper = ({
   children,
@@ -218,26 +51,11 @@ const EventWrapper = ({
   event: ActivityEvent,
   shopItemMap?: { [key: string]: string },
   gardenItemMap?: { [key: string]: string }
-}) => (
-  <div className="flex items-start gap-3 px-2 py-2">
-    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-[hsl(var(--border-strong)/0.28)] bg-card/75 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-hairline)]">
-      <EventIcon
-        type={event.__typename}
-        event={event}
-        shopItemMap={shopItemMap}
-        gardenItemMap={gardenItemMap}
-      />
-    </div>
-    <div className="flex-1">
-      {children}
-      <TimeAgo timestamp={event.timestamp} />
-    </div>
-  </div>
-);
-
-const GAME_NAME_ALIASES: Record<string, string> = {
-  SpinGameV2: "SpinLeaf",
-  "spinGameV2": "SpinLeaf",
+}) => {
+  const perspective = React.useContext(ActivityIdentityContext);
+  const source = getActivitySource(event);
+  const isMine = source.id !== null && Boolean(source.kind === 'land' ? perspective?.landIds.has(source.id) : perspective?.plantIds.has(source.id));
+  return <ActivityRecord event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap} isMine={isMine}>{children}</ActivityRecord>;
 };
 
 export const AttackEventRenderer = React.memo(({
@@ -258,7 +76,7 @@ export const AttackEventRenderer = React.memo(({
     isOpponentYou,
     formattedScore
   } = React.useMemo(() => {
-    const winner = event.attacker === event.winner;
+    const winner = getActivityAttackOutcome(event);
     const opp = winner
       ? { id: event.loser, name: event.loserName }
       : { id: event.winner, name: event.winnerName };
@@ -267,7 +85,8 @@ export const AttackEventRenderer = React.memo(({
     // plant NAME to a wallet ADDRESS, so "(You)" never rendered for anyone.
     const attackerYou = Boolean(perspective?.plantIds.has(String(event.attacker)));
     const opponentYou = Boolean(perspective?.plantIds.has(String(opp.id)));
-    const score = formatScore(parseInt(event.scoresWon));
+    const rawScore = activityInteger(event.scoresWon);
+    const score = rawScore !== null && Number.isFinite(Number(rawScore)) ? formatScore(Number(rawScore)) : 'Amount unavailable';
 
     return {
       attackerIsWinner: winner,
@@ -277,6 +96,12 @@ export const AttackEventRenderer = React.memo(({
       formattedScore: score
     };
   }, [event, perspective]);
+
+  if (attackerIsWinner === null) {
+    return <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
+      <p className="text-sm"><PlantName name={event.attackerName} id={event.attacker} isYou={!!isAttackerYou} /> took part in an attack. The result is unavailable.</p>
+    </EventWrapper>;
+  }
 
   return (
     <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
@@ -325,56 +150,13 @@ export const MintEventRenderer = ({ event, shopItemMap, gardenItemMap }: { event
 
 export const PlayedEventRenderer = ({ event, perspective, shopItemMap, gardenItemMap }: { event: PlayedEvent, perspective?: ActivityPerspective, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
   const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
-  const displayGameName = GAME_NAME_ALIASES[event.gameName] ?? event.gameName;
-  const pointsDelta = Number(event.points ?? "0");
-  const timeBonusSeconds = event.timeAdded ?? event.timeExtension ? Number(event.timeAdded ?? event.timeExtension ?? "0") : 0;
-  const leafReward = event.leafAmount ? BigInt(String(event.leafAmount)) : BigInt("0");
-
-  const rewardChips: React.ReactNode[] = [];
-
-  if (pointsDelta !== 0) {
-    rewardChips.push(
-      <span key="points" className="font-semibold text-value">
-        {`${pointsDelta > 0 ? '+' : '-'}${formatScore(Math.abs(pointsDelta))} PTS`}
-      </span>
-    );
-  }
-
-  if (timeBonusSeconds !== 0) {
-    rewardChips.push(
-      <span key="tod" className="font-semibold text-value">
-        {`${timeBonusSeconds > 0 ? '+' : '-'}${formatDuration(Math.abs(timeBonusSeconds))} lifetime`}
-      </span>
-    );
-  }
-
-  if (leafReward !== BigInt("0")) {
-    rewardChips.push(
-      <span key="leaf" className="font-semibold text-value">
-        {`${leafReward > BigInt("0") ? '+' : ''}${formatTokenAmount(leafReward)} LEAF`}
-      </span>
-    );
-  }
-
-  let rewardSummary: React.ReactNode = <span className="text-muted-foreground">no reward this time</span>;
-
-  if (rewardChips.length > 0) {
-    rewardSummary = rewardChips.reduce<React.ReactNode[]>((acc, chip, index) => {
-      if (index === 0) return [chip];
-      acc.push(
-        <span key={`separator-${index}`} className="px-1 text-muted-foreground">
-          •
-        </span>
-      );
-      acc.push(chip);
-      return acc;
-    }, []);
-  }
+  const displayGameName = ACTIVITY_GAME_NAMES[event.gameName] ?? event.gameName;
+  const rewardSummary = getPlayedRewardSummary(event);
 
   return (
     <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
       <p className="text-sm">
-        <PlantName name={event.nftName} id={event.nftId} isYou={!!isYou} /> played <span className="font-semibold">{displayGameName}</span> and won {rewardSummary}.
+        <PlantName name={event.nftName} id={event.nftId} isYou={!!isYou} /> played <span className="font-semibold">{displayGameName}</span>: {rewardSummary}.
       </p>
     </EventWrapper>
   );
@@ -382,7 +164,7 @@ export const PlayedEventRenderer = ({ event, perspective, shopItemMap, gardenIte
 
 export const ItemConsumedEventRenderer = ({ event, perspective, itemMap, shopItemMap, gardenItemMap }: { event: BundledItemConsumedEvent, perspective?: ActivityPerspective, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
   const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
-  const itemName = itemMap[event.itemId] || `Item #${event.itemId}`;
+  const itemName = getActivityItem(event.itemId, 'garden', itemMap).name;
   const quantityText = event.quantity > 1 ? `${event.quantity}x ` : '';
 
   return (
@@ -396,8 +178,7 @@ export const ItemConsumedEventRenderer = ({ event, perspective, itemMap, shopIte
 
 export const ShopItemPurchasedEventRenderer = ({ event, perspective, itemMap, shopItemMap, gardenItemMap }: { event: ShopItemPurchasedEvent, perspective?: ActivityPerspective, itemMap: { [key: string]: string }, shopItemMap?: { [key: string]: string }, gardenItemMap?: { [key: string]: string } }) => {
   const isYou = Boolean(perspective?.plantIds.has(String(event.nftId)));
-  const override = SHOP_ITEM_OVERRIDES[event.itemId];
-  const itemName = override?.name || itemMap[event.itemId] || `Item #${event.itemId}`;
+  const itemName = getActivityItem(event.itemId, 'shop', itemMap).name;
   return (
     <EventWrapper event={event} shopItemMap={shopItemMap} gardenItemMap={gardenItemMap}>
       <p className="text-sm">
@@ -555,24 +336,25 @@ export const CasinoBuiltEventRenderer = ({ event, userAddress }: { event: Casino
   );
 };
 
-export const WarehouseAssignmentEventRenderer = ({ event }: { event: WarehouseAssignmentEvent }) => (
-  <EventWrapper event={event}>
+export const WarehouseAssignmentEventRenderer = ({ event }: { event: WarehouseAssignmentEvent }) => {
+  const plantId = getActivityAssetId(event.plantId);
+  return <EventWrapper event={event}>
     <p className="text-sm">
       <LandName landId={event.landId} isYou={false} /> applied{' '}
       <span className="font-semibold text-value">{event.resource === 'points'
         ? `${formatScore(Number(event.amount))} PTS`
         : `${formatDuration(Number(event.amount))} lifetime`}</span>{' '}
-      from its warehouse to <span className="font-bold">Plant #{event.plantId}</span>.{' '}
-      <a className="underline underline-offset-2" href={`https://basescan.org/block/${event.blockHeight}`} target="_blank" rel="noopener noreferrer">View block</a>
+      from its warehouse to <span className="font-bold">{plantId === null ? 'a plant' : `Plant #${plantId}`}</span>.
     </p>
-  </EventWrapper>
-);
+  </EventWrapper>;
+};
 
 export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event: RouletteSpinResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
   const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
-  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
-  const displaySymbol = tokenSymbol || 'TOKEN';
+  const payout = activityInteger(event.payout);
+  const payoutFormatted = tokenDecimals === undefined || payout === null ? 'Amount unavailable' : formatTokenAmount(payout, tokenDecimals);
+  const displaySymbol = tokenSymbol ?? '';
 
   return (
     <EventWrapper event={event}>
@@ -591,19 +373,17 @@ export const RouletteSpinResultEventRenderer = ({ event, userAddress }: { event:
 export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: BlackjackResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
   const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
-  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
-  const won = Number(event.payout) > 0;
-  const displaySymbol = tokenSymbol || 'TOKEN';
+  const payout = activityInteger(event.payout);
+  const payoutFormatted = tokenDecimals === undefined || payout === null ? 'Amount unavailable' : formatTokenAmount(payout, tokenDecimals);
+  const outcome = blackjackActivityOutcome(Number(event.result));
+  const displaySymbol = tokenSymbol ?? '';
 
   return (
     <EventWrapper event={event}>
       <p className="text-sm">
         <LandName landId={event.landId} isYou={!!isYou} /> played <span className="font-bold">Blackjack</span>
-        {won ? (
-          <> and won <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>
-        ) : (
-          <> and lost.</>
-        )}
+        {' and '}{outcome.label}.
+        {(payout === null || payout > BigInt(0)) && <> {outcome.won ? 'Payout' : 'Returned'}: <span className="font-semibold text-value">{payoutFormatted} {displaySymbol}</span>.</>}
       </p>
     </EventWrapper>
   );
@@ -612,9 +392,10 @@ export const BlackjackResultEventRenderer = ({ event, userAddress }: { event: Bl
 export const BaccaratRoundResultEventRenderer = ({ event, userAddress }: { event: BaccaratRoundResultEvent, userAddress?: string | null }) => {
   const isYou = userAddress && event.player.toLowerCase() === userAddress.toLowerCase();
   const { symbol: tokenSymbol, decimals: tokenDecimals } = useTokenMetadata(event.bettingToken as `0x${string}`);
-  const payoutFormatted = formatTokenAmount(BigInt(event.payout), tokenDecimals);
-  const displaySymbol = tokenSymbol || 'TOKEN';
-  const pushed = !event.won && BigInt(event.payout) > BigInt(0);
+  const payout = activityInteger(event.payout);
+  const payoutFormatted = tokenDecimals === undefined || payout === null ? 'Amount unavailable' : formatTokenAmount(payout, tokenDecimals);
+  const displaySymbol = tokenSymbol ?? '';
+  const pushed = !event.won && payout !== null && payout > BigInt(0);
 
   return (
     <EventWrapper event={event}>

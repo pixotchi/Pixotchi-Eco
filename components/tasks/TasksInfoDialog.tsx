@@ -1,61 +1,135 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { CLIENT_ENV } from "@/lib/env-config";
 import { getClientGamificationPolicy } from "@/lib/gamification-client";
-import { onTasksDialogOpen } from "@/lib/app-events";
-import type { GmMissionDay } from "@/lib/gamification-types";
+import { onTasksDialogOpen, openStakingDialog } from "@/lib/app-events";
 import {
   flushMissionProgressOutbox,
   onMissionTrackingEvent,
 } from "@/lib/mission-tracking";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, HelpCircle, X } from "lucide-react";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import {
+  getMissionSections,
+  parseMissionSummary,
+  type MissionDestination,
+  type MissionSummary,
+} from "@/lib/mission-presentation";
+import { completeFirstCareStep } from "@/lib/first-care-progress";
+import { navigateToGameTab } from "@/lib/game-navigation";
+import { clearMissionLandForOwner, openMissionLand, openPublicChat } from "@/lib/mission-navigation";
+import { clearMissionPlantForOwner, openMissionPlant } from "@/lib/mission-plant-navigation";
+import { useMissionAssets } from "@/hooks/useMissionAssets";
+import { resolveMissionAction, type MissionAction, type MissionAssets } from "@/lib/mission-actions";
 
-type MissionTask = {
-  done?: boolean;
-  label: string;
-};
-
-type MissionSection = {
-  reward: number;
-  tasks: MissionTask[];
-  title: string;
-};
-
-function MissionCard({ section }: { section: MissionSection }) {
+type MissionSection = ReturnType<typeof getMissionSections>[number];
+function MissionCard({
+  section,
+  assets,
+  onNavigate,
+  onRetryAssets,
+}: {
+  section: MissionSection;
+  assets: MissionAssets;
+  onNavigate: (task: MissionSection["tasks"][number], action: MissionAction | null) => void;
+  onRetryAssets: () => void;
+}) {
+  const known = section.earned !== undefined;
   const completed = section.tasks.filter((task) => task.done).length;
-  const progress = section.tasks.length > 0 ? (completed / section.tasks.length) * 100 : 0;
-
   return (
-    <section className="chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]">
+    <section
+      aria-label={section.title + " tasks"}
+      className="surface-lifted rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)]"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold leading-tight">{section.title}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">{section.reward} Rocks available</p>
+          <h3 className="text-sm font-semibold leading-tight">
+            {section.title}
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {section.earned
+              ? section.reward + " Rocks earned"
+              : section.reward + " Rocks when all tasks are complete"}
+          </p>
         </div>
-        <div className="shrink-0 rounded-[var(--radius-control)] border border-border/60 bg-card/80 px-2 py-1 text-xs font-semibold tabular-nums">
-          {completed}/{section.tasks.length}
+        <span className="shrink-0 text-xs tabular-nums">
+          {known ? completed : "—"}/{section.tasks.length}
+        </span>
+      </div>
+      {known && (
+        <div className="mt-3">
+          <ProgressBar
+            label={section.title + " progress"}
+            value={(completed / section.tasks.length) * 100}
+          />
         </div>
-      </div>
-
-      <div className="mt-3">
-        <ProgressBar label={`${section.title} progress`} value={progress} />
-      </div>
-
-      <ul className="mt-3 space-y-2">
+      )}
+      <ul className="mt-3 space-y-4">
         {section.tasks.map((task) => {
-          const StatusIcon = task.done ? CheckCircle2 : Circle;
+          const action = resolveMissionAction(task.id, assets);
+          const actionLabel = action?.label ?? task.actionLabel;
+          const prerequisite = action?.description ?? task.prerequisite;
+          const Icon =
+            task.done === undefined
+              ? HelpCircle
+              : task.done
+                ? CheckCircle2
+                : Circle;
           return (
-            <li key={task.label} className="flex items-start gap-2 text-sm leading-snug">
-              <StatusIcon
-                className={task.done ? "mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--success))]" : "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50"}
+            <li
+              key={task.id}
+              className="flex items-start gap-2 text-sm leading-snug"
+              data-mission-id={task.id}
+            >
+              <Icon
+                className={
+                  task.done
+                    ? "mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--success))]"
+                    : "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                }
                 aria-hidden="true"
               />
-              <span className={task.done ? "text-foreground" : "text-muted-foreground"}>{task.label}</span>
+              <div className="min-w-0 flex-1 space-y-1">
+                <p>{task.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {task.done === undefined
+                    ? "Progress not yet available"
+                    : task.done
+                      ? "Completed"
+                      : "Not completed"}
+                </p>
+                {task.done !== true && (
+                  <>
+                    {prerequisite && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {prerequisite}
+                      </p>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="compact"
+                      className="h-auto max-w-full whitespace-normal leading-snug"
+                      disabled={action?.disabled}
+                      onClick={() => action?.retry ? onRetryAssets() : onNavigate(task, action)}
+                      aria-label={actionLabel + ": " + task.label}
+                    >
+                      {actionLabel}
+                    </Button>
+                  </>
+                )}
+              </div>
             </li>
           );
         })}
@@ -64,285 +138,304 @@ function MissionCard({ section }: { section: MissionSection }) {
   );
 }
 
+function navigateToMission(destination: MissionDestination) {
+  if (destination === "stake") openStakingDialog();
+  else if (destination === "chat") openPublicChat();
+  else if (destination === "lands" || destination === "plants")
+    navigateToGameTab("dashboard", { dashboardView: destination });
+  else navigateToGameTab(destination === "ranking" ? "leaderboard" : "swap");
+}
+
 export default function TasksInfoDialog() {
   const { address } = useAccount();
-  const gamificationDisabledMessage = CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE;
-  const gamificationPolicy = getClientGamificationPolicy();
+  const owner = address?.toLowerCase() ?? null;
+  const policy = getClientGamificationPolicy();
   const [open, setOpen] = useState(false);
-  const [missionDay, setMissionDay] = useState<GmMissionDay | null>(null);
-  const [missionPts, setMissionPts] = useState<number>(0);
-  const [missionTotal, setMissionTotal] = useState<number>(0);
-  const [streak, setStreak] = useState<{ current: number; best: number } | null>(null);
-  const [serverDisabledMessage, setServerDisabledMessage] = useState<string | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryVersion, setSummaryVersion] = useState(0);
-  const [missionTrackingNotice, setMissionTrackingNotice] = useState<{
-    message: string;
-    status: 'error' | 'queued';
+  const [snapshot, setSnapshot] = useState<{
+    owner: string;
+    summary: MissionSummary;
   } | null>(null);
-  const summaryRequestGenerationRef = useRef(0);
-  const previousSummaryAddressRef = useRef<string | null>(null);
-  const effectiveDisabled = !gamificationPolicy.enabled || !!serverDisabledMessage;
-  const effectiveDisabledMessage =
-    serverDisabledMessage ||
-    gamificationPolicy.message ||
-    gamificationDisabledMessage;
+  const [failure, setFailure] = useState<{
+    owner: string;
+    message: string;
+  } | null>(null);
+  const [serverDisabled, setServerDisabled] = useState<{
+    owner: string;
+    message: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState(0);
+  const [notice, setNotice] = useState<{
+    owner: string;
+    message: string;
+  } | null>(null);
+  const [lastTask, setLastTask] = useState<string | null>(null);
+  const generation = useRef(0);
+  const summary = snapshot?.owner === owner ? snapshot.summary : null;
+  const error = failure?.owner === owner ? failure.message : null;
+  const disabledMessage =
+    serverDisabled?.owner === owner ? serverDisabled.message : null;
+  const disabled = !policy.enabled || Boolean(disabledMessage);
+  const { assets, retry: retryAssets } = useMissionAssets(owner, open && policy.visible && !disabled);
+  const sections = getMissionSections(summary?.day ?? null);
+  const completed = sections.reduce(
+    (sum, section) => sum + section.tasks.filter((task) => task.done).length,
+    0,
+  );
+  const totalTaskCount = sections.reduce(
+    (sum, section) => sum + section.tasks.length,
+    0,
+  );
 
+  useEffect(() => onTasksDialogOpen(() => setOpen(true)), []);
   useEffect(() => {
-    return onTasksDialogOpen(() => setOpen(true));
-  }, []);
-
-  useEffect(() => {
-    return onMissionTrackingEvent((detail) => {
-      const eventAddress = typeof detail.payload.address === 'string'
-        ? detail.payload.address.toLowerCase()
-        : null;
-      if (!address || !eventAddress || eventAddress !== address.toLowerCase()) {
-        return;
-      }
-
-      if (detail.status === 'success') {
-        setMissionTrackingNotice(null);
-        if (open) {
-          setSummaryVersion((version) => version + 1);
-        }
-        return;
-      }
-
-      setMissionTrackingNotice({
-        message: detail.message ?? 'Task progress could not be synced.',
-        status: detail.status,
-      });
-    });
-  }, [address, open]);
-
+    clearMissionLandForOwner(owner);
+    clearMissionPlantForOwner(owner);
+  }, [owner]);
   useEffect(() => {
     void flushMissionProgressOutbox();
   }, [open]);
-
+  useEffect(
+    () =>
+      onMissionTrackingEvent((detail) => {
+        const eventOwner =
+          typeof detail.payload.address === "string"
+            ? detail.payload.address.toLowerCase()
+            : null;
+        if (!owner || eventOwner !== owner) return;
+        if (detail.status === "success") {
+          setNotice(null);
+          if (open) setVersion((value) => value + 1);
+        } else
+          setNotice({
+            owner,
+            message: detail.message ?? "Task progress could not be synced.",
+          });
+      }),
+    [owner, open],
+  );
   useEffect(() => {
-    const normalizedAddress = address?.toLowerCase() ?? null;
-    if (previousSummaryAddressRef.current === normalizedAddress) {
-      return;
-    }
-
-    previousSummaryAddressRef.current = normalizedAddress;
-    setMissionDay(null);
-    setMissionPts(0);
-    setMissionTotal(0);
-    setStreak(null);
-    setServerDisabledMessage(null);
-    setSummaryError(null);
-    setMissionTrackingNotice(null);
-  }, [address]);
-
-  useEffect(() => {
-    // Abort on close/wallet switch (a switch mid-flight used to paint the
-    // previous wallet's streak), track loading so the summary shows skeletons
-    // instead of confident zeros, and surface failures instead of swallowing
-    // them into a "Streak 0 / Tasks 0" card.
-    const generation = summaryRequestGenerationRef.current + 1;
-    summaryRequestGenerationRef.current = generation;
-    if (!address || !open || !gamificationPolicy.enabled) {
-      setSummaryLoading(false);
+    const request = ++generation.current;
+    if (!owner || !open || !policy.enabled) {
+      setLoading(false);
       return;
     }
     const controller = new AbortController();
-    const isCurrentRequest = () =>
-      !controller.signal.aborted &&
-      summaryRequestGenerationRef.current === generation;
-
-    (async () => {
+    const isCurrent = () =>
+      !controller.signal.aborted && generation.current === request;
+    setLoading(true);
+    setFailure(null);
+    setServerDisabled(null);
+    void (async () => {
       try {
-        setServerDisabledMessage(null);
-        setSummaryError(null);
-        setSummaryLoading(true);
-
-        const [sRes, mRes] = await Promise.all([
-          fetch(`/api/gamification/streak?address=${address}`, { signal: controller.signal }),
-          fetch(`/api/gamification/missions?address=${address}`, { signal: controller.signal }),
+        const responses = await Promise.all([
+          fetch("/api/gamification/streak?address=" + owner, {
+            signal: controller.signal,
+          }),
+          fetch("/api/gamification/missions?address=" + owner, {
+            signal: controller.signal,
+          }),
         ]);
-
-        if (sRes.ok) {
-          const sPayload = await sRes.json();
-          if (!isCurrentRequest()) return;
-          if (sPayload?.disabled) {
-            setServerDisabledMessage(typeof sPayload?.message === 'string' ? sPayload.message : gamificationDisabledMessage);
-            return;
-          }
-          setStreak({ current: sPayload.streak.current, best: sPayload.streak.best });
-        } else {
-          throw new Error(`Streak request failed (${sRes.status})`);
+        if (responses.some((response) => !response.ok))
+          throw new Error("Progress request failed.");
+        const [streakPayload, missionPayload] = await Promise.all(
+          responses.map((response) => response.json()),
+        );
+        if (!isCurrent()) return;
+        const unavailable = [streakPayload, missionPayload].find(
+          (payload) => payload?.disabled,
+        );
+        if (unavailable) {
+          setServerDisabled({
+            owner,
+            message:
+              typeof unavailable.message === "string"
+                ? unavailable.message
+                : CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE,
+          });
+          return;
         }
-
-        if (mRes.ok) {
-          const m = await mRes.json();
-          if (!isCurrentRequest()) return;
-          if (m?.disabled) {
-            setServerDisabledMessage(typeof m?.message === 'string' ? m.message : gamificationDisabledMessage);
-            return;
-          }
-          setMissionDay(m.day || null);
-          setMissionPts(m.day?.pts ?? 0);
-          setMissionTotal(typeof m.total === 'number' && Number.isFinite(m.total) ? m.total : 0);
-        } else {
-          throw new Error(`Missions request failed (${mRes.status})`);
-        }
-      } catch (error) {
-        if ((error as Error)?.name !== 'AbortError' && isCurrentRequest()) {
-          console.warn('[Tasks] Failed to load summary:', error);
-          setSummaryError('Could not load your progress. Close and reopen to retry.');
-        }
+        const verified = parseMissionSummary(streakPayload, missionPayload);
+        setSnapshot({ owner, summary: verified });
+      } catch (cause) {
+        if (isCurrent() && (cause as Error)?.name !== "AbortError")
+          setFailure({ owner, message: "Could not load your progress." });
       } finally {
-        if (isCurrentRequest()) {
-          setSummaryLoading(false);
-        }
+        if (isCurrent()) setLoading(false);
       }
     })();
-
     return () => {
       controller.abort();
-      if (summaryRequestGenerationRef.current === generation) {
-        summaryRequestGenerationRef.current += 1;
-      }
+      if (generation.current === request) generation.current += 1;
     };
-  }, [address, open, gamificationPolicy.enabled, gamificationDisabledMessage, summaryVersion]);
-
+  }, [owner, open, policy.enabled, version]);
   useEffect(() => {
-    if (gamificationPolicy.visible) return;
-    setOpen(false);
-  }, [gamificationPolicy.visible]);
+    if (!policy.visible) setOpen(false);
+  }, [policy.visible]);
+  // The destination, not its trigger, confirms that Tasks actually opened with
+  // usable progress for this owner. Hidden/disabled/error states never complete it.
+  useEffect(() => {
+    if (open && policy.visible && !disabled && summary && owner)
+      completeFirstCareStep(owner, "tasks");
+  }, [open, policy.visible, disabled, summary, owner]);
 
-  if (!gamificationPolicy.visible) {
-    return null;
-  }
-
-  const missionSections: MissionSection[] = [
-    {
-      reward: 30,
-      title: "General",
-      tasks: [
-        { done: missionDay?.s1?.makeSwap, label: "Make a SEED swap" },
-        { done: missionDay?.s1?.stakeSeed, label: "Stake SEED" },
-        { done: missionDay?.s1?.claimStake, label: "Claim stake rewards" },
-        { done: missionDay?.s1?.placeOrder, label: "Place a SEED/LEAF order" },
-      ],
-    },
-    {
-      reward: 20,
-      title: "Social",
-      tasks: [
-        { done: missionDay?.s2?.followPlayer, label: "Follow a player" },
-        { done: missionDay?.s2?.chatMessage, label: "Send a message in public chat" },
-        { done: missionDay?.s2?.visitProfile, label: "Visit a profile" },
-      ],
-    },
-    {
-      reward: 25,
-      title: "Land",
-      tasks: [
-        { done: missionDay?.s3?.applyResources, label: "Apply resources or production to a plant" },
-        { done: missionDay?.s3?.sendQuest, label: "Send a farmer on a quest" },
-        { done: missionDay?.s3?.claimProduction, label: "Claim production from any building" },
-        { done: missionDay?.s3?.playCasinoGame, label: "Play roulette, blackjack, or baccarat" },
-      ],
-    },
-    {
-      reward: 25,
-      title: "Plant",
-      tasks: [
-        { done: missionDay?.s4?.buy10, label: "Buy at least 10 elements" },
-        { done: missionDay?.s4?.buyShield, label: "Buy a shield or fence" },
-        { done: missionDay?.s4?.collectStar, label: "Collect a star by killing a plant" },
-        { done: missionDay?.s4?.playArcade, label: "Play Box or Spin in the arcade" },
-      ],
-    },
-  ];
-  const completedTaskCount = missionSections.reduce(
-    (total, section) => total + section.tasks.filter((task) => task.done).length,
-    0
-  );
-  const totalTaskCount = missionSections.reduce((total, section) => total + section.tasks.length, 0);
-  const dailyProgress = Math.max(0, Math.min(100, missionPts));
-  const summaryCard = (
-    <div
-      className="chromatic-white-surface space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-3.5 shadow-[var(--shadow-hairline)] backdrop-blur-[var(--blur-surface)]"
-      data-task-summary-card
-    >
-      {summaryError && (
-        <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">{summaryError}</p>
-      )}
-      {missionTrackingNotice && (
-        <p className="text-xs text-[hsl(var(--warning-strong))]" role="status">
-          {missionTrackingNotice.message}
-        </p>
-      )}
-      <div className="grid grid-cols-3 gap-2" aria-busy={summaryLoading || undefined}>
-        <div>
-          <span className="text-xs font-semibold text-muted-foreground">Streak</span>
-          <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : streak?.current ?? 0}</span>
-            <span className="text-xs text-muted-foreground">days</span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Best {streak?.best ?? 0}</p>
-        </div>
-
-        <div>
-          <span className="text-xs font-semibold text-muted-foreground">Today</span>
-          <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : missionPts}</span>
-            <span className="text-xs text-muted-foreground">/100</span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Rocks</p>
-        </div>
-
-        <div>
-          <span className="text-xs font-semibold text-muted-foreground">Tasks</span>
-          <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-2xl font-bold leading-none tabular-nums">{summaryLoading ? "–" : completedTaskCount}</span>
-            <span className="text-xs text-muted-foreground">/{totalTaskCount}</span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Done</p>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>Daily progress</span>
-          <span className="font-medium tabular-nums">Total {missionTotal}</span>
-        </div>
-        <ProgressBar label="Daily task reward progress" value={dailyProgress} />
-      </div>
-    </div>
-  );
-
+  if (!policy.visible) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
-        <DialogHeader className="space-y-2">
-          <DialogTitle className="flex items-center gap-2">
-            <Image src="/icons/Volcanic_Rock.svg" alt="" width={20} height={20} className="h-5 w-5" aria-hidden="true" />
+      <DialogContent
+        mobileMode="center"
+        surface="soft"
+        padding="none"
+        hideCloseButton
+        className="w-[94vw] max-w-md [--dialog-padding:16px]"
+      >
+        <DialogHeader className="space-y-2 pr-[68px]">
+          <DialogTitle className="flex min-w-0 items-center gap-[8px] leading-snug">
+            <Image
+              src="/icons/Volcanic_Rock.svg"
+              alt=""
+              width={20}
+              height={20}
+              className="h-[20px] w-[20px] shrink-0"
+              aria-hidden="true"
+            />
             Farmer&apos;s Tasks
           </DialogTitle>
+        </DialogHeader>
+        <Button
+          variant="headerIcon"
+          size="icon"
+          className="absolute right-[12px] top-[12px] h-[44px] min-h-[44px] w-[44px] min-w-[44px]"
+          aria-label="Close Tasks"
+          onClick={() => setOpen(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <DialogBody className="space-y-4 pr-1">
           <DialogDescription className="leading-relaxed">
             Earn up to 100 Rocks per day. Daily reset is 00:00 UTC.
           </DialogDescription>
-          {!effectiveDisabled && summaryCard}
-        </DialogHeader>
-
-        <DialogBody className="space-y-4 pr-1">
-          {effectiveDisabled ? (
-            <div className="rounded-[var(--radius-panel)] border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.1)] p-3.5">
-              <p className="text-sm font-semibold">Temporarily Disabled</p>
-              <p className="text-xs text-muted-foreground mt-1">{effectiveDisabledMessage}</p>
+          {disabled ? (
+            <div
+              role="status"
+              className="rounded-[var(--radius-panel)] border border-border p-3.5"
+            >
+              <p className="text-sm font-semibold">
+                Tasks are temporarily unavailable
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {disabledMessage ||
+                  policy.message ||
+                  CLIENT_ENV.GAMIFICATION_DISABLED_MESSAGE}
+              </p>
             </div>
+          ) : !owner ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Connect a supported EVM wallet to view your daily Tasks and saved
+              progress.
+            </p>
           ) : (
-            <div className="grid gap-3 pb-1 sm:grid-cols-2">
-              {missionSections.map((section) => (
-                <MissionCard key={section.title} section={section} />
-              ))}
-            </div>
+            <>
+              <div
+                className="space-y-3 rounded-[var(--radius-panel)] border border-border/60 bg-card p-3.5"
+                data-task-summary-card
+                aria-busy={loading || undefined}
+              >
+                {error && (
+                  <div role="status" className="space-y-2 text-sm">
+                    <p>
+                      {error}{" "}
+                      {summary
+                        ? "Showing last verified progress."
+                        : "Your progress is unknown until it loads."}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="compact"
+                      className="h-auto max-w-full whitespace-normal leading-snug"
+                      disabled={loading}
+                      onClick={() => setVersion((value) => value + 1)}
+                    >
+                      {loading ? "Retrying progress…" : "Retry progress"}
+                    </Button>
+                  </div>
+                )}
+                {!error && loading && (
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {summary
+                      ? "Refreshing saved progress…"
+                      : "Loading your progress…"}
+                  </p>
+                )}
+                {notice?.owner === owner && (
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {notice.message}
+                  </p>
+                )}
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2">
+                  <div>
+                    <span className="text-xs text-muted-foreground">
+                      Streak
+                    </span>
+                    <p className="text-xl font-semibold tabular-nums">
+                      {summary?.streak.current ?? "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Best {summary?.streak.best ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground">Today</span>
+                    <p className="text-xl font-semibold tabular-nums">
+                      {summary?.day.pts ?? "—"}
+                      <span className="text-xs">/100</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">Rocks</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground">Tasks</span>
+                    <p className="text-xl font-semibold tabular-nums">
+                      {summary ? completed : "—"}
+                      <span className="text-xs">/{totalTaskCount}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">Completed</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Total Rocks: {summary?.total ?? "—"}
+                </p>
+                {summary && (
+                  <ProgressBar
+                    label="Daily task reward progress"
+                    value={summary.day.pts}
+                  />
+                )}
+              </div>
+              {lastTask && (
+                <p className="text-xs text-muted-foreground">
+                  Last opened: {lastTask}
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-3 pb-1">
+                {sections.map((section) => (
+                  <MissionCard
+                    key={section.key}
+                    section={section}
+                    assets={assets}
+                    onRetryAssets={retryAssets}
+                    onNavigate={(task, action) => {
+                      setLastTask(task.label);
+                      setOpen(false);
+                      const target = action?.target;
+                      if (target?.kind === 'land') openMissionLand(target);
+                      else if (target?.kind === 'plant') openMissionPlant(target);
+                      else if (target?.kind === 'mint') navigateToGameTab('mint', { mintType: target.mintType });
+                      else navigateToMission(task.destination);
+                    }}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </DialogBody>
       </DialogContent>

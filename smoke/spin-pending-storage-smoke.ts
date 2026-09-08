@@ -98,6 +98,11 @@ assert.equal(readStoredSpinPending(throwingStorage, accountA, 42), null);
 assert.equal(writeStoredSpinPending(throwingStorage, record), false);
 assert.equal(removeStoredSpinPending(throwingStorage, accountA, 42), false);
 
+const noOpStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+assert.equal(writeStoredSpinPending(noOpStorage, record), false, "a no-op write cannot authorize a paid spin");
+const staleStorage = { ...noOpStorage, getItem: () => JSON.stringify({ ...record, secretHex: `0x${'33'.repeat(32)}` }) };
+assert.equal(writeStoredSpinPending(staleStorage, record), false, "readback must retain the exact submitted reveal key");
+
 const projectFile = (relativePath: string) => fs.readFileSync(
   path.join(process.cwd(), relativePath),
   "utf8",

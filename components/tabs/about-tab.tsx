@@ -11,7 +11,7 @@ import { openExternalUrl } from "@/lib/open-external";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import packageJson from '@/package.json';
 import { BookOpen,Loader2,MessageCircle,PlayCircle,Radio } from "lucide-react";
-import { useId,useState } from "react";
+import { useId,useRef,useState } from "react";
 import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 
@@ -45,6 +45,10 @@ export default function AboutTab() {
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const feedbackDraftRef = useRef(feedbackText);
+  feedbackDraftRef.current = feedbackText;
+  const feedbackDialogRevisionRef = useRef(0);
 
   // Note: Gamification streak/missions now handled by TasksInfoDialog component
 
@@ -59,11 +63,15 @@ export default function AboutTab() {
       return;
     }
 
-    if (feedbackText.trim().length < 10) {
-      toast.error('Feedback must be at least 10 characters');
+    if (feedbackText.trim().length < 10 || feedbackText.trim().length > 1000) {
+      setFeedbackError('Feedback must contain 10–1000 characters.');
       return;
     }
 
+    const submittedDraft = feedbackText;
+    const dialogRevision = feedbackDialogRevisionRef.current;
+    const isCurrentDraft = () => feedbackDraftRef.current === submittedDraft && feedbackDialogRevisionRef.current === dialogRevision;
+    setFeedbackError(null);
     setFeedbackLoading(true);
     try {
       // Collect wallet profile data
@@ -99,14 +107,16 @@ export default function AboutTab() {
 
       if (response.ok) {
         toast.success('Thank you for your feedback!');
-        setFeedbackText('');
-        setShowFeedbackDialog(false);
+        if (isCurrentDraft()) {
+          setFeedbackText('');
+          setShowFeedbackDialog(false);
+        }
       } else {
-        toast.error(data.error || 'Failed to submit feedback');
+        if (isCurrentDraft()) setFeedbackError(data.error || 'Failed to submit feedback. Your draft is saved; try again.');
       }
     } catch (error) {
       console.error('Feedback submission error:', error);
-      toast.error('Failed to submit feedback');
+      if (isCurrentDraft()) setFeedbackError('Failed to submit feedback. Your draft is saved; try again.');
     } finally {
       setFeedbackLoading(false);
     }
@@ -132,10 +142,10 @@ export default function AboutTab() {
               on desktop and become hard to read. */}
           <div className="space-y-4 tablet:max-w-[62ch]">
             <p className="leading-relaxed text-foreground/85">
-              <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base where you mint, grow, and care for plants and lands while earning real ETH rewards. Keep your plants alive, increase their score, and compete on the global leaderboard.
+              <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base. Care for plants, develop lands, and compete on the global leaderboard. Plant points contribute to your share when ETH rewards are distributed; reward amounts vary.
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Every player follows a different strategy. Some invest in Lands for long-term, passive growth, while others push their plants aggressively using the marketplace to climb rankings faster at a higher cost.
+              Build Village production buildings to accumulate points and lifetime, then collect and apply those resources to your plants through Warehouse. You can also buy Plant care items or unlock Town features such as quests and the LEAF marketplace.
             </p>
           </div>
 
@@ -145,12 +155,12 @@ export default function AboutTab() {
               {enabled && (
                 <Button
                   variant="default"
-                  onClick={() => start({ reset: true })}
+                  onClick={() => start()}
                   className="tablet:w-auto"
-                  aria-label="Start Pixotchi tutorial"
+                  aria-label="Open game guide"
                 >
                   <PlayCircle className="w-4 h-4 mr-2" />
-                  Tutorial
+                  Game guide
                 </Button>
               )}
               <Button
@@ -189,7 +199,7 @@ export default function AboutTab() {
       </TabCard>
 
       {/* Feedback Dialog */}
-      <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+      <Dialog open={showFeedbackDialog} onOpenChange={open => { feedbackDialogRevisionRef.current += 1; setShowFeedbackDialog(open); }}>
           <DialogContent mobileMode="center" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
             <DialogHeader className="mb-6">
             <DialogTitle>Share Your Feedback</DialogTitle>
@@ -203,7 +213,7 @@ export default function AboutTab() {
                 Feedback
               </label>
               <p id={feedbackHelpId} className="text-xs text-muted-foreground">
-                Share bugs, feature requests, or suggestions.
+                Share bugs, feature requests, or suggestions. 10–1000 characters.
               </p>
             </div>
             <Textarea
@@ -211,17 +221,21 @@ export default function AboutTab() {
               name="feedback"
               placeholder="What's on your mind? (e.g., bugs, feature requests, suggestions)"
               value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
+              onChange={(e) => { setFeedbackText(e.target.value); setFeedbackError(null); }}
               rows={5}
+              maxLength={1000}
               className="min-h-32 w-full"
               spellCheck={true}
               autoComplete="off"
               aria-describedby={feedbackHelpId}
             />
+            <p className="text-xs text-muted-foreground" aria-live="polite">{feedbackText.length}/1000 characters</p>
+            {!address && <p role="note" className="text-sm text-muted-foreground">Connect your wallet to send feedback. Your draft will stay here.</p>}
+            {feedbackError && <p role="alert" className="text-sm text-destructive">{feedbackError}</p>}
             <Button
               type="button"
               onClick={submitFeedback}
-              disabled={feedbackLoading || !address}
+              disabled={feedbackLoading || !address || feedbackText.trim().length < 10 || feedbackText.trim().length > 1000}
               aria-busy={feedbackLoading}
               className="w-full"
             >
@@ -245,7 +259,7 @@ export default function AboutTab() {
         {/* Community first, version last: `order` only applies in flex/grid, so the
             previous DOM order left the version stranded above the heading on mobile. */}
         <div className="text-center tablet:flex tablet:flex-1 tablet:flex-col tablet:justify-center">
-          <h3 className="mb-3 text-sm font-semibold">Join our Community</h3>
+          <h2 className="mb-3 text-sm font-semibold">Join our Community</h2>
           <div className="flex justify-center gap-3">
             <button
               type="button"

@@ -1,8 +1,9 @@
 "use client";
 
 import { useChat as useAIChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { useEffect, useMemo } from 'react';
+import { DefaultChatTransport, generateId } from 'ai';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { AiChatAuthenticationError, AiSendAttempt } from '@/lib/ai-send-outcome';
 
 import {
   getAIUIMessageText,
@@ -33,10 +34,19 @@ export default function AiChatEngine({
   onReady,
   onStatusChange,
 }: AiChatEngineProps) {
+  const activeAttemptRef = useRef<AiSendAttempt | null>(null);
+  const retryMessageRef = useRef<{ id: string; text: string } | null>(null);
+  const historyRevisionRef = useRef(0);
   const aiTransport = useMemo(
     () => new DefaultChatTransport<AIUIMessage>({
       api: '/api/chat/ai/send',
       credentials: 'same-origin',
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        // The SDK otherwise discards HTTP status and throws only response text.
+        if (response.status === 401) throw new AiChatAuthenticationError();
+        return response;
+      },
       prepareSendMessagesRequest: ({ body, id, messageId, messages, trigger }) => {
         const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user');
         return {
@@ -57,12 +67,54 @@ export default function AiChatEngine({
   const aiChat = useAIChat<AIUIMessage>({
     experimental_throttle: 60,
     transport: aiTransport,
+    onError: (error) => {
+      if (activeAttemptRef.current) activeAttemptRef.current.fail(error);
+      else onError(error);
+    },
+    onFinish: (result) => activeAttemptRef.current?.finish(result),
   });
 
   const { sendMessage, setMessages, stop } = aiChat;
+  const sendWithOutcome = useCallback<AiChatHandle['sendMessage']>(async (message, options) => {
+    if (activeAttemptRef.current) return { status: 'failed', error: new Error('Wait for the current response before sending another question.') };
+    const attempt = new AiSendAttempt();
+    const historyRevision = historyRevisionRef.current;
+    const retry = retryMessageRef.current?.text === message.text ? retryMessageRef.current : null;
+    const id = retry?.id ?? generateId();
+    activeAttemptRef.current = attempt;
+    try {
+      await sendMessage({ id, role: 'user', parts: [{ type: 'text', text: message.text }], ...(retry ? { messageId: retry.id } : {}) }, options);
+    } catch (error) {
+      attempt.fail(error instanceof Error ? error : new Error('Neural Seed could not send this question.'));
+    }
+    const result = attempt.outcome();
+    if (activeAttemptRef.current === attempt) activeAttemptRef.current = null;
+    retryMessageRef.current = result.status === 'accepted' || historyRevision !== historyRevisionRef.current ? null : { id, text: message.text };
+    if (result.status !== 'accepted') {
+      setMessages(current => current.map(entry => entry.id === id
+        ? { ...entry, metadata: { ...entry.metadata, deliveryStatus: result.status } }
+        : entry));
+    }
+    return result;
+  }, [sendMessage, setMessages]);
+
+  const stopWithOutcome = useCallback(() => {
+    activeAttemptRef.current?.cancel();
+    return stop();
+  }, [stop]);
+  useEffect(() => () => { void stopWithOutcome(); }, [stopWithOutcome]);
+
+  const replaceHistory = useCallback<AiChatHandle['setMessages']>(messages => {
+    // Refetched history may not contain a locally failed question. Its old id
+    // must not be sent as a replacement target in the SDK's new message list.
+    retryMessageRef.current = null;
+    historyRevisionRef.current += 1;
+    setMessages(messages);
+  }, [setMessages]);
+
   useEffect(() => {
-    onReady({ sendMessage, setMessages, stop });
-  }, [onReady, sendMessage, setMessages, stop]);
+    onReady({ sendMessage: sendWithOutcome, setMessages: replaceHistory, stop: stopWithOutcome });
+  }, [onReady, replaceHistory, sendWithOutcome, stopWithOutcome]);
 
   useEffect(() => {
     onStatusChange(aiChat.status);
@@ -71,12 +123,6 @@ export default function AiChatEngine({
   useEffect(() => {
     onMessagesChange(aiChat.messages);
   }, [aiChat.messages, onMessagesChange]);
-
-  useEffect(() => {
-    if (aiChat.error) {
-      onError(aiChat.error);
-    }
-  }, [aiChat.error, onError]);
 
   return null;
 }

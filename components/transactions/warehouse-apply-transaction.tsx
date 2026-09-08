@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import GameTransaction from "./game-transaction";
+import React, { useRef } from "react";
+import GameTransaction, { type GameTransactionProps } from "./game-transaction";
 import { landAbi } from "@/public/abi/pixotchi-v3-abi";
 import { LAND_CONTRACT_ADDRESS } from "@/lib/contracts";
 
@@ -12,8 +12,8 @@ interface WarehouseApplyTransactionProps {
   plantId: number;
   amount: string; // human-friendly input
   mode: ApplyMode; // points (PTS) or lifetime (TOD)
-  onSuccess?: (tx: UntypedValue) => void;
-  onError?: (error: UntypedValue) => void;
+  onSuccess?: GameTransactionProps['onSuccess'];
+  onError?: GameTransactionProps['onError'];
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
@@ -30,6 +30,9 @@ export default function WarehouseApplyTransaction({
   buttonClassName = "h-11 min-h-11 px-3 text-sm w-auto",
   disabled = false,
 }: WarehouseApplyTransactionProps) {
+  // The mounted controller can outlive edits to its destination and amount.
+  // Keep its confirmed callback attached to the submitted draft.
+  const submittedSuccess = useRef<GameTransactionProps['onSuccess']>(undefined);
   // Contract expects:
   // - Points: 1e12 scaling (addedPoints)
   // - Lifetime: minutes (integer)
@@ -77,7 +80,8 @@ export default function WarehouseApplyTransaction({
       trackStreak={false}
       intentKey={`warehouse:apply:${landId}:${plantId}`}
       calls={calls}
-      onSuccess={onSuccess}
+      onButtonClick={() => { submittedSuccess.current = onSuccess; }}
+      onSuccess={(proof) => (submittedSuccess.current ?? onSuccess)?.(proof)}
       onError={onError}
       successMessage={mode === "points" ? `${amount} PTS added to plant #${plantId}` : `${amount} minutes added to plant #${plantId}`}
       buttonText={buttonText || (mode === "points" ? "Apply PTS" : "Add lifetime")}

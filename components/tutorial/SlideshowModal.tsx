@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSlideshow } from "./SlideshowProvider";
 import { slides as allSlides } from "./slides";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import type { SyntheticEvent } from "react";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { navigateToGameTab } from '@/lib/game-navigation';
 
 /*
  * No manual image preloading here any more: the old `new window.Image()` pass
@@ -58,7 +60,8 @@ function Art({ type }: { type?: string }) {
 }
 
 export default function SlideshowModal() {
-  const { open, index, slideIds, next, prev, close } = useSlideshow();
+  const { open, index, mode, slideIds, next, prev, close, finish, start } = useSlideshow();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const slides = useMemo(
     () => allSlides.filter((slide) => slideIds.includes(slide.id)),
     [slideIds],
@@ -70,6 +73,7 @@ export default function SlideshowModal() {
    * listener made close() run twice per press (double-persisting completion).
    */
   useEffectArrowKeys(open, next, prev);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' }); }, [index, mode]);
 
   // No `if (!open) return null` before the Dialog: unmounting in the same
   // commit that open flips false skipped Radix's exit animation and the
@@ -93,51 +97,42 @@ export default function SlideshowModal() {
         useSafeAreaInset={false}
         overlayClassName="bg-black/50 backdrop-blur-[var(--blur-overlay)]"
         frameClassName="items-end sm:items-center justify-center p-0 sm:p-4"
-        className="max-h-[90dvh] w-full max-w-md rounded-[var(--radius-dialog)] border border-[hsl(var(--edge-strong))] shadow-[var(--shadow-modal)]"
+        className="flex max-h-[90dvh] min-h-0 w-full max-w-md flex-col gap-0 overflow-hidden rounded-[var(--radius-dialog)] border border-[hsl(var(--edge-strong))] shadow-[var(--shadow-modal)]"
         onInteractOutside={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
         <DialogTitle className="sr-only">Pixotchi tutorial: {slide.title}</DialogTitle>
         <DialogDescription className="sr-only">
-          Step-by-step Pixotchi tutorial slide with navigation controls.
+          {mode === 'quick' ? 'A three-step introduction to your first plant and care.' : 'The full Pixotchi game guide. Skip saves your place so you can resume from About.'}
         </DialogDescription>
         {/* Header */}
-        <div className="surface-header-divider dialog-header-surface flex items-center justify-between px-4 py-3">
+        <div className="surface-header-divider dialog-header-surface flex shrink-0 items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2">
             <Image src="/PixotchiKit/Logonotext.svg" alt="Pixotchi" width={20} height={20} />
-            <span className="text-sm font-semibold">Tutorial</span>
+            <span className="text-sm font-semibold">{mode === 'quick' ? 'Quick start' : 'Game guide'}</span>
           </div>
           <Button variant="ghost" size="default" onClick={close} className="px-3 text-sm text-muted-foreground hover:text-foreground">Skip</Button>
         </div>
 
         {/* Body (dvh, matching the panel's own cap — vh over-measures on mobile) */}
-        <div className="surface-scroll-fade max-h-[65dvh] overflow-y-auto p-6 space-y-5">
+        <ScrollArea ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>
           </div>
           <Art type={slide.art} />
           <div className="text-foreground">{slide.content}</div>
-        </div>
+          {mode === 'full' && index > 0 && <Button variant="link" onClick={() => start({ reset: true })}>Restart guide</Button>}
+        </ScrollArea>
 
         {/* Footer */}
-        <div className="surface-footer-divider dialog-footer-surface px-4 py-3 safe-area-bottom">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              {/* Explicit property list (was transition-all with default easing). */}
-              {slides.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 rounded-full transition-[width,background-color] duration-[var(--motion-quick)] ease-[var(--ease-standard)] ${
-                    i === index ? "w-6 bg-primary" : "w-2 bg-muted"
-                  }`}
-                />
-              ))}
-            </div>
+        <div className="surface-footer-divider dialog-footer-surface shrink-0 px-4 py-3 safe-area-bottom">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs tabular-nums" aria-live="polite" aria-atomic="true">Step {index + 1} of {slides.length}<span className="sr-only">: {slide.title}</span></p>
             <div className="flex items-center gap-2">
               <Button variant="ghost" onClick={prev} disabled={index === 0}>Back</Button>
               {isLast ? (
-                <Button onClick={close}>Done</Button>
+                <Button onClick={() => { finish(); if (mode === 'quick') navigateToGameTab('dashboard'); }}>{mode === 'quick' ? 'Open my farm' : 'Done'}</Button>
               ) : (
                 <Button onClick={next}>Next</Button>
               )}
@@ -153,8 +148,9 @@ function useEffectArrowKeys(open: boolean, next: () => void, prev: () => void) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") next();
-      if (e.key === "ArrowLeft") prev();
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); next(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

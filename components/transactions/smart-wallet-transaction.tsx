@@ -1,16 +1,17 @@
 "use client";
 
 import GameTransaction, { type GameTransactionEffects } from './game-transaction';
-import type { LifecycleStatus, TransactionFeedbackMode } from './transaction-kit';
+import type { LifecycleStatus, TransactionFeedbackMode, TransactionPreflight } from './transaction-kit';
 import type { TransactionCall } from '@/lib/types';
 
 interface SmartWalletTransactionProps {
   calls: TransactionCall[];
   onSuccess?: (tx: UntypedValue) => void;
   onError?: (error: UntypedValue) => void;
-  onButtonClick?: () => void;
+  onButtonClick?: TransactionPreflight;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   buttonText: string;
+  pendingText?: string;
   buttonClassName?: string;
   disabled?: boolean;
   feedbackMode?: TransactionFeedbackMode;

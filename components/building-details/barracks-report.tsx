@@ -10,11 +10,14 @@ export function BarracksReportCard({
   mode,
   previewEnabled = false,
   onRetry,
+  timestampLabel,
 }: {
   report: BarracksRaidReportV2 | null;
   mode: ReportMode;
   previewEnabled?: boolean;
   onRetry?: () => void;
+  /** Preformatted time for deterministic server-rendered consumers. */
+  timestampLabel?: string;
 }) {
   if (report === null) {
     return <ResourceState status="error" title={`${mode === 'outgoing' ? 'Attack' : 'Defense'} report unavailable`} description="The report could not be loaded. Try again to check the result." onRetry={onRetry} />;
@@ -95,7 +98,7 @@ export function BarracksReportCard({
       <div className="text-xs text-muted-foreground">
         Settled {formatBarracksPoints(report.pendingPointsSettled)} pending PTS and{" "}
         {formatBarracksLifetime(report.pendingLifetimeSettled)} pending lifetime on{" "}
-        {new Date(Number(report.timestamp) * 1000).toLocaleString()}.
+        {timestampLabel ?? new Date(Number(report.timestamp) * 1000).toLocaleString()}.
       </div>
     </div>
   );

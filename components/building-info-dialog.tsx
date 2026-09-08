@@ -2,6 +2,7 @@
 
 import { getVillageProductionRates } from '@/lib/land-production';
 import { ResourceValue } from '@/components/ui/resource-value';
+import { ResourceState } from '@/components/ui/resource-state';
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
@@ -28,12 +29,12 @@ interface BuildingInfoDialogProps {
 
 // Roulette game info
 const rouletteInfo = {
-  description: "Play European Roulette with a true 2.7% house edge. Place bets on numbers, colors, or ranges and spin to win tokens!",
+  description: "Play European Roulette with a single zero. Bet on numbers, colors, or ranges, then reveal the result.",
   features: [
     "European roulette (single zero, 37 pockets)",
-    "Commit-reveal mechanism for provably fair results",
+    "Results determined from a future block hash",
     "Multiple bet types with different odds",
-    "Win up to 35x your bet on single numbers"
+    "A winning single-number bet returns 36× its stake, including 35× profit"
   ],
   betTypes: {
     "Straight (Single Number)": "35:1 payout",
@@ -63,8 +64,8 @@ const blackjackInfo = {
     "Surrender": "Forfeit half your bet"
   },
   payouts: {
-    "Blackjack (Natural 21)": "3:2 (1.5x bet)",
-    "Win": "1:1 (even money)",
+    "Blackjack (Natural 21)": "2.5× total return",
+    "Win": "2× total return",
     "Push (Tie)": "Bet returned",
     "Surrender": "Half bet returned"
   }
@@ -72,17 +73,17 @@ const blackjackInfo = {
 
 // Baccarat game info
 const baccaratInfo = {
-  description: "Play Punto Banco Baccarat with Player, Banker, and Tie bets. Place a bet, wait one block, then reveal the round.",
+  description: "Play Punto Banco Baccarat with Player, Banker, and Tie bets. Place a bet, then reveal the round when it is ready.",
   features: [
     "Classic casino Baccarat with no player decisions after betting",
     "Block reveal mechanism matching Roulette",
     "Player and Banker bets push on Tie",
-    "Banker wins pay with standard 5% commission"
+    "Banker wins pay after the current commission"
   ],
   payouts: {
     "Player": "1:1 (2x return)",
-    "Banker": "0.95:1 profit (1.95x return)",
-    "Tie": "8:1 profit (9x return)",
+    "Banker": "See current rules",
+    "Tie": "See current rules",
     "Player/Banker on Tie": "Bet returned"
   }
 };
@@ -91,15 +92,15 @@ const buildingInfo = {
   // Village Buildings (Production-Focused)
   "village-0": { // Solar Panels
     name: "Solar Panels",
-    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
+    description: "Solar Panels turn sunlight into resources for your plants.",
   },
   "village-3": { // Soil Factory
     name: "Soil Factory",
-    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
+    description: "Soil Factory produces resources to help your plants grow.",
   },
   "village-5": { // Bee Farm
     name: "Bee Farm",
-    description: "Generates production for your plants. Current rates and upgrade requirements are read from the selected land.",
+    description: "Bee Farm builds up resources you can save for a plant that needs them.",
   },
   // Town Buildings (Utility-Focused)
   "town-1": { // Stake House
@@ -129,23 +130,23 @@ const buildingInfo = {
       "Create limit orders to sell SEED for LEAF or LEAF for SEED at your chosen price.",
       "Take existing orders from the live book when price and depth fit your plan.",
       "Uses your owned land for marketplace permissions; trades are token swaps only.",
-      "Plant items, fences, and garden boosts stay in the plant Marketplace on the Farm tab."
+      "Plant items, fences, and garden boosts are in Plant care on the Farm tab."
     ]
   },
   "town-7": { // Farmer House
     name: "Farmer House",
     description: "Runs land quests that turn time and Farmer House capacity into token, XP, and lifetime rewards.",
     features: [
-      "Start quests, wait for them to complete, then finalize to claim the result.",
+      "Start a quest, return your farmer when it finishes, then open the loot bag before its deadline.",
       "Each level unlocks one more active quest slot, up to three simultaneous quests.",
-      "Quest rewards can include LEAF, SEED, land XP, and Plant Lifetime.",
+      "Quest rewards can include LEAF, SEED, land XP, plant points, and plant lifetime.",
       "Higher levels matter most for players who want more parallel quest uptime."
     ],
   },
   "town-6": { // Casino
     name: "Casino",
     isCasino: true, // Flag to show game toggle
-    description: "Play Roulette, Blackjack, or Baccarat with provably fair onchain randomness!"
+    description: "Roulette and Baccarat reveal results using block-based randomness. Blackjack uses verified server-signed cards."
   },
   "town-8": { // Barracks
     name: "Barracks",
@@ -157,7 +158,7 @@ const buildingInfo = {
 const PLANT_POINTS_DECIMALS = 12;
 const XP_DECIMALS = 18;
 const INFO_NESTED_SURFACE_CLASS =
-  "building-subpanel-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3";
+  "surface-subpanel rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-[12px] py-3";
 
 function formatBarracksPoints(value: bigint): string {
   return formatTokenAmountPrecise(value, PLANT_POINTS_DECIMALS, 2);
@@ -189,7 +190,7 @@ function InfoSection({
 
 function InfoRows({ children }: { children: React.ReactNode }) {
   return (
-    <div className="chromatic-white-surface divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-background/45 px-3 py-1.5 text-sm shadow-[var(--shadow-hairline)]">
+    <div className="@container/info-rows surface-lifted min-w-0 divide-y divide-border/45 rounded-[var(--radius-control)] border border-border/60 bg-background/45 px-[12px] py-1.5 text-sm shadow-[var(--shadow-hairline)]">
       {children}
     </div>
   );
@@ -207,9 +208,9 @@ function InfoRow({
   valueClassName?: string;
 }) {
   return (
-    <div className="flex min-h-9 items-start justify-between gap-3 py-2">
-      <span className={cn("min-w-0 text-muted-foreground", labelClassName)}>{label}</span>
-      <span className={cn("shrink-0 text-right font-medium text-foreground", valueClassName)}>{value}</span>
+    <div className="flex min-h-9 flex-col items-start justify-between gap-x-3 gap-y-1 py-2 @min-[10rem]/info-rows:flex-row">
+      <span className={cn("min-w-0 max-w-full text-muted-foreground [overflow-wrap:anywhere]", labelClassName)}>{label}</span>
+      <span className={cn("min-w-0 max-w-full self-end text-right font-medium text-foreground [overflow-wrap:anywhere] @min-[10rem]/info-rows:shrink-0 @min-[10rem]/info-rows:self-auto", valueClassName)}>{value}</span>
     </div>
   );
 }
@@ -227,15 +228,15 @@ function BarracksTroopTile({
 }) {
   return (
     <div className={INFO_NESTED_SURFACE_CLASS}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="inline-flex items-center gap-2">
-          <Image src={icon} alt={title} width={18} height={18} className="h-4.5 w-4.5 object-contain" />
-          <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="inline-flex min-w-0 max-w-full items-center gap-2">
+          <Image src={icon} alt={title} width={18} height={18} className="h-4.5 w-4.5 shrink-0 object-contain" />
+          <div className="min-w-0 [overflow-wrap:anywhere]">
             <div className="text-sm font-semibold text-foreground">{title}</div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{role}</div>
+            <div className="text-xs text-muted-foreground">{role}</div>
           </div>
         </div>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="ml-auto text-right text-xs text-muted-foreground">
           {formatDuration(Number(troop.trainingTimePerTroop))} train
         </div>
       </div>
@@ -245,7 +246,7 @@ function BarracksTroopTile({
           <InfoRow
             label="Strength"
             value={
-              <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex max-w-full flex-wrap items-center justify-end gap-x-1.5 gap-y-1">
                 <span>{troop.troopAttackStrength.toString()}</span>
                 <Image src="/icons/attackpwr.svg" alt="Attack power" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
                 <span>/</span>
@@ -269,8 +270,9 @@ function BarracksTroopTile({
 
 function BarracksInfoContent({ open }: { open: boolean }) {
   const [configV2, setConfigV2] = useState<BarracksConfigV2 | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(open);
   const [error, setError] = useState<string | null>(null);
+  const [readVersion, setReadVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,23 +312,18 @@ function BarracksInfoContent({ open }: { open: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, readVersion]);
 
   if (loading && !configV2) {
     return (
-      <InfoSection title="Command Brief">
-        <p className="text-sm text-muted-foreground">Loading current Barracks rules...</p>
-      </InfoSection>
+      <ResourceState status="loading" title="Loading Barracks rules…" description="Checking the current training and raid rules." className="min-h-32" />
     );
   }
 
   if (!configV2) {
     return (
-      <InfoSection title="Command Brief">
-        <p className="text-sm text-muted-foreground">
-          {error || 'Barracks rules are unavailable right now.'}
-        </p>
-      </InfoSection>
+      <ResourceState status="error" title="Barracks rules unavailable" description={error ?? 'Try loading the current rules again.'}
+        onRetry={() => setReadVersion(value => value + 1)} />
     );
   }
 
@@ -404,6 +401,10 @@ export default function BuildingInfoDialog({
   // Town tuples have no production fields. This dialog stays mounted even
   // while closed, so calculating Village rates here would crash the Farm tab.
   const production = isProductionBuilding ? getVillageProductionRates(building) : null;
+  const producedResources = [
+    building.productionRatePlantPointsPerDay > BigInt(0) ? 'plant points' : null,
+    building.productionRatePlantLifetimePerDay > BigInt(0) ? 'plant lifetime' : null,
+  ].filter(Boolean).join(' and ');
   const isUtilityBuilding = buildingType === 'town' && 'features' in info;
   const isCasino = 'isCasino' in info && info.isCasino;
   const isBarracks = 'isBarracks' in info && info.isBarracks;
@@ -426,12 +427,13 @@ export default function BuildingInfoDialog({
         <DialogHeader className="pb-4">
           <DialogTitle>{info.name}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            {isCasino ? info.description : info.description}
+            {info.description}
+            {isProductionBuilding && ` ${producedResources ? `This level produces ${producedResources}. ` : ''}Collect its output into Warehouse, then choose which plant receives it.`}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="pr-1">
-          <div className="building-subpanel-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-3.5">
+          <div className="surface-subpanel space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] px-[14px] py-3.5">
             {/* Casino Game Toggle */}
             {isCasino && (
               <>
@@ -495,6 +497,7 @@ export default function BuildingInfoDialog({
 
                 {selectedGame === 'roulette' && (
                   <InfoSection title="Bet Types & Payouts">
+                    <p className="text-xs text-muted-foreground">Ratios show profit on a winning bet. Your original stake is also returned.</p>
                     <InfoRows>
                       {Object.entries(rouletteInfo.betTypes).map(([betType, payout]) => (
                         <InfoRow
@@ -525,6 +528,7 @@ export default function BuildingInfoDialog({
                     </InfoSection>
 
                     <InfoSection title="Payouts">
+                      <p className="text-xs text-muted-foreground">Total returns include your original stake.</p>
                       <InfoRows>
                         {Object.entries(blackjackInfo.payouts).map(([result, payout]) => (
                           <InfoRow
@@ -541,6 +545,7 @@ export default function BuildingInfoDialog({
 
                 {selectedGame === 'baccarat' && (
                   <InfoSection title="Payouts">
+                    <p className="text-xs text-muted-foreground">Open Baccarat to check the current Banker commission and Tie payout before betting.</p>
                     <InfoRows>
                       {Object.entries(baccaratInfo.payouts).map(([result, payout]) => (
                         <InfoRow
@@ -567,14 +572,14 @@ export default function BuildingInfoDialog({
                   <InfoRow label="Current level" value={`Level ${building.level}/${building.maxLevel}`} />
                   {building.productionRatePlantPointsPerDay > BigInt(0) && (
                     <InfoRow
-                      label={building.isUpgrading ? 'PTS / day after upgrade' : 'PTS / day'}
+                      label={building.isUpgrading ? 'Plant points / day after upgrade' : 'Plant points per day'}
                       value={<ResourceValue resource="points">{formatProductionRate(production.pointsPerDayWhenReady)}</ResourceValue>}
                       valueClassName="text-primary"
                     />
                   )}
                   {building.productionRatePlantLifetimePerDay > BigInt(0) && (
                     <InfoRow
-                      label={building.isUpgrading ? 'Lifetime / day after upgrade' : 'Lifetime per day'}
+                      label={building.isUpgrading ? 'Plant lifetime / day after upgrade' : 'Plant lifetime per day'}
                       value={<ResourceValue resource="lifetime">{formatLifetimeProduction(production.lifetimePerDaySecondsWhenReady)}</ResourceValue>}
                       valueClassName="text-primary"
                     />
@@ -600,7 +605,7 @@ export default function BuildingInfoDialog({
               <InfoSection title="Upgrade Costs">
                 <InfoRows>
                   <InfoRow
-                    label={`Next upgrade (Level ${building.level + 1})`}
+                    label={building.isUpgrading ? `Current upgrade (Level ${building.level})` : `Next upgrade (Level ${building.level + 1})`}
                     value={<ResourceValue resource="leaf">{formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF</ResourceValue>}
                     valueClassName="text-amber-600"
                   />

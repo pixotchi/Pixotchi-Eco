@@ -17,8 +17,8 @@ const badgeVariants = cva(
            ink-token rule documented in globals.css.) */
         warning: "border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.16)] text-[hsl(var(--warning-strong))]",
         danger: "border-destructive/25 bg-destructive/10 text-destructive",
-        info: "border-[hsl(var(--info)/0.25)] bg-[hsl(var(--info)/0.12)] text-[hsl(var(--info))]",
-        chain: "border-primary/25 bg-primary/10 text-primary",
+        info: "border-[hsl(var(--info)/0.25)] bg-[hsl(var(--info)/0.12)] text-info-strong",
+        chain: "border-primary/25 bg-primary/10 text-primary-strong",
         special: "border-[hsl(var(--value)/0.28)] bg-[hsl(var(--value)/0.1)] text-value",
       },
     },

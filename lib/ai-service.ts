@@ -584,6 +584,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
         name: strain.name,
         priceDisplay: strain.priceDisplay,
         remainingSupply: strain.remainingSupply,
+        strainInitialTODSeconds: strain.strainInitialTODSeconds,
       })),
     };
   }
@@ -603,6 +604,7 @@ function compactToolPromptValue(toolName: string, output: UntypedValue): Untyped
         name: strain.name,
         priceDisplay: strain.priceDisplay,
         remainingSupply: strain.remainingSupply,
+        strainInitialTODSeconds: strain.strainInitialTODSeconds,
       })),
       summary: data?.summary,
       ui: data?.ui,

@@ -3,11 +3,12 @@
 import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ResourceState } from "@/components/ui/resource-state";
+import { useBatchReconciliation } from '@/hooks/useBatchReconciliation';
 import { useBalances } from '@/lib/balance-context';
-import { getLandBuildingsBatch,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
+import { getLandBuildingsBatch,getReadClient,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
-import { extractTransactionHash } from '@/lib/transaction-utils';
+import { extractTransactionHash,getHighestTransactionReceiptBlock } from '@/lib/transaction-utils';
 import { Land } from '@/lib/types';
 import { cn,formatLifetimeProduction,formatScore } from '@/lib/utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
@@ -20,10 +21,12 @@ import { TokenAmount } from '@/components/ui/token-amount';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
+import type { LifecycleStatus } from './transaction-kit';
 
 interface BatchClaimCardProps {
   lands: Land[];
   onSuccess?: () => void;
+  onOpenBuildings?: () => void;
   variant?: 'card' | 'embedded';
   showWhenEmpty?: boolean;
   className?: string;
@@ -35,6 +38,8 @@ interface ClaimableItem {
   points: bigint;
   lifetime: bigint;
 }
+
+const claimKey = (item: ClaimableItem) => `${item.landId}/${item.buildingId}`;
 
 // Burn configuration
 const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_BURN_AMOUNT || 500);
@@ -75,24 +80,21 @@ const MIN_LIFETIME_TO_CLAIM = BigInt(15); // 15 seconds of TOD minimum (~1.3 min
 // Tune via NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE if simulation fails
 const MAX_BATCH_SIZE = Number(process.env.NEXT_PUBLIC_BATCH_CLAIM_MAX_SIZE || 150);
 
-const embeddedSurfaceClassName = "chromatic-white-surface rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]";
+const embeddedSurfaceClassName = "surface-lifted rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]";
 
 export default function BatchClaimCard({
   lands,
   onSuccess,
+  onOpenBuildings,
   variant = 'card',
   showWhenEmpty = false,
   className
 }: BatchClaimCardProps) {
-  const [loading, setLoading] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const scanGeneration = useRef(0);
-  const [claimableItems, setClaimableItems] = useState<ClaimableItem[]>([]);
-  const [lastScannedLandIds, setLastScannedLandIds] = useState<string>("");
   // Track total claimed across batches for progress display
   const [totalClaimedThisSession, setTotalClaimedThisSession] = useState(0);
-  // Key to force re-mount of Transaction component after each batch (resets button state)
-  const [txKey, setTxKey] = useState(0);
+  const [submittedItems, setSubmittedItems] = useState<ClaimableItem[] | null>(null);
+  const submittedItemsRef = useRef<ClaimableItem[]>([]);
+  const retiredProofRef = useRef<string | undefined>(undefined);
   const { isSmartWallet } = useSmartWallet();
   const {
     pixotchiBalance,
@@ -117,19 +119,13 @@ export default function BatchClaimCard({
   );
 
   const scanIdentity = (address?.toLowerCase() ?? '') + ':' + landIdsHash;
-  const identityRef = useRef(scanIdentity);
-  identityRef.current = scanIdentity;
-  const scanLands = useCallback(async () => {
-    if (lands.length === 0) return;
-
-    const generation = ++scanGeneration.current;
-    setLoading(true);
-    setScanError(null);
-    try {
-      const landIds = lands.map(l => l.tokenId);
-      const results = await getLandBuildingsBatch(landIds, { requireComplete: true });
-      if (generation !== scanGeneration.current || identityRef.current !== scanIdentity) return;
-
+  const readProduction = useCallback(async (minimumBlock?: bigint) => {
+      const landIds = landIdsHash ? landIdsHash.split(',').map(BigInt) : [];
+      if (landIds.length === 0) return [];
+      const readClient = getReadClient();
+      const currentBlock = await readClient.getBlockNumber({ cacheTime: 0 });
+      if (minimumBlock !== undefined && currentBlock < minimumBlock) throw new Error('Production node is behind the receipt.');
+      const results = await getLandBuildingsBatch(landIds, { requireComplete: true, readClient, blockNumber: currentBlock });
       const items: ClaimableItem[] = [];
 
       results.forEach(result => {
@@ -157,41 +153,23 @@ export default function BatchClaimCard({
         });
       });
 
-      setClaimableItems(items);
-      setLastScannedLandIds(scanIdentity);
-    } catch (error) {
-      if (generation !== scanGeneration.current || identityRef.current !== scanIdentity) return;
-      console.error("Failed to batch scan lands:", error);
-      setScanError("Production could not be checked. Retry to see what is ready to collect.");
-      setClaimableItems([]);
-      setLastScannedLandIds(scanIdentity);
-    } finally {
-      if (generation === scanGeneration.current && identityRef.current === scanIdentity) setLoading(false);
-    }
-  }, [lands, scanIdentity]);
+      return items;
+  }, [landIdsHash]);
+
+  const { items: claimableItems, loading, error: scanError, ready: scanReady, coordinator, refresh: scanLands } = useBatchReconciliation({
+    identity: scanIdentity,
+    address,
+    read: readProduction,
+    key: claimKey,
+    errorMessage: 'Production could not be checked. Retry before collecting another batch.',
+  });
 
   useEffect(() => {
-    const generationRef = scanGeneration;
-    if (scanIdentity === lastScannedLandIds) return;
-    ++scanGeneration.current;
-    setClaimableItems([]);
-    setScanError(null);
-    setLoading(false);
-    // Scan when ownership or the land list changes.
-    if (scanIdentity !== lastScannedLandIds) {
-      scanLands();
-      setTotalClaimedThisSession(0); // Reset progress for new session
-      setTxKey(0); // Reset transaction component key
-    }
-    return () => { ++generationRef.current; };
-  }, [scanIdentity, lastScannedLandIds, scanLands]);
-
-  // Listen for global building refresh events to re-scan
-  useEffect(() => {
-    const handler = () => scanLands();
-    window.addEventListener('buildings:refresh', handler);
-    return () => window.removeEventListener('buildings:refresh', handler);
-  }, [scanLands]);
+    setTotalClaimedThisSession(0);
+    setSubmittedItems(null);
+    submittedItemsRef.current = [];
+    retiredProofRef.current = undefined;
+  }, [scanIdentity]);
 
   // Calculate batch info
   const totalBatches = Math.ceil(claimableItems.length / MAX_BATCH_SIZE);
@@ -200,19 +178,14 @@ export default function BatchClaimCard({
   // Current batch is always the first MAX_BATCH_SIZE items
   // After each successful claim, we re-scan and the claimed items are removed
   const currentBatchItems = useMemo(() =>
-    claimableItems.slice(0, MAX_BATCH_SIZE),
-    [claimableItems]
+    submittedItems ?? claimableItems.slice(0, MAX_BATCH_SIZE),
+    [claimableItems, submittedItems]
   );
 
-  // Total points/lifetime across ALL items (for display)
-  const totalPoints = useMemo(() =>
-    claimableItems.reduce((acc, item) => acc + item.points, BigInt(0)),
-    [claimableItems]
-  );
-
-  const totalLifetime = useMemo(() =>
-    claimableItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)),
-    [claimableItems]
+  // Reward estimates describe the exact subset included in this transaction.
+  const batchLifetime = useMemo(() =>
+    currentBatchItems.reduce((acc, item) => acc + item.lifetime, BigInt(0)),
+    [currentBatchItems]
   );
 
   // Current batch points/lifetime (what will be claimed this tx)
@@ -223,6 +196,7 @@ export default function BatchClaimCard({
 
   // Only create calls for current batch
   const calls = useMemo(() => {
+    if (currentBatchItems.length === 0) return [];
     // 1. Burn transaction (First call in batch)
     const burnCall = {
       address: PIXOTCHI_TOKEN_ADDRESS as `0x${string}`,
@@ -254,9 +228,24 @@ export default function BatchClaimCard({
     return `batch-claim:${pairs}`;
   }, [currentBatchItems]);
 
-  const scanPending = lands.length > 0 && scanIdentity !== lastScannedLandIds;
+  const handleBatchStatus = useCallback((status: LifecycleStatus) => {
+    if (status.statusName === 'confirmedSyncing' && status.statusData.callsMatch !== false) {
+      const proof = extractTransactionHash(status.statusData) ?? status.statusData.transactionId;
+      if (proof && retiredProofRef.current !== proof) {
+        retiredProofRef.current = proof;
+        const confirmedItems = submittedItemsRef.current.length ? submittedItemsRef.current : currentBatchItems;
+        submittedItemsRef.current = confirmedItems;
+        setSubmittedItems(confirmedItems);
+        coordinator.retire(confirmedItems,
+          getHighestTransactionReceiptBlock(status.statusData.transactionReceipts));
+      }
+    }
+    if (['idle', 'success', 'reverted', 'error', 'failed', 'cancelled', 'canceled', 'rejected', 'transactionRejected', 'userRejected', 'buildError'].includes(status.statusName)) {
+      setSubmittedItems(null);
+    }
+  }, [coordinator, currentBatchItems]);
 
-  if ((loading || (showWhenEmpty && scanPending)) && claimableItems.length === 0) {
+  if (!submittedItems && !scanError && !scanReady && claimableItems.length === 0) {
     const loadingContent = (
       <div className="flex justify-center items-center text-muted-foreground gap-2">
         <Loader2 className="w-4 h-4 animate-spin" />
@@ -281,10 +270,10 @@ export default function BatchClaimCard({
     );
   }
 
-  if (scanError) return <ResourceState status="error" title="Production unavailable" description={scanError} onRetry={() => void scanLands()} className={className} />;
+  if (scanError && !submittedItems) return <ResourceState status="error" title="Production unavailable" description={scanError} onRetry={() => void scanLands()} className={className} />;
 
   // Hide if nothing to claim
-  if (claimableItems.length === 0) {
+  if (claimableItems.length === 0 && !submittedItems) {
     if (showWhenEmpty) {
       const emptyContent = (
         <>
@@ -292,17 +281,11 @@ export default function BatchClaimCard({
             <span className="font-semibold">Batch Claim</span>
             <span className="text-xs text-muted-foreground">Nothing ready</span>
           </div>
-          {!isSmartWallet && (
-            <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                <Lock className="h-3 w-3" />
-                Smart Wallet Required
-              </div>
-            </div>
-          )}
           <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-3 text-sm text-muted-foreground">
-            No accumulated village production is ready to claim yet.
+            No buildings meet the batch minimum yet: 0.1 PTS or 15 seconds of plant lifetime.
+            Smaller amounts can still be collected from each village building.
           </div>
+          {onOpenBuildings && <Button variant="outline" onClick={onOpenBuildings}>View village production</Button>}
         </>
       );
 
@@ -337,34 +320,34 @@ export default function BatchClaimCard({
               </span>
             )}
             <span className="text-muted-foreground">
-              {claimableItems.length} buildings remaining
+              {claimableItems.length} {claimableItems.length === 1 ? 'building' : 'buildings'} remaining
             </span>
           </div>
         </div>
 
-        {/* Show totals for all items */}
+        <p className="text-xs text-muted-foreground">This batch: {currentBatchItems.length} {currentBatchItems.length === 1 ? 'building' : 'buildings'}</p>
         <div className="flex items-center justify-between gap-4 text-sm">
-          <div className="flex items-center gap-2">
+          {batchPoints > BigInt(0) && <div className="flex items-center gap-2">
             <Image src="/icons/pts.svg" alt="Points" width={16} height={16} className="w-4 h-4" />
             <span className="font-semibold text-primary">
-              +{formatScore(Number(totalPoints))} PTS
+              +{formatScore(Number(batchPoints))} PTS
             </span>
-          </div>
-          <div className="flex items-center gap-2">
+          </div>}
+          {batchLifetime > BigInt(0) && <div className="flex items-center gap-2">
             <Image src="/icons/tod.svg" alt="Lifetime" width={16} height={16} className="w-4 h-4" />
             <span className="font-semibold text-primary">
-              +{formatLifetimeProduction(totalLifetime)} lifetime
+              +{formatLifetimeProduction(batchLifetime)} lifetime
             </span>
-          </div>
+          </div>}
         </div>
 
         {/* Multi-batch info */}
         {hasMultipleBatches && (
           <div className="rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.1)] p-2">
-            <div className="flex items-center gap-2 text-[hsl(var(--info))] text-xs">
+            <div className="flex items-center gap-2 text-info-strong text-xs">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
               <span>
-                Large claim split into {totalBatches} batches of {MAX_BATCH_SIZE}.
+                Large claim split into {totalBatches} batches of up to {MAX_BATCH_SIZE} buildings.
                 This batch: {currentBatchItems.length} buildings ({formatScore(Number(batchPoints))} PTS)
               </span>
             </div>
@@ -372,14 +355,16 @@ export default function BatchClaimCard({
         )}
 
         {/* Gating Logic */}
-        {!isSmartWallet ? (
+        {!submittedItems && !isSmartWallet ? (
           <div className="space-y-2 rounded-[var(--radius-control)] border border-primary/20 bg-primary/10 p-3">
             <div className="flex items-center gap-2 text-primary font-bold text-xs">
               <Lock className="w-3 h-3" />
               Smart Wallet Required
             </div>
+            <p className="text-sm text-muted-foreground">You can collect from each village building with your current wallet. Batch collection combines those actions in a smart wallet.</p>
+            {onOpenBuildings && <Button variant="outline" onClick={onOpenBuildings}>Collect from a building</Button>}
           </div>
-        ) : !pixotchiBalanceKnown ? (
+        ) : !submittedItems && !pixotchiBalanceKnown ? (
           <div className="space-y-2 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />
@@ -396,7 +381,7 @@ export default function BatchClaimCard({
               </>
             )}
           </div>
-        ) : !hasEnoughTokens ? (
+        ) : !submittedItems && !hasEnoughTokens ? (
           <div className="space-y-1 rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/10 p-3">
             <div className="flex items-center gap-2 text-value font-bold text-xs">
               <Lock className="w-3 h-3" />
@@ -409,36 +394,42 @@ export default function BatchClaimCard({
         ) : (
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs px-1">
-              <span className="text-muted-foreground">Cost:</span>
+              <span className="text-muted-foreground">This batch cost:</span>
               <ResourceValue resource="pixotchi" className="font-mono text-primary font-semibold">
                 {BURN_AMOUNT_TOKENS} PIXOTCHI
               </ResourceValue>
             </div>
+            {hasMultipleBatches && <p className="px-1 text-xs text-muted-foreground">Remaining total cost: {(totalBatches * BURN_AMOUNT_TOKENS).toLocaleString()} PIXOTCHI across {totalBatches} batches.</p>}
+            {scanError && <ResourceState status="error" title="Production refresh delayed" description={scanError} onRetry={() => void scanLands()} />}
+            {loading && <p role="status" className="text-xs text-muted-foreground">Updating production before the next batch…</p>}
             <SmartWalletTransaction
               successFeedback="feature"
-              effects={{ domains: ["plants", "balances", "rewards"] }}
-              key={txKey} // Force re-mount to reset button state after each batch
+              effects={{ domains: ["buildings", "lands", "balances", "rewards"] }}
               intentKey={batchClaimIntentKey}
               calls={calls}
               buttonText={hasMultipleBatches ? `Burn & Claim Batch (${currentBatchItems.length})` : "Burn & Claim All"}
               buttonClassName="h-11 min-h-11 w-full text-sm font-bold"
+              disabled={!scanReady || !isSmartWallet || !hasEnoughTokens}
+              onButtonClick={() => {
+                coordinator.assertReady(currentBatchItems);
+                submittedItemsRef.current = currentBatchItems;
+                setSubmittedItems(currentBatchItems);
+              }}
+              onStatusUpdate={handleBatchStatus}
               onSuccess={(tx) => {
-                const claimedCount = currentBatchItems.length;
-                const remainingCount = claimableItems.length - claimedCount;
+                const claimedCount = submittedItemsRef.current.length || currentBatchItems.length;
+                const remainingCount = coordinator.state.items.length;
                 const newTotalClaimed = totalClaimedThisSession + claimedCount;
 
                 setTotalClaimedThisSession(newTotalClaimed);
-                setTxKey(k => k + 1); // Increment key to reset Transaction component
 
                 if (remainingCount > 0) {
-                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed ${claimedCount} buildings! ${remainingCount} remaining.`);
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} PIXOTCHI and collected production from ${claimedCount} ${claimedCount === 1 ? 'building' : 'buildings'}. ${remainingCount} remaining.`);
                 } else {
-                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} tokens & Claimed all ${newTotalClaimed} buildings!`);
+                  toast.success(`Burned ${BURN_AMOUNT_TOKENS} PIXOTCHI and collected production from ${claimedCount} ${claimedCount === 1 ? 'building' : 'buildings'}. All batches complete.`);
                 }
 
-                scanLands(); // Re-scan to update remaining items
                 if (onSuccess) onSuccess();
-                window.dispatchEvent(new Event('buildings:refresh'));
 
                 // Trigger claim production task for gamification
                 try {
@@ -450,7 +441,6 @@ export default function BatchClaimCard({
                   postMissionProgress(payload);
                 } catch { }
               }}
-              onError={() => toast.error("Batch claim failed")}
             />
           </div>
         )}

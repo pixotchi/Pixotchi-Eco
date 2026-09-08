@@ -34,10 +34,10 @@ assert.match(
   /requestBaseChatSessionRefresh\('chat-auth-failure', 15_000\)/,
 );
 
-const authController = projectFile("hooks/useAppAuthController.ts");
+const authController = projectFile("hooks/useBaseAuthAdapter.ts");
 assert.match(
   authController,
-  /ensureLocalTestWallet\(\);[\s\S]*completeBaseAuthentication\(testConnector as UntypedValue\);[\s\S]*finally[\s\S]*removeAutologin\(\)/,
+  /ensureLocalTestWallet\(\);[\s\S]*completeBaseAuthentication\(testConnector, attempt\)[\s\S]*finally[\s\S]*removeAutologin\(\)/,
 );
 
 const missionTracking = projectFile("lib/mission-tracking.ts");
@@ -71,7 +71,8 @@ assert.match(
 );
 
 const tasksDialog = projectFile("components/tasks/TasksInfoDialog.tsx");
-assert.match(tasksDialog, /summaryRequestGenerationRef/);
+assert.match(tasksDialog, /const generation = useRef\(0\)/);
+assert.match(tasksDialog, /!controller\.signal\.aborted && generation\.current === request/);
 assert.match(tasksDialog, /onMissionTrackingEvent/);
 assert.match(tasksDialog, /flushMissionProgressOutbox/);
 

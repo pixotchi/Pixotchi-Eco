@@ -1,5 +1,6 @@
 "use client";
 
+import { RED_NUMBERS } from '@/lib/casino-hardening-rules.mjs';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { usePerformanceMode } from '@/components/ui/performance-mode';
 
@@ -13,7 +14,7 @@ const EUROPEAN_WHEEL_NUMBERS = [
     5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ];
 
-const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+
 
 interface EuropeanRouletteWheelProps {
     spinning: boolean;

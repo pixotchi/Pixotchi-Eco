@@ -1,0 +1,77 @@
+/* Feature-owned styles; shared tokens and primitives remain in globals.css. */
+
+
+@keyframes stake-token-seed {
+  0%,
+  36%,
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+
+  50%,
+  82% {
+    opacity: 0;
+    transform: scale(0.82) rotate(-8deg);
+  }
+}
+
+@keyframes stake-token-leaf {
+  0%,
+  36%,
+  100% {
+    opacity: 0;
+    transform: scale(0.82) rotate(8deg);
+  }
+
+  50%,
+  82% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.status-token-cycle {
+  position: relative;
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 340px) {
+  .status-token-cycle {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .status-token-cycle img {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
+.stake-token-cycle-seed,
+.stake-token-cycle-leaf {
+  transform-origin: 50% 50%;
+  will-change: opacity, transform;
+}
+
+.stake-token-cycle-seed {
+  animation: stake-token-seed 2.8s var(--ease-standard) infinite;
+}
+
+.stake-token-cycle-leaf {
+  animation: stake-token-leaf 2.8s var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stake-token-cycle-seed,
+  .stake-token-cycle-leaf {
+    animation: none;
+  }
+
+  .stake-token-cycle-leaf {
+    opacity: 0;
+  }
+}

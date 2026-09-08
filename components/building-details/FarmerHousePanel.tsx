@@ -2,19 +2,25 @@
 
 import GameTransaction from '@/components/transactions/game-transaction';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
+import { ResourceState } from '@/components/ui/resource-state';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { QuestDifficultySelector } from './quest-difficulty-selector';
+import { QuestDifficultySummary } from './quest-difficulty-summary';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
-import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { getQuestSlotState, getUnlockedQuestSlots, type QuestSlot } from '@/lib/quest-slots';
+import { LAND_CONTRACT_ADDRESS, getReadClient } from '@/lib/contracts';
+import { requireQuestFinalizeReady } from '@/lib/quest-rewards-readiness';
+import { getQuestSlotState, getUnlockedQuestSlots, type QuestSlot, type QuestSlotState } from '@/lib/quest-slots';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
+import { useQuestConfiguration } from '@/hooks/useQuestConfiguration';
+import { formatDurationSeconds } from '@/lib/duration-display';
+import { BASE_SECONDS_PER_BLOCK, formatUpgradeDuration } from '@/lib/utils';
 import React from 'react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import { describeQuestResult, getQuestFinalizeResult, loadQuestResult, saveQuestResult, questResultScope, questFinalizeBlocksRemaining, QUEST_EXPIRED_STATUS, type QuestFinalizeResult } from '@/lib/quest-ui';
+import { describeQuestResult, getQuestFinalizeResult, loadQuestResult, saveQuestResult, questResultScope, questFinalizeBlocksRemaining, QUEST_FINALIZE_EXPIRY_BLOCKS, QUEST_EXPIRED_STATUS, type QuestFinalizeResult } from '@/lib/quest-ui';
 export { getQuestFinalizeOutcome, isQuestFinalizeExpired, QUEST_EXPIRED_STATUS, type QuestFinalizeOutcome } from '@/lib/quest-ui';
 import { useAccount,useBlockNumber } from 'wagmi';
 
@@ -30,6 +36,7 @@ const QUEST_STATUS_PILL_CLASS = 'rounded-[var(--radius-control)] bg-muted px-2 p
 const QUEST_RECONCILE_DELAYS_MS = [500, 1_000, 1_500, 2_500, 4_000, 6_000] as const;
 
 export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
+  const questConfiguration = useQuestConfiguration();
   const { address } = useAccount();
   const { isTabVisible } = useTabVisibility();
   const isDashboardVisible = isTabVisible('dashboard');
@@ -43,9 +50,16 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   // Resolved from diamond storage, not env: setQuestRewardsWallet can rotate the
   // payer, and the NEXT_PUBLIC_QUEST_* vars silently point at the pre-rotation
   // constant when unset, which reads as an empty pool and locks the panel.
-  const { isReady: isRewardsReady, isUnavailable: isRewardsUnavailable } =
+  const { isReady: isRewardsReady, isUnavailable: isRewardsUnavailable,
+    isRefreshing: isRewardsRefreshing, error: rewardsError, refresh: refreshRewards, requireReady: requireRewardsReady } =
     useQuestRewardsAvailability(isDashboardVisible);
   const questActionsBlocked = isRewardsUnavailable || !isRewardsReady;
+  const validateQuestReturn = async () => {
+    await requireRewardsReady();
+    if (currentScopeRef.current !== scope) {
+      throw new Error('Your wallet or land changed. Review the selected quest before returning.');
+    }
+  };
 
   const { slots: currentSlots, loading, error, refresh: fetchSlots } = useLandQuestSlots({
     owner: address, chainId: 8453, landId, enabled: farmerHouseLevel > 0,
@@ -67,12 +81,11 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const { data: liveBlock } = useBlockNumber({ chainId: 8453, watch: false });
   const currentBlock = liveBlock ?? BigInt(0);
 
-  const statusOf = (s: QuestSlot): string => {
-    // Until we know the current block, avoid guessing to prevent huge time estimates
-    if (currentBlock === BigInt(0)) return 'Loading';
-    const labels = { available: 'Available', cooldown: 'Cooldown', in_progress: 'In progress', ready_to_commit: 'Ready to commit', committed: 'Committed', expired: QUEST_EXPIRED_STATUS };
-    return labels[getQuestSlotState(s, currentBlock)];
-  };
+  const stateOf = (slot: QuestSlot): QuestSlotState | 'loading' => currentBlock === BigInt(0) ? 'loading' : getQuestSlotState(slot, currentBlock);
+  const statusOf = (slot: QuestSlot): string => ({
+    loading: 'Loading', available: 'Available', cooldown: 'Cooldown', in_progress: 'In progress',
+    ready_to_commit: 'Ready to return', committed: 'Loot bag ready', expired: QUEST_EXPIRED_STATUS,
+  })[stateOf(slot)];
 
   const progressPct = (s: QuestSlot) => {
     if (s.startBlock === BigInt(0)) return 0;
@@ -80,16 +93,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
     const done = Math.max(0, Math.min(total, Number(currentBlock - s.startBlock)));
     return total <= 0 ? 0 : (done / total) * 100;
   };
-  const blocksLeft = (target: bigint) => Math.max(0, Number(target - currentBlock));
-  const formatSeconds = (sec: number) => {
-    if (sec <= 0) return '0s';
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
+  const blocksLeft = (target: bigint) => target > currentBlock ? target - currentBlock : BigInt(0);
+  const blockTimeRemaining = (blocks: bigint) => formatDurationSeconds(blocks * BigInt(BASE_SECONDS_PER_BLOCK));
   const handleSuccess = async (opts?: { slotIndex?: number; awaitCommitted?: boolean; awaitUncommitted?: boolean; awaitInProgress?: boolean }) => {
     const operationLandId = landId;
     await fetchSlots();
@@ -107,10 +112,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
           const fresh = await fetchSlots();
           if (currentLandIdRef.current !== operationLandId || currentScopeRef.current !== scope) return;
           const s = fresh?.[opts.slotIndex];
-          const st = s ? statusOf(s) : undefined;
-          if (opts.awaitCommitted && st === 'Committed') break;
+          const st = s ? stateOf(s) : undefined;
+          if (opts.awaitCommitted && st === 'committed') break;
           if (opts.awaitUncommitted && s?.pseudoRndBlock === BigInt(0)) break;
-          if (opts.awaitInProgress && st === 'In progress') break;
+          if (opts.awaitInProgress && st === 'in_progress') break;
         } catch { }
       }
       await fetchSlots();
@@ -132,10 +137,10 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   };
 
   return (
-    <div className="space-y-3 pt-2">
-      <h4 className="font-semibold text-sm text-center">Quests</h4>
+    <div className="space-y-4">
+      <h4 className="font-semibold text-sm">Quests</h4>
       {loading ? (
-        <div className="text-center text-muted-foreground text-sm">Loading...</div>
+        <ResourceState status="loading" title="Loading quests…" description="Checking your farmers and quest slots." className="min-h-32" />
       ) : error ? (
         <div className="space-y-2 text-center text-sm">
           <p role="alert" className="text-destructive">{error}</p>
@@ -143,9 +148,16 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
         </div>
       ) : (
         <>
-          {isRewardsUnavailable && (
-            <div className="rounded-md border border-amber-300 bg-amber-100/60 px-3 py-2 text-xs text-amber-900">
-              Farmer House rewards wallet is being refilled or approved. Starting new quests and opening loot bags are paused to prevent failed transactions.
+          {questActionsBlocked && (
+            <div role="status" className="space-y-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <p>{rewardsError
+                ? "We couldn't check quest rewards. Retry before starting or returning. Existing loot bags can still be checked and opened."
+                : isRewardsUnavailable
+                  ? 'Quest rewards are temporarily unavailable. New quests and returning farmers are paused. Existing loot bags can still be checked and opened.'
+                  : 'Checking quest rewards…'}</p>
+              <Button type="button" size="sm" variant="outline" disabled={isRewardsRefreshing} onClick={() => void refreshRewards()}>
+                {isRewardsRefreshing ? 'Checking rewards…' : 'Retry rewards'}
+              </Button>
             </div>
           )}
           <div className="grid grid-cols-1 gap-2">
@@ -157,37 +169,49 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     <div className="text-xs text-muted-foreground">{statusOf(s)}</div>
                   </div>
                   <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
-                    {statusOf(s) === 'Loading' && (
+                    {stateOf(s) === 'loading' && (
                       <div className={QUEST_STATUS_PILL_CLASS}>Loading...</div>
                     )}
-                    {statusOf(s) === 'Ready to commit' && (
+                    {stateOf(s) === 'ready_to_commit' && (
                       <GameTransaction
                         effects="none"
                         intentKey={`quest:commit:${landId}:${idx}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questCommit', args: [landId, BigInt(idx)] }]}
                         buttonText="Return now"
-                        buttonClassName="h-11 min-h-11 w-full px-3 text-xs sm:w-auto"
+                        buttonClassName="h-11 min-h-11 w-full px-3 text-sm sm:w-auto"
                         hideStatus
+                        disabled={questActionsBlocked}
+                        onButtonClick={validateQuestReturn}
                         onSuccess={() => handleSuccess({ slotIndex: idx, awaitCommitted: true })}
                       />
                     )}
-                    {statusOf(s) === 'Committed' && (
+                    {stateOf(s) === 'committed' && (
                       <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                        <span className="text-xs text-muted-foreground">Loot bag ready</span>
-                        <GameTransaction
+                                                <GameTransaction
                           successFeedback="feature"
                           effects={{ domains: ["balances"] }}
                           intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Open now"
-                          buttonClassName="h-11 min-h-11 w-full px-3 text-xs sm:w-auto"
+                          buttonClassName="h-11 min-h-11 w-full px-3 text-sm sm:w-auto"
                           hideStatus
-                          disabled={questActionsBlocked}
+                          disabled={!address}
+                          onButtonClick={async () => {
+                            if (!address) throw new Error('Connect the wallet that owns this quest.');
+                            await requireQuestFinalizeReady(async () => {
+                              const simulation = await getReadClient().simulateContract({
+                                account: address, address: LAND_CONTRACT_ADDRESS, abi: landAbi,
+                                functionName: 'questFinalize', args: [landId, BigInt(idx)],
+                              });
+                              if (!simulation.result[0]) void fetchSlots();
+                              return simulation.result[0];
+                            }, () => currentScopeRef.current === scope);
+                          }}
                           onSuccess={(tx: unknown) => handleFinalizeSuccess(tx, idx)}
                         />
                       </div>
                     )}
-                    {statusOf(s) === QUEST_EXPIRED_STATUS && (
+                    {stateOf(s) === 'expired' && (
                       <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                         <span className="text-xs text-amber-700">Loot bag expired; reset required</span>
                         <GameTransaction
@@ -196,27 +220,27 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                           intentKey={`quest:finalize:${landId}:${idx}`}
                           calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questFinalize', args: [landId, BigInt(idx)] }]}
                           buttonText="Reset expired quest"
-                          buttonClassName="h-11 min-h-11 w-full px-3 text-xs sm:w-auto"
+                          buttonClassName="h-11 min-h-11 w-full px-3 text-sm sm:w-auto"
                           hideStatus
                           onSuccess={(tx: unknown) => handleFinalizeSuccess(tx, idx)}
                         />
                       </div>
                     )}
-                    {statusOf(s) === 'Cooldown' && (
+                    {stateOf(s) === 'cooldown' && (
                       <div className={QUEST_STATUS_PILL_CLASS}>
-                        ~{formatSeconds(blocksLeft(s.coolDownBlock) * 2)} left
+                        ~{blockTimeRemaining(blocksLeft(s.coolDownBlock))} left
                       </div>
                     )}
                   </div>
                 </div>
-                {statusOf(s) === 'Ready to commit' && (
-                  <p className="text-xs text-[hsl(var(--warning-strong))]">After returning, open the loot bag within about 8½ minutes (256 blocks) or the reward expires. Opening requires a second transaction.</p>
+                {stateOf(s) === 'ready_to_commit' && (
+                  <p className="text-xs text-[hsl(var(--warning-strong))]">{questActionsBlocked ? 'Your farmer can safely wait here. The opening deadline starts only after returning. ' : ''}After returning, open the loot bag within {formatUpgradeDuration(QUEST_FINALIZE_EXPIRY_BLOCKS)} ({QUEST_FINALIZE_EXPIRY_BLOCKS.toString()} blocks) or the reward expires. Opening requires a second transaction.</p>
                 )}
-                {statusOf(s) === 'Committed' && (
+                {stateOf(s) === 'committed' && (
                   <p className="text-xs font-medium text-[hsl(var(--warning-strong))]">
                     {questFinalizeBlocksRemaining(s, currentBlock) === BigInt(0)
                       ? 'Final eligible block — open immediately. The reward expires next block.'
-                      : `Open within ~${formatSeconds(Number(questFinalizeBlocksRemaining(s, currentBlock)) * 2)} (${questFinalizeBlocksRemaining(s, currentBlock)} blocks) or the reward expires.`}
+                      : `Open within ~${blockTimeRemaining(questFinalizeBlocksRemaining(s, currentBlock))} (${questFinalizeBlocksRemaining(s, currentBlock)} blocks) or the reward expires.`}
                   </p>
                 )}
                 {recentResults.scope === scope && recentResults.slots[idx] && (
@@ -228,13 +252,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                     )}
                   </div>
                 )}
-                {statusOf(s) === 'Available' && (
+                {stateOf(s) === 'available' && (
                   <>
-                    <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[1fr,auto] items-center`}>
+                    <div className={`${QUEST_START_SURFACE_CLASS} grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] items-center`}>
                       <div className="overflow-x-auto sm:overflow-visible">
                         <QuestDifficultySelector
                           label={`Quest ${idx + 1} difficulty`}
                           value={difficulty[idx] ?? 0}
+                          durationLabels={questConfiguration.isReady ? questConfiguration.data?.difficulties.map(item => formatUpgradeDuration(item.durationInBlocks)) : undefined}
                           onChange={value => setDifficulty(prev => ({ ...prev, [idx]: value }))}
                         />
                       </div>
@@ -243,9 +268,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         intentKey={`quest:start:${landId}:${idx}`}
                         calls={[{ address: LAND_CONTRACT_ADDRESS, abi: landAbi, functionName: 'questStart', args: [landId, BigInt(difficulty[idx] ?? 0), BigInt(idx)] }]}
                         buttonText="Start"
-                        buttonClassName="h-11 min-h-11 px-3 text-xs w-full sm:w-auto shrink-0"
+                        buttonClassName="h-11 min-h-11 px-3 text-sm w-full sm:w-auto shrink-0"
                         hideStatus
-                        disabled={questActionsBlocked}
+                        disabled={questActionsBlocked || !questConfiguration.isReady}
+                        onButtonClick={async () => {
+                          if (!questConfiguration.isReady || !questConfiguration.data) throw new Error('Check the quest terms before starting.');
+                          await requireRewardsReady(questConfiguration.data);
+                          if (currentScopeRef.current !== scope) throw new Error('Your wallet or land changed. Review the quest again.');
+                        }}
                         onSuccess={async (tx: UntypedValue) => {
                           await handleSuccess({ slotIndex: idx, awaitInProgress: true });
                           try {
@@ -259,17 +289,18 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         }}
                       />
                     </div>
+                    <QuestDifficultySummary value={difficulty[idx] ?? 0} />
                     {isRewardsUnavailable && (
                       <p className="text-xs text-amber-800 sm:col-span-2">
-                        Rewards pool is not ready yet. Please wait for it to refill or approve before sending new quests.
+                        Wait until rewards are available before sending a new quest.
                       </p>
                     )}
                   </>
                 )}
-                {statusOf(s) === 'In progress' && (
+                {stateOf(s) === 'in_progress' && (
                   <div className="space-y-1">
                     <ProgressBar label={`Quest ${idx + 1} progress`} value={progressPct(s)} />
-                    <div className="text-xs text-muted-foreground">Ends in ~{formatSeconds(Math.max(0, Math.ceil(blocksLeft(s.endBlock) * 2)))}</div>
+                    <div className="text-xs text-muted-foreground">Ends in ~{blockTimeRemaining(blocksLeft(s.endBlock))}</div>
                   </div>
                 )}
               </div>

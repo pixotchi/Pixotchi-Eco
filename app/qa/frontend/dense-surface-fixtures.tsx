@@ -26,7 +26,7 @@ export function DenseSurfaceFixtures() {
   return <>
     <section aria-label="Barracks report fixture" className="max-w-md space-y-4 rounded border bg-card p-4">
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setMode('outgoing')}>Attack report</Button><Button variant="outline" onClick={() => setMode('incoming')}>Defense report</Button><Button variant="outline" onClick={() => setMode('empty')}>Empty report</Button><Button variant="outline" onClick={() => setMode('error')}>Failed report</Button></div>
-      <div data-visual="barracks"><BarracksReportCard report={mode === 'error' ? null : mode === 'empty' ? { ...report, raidId: B(0) } : report} mode={mode === 'incoming' ? 'incoming' : 'outgoing'} onRetry={() => setMode('outgoing')} /></div>
+      <div data-visual="barracks"><BarracksReportCard report={mode === 'error' ? null : mode === 'empty' ? { ...report, raidId: B(0) } : report} mode={mode === 'incoming' ? 'incoming' : 'outgoing'} timestampLabel={new Date(Number(report.timestamp) * 1000).toLocaleString('en-US', { timeZone: 'UTC' })} onRetry={() => setMode('outgoing')} /></div>
     </section>
     <section aria-label="Chat message fixture" className="max-w-xl space-y-3 rounded border bg-background p-3">
       <div data-visual="chat" className="space-y-3">

@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { THEMES, Theme } from "@/lib/theme-utils";
+import { THEMES, THEME_NAMES, Theme } from "@/lib/theme-utils";
 import { useSnow } from "@/lib/snow-context";
 import { useAmbientAudio } from "@/lib/ambient-audio-context";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
@@ -24,23 +24,24 @@ import toast from "react-hot-toast";
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 const PERFORMANCE_MODE_BLOCKED_MESSAGE = "Performance Mode is on. Disable Performance Mode first to use this effect.";
 
-const themes: Array<{ name: Theme; label: string; color: string }> = [
-  { name: "light", label: "Light", color: "bg-slate-300" },
-  { name: "dark", label: "Dark", color: "bg-[#2D3C53]" },
-  { name: "green", label: "Green", color: "bg-green-500" },
-  { name: "yellow", label: "Yellow", color: "bg-yellow-500" },
-  { name: "red", label: "Red", color: "bg-red-500" },
-  { name: "pink", label: "Pink", color: "bg-pink-500" },
-  { name: "blue", label: "Blue", color: "bg-blue-500" },
-  { name: "violet", label: "Violet", color: "bg-fuchsia-500" }
-];
+const themePresentation: Record<Theme, { label: string; color: string }> = {
+  light: { label: "Light", color: "bg-slate-300" },
+  dark: { label: "Dark", color: "bg-[#2D3C53]" },
+  green: { label: "Green", color: "bg-green-500" },
+  yellow: { label: "Yellow", color: "bg-yellow-500" },
+  red: { label: "Red", color: "bg-red-500" },
+  pink: { label: "Pink", color: "bg-pink-500" },
+  blue: { label: "Blue", color: "bg-blue-500" },
+  violet: { label: "Violet", color: "bg-fuchsia-500" },
+};
+const themes = THEME_NAMES.map(name => ({ name, ...themePresentation[name] }));
 
-const themeMenuButtonClass = "h-11 min-h-11 w-11 min-w-11 !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
+const themeMenuButtonClass = "h-[44px] min-h-[44px] w-[44px] min-w-[44px] !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
 /* The hairline border keeps the swatch legible when its colour matches the
    surface behind it (the Light swatch on the light header button, and the Dark
    swatch in dark theme, both used to read as a blank/broken button). */
 const themeSwatchClass = "h-4 w-4 rounded-[2px] border border-[hsl(var(--border-strong)/0.45)]";
-const themeTriggerSwatchClass = "absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
+const themeTriggerSwatchClass = "absolute bottom-[6px] right-[6px] h-[10px] w-[10px] rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
 
 /*
  * A Radix menu item, not a hand-rolled button.
@@ -183,7 +184,7 @@ export function ThemeSelector({
   if (!mounted) {
     // Render a placeholder to prevent layout shift
     return (
-      <Button variant="headerIcon" size="icon" disabled aria-label="Loading theme selector">
+      <Button variant="headerIcon" size="headerIcon" disabled aria-label="Loading theme selector">
         <Palette className="h-5 w-5" aria-hidden="true" />
       </Button>
     );
@@ -196,7 +197,7 @@ export function ThemeSelector({
       <DropdownMenuTrigger asChild>
         <Button
           variant="headerIcon"
-          size="icon"
+          size="headerIcon"
           title={`Change theme: ${currentTheme.label}`}
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
           className="relative"

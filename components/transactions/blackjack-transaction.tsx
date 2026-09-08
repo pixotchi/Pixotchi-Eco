@@ -1,4 +1,5 @@
 "use client";
+import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 import { parseBlackjackTransactionResult, type BlackjackTransactionResult } from "@/lib/blackjack-events";
 import type { TransactionCall } from "@/lib/types";
 import type { TransactionReceiptLike } from "@/lib/transaction-utils";
@@ -21,14 +22,14 @@ import {
     BlackjackAction,
 } from "@/lib/contracts";
 import { getMiniAppQuickAuthHeaders } from "@/lib/farcaster-miniapp-auth-client";
-import { BlackjackResult, getResultText } from "@/public/abi/blackjack-abi";
 import { toast } from "react-hot-toast";
-import { extractTransactionHash } from "@/lib/transaction-utils";
+import { getBlackjackSettlementProofs, type BlackjackMissionSubject } from '@/lib/blackjack-mission-proof';
 import { useAccount } from "wagmi";
 import { getBuilderCapabilities, transformCallsWithBuilderCode } from '@/lib/builder-code';
 import { postMissionProgress } from '@/lib/mission-tracking';
+import { gameActionButtonClass } from './game-dialog-styles';
 
-interface BlackjackTransactionProps {
+export interface BlackjackTransactionProps {
     mode: "deal" | "action";
     landId: bigint;
     betAmount?: bigint;
@@ -44,14 +45,10 @@ interface BlackjackTransactionProps {
     onPreparedCancel?: (reason: "cancelled" | "expired") => void;
     onError?: (error: string) => void;
     tokenSymbol?: string;
-    tokenDecimals?: number;
+    tokenDecimals: number | undefined;
     bettingToken?: string | null;
 }
 
-const FAILURE_STATUSES = new Set([
-    "error", "failed", "reverted", "cancelled", "canceled",
-    "rejected", "transactionRejected", "userRejected", "buildError",
-]);
 const PREPARED_FALLBACK_TIMEOUT_MS = 60_000;
 
 type Phase = "idle" | "fetching" | "ready" | "pending" | "complete" | "error";
@@ -72,14 +69,19 @@ export default function BlackjackTransaction({
     onPreparedCancel,
     onError,
     tokenSymbol = "SEED",
-    tokenDecimals = 18,
+    tokenDecimals,
     bettingToken = null,
 }: BlackjackTransactionProps) {
     const { address } = useAccount();
     const { isSponsored } = usePaymaster();
     const builderCapabilities = getBuilderCapabilities();
+    const requiresTokenUnits = mode === "deal" || action === BlackjackAction.DOUBLE || action === BlackjackAction.SPLIT;
     const processedTxHashes = useRef<Set<string>>(new Set());
     const successHandledRef = useRef(false);
+    const preparationInFlightRef = useRef(false);
+    const preparationGenerationRef = useRef(0);
+    const preparedSubjectRef = useRef<BlackjackMissionSubject | null>(null);
+    const submittedMissionProofsRef = useRef(new Set<string>());
 
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
@@ -93,14 +95,19 @@ export default function BlackjackTransaction({
         return transformCallsWithBuilderCode(calls);
     }, [calls]);
 
-    // Reset on mode/landId change
+    // Never let an old owner's deferred preparation populate a new transaction.
     useEffect(() => {
+        preparationGenerationRef.current += 1;
+        preparationInFlightRef.current = false;
         processedTxHashes.current.clear();
+        preparedSubjectRef.current = null;
+        successHandledRef.current = false;
         setPhase("idle");
         setError(null);
         setCalls([]);
         setPreparedExpiresAt(null);
-    }, [mode, landId]);
+        return () => { preparationGenerationRef.current += 1; };
+    }, [mode, landId, address, bettingToken, action]);
 
     const resetPreparedAction = useCallback((reason: "cancelled" | "expired") => {
         setPhase("idle");
@@ -123,31 +130,45 @@ export default function BlackjackTransaction({
         return () => window.clearTimeout(timeoutId);
     }, [phase, preparedExpiresAt, resetPreparedAction]);
 
+    useEffect(() => {
+        if (phase !== 'complete') return;
+        const timer = window.setTimeout(() => {
+            setPhase('idle');
+            setCalls([]);
+            setPreparedExpiresAt(null);
+        }, 500);
+        return () => window.clearTimeout(timer);
+    }, [phase]);
+
     // Fetch randomness and build transaction
     const fetchRandomnessAndBuildCalls = useCallback(async () => {
+        if (disabled || preparationInFlightRef.current || phase === 'fetching' || phase === 'pending' || (requiresTokenUnits && tokenDecimals === undefined)) return;
         if (!address) {
             toast.error("Wallet not connected");
             return;
         }
 
-        const preflightResult = await onButtonClick?.();
-        if (preflightResult === false) {
-            setPhase("idle");
-            return;
-        }
-
-        let resolvedHandIndex = handIndex;
-        if (preflightResult && typeof preflightResult === "object") {
-            if (typeof preflightResult.handIndex === "number") {
-                resolvedHandIndex = preflightResult.handIndex;
-            }
-        }
-
-        setPhase("fetching");
+        preparationInFlightRef.current = true;
+        const generation = preparationGenerationRef.current;
+        setPhase('fetching');
         setError(null);
-
         try {
+            const preflightResult = await onButtonClick?.();
+            if (preparationGenerationRef.current !== generation) return;
+            if (preflightResult === false) {
+                setPhase("idle");
+                return;
+            }
 
+            let resolvedHandIndex = handIndex;
+            if (preflightResult && typeof preflightResult === "object") {
+                if (typeof preflightResult.handIndex === "number") {
+                    resolvedHandIndex = preflightResult.handIndex;
+                }
+            }
+
+            setPhase("fetching");
+            setError(null);
 
             const actionName = mode === "deal" ? "deal" :
                 action === BlackjackAction.HIT ? "hit" :
@@ -166,8 +187,7 @@ export default function BlackjackTransaction({
                 mode === "deal" ? betAmount?.toString() : undefined,
                 authHeaders,
             );
-
-
+            if (preparationGenerationRef.current !== generation) return;
 
             // Build transaction call
             let call;
@@ -206,10 +226,12 @@ export default function BlackjackTransaction({
 
 
             setCalls([call]);
+            preparedSubjectRef.current = { player: address, landId };
             setPreparedExpiresAt(typeof result.expiresAt === "number" ? result.expiresAt : null);
             setPhase("ready");
 
         } catch (err) {
+            if (preparationGenerationRef.current !== generation) return;
             console.error("[Blackjack] Failed:", err);
             const msg = err instanceof Error ? err.message : "Failed to prepare transaction";
 
@@ -220,8 +242,10 @@ export default function BlackjackTransaction({
             } else {
                 toast.error(msg);
             }
+        } finally {
+            if (preparationGenerationRef.current === generation) preparationInFlightRef.current = false;
         }
-    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError, bettingToken]);
+    }, [address, landId, mode, betAmount, action, handIndex, onButtonClick, onError, bettingToken, disabled, phase, requiresTokenUnits, tokenDecimals]);
 
     // Handle transaction status
     const handleStatus = (status: LifecycleStatus) => {
@@ -233,7 +257,7 @@ export default function BlackjackTransaction({
             setPhase("pending");
         }
 
-        if (FAILURE_STATUSES.has(status.statusName ?? "")) {
+        if (isGameTransactionFailure(status.statusName ?? "")) {
             setPhase("idle");
             setCalls([]);
             setPreparedExpiresAt(null);
@@ -265,7 +289,6 @@ export default function BlackjackTransaction({
             newReceipts.push(...receiptsByHash.values());
             if (newReceipts.length === 0) {
                 onComplete?.({ success: true });
-                setTimeout(() => { setPhase("idle"); setCalls([]); setPreparedExpiresAt(null); }, 500);
                 return;
             }
             newReceipts.forEach(r => {
@@ -274,53 +297,34 @@ export default function BlackjackTransaction({
 
             const { result: resultData, gameComplete } = parseBlackjackTransactionResult(newReceipts, mode, action, tokenDecimals, LAND_CONTRACT_ADDRESS);
 
-            // Emit one toast per successful settlement
-            if (resultData.splitResults && resultData.splitResults.length > 1) {
-                const totalPayout = resultData.payout || "0";
-                const handSummary = resultData.splitResults
-                    .map((hand: { result: BlackjackResult }, idx: number) => `H${idx + 1} ${getResultText(hand.result)}`)
-                    .join(" | ");
-                if (parseFloat(totalPayout) > 0) {
-                    toast.success(`Split resolved: ${handSummary}. Total payout ${totalPayout} ${tokenSymbol}`);
-                } else {
-                    toast.error(`Split resolved: ${handSummary}.`);
-                }
-            } else if (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) {
-                const txt = getResultText(resultData.gameResult);
-                if (resultData.gameResult === BlackjackResult.PLAYER_WIN || resultData.gameResult === BlackjackResult.PLAYER_BLACKJACK) {
-                    toast.success(`${txt} Payout ${resultData.payout || "0"} ${tokenSymbol}!`);
-                } else if (resultData.gameResult === BlackjackResult.PUSH) {
-                    toast.success('Push!');
-                } else {
-                    toast.error(txt);
-                }
+            // The dialog owns the player's net outcome; this toast confirms the
+            // settlement without confusing a gross return with winnings.
+            if (gameComplete || resultData.gameResult !== undefined || resultData.splitResults?.length) {
+                toast(resultData.payout === undefined
+                    ? 'Round settled. Verify token details to display the returned amount.'
+                    : `Round settled. Total returned ${resultData.payout} ${tokenSymbol}.`);
             }
 
-            const gameSettled =
-                gameComplete ||
-                (resultData.gameResult !== undefined && resultData.gameResult !== BlackjackResult.NONE) ||
-                (Array.isArray(resultData.splitResults) && resultData.splitResults.length > 0);
-
-            if (address && mode === "action" && gameSettled) {
-                const txHash = extractTransactionHash(newReceipts[0] ?? receipts[0]);
-                if (txHash) {
+            const subject = preparedSubjectRef.current;
+            if (subject) {
+                for (const txHash of getBlackjackSettlementProofs(newReceipts, subject, LAND_CONTRACT_ADDRESS)) {
+                    const proofKey = `${subject.player.toLowerCase()}:${txHash}`;
+                    if (submittedMissionProofsRef.current.has(proofKey)) continue;
+                    submittedMissionProofsRef.current.add(proofKey);
                     postMissionProgress({
-                        address,
+                        address: subject.player,
                         taskId: "s3_play_casino_game",
                         proof: { txHash },
                     }).catch(() => { });
                 }
             }
 
-            setTimeout(() => { setPhase("idle"); setCalls([]); setPreparedExpiresAt(null); }, 500);
             onComplete?.(resultData);
         }
     };
 
     // Get button text
     const getButtonText = () => {
-        if (phase === "fetching") return "Preparing...";
-        if (phase === "pending") return "Confirming...";
         if (buttonText) return buttonText;
         if (mode === "deal") return "Deal";
         switch (action) {
@@ -333,13 +337,11 @@ export default function BlackjackTransaction({
         }
     };
 
-    const isDisabled = disabled || phase === "fetching" || phase === "pending" ||
+    const isDisabled = disabled || (requiresTokenUnits && tokenDecimals === undefined) || phase === "fetching" || phase === "pending" ||
         (mode === "deal" && (!betAmount || betAmount <= BigInt(0))) ||
         (mode === "action" && action === undefined);
 
-    const defaultClassName = "w-full min-h-11 rounded-[var(--radius-control)] px-4 py-2 font-bold transition-colors";
-    const activeClassName = buttonClassName || `${defaultClassName} bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] hover:brightness-[1.03]`;
-    const disabledClassName = `${defaultClassName} bg-muted text-muted-foreground cursor-not-allowed`;
+    const activeClassName = `${buttonClassName || gameActionButtonClass('warning')} disabled:cursor-not-allowed disabled:opacity-50`;
     const resolvedButtonText = getButtonText();
     const resolvedButtonAriaLabel = buttonAriaLabel ?? (
         mode === "deal"
@@ -354,7 +356,7 @@ export default function BlackjackTransaction({
                 type="button"
                 onClick={fetchRandomnessAndBuildCalls}
                 disabled={isDisabled}
-                className={isDisabled ? disabledClassName : activeClassName}
+                className={activeClassName}
                 aria-label={error ? `Retry ${resolvedButtonAriaLabel}` : resolvedButtonAriaLabel}
                 aria-busy={phase === "fetching"}
             >
@@ -362,11 +364,11 @@ export default function BlackjackTransaction({
                     <>
                         <span className="flex items-center justify-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                            Preparing...
+                            Preparing {resolvedButtonText}…
                         </span>
                     </>
                 ) : error ? (
-                    "Retry"
+                    `Retry ${resolvedButtonText}`
                 ) : (
                     resolvedButtonText
                 )}
@@ -379,6 +381,7 @@ export default function BlackjackTransaction({
     if (transformedCalls.length > 0) {
         return (
             <Transaction
+                canSubmit={phase === 'ready' && !disabled && (!requiresTokenUnits || tokenDecimals !== undefined)}
                 effects={{ domains: ["arcade", "balances"] }}
                 intentKey={`blackjack:${landId}`}
                 onStatus={handleStatus}
@@ -387,10 +390,11 @@ export default function BlackjackTransaction({
                 capabilities={builderCapabilities}
             >
                 <div className="space-y-2">
+                    <p role="status" className="text-center text-xs text-white/80">{phase === "ready" ? `${resolvedButtonText} is ready. Confirm to open your wallet.` : "Waiting for transaction confirmation…"}</p>
                     <TransactionButton
-                        text={phase === "ready" ? resolvedButtonText : getButtonText()}
+                        text={phase === "ready" ? `Confirm ${resolvedButtonText}` : `Confirming ${resolvedButtonText}…`}
                         className={activeClassName}
-                        disabled={phase !== "ready"}
+                        disabled={phase !== "ready" || disabled}
                         ariaLabel={`${resolvedButtonAriaLabel}. Confirm this action`}
                     />
                 </div>

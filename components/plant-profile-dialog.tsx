@@ -1,5 +1,7 @@
 "use client";
 
+import "./social/identity-kit.css";
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { copyWithToast } from '@/lib/clipboard';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -9,14 +11,13 @@ import { Copy, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import PlantImage from '@/components/PlantImage';
 import { ResourceState } from '@/components/ui/resource-state';
-import { getUserGameStats } from '@/lib/user-stats-service';
-import { getStakeInfo } from '@/lib/contracts';
+import { useProfileStats } from '@/hooks/useProfileStats';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatEthShort, formatTokenAmount, formatAddress } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/open-external';
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import toast from 'react-hot-toast';
 import type { Plant } from '@/lib/types';
-import { fetchEfpStats } from '@/lib/efp-service';
 import { useAccount } from 'wagmi';
 import {
   FollowButton,
@@ -62,7 +63,6 @@ interface PlantProfileDialogProps {
   onRetryPrimaryPlant?: () => void;
 }
 
-const CACHE_DURATION = 120000; // 2 minutes
 
 const formatStaked = (amount: bigint) => formatTokenAmount(amount, 18);
 
@@ -93,7 +93,6 @@ export default function PlantProfileDialog({
     if (plant?.owner) return plant.owner;
     return walletAddressOverride ?? null;
   }, [plant?.owner, walletAddressOverride]);
-  const plantId = plant?.id ?? null;
 
   // Get TransactionModal state to detect when it's open/closed
   const {
@@ -122,35 +121,9 @@ export default function PlantProfileDialog({
   const { name: ownerNameDerived, loading: isNameLoading } = usePrimaryName(ownerAddress);
   const ownerName = walletNameOverride ?? ownerNameDerived ?? null;
 
-  // React Query for Owner Stats
-  const { data: ownerStats, isFetching: ownerStatsFetching, isLoading: loading } = useQuery({
-    queryKey: ['ownerStats', ownerAddress, plantId],
-    queryFn: async () => {
-      if (!ownerAddress) return null;
-      const [stats, stake] = await Promise.all([
-        getUserGameStats(ownerAddress),
-        getStakeInfo(ownerAddress)
-      ]);
-      return {
-        totalPlants: stats.totalPlants,
-        totalLands: stats.totalLands,
-        stakedSeed: stake?.staked || BigInt(0)
-      };
-    },
-    enabled: !!ownerAddress && open,
-    staleTime: CACHE_DURATION,
-  });
-
-  // React Query for EFP Stats
-  const { data: efpStats, isLoading: efpLoading } = useQuery({
-    queryKey: ['efpStats', ownerAddress, efpRefreshKey],
-    queryFn: async () => {
-      if (!ownerAddress) return null;
-      return fetchEfpStats(ownerAddress);
-    },
-    enabled: !!ownerAddress && open,
-    staleTime: CACHE_DURATION,
-  });
+  const profileStats = useProfileStats(ownerAddress, open, efpRefreshKey);
+  const efpStats = profileStats.social.data;
+  const efpLoading = profileStats.social.isPending;
 
   // Function to refresh EFP stats after follow/unfollow
   const refreshEfpStats = useCallback(() => {
@@ -427,7 +400,6 @@ export default function PlantProfileDialog({
   const displaySubtitle = !isWalletVariant && hasPlant && plant
     ? `Level ${plant.level}${plant.rank ? ` · Rank #${plant.rank}` : ''}`
     : undefined;
-  const ownerStatsPending = loading || (ownerStatsFetching && !ownerStats);
 
   const handleCopyAddress = () => {
     if (!ownerAddress) return;
@@ -448,13 +420,13 @@ export default function PlantProfileDialog({
           padding="none"
           className="w-[min(94vw,27.5rem)] max-w-[27.5rem]"
         >
-          <div className="surface-scroll-fade flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
+          <ScrollArea className="flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
             <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
               {/* pr-16 clears the primitive's absolute close button (which paints
                   over x∈[right-3, right-3+44px]) — the EFP link used to sit under it. */}
-              <div className="relative z-[1] flex items-start justify-between gap-3 px-6 pb-12 pr-16 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span className="shrink-0 pt-2">Powered by:</span>
+              <div className="relative z-[1] flex items-center justify-between gap-3 px-6 pb-12 pr-16 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="shrink-0">Powered by:</span>
                 <button
                   type="button"
                   onClick={() => openExternalUrl('https://efp.app')}
@@ -521,6 +493,9 @@ export default function PlantProfileDialog({
               {/* Plant & Owner Stats Row */}
               <div className="mb-3 flex flex-col gap-2.5 text-sm">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Game Stats</span>
+                {isWalletVariant && hasPlant && plant && (
+                  <p className="text-xs text-muted-foreground">Stars and ETH rewards are for Plant #{plant.id}.</p>
+                )}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {hasPlant && plant && (
                     <>
@@ -535,42 +510,16 @@ export default function PlantProfileDialog({
                       </div>
                     </>
                   )}
-                  {ownerStatsPending ? (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <span className="sr-only">Loading plant count</span>
-                        <Image src="/icons/plant1.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
-                        <Skeleton className="h-4 w-8" />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="sr-only">Loading land count</span>
-                        <Image src="/icons/bee-house.png" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
-                        <Skeleton className="h-4 w-8" />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="sr-only">Loading staked SEED</span>
-                        <Image src="/PixotchiKit/COIN.svg" alt="" width={16} height={16} className="opacity-55" aria-hidden="true" />
-                        <Skeleton className="h-4 w-12" />
-                        <span className="text-xs text-muted-foreground uppercase">Staked</span>
-                      </div>
-                    </>
-                  ) : ownerStats ? (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <Image src="/icons/plant1.svg" alt="Plants" width={16} height={16} />
-                        <span className="font-semibold">{ownerStats.totalPlants}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Image src="/icons/bee-house.png" alt="Lands" width={16} height={16} />
-                        <span className="font-semibold">{ownerStats.totalLands}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Image src="/PixotchiKit/COIN.svg" alt="Staked" width={16} height={16} />
-                        <span className="font-semibold">{formatStaked(ownerStats.stakedSeed)}</span>
-                        <span className="text-xs text-muted-foreground uppercase">Staked</span>
-                      </div>
-                    </>
-                  ) : null}
+                  {[
+                    { label: 'Plants', icon: '/icons/plant1.svg', query: profileStats.plants, value: profileStats.plants.data?.toString() },
+                    { label: 'Lands', icon: '/icons/bee-house.png', query: profileStats.lands, value: profileStats.lands.data?.toString() },
+                    { label: 'Staked SEED', icon: '/PixotchiKit/COIN.svg', query: profileStats.stake, value: profileStats.stake.data !== undefined ? formatStaked(profileStats.stake.data) : undefined },
+                  ].map(resource => resource.query.isError ? <ResourceState key={resource.label} className="basis-full" status="error" title={`${resource.label} unavailable`} onRetry={() => void resource.query.refetch()} />
+                    : <div key={resource.label} className="flex items-center gap-1.5" aria-label={resource.label}>
+                      <Image src={resource.icon} alt="" width={16} height={16} />
+                      {resource.value === undefined ? <Skeleton className="h-4 w-10" /> : <span className="font-semibold">{resource.value}</span>}
+                      <span className="text-xs text-muted-foreground">{resource.label}</span>
+                    </div>)}
                 </div>
               </div>
 
@@ -578,11 +527,11 @@ export default function PlantProfileDialog({
                 <div className="space-y-2.5 mb-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       {isNameLoading ? (
                         <Skeleton className="h-4 w-32" />
                       ) : ownerName ? (
-                        <span className="text-sm text-primary font-medium">{ownerName}</span>
+                        <span className="min-w-0 break-all text-right text-sm text-primary font-medium">{ownerName}</span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
                       )}
@@ -614,7 +563,7 @@ export default function PlantProfileDialog({
                 {/* EFP Social Stats - Followers/Following */}
                 <div className="flex flex-col items-center gap-1.5 py-3 border-t border-border">
                   <div className="flex items-center justify-center gap-3">
-                    {efpLoading ? (
+                    {profileStats.social.isError ? <ResourceState status="error" title="Social counts unavailable" description="We could not load followers and following." onRetry={() => void profileStats.social.refetch()} /> : efpLoading ? (
                       <>
                         <div className="flex flex-col items-center">
                           <Skeleton className="h-6 w-12 mb-1" />
@@ -628,12 +577,12 @@ export default function PlantProfileDialog({
                       </>
                     ) : efpStats ? (
                       <>
-                        <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                        <div className="flex flex-col items-center">
                           <span className="text-xl font-bold">{formatCount(efpStats.followersCount)}</span>
                           <span className="text-xs text-muted-foreground">Followers</span>
                         </div>
                         <div className="h-8 w-px bg-border" />
-                        <div className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity">
+                        <div className="flex flex-col items-center">
                           <span className="text-xl font-bold">{formatCount(efpStats.followingCount)}</span>
                           <span className="text-xs text-muted-foreground">Following</span>
                         </div>
@@ -667,7 +616,7 @@ export default function PlantProfileDialog({
 
               </>
             </div>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </>

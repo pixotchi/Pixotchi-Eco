@@ -2,6 +2,7 @@
 import { ResourceValue } from '@/components/ui/resource-value';
 
 import { useBarracksSnapshot } from "@/hooks/useBarracksSnapshot";
+import { useBarracksRaidPreview } from '@/hooks/useBarracksRaidPreview';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useAccount, useBalance } from "wagmi";
@@ -16,16 +17,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { InlineBalanceNotice } from "@/components/ui/premium";
+import { PurchaseReadinessNotice } from './purchase-readiness-notice';
+import { getBuildingPurchaseReadiness } from '@/lib/building-purchase-readiness';
+import { formatTokenDisplay } from '@/lib/token-display';
 import ApproveTransaction from "@/components/transactions/approve-transaction";
+import { useBuildingApproval } from '@/hooks/useBuildingApproval';
 import DisabledTransaction from "@/components/transactions/disabled-transaction";
 import GameTransaction from "@/components/transactions/game-transaction";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
-import { useTokenSymbol } from "@/hooks/useTokenSymbol";
 import {
   LAND_CONTRACT_ADDRESS,
   barracksGetEligibleAttackableLandIds,
-  barracksPreviewRaidV2,
+  barracksGetConfigV2,
   buildBarracksAttackCallV2,
   buildBarracksBuildCall,
   buildBarracksTrainCallV2,
@@ -35,13 +38,11 @@ import {
 import { CLIENT_ENV } from "@/lib/env-config";
 import { dispatchPostTransactionRefresh } from "@/lib/transaction-refresh";
 import type {
-  BarracksRaidPreviewV2,
   BarracksTroopId,
   BuildingData,
   Land,
 } from "@/lib/types";
 import {
-  formatTokenAmount,
   getFriendlyErrorMessage,
 } from "@/lib/utils";
 import { BarracksReportCard, type ReportMode } from './barracks-report';
@@ -80,9 +81,9 @@ function StatTile({
 }) {
   return (
     <div className={BARRACKS_BUBBLE_SURFACE_CLASS}>
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-semibold">{value}</div>
-      {hint ? <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div> : null}
+      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -105,7 +106,7 @@ function TroopCount({
       <Image src={troop.icon} alt={troop.name} width={16} height={16} className="h-4 w-4 object-contain opacity-90" />
       {hasAmount ? <span>{typeof amount === "bigint" ? amount.toString() : amount}</span> : null}
       {withName ? <span className="text-xs font-medium text-muted-foreground">{troop.name}</span> : null}
-      {withRole ? <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{troop.role}</span> : null}
+      {withRole ? <span className="text-xs text-muted-foreground">{troop.role}</span> : null}
     </span>
   );
 }
@@ -117,10 +118,7 @@ export default function BarracksPanelV2({
   villageBuildings,
 }: BarracksPanelV2Props) {
   const { address } = useAccount();
-  const { config, landState, lastOutgoingReport, lastIncomingReport, loading, loadedStateLandId, loadState } = useBarracksSnapshot({ landId, currentBlock });
-  const [preview, setPreview] = useState<BarracksRaidPreviewV2 | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const { config, landState, lastOutgoingReport, lastIncomingReport, loading, error: snapshotError, loadedStateLandId, loadState } = useBarracksSnapshot({ landId });
   const [targetsLoading, setTargetsLoading] = useState(false);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [, setCountdownTick] = useState(0);
@@ -135,14 +133,17 @@ export default function BarracksPanelV2({
   const [eligibleTargets, setEligibleTargets] = useState<Land[]>([]);
   const [selectedTargetLandId, setSelectedTargetLandId] = useState<bigint | null>(null);
   const [loadedAllowanceIdentity, setLoadedAllowanceIdentity] = useState<string | null>(null);
+  const [allowancesError, setAllowancesError] = useState<string | null>(null);
   const trainAmountInputId = useId();
   const trainAmountHelpId = useId();
   const attackSwordsmenInputId = useId();
   const attackPhalanxInputId = useId();
   const normalizedAddress = address?.toLowerCase() ?? "disconnected";
+  const approval = useBuildingApproval(`${landId}:${normalizedAddress}`);
   const currentLandIdRef = useRef(landId);
   const allowanceRequestRef = useRef(0);
   const targetsRequestRef = useRef(0);
+  const targetsInFlightRef = useRef<bigint | null>(null);
   currentLandIdRef.current = landId;
 
   const buildTokenAddress = config?.buildToken;
@@ -152,14 +153,18 @@ export default function BarracksPanelV2({
   const currentAllowanceIdentityRef = useRef(allowanceIdentity);
   currentAllowanceIdentityRef.current = allowanceIdentity;
   const allowancesAreCurrent = loadedAllowanceIdentity === allowanceIdentity;
-  const currentBuildAllowance = allowancesAreCurrent ? buildAllowance : ZERO_BIGINT;
-  const currentTrainingAllowance = allowancesAreCurrent ? trainingAllowance : ZERO_BIGINT;
-  const buildTokenSymbol = useTokenSymbol(buildTokenAddress) || "TOKEN";
-  const trainingTokenSymbol = useTokenSymbol(trainingTokenAddress) || "TOKEN";
-  const { decimals: buildTokenDecimals } = useTokenMetadata(buildTokenAddress);
-  const { decimals: trainingTokenDecimals } = useTokenMetadata(trainingTokenAddress);
+  const currentBuildAllowance = allowancesAreCurrent ? buildAllowance : undefined;
+  const currentTrainingAllowance = allowancesAreCurrent ? trainingAllowance : undefined;
+  const buildTokenMetadata = useTokenMetadata(buildTokenAddress);
+  const trainingTokenMetadata = useTokenMetadata(trainingTokenAddress);
+  const buildTokenSymbol = buildTokenMetadata.symbol;
+  const trainingTokenSymbol = trainingTokenMetadata.symbol;
+  const formatBuildAmount = (amount: bigint) => buildTokenMetadata.isReady && buildTokenMetadata.decimals !== undefined
+    ? formatTokenDisplay(amount, buildTokenMetadata.decimals, buildTokenMetadata.decimals) : '—';
+  const formatTrainingAmount = (amount: bigint) => trainingTokenMetadata.isReady && trainingTokenMetadata.decimals !== undefined
+    ? formatTokenDisplay(amount, trainingTokenMetadata.decimals, trainingTokenMetadata.decimals) : '—';
 
-  const { data: buildTokenBalance } = useBalance({
+  const { data: buildTokenBalance, isError: buildBalanceError, refetch: refreshBuildBalance } = useBalance({
     address,
     token:
       buildTokenAddress && buildTokenAddress !== ZERO_ADDRESS
@@ -170,7 +175,7 @@ export default function BarracksPanelV2({
     },
   });
 
-  const { data: trainingTokenBalance } = useBalance({
+  const { data: trainingTokenBalance, isError: trainingBalanceError, refetch: refreshTrainingBalance } = useBalance({
     address,
     token:
       trainingTokenAddress && trainingTokenAddress !== ZERO_ADDRESS
@@ -209,6 +214,11 @@ export default function BarracksPanelV2({
       : null;
   const totalRequestedToAttack =
     (parsedAttackSwordsmen ?? ZERO_BIGINT) + (parsedAttackPhalanx ?? ZERO_BIGINT);
+  const { preview, error: previewError, isLoading: previewLoading, requireReady: requirePreviewReady, refresh: refreshPreview } = useBarracksRaidPreview({
+    enabled: BARRACKS_PREVIEW_ENABLED && activeTab === 'raid' && !!config?.enabled && !!landState?.isBuilt,
+    owner: address, landId, targetLandId: selectedTargetLandId,
+    swordsmen: parsedAttackSwordsmen, phalanx: parsedAttackPhalanx, currentBlock,
+  });
 
   const pause = useCallback((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)), []);
   const hasLiveCountdown = useMemo(
@@ -235,10 +245,10 @@ export default function BarracksPanelV2({
       return { build: ZERO_BIGINT, training: ZERO_BIGINT };
     }
     const requestId = ++allowanceRequestRef.current;
+    setAllowancesError(null);
     if (!address || !buildTokenAddress || !trainingTokenAddress) {
-      setBuildAllowance(ZERO_BIGINT);
-      setTrainingAllowance(ZERO_BIGINT);
-      setLoadedAllowanceIdentity(requestIdentity);
+      setLoadedAllowanceIdentity(null);
+      setAllowancesError('Approval status could not be checked.');
       return { build: ZERO_BIGINT, training: ZERO_BIGINT };
     }
 
@@ -261,9 +271,8 @@ export default function BarracksPanelV2({
         requestId !== allowanceRequestRef.current
         || currentAllowanceIdentityRef.current !== requestIdentity
       ) return { build: ZERO_BIGINT, training: ZERO_BIGINT };
-      setBuildAllowance(ZERO_BIGINT);
-      setTrainingAllowance(ZERO_BIGINT);
-      setLoadedAllowanceIdentity(requestIdentity);
+      setAllowancesError('Approval status could not be checked.');
+      setLoadedAllowanceIdentity(null);
       return { build: ZERO_BIGINT, training: ZERO_BIGINT };
     }
   }, [address, allowanceIdentity, buildTokenAddress, trainingTokenAddress]);
@@ -271,6 +280,7 @@ export default function BarracksPanelV2({
   const loadTargets = useCallback(async () => {
     const requestLandId = landId;
     if (currentLandIdRef.current !== requestLandId) return;
+    if (targetsInFlightRef.current === requestLandId) return;
     const requestId = ++targetsRequestRef.current;
     if (!config?.enabled || !landState?.isBuilt) {
       setEligibleTargets([]);
@@ -281,6 +291,7 @@ export default function BarracksPanelV2({
     }
 
     try {
+      targetsInFlightRef.current = requestLandId;
       setTargetsLoading(true);
       setTargetsError(null);
 
@@ -303,26 +314,25 @@ export default function BarracksPanelV2({
         requestId !== targetsRequestRef.current
         || currentLandIdRef.current !== requestLandId
       ) return;
-      setEligibleTargets([]);
-      setSelectedTargetLandId(null);
       setTargetsError("Unable to load eligible targets right now.");
     } finally {
       if (
         requestId === targetsRequestRef.current
         && currentLandIdRef.current === requestLandId
-      ) setTargetsLoading(false);
+      ) {
+        targetsInFlightRef.current = null;
+        setTargetsLoading(false);
+      }
     }
   }, [config?.enabled, landId, landState?.isBuilt]);
 
   useEffect(() => {
     targetsRequestRef.current += 1;
+    targetsInFlightRef.current = null;
     setEligibleTargets([]);
     setSelectedTargetLandId(null);
     setTargetsError(null);
     setTargetsLoading(false);
-    setPreview(null);
-    setPreviewError(null);
-    setPreviewLoading(false);
     setAttackSwordsmen("");
     setAttackPhalanx("");
 
@@ -346,65 +356,13 @@ export default function BarracksPanelV2({
   useEffect(() => {
     if (activeTab !== "raid") return;
     void loadTargets();
-  }, [activeTab, currentBlock, loadTargets]);
+    const interval = setInterval(() => { void loadTargets(); }, 30_000);
+    return () => clearInterval(interval);
+  }, [activeTab, loadTargets]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadPreview() {
-      if (
-        !BARRACKS_PREVIEW_ENABLED ||
-        activeTab !== "raid" ||
-        !config?.enabled ||
-        !landState?.isBuilt ||
-        !selectedTargetLandId ||
-        parsedAttackSwordsmen === null ||
-        parsedAttackPhalanx === null ||
-        totalRequestedToAttack === ZERO_BIGINT
-      ) {
-        setPreview(null);
-        setPreviewError(null);
-        setPreviewLoading(false);
-        return;
-      }
-
-      setPreviewLoading(true);
-      const nextPreview = await barracksPreviewRaidV2(
-        landId,
-        selectedTargetLandId,
-        parsedAttackSwordsmen,
-        parsedAttackPhalanx,
-      );
-
-      if (cancelled) return;
-
-      if (!nextPreview) {
-        setPreview(null);
-        setPreviewError("Raid preview unavailable for the selected target.");
-      } else {
-        setPreview(nextPreview);
-        setPreviewError(null);
-      }
-
-      setPreviewLoading(false);
-    }
-
-    void loadPreview();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeTab,
-    config?.enabled,
-    currentBlock,
-    landId,
-    landState?.isBuilt,
-    parsedAttackPhalanx,
-    parsedAttackSwordsmen,
-    selectedTargetLandId,
-    totalRequestedToAttack,
-  ]);
+    if (activeTab === 'history') void loadState(false, true);
+  }, [activeTab, loadState]);
 
   useEffect(() => {
     if (!hasLiveCountdown) return;
@@ -413,15 +371,10 @@ export default function BarracksPanelV2({
       setCountdownTick((current) => current + 1);
     }, 1000);
 
-    const refreshInterval = setInterval(() => {
-      void loadState(false);
-    }, 15000);
-
     return () => {
       clearInterval(countdownInterval);
-      clearInterval(refreshInterval);
     };
-  }, [hasLiveCountdown, loadState]);
+  }, [hasLiveCountdown]);
 
   const dispatchRefreshEvents = useCallback(() => {
     onUpdate();
@@ -520,26 +473,39 @@ export default function BarracksPanelV2({
     [config?.buildCost, loadAllowances, pause, trainCostTotal],
   );
 
-  const needsBuildApproval =
-    !!config && config.buildCost > ZERO_BIGINT && currentBuildAllowance < config.buildCost;
-  const needsTrainingApproval =
-    !!selectedTrainConfig && trainCostTotal > ZERO_BIGINT && currentTrainingAllowance < trainCostTotal;
-  const isBuildBalanceLoaded =
-    !address || !buildTokenAddress || buildTokenAddress === ZERO_ADDRESS || !!buildTokenBalance;
-  const hasBuildBalance =
-    config?.buildCost === ZERO_BIGINT ||
-    (buildTokenBalance ? buildTokenBalance.value >= (config?.buildCost ?? ZERO_BIGINT) : false);
-  const hasTrainingBalance =
-    trainCostTotal === ZERO_BIGINT ||
-    (trainingTokenBalance ? trainingTokenBalance.value >= trainCostTotal : false);
+  const buildReadiness = getBuildingPurchaseReadiness({ cost: config?.buildCost ?? ZERO_BIGINT,
+    balance: buildTokenBalance?.value, balanceError: buildBalanceError,
+    allowance: currentBuildAllowance, allowanceError: allowancesError });
+  const trainingReadiness = getBuildingPurchaseReadiness({ cost: trainCostTotal,
+    balance: trainingTokenBalance?.value, balanceError: trainingBalanceError,
+    allowance: currentTrainingAllowance, allowanceError: allowancesError });
+  const featureAvailable = !!config?.enabled && !snapshotError;
+  const requireFeatureAvailable = async (action: 'build' | 'train' | 'raid') => {
+    const scope = allowanceIdentity;
+    const fresh = await barracksGetConfigV2();
+    if (currentAllowanceIdentityRef.current !== scope) throw new Error('Your land or wallet changed. Review the action again.');
+    if (!fresh?.enabled) {
+      void loadState(false, false);
+      throw new Error('Barracks is currently unavailable. Your troops and reports are still safe to inspect.');
+    }
+    const freshTraining = getTroopConfig(fresh, selectedTrainTroop);
+    if ((action === 'build' && (fresh.buildCost !== config?.buildCost || fresh.buildToken !== config?.buildToken))
+      || (action === 'train' && (freshTraining?.trainingCost !== selectedTrainConfig?.trainingCost
+        || freshTraining?.trainingToken !== trainingTokenAddress
+        || freshTraining?.trainingTimePerTroop !== selectedTrainConfig?.trainingTimePerTroop))) {
+      void loadState(false, false);
+      throw new Error('Barracks terms changed. Review the updated cost and duration before continuing.');
+    }
+  };
   const attackInputsValid = parsedAttackSwordsmen !== null && parsedAttackPhalanx !== null;
   const canAttack =
+    featureAvailable && !!landState?.isBuilt &&
     !!selectedTargetLandId &&
     attackInputsValid &&
     totalRequestedToAttack > ZERO_BIGINT &&
     (parsedAttackSwordsmen ?? ZERO_BIGINT) <= availableSwordsmenToSend &&
     (parsedAttackPhalanx ?? ZERO_BIGINT) <= availablePhalanxToSend &&
-    (!BARRACKS_PREVIEW_ENABLED || (!!preview && preview.statusCode === RAID_STATUS_OK));
+    (!BARRACKS_PREVIEW_ENABLED || (!previewLoading && !!preview && preview.statusCode === RAID_STATUS_OK));
   const attackCooldownEndsAt = landState?.attackCooldownEndsAt ?? ZERO_BIGINT;
   const attackCooldownActive = secondsUntil(attackCooldownEndsAt) > 0;
   const emptyRaidTargetMessage = attackCooldownActive
@@ -548,9 +514,7 @@ export default function BarracksPanelV2({
 
   if (loadedStateLandId !== landId || (loading && !config && !landState)) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <ResourceState status="loading" title="Loading Barracks…" description="Checking troops and current rules." className="min-h-32" />
     );
   }
 
@@ -560,33 +524,46 @@ export default function BarracksPanelV2({
     );
   }
 
-  const buildCostDisplay = formatTokenAmount(config.buildCost, buildTokenDecimals);
-  const trainingCostDisplay = formatTokenAmount(trainCostTotal, trainingTokenDecimals);
+  const buildCostDisplay = formatBuildAmount(config.buildCost);
+  const trainingCostDisplay = formatTrainingAmount(trainCostTotal);
   const selectedTroopOption = getTroopOption(selectedTrainTroop);
+  const buildApprovalToken = approval.active?.action === 'build' ? approval.active.token : config.buildToken as `0x${string}`;
+  const buildApprovalLabel = approval.active?.action === 'build' ? approval.active.label : `Approve ${buildTokenSymbol} to Build`;
+  const buildApproval = <ApproveTransaction disabled={approval.active?.settled} spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={buildApprovalToken}
+    buttonText={buildApprovalLabel} buttonClassName="w-full"
+    onStatusUpdate={approval.observe('build', buildApprovalToken, buildApprovalLabel)}
+    onSuccess={async () => { await refreshAfterApproval('build'); }} />;
+  const trainingApprovalToken = approval.active?.action === 'training' ? approval.active.token : trainingTokenAddress as `0x${string}`;
+  const trainingApprovalLabel = approval.active?.action === 'training' ? approval.active.label : `Approve ${trainingTokenSymbol}`;
+  const trainingApproval = <ApproveTransaction disabled={approval.active?.settled} spenderAddress={LAND_CONTRACT_ADDRESS} tokenAddress={trainingApprovalToken}
+    buttonText={trainingApprovalLabel} buttonClassName="w-full"
+    onStatusUpdate={approval.observe('training', trainingApprovalToken, trainingApprovalLabel)}
+    onSuccess={async () => { await refreshAfterApproval('training'); }} />;
 
-  if (!landState.isBuilt) {
+  if (!landState.isBuilt || approval.active?.action === 'build') {
     return (
       <div className="space-y-4">
-        <div className="text-center py-4 space-y-2">
+        {snapshotError && <ResourceState status="error" title="Barracks status unavailable" description="Retry the status check before building." onRetry={() => { void loadState(); }} />}
+        <div className="space-y-2">
           <div className="text-muted-foreground text-sm">
             Build a Barracks to train troops and raid nearby lands.
           </div>
         </div>
 
-        <div className="building-subpanel-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4">
+        <div className="surface-subpanel space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] p-4">
           <div className="space-y-2">
-            <h4 className="font-semibold text-sm">Build Cost:</h4>
+            <h4 className="font-semibold text-sm">Build cost</h4>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Instant Build:</span>
+              <span className="text-muted-foreground">Instant build</span>
               <ResourceValue unit={buildTokenSymbol} className="font-semibold">
                 {buildCostDisplay} {buildTokenSymbol}
               </ResourceValue>
             </div>
             {address && (
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Your Balance:</span>
-                <ResourceValue unit={buildTokenSymbol} className={hasBuildBalance ? "font-medium" : "font-medium text-destructive"}>
-                  {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."}{" "}
+                <span className="text-muted-foreground">Your balance</span>
+                <ResourceValue unit={buildTokenSymbol} className={buildReadiness === 'insufficient' ? "font-medium text-destructive" : "font-medium"}>
+                  {buildTokenBalance && !buildBalanceError ? formatBuildAmount(buildTokenBalance.value) : "—"}{" "}
                   {buildTokenSymbol}
                 </ResourceValue>
               </div>
@@ -594,7 +571,7 @@ export default function BarracksPanelV2({
           </div>
 
           <div className="space-y-2">
-            {!config.enabled ? (
+            {approval.active?.action === 'build' ? buildApproval : !featureAvailable ? (
               <Button className="w-full" variant="secondary" disabled>
                 Barracks disabled
               </Button>
@@ -602,29 +579,14 @@ export default function BarracksPanelV2({
               <Button className="w-full" variant="secondary" disabled>
                 Connect wallet to build
               </Button>
-            ) : !isBuildBalanceLoaded ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Checking balance...
-              </Button>
-            ) : needsBuildApproval ? (
-              <ApproveTransaction
-                spenderAddress={LAND_CONTRACT_ADDRESS}
-                tokenAddress={config.buildToken as `0x${string}`}
-                buttonText={`Approve ${buildTokenSymbol} to Build`}
-                buttonClassName="w-full"
-                onSuccess={async () => {
-
-                  await refreshAfterApproval("build");
-                }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-              />
-            ) : !hasBuildBalance ? (
-              <>
-                <DisabledTransaction buttonText={`Insufficient ${buildTokenSymbol} Balance`} buttonClassName="w-full" />
-                <InlineBalanceNotice>
-                  Not enough {buildTokenSymbol}. Balance: {buildTokenBalance ? formatTokenAmount(buildTokenBalance.value, buildTokenDecimals) : "..."} • Required: {buildCostDisplay}
-                </InlineBalanceNotice>
-              </>
+            ) : !buildTokenMetadata.isReady ? (
+              <ResourceState status={buildTokenMetadata.isError ? 'error' : 'loading'} title={buildTokenMetadata.isError ? 'Build token details unavailable' : 'Checking build token…'} description="The price must be verified before approving or building." onRetry={() => { void buildTokenMetadata.refetch(); }} />
+            ) : buildReadiness !== 'ready' && buildReadiness !== 'approval_required' ? (
+              <PurchaseReadinessNotice state={buildReadiness} symbol={buildTokenSymbol} cost={config.buildCost}
+                balance={buildTokenBalance?.value} formatAmount={formatBuildAmount}
+                onRetryBalance={() => { void refreshBuildBalance(); }} onRetryAllowance={() => { void loadAllowances(); }} />
+            ) : buildReadiness === 'approval_required' ? (
+              buildApproval
             ) : (
               <GameTransaction
                 effects={{ domains: ["buildings", "lands", "balances"] }}
@@ -632,7 +594,8 @@ export default function BarracksPanelV2({
                 calls={[buildBarracksBuildCall(landId)]}
                 buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
                 buttonClassName="w-full"
-                disabled={!config.enabled}
+                disabled={!featureAvailable || !buildTokenMetadata.isReady || buildReadiness !== 'ready'}
+                onButtonClick={() => requireFeatureAvailable('build')}
                 onSuccess={async () => {
 
                   await refreshAfterSuccess();
@@ -647,19 +610,19 @@ export default function BarracksPanelV2({
   }
 
   return (
-    <div className="space-y-4 pt-4 border-t border-border">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">Barracks</div>
-          <div className="text-xs text-muted-foreground">
-            Train Swordsmen and Phalanx, raid lands, and review the latest reports.
-          </div>
-        </div>
-        <div className={`text-[11px] font-semibold uppercase tracking-wide ${config.enabled ? "text-primary" : "text-muted-foreground"}`}>
-          {config.enabled ? `Defense +${formatPercentFromBps(homeDefenseBonusBps)}` : "Disabled"}
-        </div>
+    <div className="space-y-4">
+      {snapshotError ? <ResourceState status="error" title="Barracks status unavailable" description="Showing your last checked troops and reports. Retry before building, training or raiding." onRetry={() => { void loadState(); }} />
+        : !config.enabled ? <ResourceState status="empty" title="Barracks is paused" description="Building, training and raids are currently unavailable. You can still inspect troops and reports." /> : null}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          Train Swordsmen and Phalanx, raid lands, and review the latest reports.
+        </p>
+        {config.enabled && <p className="shrink-0 text-xs font-medium text-primary">
+          Defense +{formatPercentFromBps(homeDefenseBonusBps)}
+        </p>}
       </div>
 
+      <fieldset disabled={!!approval.active}>
       <ToggleGroup
         ariaLabel="Barracks section"
         value={activeTab}
@@ -667,22 +630,23 @@ export default function BarracksPanelV2({
         options={[
           { value: "train", label: "Train" },
           { value: "raid", label: "Raid" },
-          { value: "history", label: "History" },
+          { value: "history", label: "Latest reports" },
         ]}
         className="w-full justify-between"
-        getButtonClassName={() => "flex-1 justify-center"}
+        getButtonClassName={() => "min-w-0 flex-1 justify-center whitespace-normal"}
       />
+      </fieldset>
 
       {activeTab === "train" && (
         <div className={BARRACKS_SECTION_SURFACE_CLASS}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <StatTile
-              label="Swordsman Ready"
+              label="Swordsmen ready"
               value={<TroopCount type="swordsman" amount={availableSwordsmenToSend} withName />}
               hint={`${landState.stationedSwordsmanTroops.toString()} stationed`}
             />
             <StatTile
-              label="Phalanx Ready"
+              label="Phalanx ready"
               value={<TroopCount type="phalanx" amount={availablePhalanxToSend} withName />}
               hint={`${landState.stationedPhalanxTroops.toString()} stationed`}
             />
@@ -706,6 +670,7 @@ export default function BarracksPanelV2({
             }
           />
 
+          <fieldset disabled={!!approval.active} className="space-y-4">
           <ToggleGroup
             ariaLabel="Troop to train"
             value={selectedTrainTroop}
@@ -729,6 +694,7 @@ export default function BarracksPanelV2({
               hint={trainDurationDisplay ? `Training time: ${trainDurationDisplay}` : undefined}
               error={trainAmount && !parsedTrainAmount ? 'Enter a positive whole number of troops.' : undefined}
             />
+          </fieldset>
 
           <div id={trainAmountHelpId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
             <TroopCount type={selectedTrainTroop} amount="" withName withRole />
@@ -738,41 +704,31 @@ export default function BarracksPanelV2({
           {address && (
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
               <span className="text-muted-foreground">Your Balance</span>
-              <ResourceValue unit={trainingTokenSymbol} className={hasTrainingBalance ? "font-medium" : "font-medium text-destructive"}>
-                {trainingTokenBalance
-                  ? formatTokenAmount(trainingTokenBalance.value, trainingTokenDecimals)
+              <ResourceValue unit={trainingTokenSymbol} className={trainingReadiness === 'insufficient' ? "font-medium text-destructive" : "font-medium"}>
+                {trainingTokenBalance && !trainingBalanceError
+                  ? formatTrainingAmount(trainingTokenBalance.value)
                   : "..."}{" "}
                 {trainingTokenSymbol}
               </ResourceValue>
             </div>
           )}
 
-          {!parsedTrainAmount ? (
+          {approval.active?.action === 'training' ? trainingApproval : !featureAvailable ? (
+            <DisabledTransaction buttonText="Training unavailable" buttonClassName="w-full" />
+          ) : !address ? (
+            <DisabledTransaction buttonText="Connect wallet to train" buttonClassName="w-full" />
+          ) : !parsedTrainAmount ? (
             <DisabledTransaction buttonText="Enter Troop Amount" buttonClassName="w-full" />
           ) : trainingQueueActive ? (
             <DisabledTransaction buttonText="Training Queue Active" buttonClassName="w-full" />
-          ) : needsTrainingApproval ? (
-            <ApproveTransaction
-              spenderAddress={LAND_CONTRACT_ADDRESS}
-              tokenAddress={trainingTokenAddress as `0x${string}`}
-              buttonText={`Approve ${trainingTokenSymbol}`}
-              buttonClassName="w-full"
-              onSuccess={async () => {
-
-                await refreshAfterApproval("training");
-              }}
-              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
-            />
-          ) : !hasTrainingBalance ? (
-            <>
-              <DisabledTransaction
-                buttonText={`Insufficient ${trainingTokenSymbol} Balance`}
-                buttonClassName="w-full"
-              />
-              <InlineBalanceNotice>
-                Not enough {trainingTokenSymbol}. Balance: {trainingTokenBalance ? formatTokenAmount(trainingTokenBalance.value, trainingTokenDecimals) : "..."} • Required: {formatTokenAmount(trainCostTotal, trainingTokenDecimals)}
-              </InlineBalanceNotice>
-            </>
+          ) : !trainingTokenMetadata.isReady ? (
+            <ResourceState status={trainingTokenMetadata.isError ? 'error' : 'loading'} title={trainingTokenMetadata.isError ? 'Training token details unavailable' : 'Checking training token…'} description="The price must be verified before approving or training." onRetry={() => { void trainingTokenMetadata.refetch(); }} />
+          ) : trainingReadiness !== 'ready' && trainingReadiness !== 'approval_required' ? (
+            <PurchaseReadinessNotice state={trainingReadiness} symbol={trainingTokenSymbol} cost={trainCostTotal}
+              balance={trainingTokenBalance?.value} formatAmount={formatTrainingAmount}
+              onRetryBalance={() => { void refreshTrainingBalance(); }} onRetryAllowance={() => { void loadAllowances(); }} />
+          ) : trainingReadiness === 'approval_required' ? (
+            trainingApproval
           ) : (
             <GameTransaction
               effects={{ domains: ["buildings", "lands", "balances"] }}
@@ -780,6 +736,8 @@ export default function BarracksPanelV2({
               calls={[buildBarracksTrainCallV2(landId, troopNumericType(selectedTrainTroop), parsedTrainAmount)]}
               buttonText={`Train ${parsedTrainAmount.toString()} ${selectedTroopOption.name}`}
               buttonClassName="w-full"
+              disabled={!featureAvailable || !trainingTokenMetadata.isReady || trainingReadiness !== 'ready'}
+              onButtonClick={() => requireFeatureAvailable('train')}
               onSuccess={async () => {
 
                 await refreshAfterSuccess();
@@ -794,12 +752,12 @@ export default function BarracksPanelV2({
         <div className={BARRACKS_SECTION_SURFACE_CLASS}>
           <div className="grid grid-cols-2 gap-2">
             <StatTile
-              label="Attack Cooldown"
+              label="Attack cooldown"
               value={formatCooldownState(landState.attackCooldownEndsAt)}
               hint="Attack timer"
             />
             <StatTile
-              label="Defense Cooldown"
+              label="Defense cooldown"
               value={formatCooldownState(landState.defenseCooldownEndsAt)}
             />
           </div>
@@ -824,7 +782,7 @@ export default function BarracksPanelV2({
                 <Button
                   variant="outline"
                   className="h-12 w-full justify-between gap-3 text-left"
-                  disabled={targetsLoading || eligibleTargets.length === 0}
+                  disabled={eligibleTargets.length === 0}
                 >
                   {selectedTarget ? (
                     <div className="min-w-0 flex-1">
@@ -841,7 +799,7 @@ export default function BarracksPanelV2({
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent matchTriggerWidth className=" max-h-72 overflow-y-auto">
+              <DropdownMenuContent matchTriggerWidth className="[--menu-max-height:18rem] overflow-y-auto">
                 {eligibleTargets.map((target) => {
                   const selected = selectedTargetLandId === target.tokenId;
                   return (
@@ -866,7 +824,7 @@ export default function BarracksPanelV2({
             </DropdownMenu>
 
             {targetsError ? (
-              <div className="text-xs text-destructive">{targetsError}</div>
+              <ResourceState status="error" title="Target refresh unavailable" description={`${targetsError} Any retained targets will be checked again before a raid.`} onRetry={() => { void loadTargets(); }} />
             ) : null}
           </div>
 
@@ -907,7 +865,7 @@ export default function BarracksPanelV2({
               </div>
 
               {previewError ? (
-                <div className="text-sm text-destructive">{previewError}</div>
+                <ResourceState status="error" title="Raid preview unavailable" description={previewError} onRetry={refreshPreview} />
               ) : preview ? (
                 <div className="space-y-3 mt-1">
                   <div className="flex items-start justify-between gap-3">
@@ -921,7 +879,7 @@ export default function BarracksPanelV2({
                     </div>
                     {preview.statusCode === RAID_STATUS_OK && (
                       <div className={`text-xs font-semibold ${preview.attackerWon ? "text-[hsl(var(--success-strong))]" : "text-destructive"}`}>
-                        {preview.attackerWon ? "Won" : "Lost"}
+                        {preview.attackerWon ? "Would win" : "Would lose"}
                       </div>
                     )}
                   </div>
@@ -955,32 +913,44 @@ export default function BarracksPanelV2({
                       </div>
                       <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:justify-between gap-1">
                         <span>Power: {preview.attackerPower.toString()} vs {preview.defenderPower.toString()}</span>
-                        <span>(Includes 10% home base bonus)</span>
+                        <span>(Includes the target&apos;s home defense bonus)</span>
                       </div>
                     </>
                   )}
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Choose an eligible target land and enter troop counts to preview the raid.
+                  {previewLoading ? 'Updating the preview for your selected target and troops…' : 'Choose an eligible target land and enter troop counts to preview the raid.'}
                 </div>
               )}
             </div>
           ) : null}
 
-          {canAttack && selectedTargetLandId && attackInputsValid ? (
-            <GameTransaction
+          <GameTransaction
               effects={{ domains: ["buildings", "lands", "balances"] }}
               intentKey={`barracks:raid:${landId}`}
-              calls={[
+              calls={selectedTargetLandId && attackInputsValid ? [
                 buildBarracksAttackCallV2(
                   landId,
                   selectedTargetLandId,
                   parsedAttackSwordsmen ?? ZERO_BIGINT,
                   parsedAttackPhalanx ?? ZERO_BIGINT,
                 ),
-              ]}
-              buttonText={`Raid Land #${selectedTargetLandId.toString()}`}
+              ] : []}
+              disabled={!canAttack}
+              onButtonClick={async () => {
+                if (!canAttack) {
+                  throw new Error('Your raid selection changed. Review the target and troops before submitting.');
+                }
+                await requireFeatureAvailable('raid');
+                const freshTargets = await barracksGetEligibleAttackableLandIds(landId);
+                if (!selectedTargetLandId || !freshTargets.includes(selectedTargetLandId)) {
+                  void loadTargets();
+                  throw new Error('This target is no longer available. Choose another land.');
+                }
+                if (BARRACKS_PREVIEW_ENABLED) requirePreviewReady();
+              }}
+              buttonText={canAttack && selectedTargetLandId ? `Raid Land #${selectedTargetLandId.toString()}` : previewLoading ? 'Updating raid preview…' : 'Raid Unavailable'}
               buttonClassName="w-full"
               onSuccess={async () => {
 
@@ -990,9 +960,6 @@ export default function BarracksPanelV2({
               }}
               onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
-          ) : (
-            <DisabledTransaction buttonText="Raid Unavailable" buttonClassName="w-full" />
-          )}
         </div>
       )}
 

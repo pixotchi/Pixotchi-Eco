@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { openFrontendFixture } from './helpers/bootstrap';
 
 test.beforeEach(async ({ page }, testInfo) => {
-  await page.goto('/qa/frontend');
-  await expect(page.locator('[data-fixtures-ready=true]')).toBeVisible();
+  await openFrontendFixture(page, testInfo, 'primitives');
   await page.evaluate(theme => document.documentElement.classList.add(theme), testInfo.project.name.endsWith('dark') ? 'dark' : 'light');
 });
 
@@ -16,7 +16,13 @@ test('large garden items display their category, effects, price and artwork', as
     await expect(group.getByRole('button')).toHaveCount(4);
     const grid = group.locator('.grid');
     const columns = await grid.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
-    expect(columns).toBe((await catalog.boundingBox())!.width >= 340 ? 4 : 2);
+    expect(columns).toBeGreaterThanOrEqual(1);
+    expect(columns).toBeLessThanOrEqual(4);
+    for (const card of await group.getByRole('button').all()) {
+      const cardWidth = (await card.boundingBox())!.width;
+      expect(cardWidth).toBeGreaterThanOrEqual(Math.min(128, (await grid.boundingBox())!.width) - 1);
+      expect(await card.locator('span').evaluateAll(nodes => nodes.every(node => parseFloat(getComputedStyle(node).fontSize) >= 12))).toBe(true);
+    }
   }
   expect(await hybrids.getByRole('button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label'))))
     .toEqual(['Select Dream Dew', 'Select Nitro', 'Select Everdew', 'Select Superbloom']);
@@ -24,12 +30,12 @@ test('large garden items display their category, effects, price and artwork', as
   const everdew = hybrids.getByRole('button', { name: 'Select Everdew' });
   const raincloud = lifetime.getByRole('button', { name: 'Select Raincloud' });
   await expect(superbloom).toContainText('+250,000 PTS');
-  await expect(superbloom).toContainText('+14d TOD');
+  await expect(superbloom).toContainText('+14d lifetime');
   await expect(superbloom).toContainText('37,500 SEED');
   await expect(everdew).toContainText('+125,000 PTS');
-  await expect(everdew).toContainText('+90d TOD');
+  await expect(everdew).toContainText('+90d lifetime');
   await expect(everdew).toContainText('20,000 SEED');
-  await expect(raincloud).toContainText('+7d TOD');
+  await expect(raincloud).toContainText('+7d lifetime');
   await expect(raincloud).toContainText('200 SEED');
   await expect(raincloud).not.toContainText('PTS');
   for (const [button, icon, name] of [[superbloom, 'superbloom', 'Superbloom'], [everdew, 'everdew', 'Everdew'], [raincloud, 'raincloud', 'Raincloud']] as const) {
@@ -39,7 +45,7 @@ test('large garden items display their category, effects, price and artwork', as
     expect(await button.evaluate(node => node.scrollWidth <= node.clientWidth + 1 && node.scrollHeight <= node.clientHeight + 1)).toBe(true);
     await button.click();
     const review = page.getByRole('dialog', { name: 'Care item review' });
-    await expect(review.getByLabel('Quantity', { exact: true })).toHaveText('1');
+    await expect(review.getByLabel('Quantity', { exact: true })).toHaveValue('1');
     await expect(review.getByLabel('Care review', { exact: true })).toContainText(name);
     await page.keyboard.press('Escape');
   }

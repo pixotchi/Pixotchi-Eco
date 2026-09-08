@@ -71,6 +71,7 @@ export interface SolanaBridgeButtonProps {
   onError?: (error: UntypedValue) => void;
   onQuote?: (quote: { wsolAmount: bigint; error?: string } | null) => void;
   onPendingChange?: (pending: boolean) => void;
+  onBeforeSubmit?: () => void | Promise<void>;
 }
 
 type LocalQuote = {
@@ -123,6 +124,7 @@ export default function SolanaBridgeButton({
   onError,
   onQuote,
   onPendingChange,
+  onBeforeSubmit,
 }: SolanaBridgeButtonProps) {
   const bridge = useSolanaBridge();
   const { solanaAddress, isTwinSetup, isConnected, refresh } = useSolanaWallet();
@@ -173,6 +175,13 @@ export default function SolanaBridgeButton({
     () => getSolanaActionKey(actionType, actionParams),
     [actionParams, actionType],
   );
+  const requestIdentity = `${solanaAddress}:${requestKey}`;
+  const latestRequestKeyRef = useRef(requestIdentity);
+  latestRequestKeyRef.current = requestIdentity;
+  useEffect(() => {
+    latestRequestKeyRef.current = requestIdentity;
+    return () => { latestRequestKeyRef.current = ''; };
+  }, [requestIdentity]);
   const actionStorageKey = useMemo(
     () =>
       solanaAddress
@@ -555,7 +564,7 @@ export default function SolanaBridgeButton({
   }, [actionStorageKey, onError, reconcilePendingBridge]);
 
   const handleClick = useCallback(async () => {
-    if (submitLockRef.current) return;
+    if (submitLockRef.current || disabled) return;
     if (!actionStorageKey || !solanaWallet || !solanaAddress || !signAndSendTransaction) {
       const error = new Error('Solana wallet is not ready');
       toast.error(error.message);
@@ -577,6 +586,8 @@ export default function SolanaBridgeButton({
         return;
       }
 
+      await onBeforeSubmit?.();
+      if (latestRequestKeyRef.current !== requestIdentity) throw new Error('The bridge action changed. Review the current selection before submitting.');
       setPhase(null);
       const admission = await acquirePendingBridgeReservation({
         actionKey: actionStorageKey,
@@ -600,6 +611,7 @@ export default function SolanaBridgeButton({
 
       const tx = await prepareAction();
       if (!tx) throw new Error(bridge.state.error || 'Failed to prepare transaction');
+      if (latestRequestKeyRef.current !== requestIdentity) throw new Error('The bridge action changed. Review the current selection before submitting.');
 
       const { transaction, metadata } = await createSolanaBridgeTransaction(
         solanaAddress,
@@ -625,6 +637,7 @@ export default function SolanaBridgeButton({
       }
       reservation = walletPendingReservation;
       setPendingRecord(reservation);
+      if (latestRequestKeyRef.current !== requestIdentity) throw new Error('The bridge wallet or action changed.');
       walletRequestStarted = true;
       const { signature } = await signAndSendTransaction({
         transaction: serialized,
@@ -692,10 +705,13 @@ export default function SolanaBridgeButton({
     actionType,
     bridge.state.error,
     confirmAndTrack,
+    disabled,
     needsSetup,
     onError,
+    onBeforeSubmit,
     prepareAction,
     requestKey,
+    requestIdentity,
     reconcilePendingBridge,
     signAndSendTransaction,
     solanaAddress,

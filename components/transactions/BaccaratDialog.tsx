@@ -1,17 +1,22 @@
 "use client";
-import { GameDialogHeading } from './game-dialog-heading';
+import { isGameTransactionFailure } from "@/lib/game-transaction-status";
+import { CasinoGameSurface } from './casino-game-surface';
+import { GAME_ACTION_BUTTON_BASE, GAME_ACTION_FOOTER_CLASS, gameActionButtonClass } from './game-dialog-styles';
 
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import { AmountField } from '@/components/ui/amount-field';
-import PlayingCard from "@/components/ui/PlayingCard";
+import { TokenAmount } from '@/components/ui/token-amount';
+import { CardHand } from "@/components/ui/PlayingCard";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
-import { loadBetPreference, storeBetPreference } from "@/lib/casino-bet-preferences";
+import { useCasinoBetPreference } from "@/hooks/useCasinoBetPreference";
 import { formatCasinoLimitForToken, getCasinoUiMaxBet, getCasinoUiMinBet, isPotentialCasinoAmountInput, parseCasinoAmountInput } from "@/lib/casino-amount-input";
 import { getClientCasinoPolicy } from "@/lib/casino-client";
-import { getPoolBoundedMaxBet, BACCARAT_WORST_CASE_RETURN_FACTOR } from "@/lib/casino-pool-solvency";
-import { rouletteCanReveal, rouletteRevealBlocksRemaining } from "@/lib/casino-hardening-rules.mjs";
+import { getEconomicReadState } from "@/lib/economic-read-state";
+import { getPoolBoundedMaxBet } from "@/lib/casino-pool-solvency";
+import { BACCARAT_REVEAL_WINDOW_BLOCKS, getCasinoRevealWindow } from "@/lib/casino-reveal-window";
+import { baccaratPotentialReturn, baccaratReturnLabel, baccaratWorstCaseReturn, validBaccaratPayoutRules, type BaccaratPayoutRules } from "@/lib/baccarat-presentation";
 import { dispatchPostTransactionRefresh, POST_TRANSACTION_REFRESH_DELAYS_MS } from "@/lib/transaction-refresh";
 import {
   baccaratGetActiveGame,
@@ -23,20 +28,21 @@ import {
   type BaccaratActiveGame,
   type BaccaratTokenConfig,
 } from "@/lib/contracts";
-import { cn, formatTokenAmount, getCasinoTokenImage } from "@/lib/utils";
+import { cn, getCasinoTokenImage } from "@/lib/utils";
 import {
   getBaccaratBetLabel,
   getBaccaratOutcomeLabel,
-  getBaccaratPayoutLabel,
 } from "@/public/abi/baccarat-abi";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
-import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useBalance, useBlockNumber } from "wagmi";
 import ApproveTransaction from "./approve-transaction";
 import BaccaratTransaction, { type BaccaratRevealResult } from "./baccarat-transaction";
+import { getBaseTransactionReceipt } from '@/lib/base-rpc';
+import { baccaratOwnerScope, baccaratRoundBelongsTo, hasCompleteBaccaratResult, parseBaccaratResultFromReceipts, type BaccaratRoundIdentity, type BaccaratSettlement } from '@/lib/baccarat-result';
 
 interface BaccaratDialogProps {
   open: boolean;
@@ -50,59 +56,30 @@ type BaccaratUiPhase = "idle" | "betting" | "waiting" | "revealing";
 
 const APPROVAL_REFRESH_DELAYS_MS = [0, 750, 1500, 3000] as const;
 const BACCARAT_STATE_POLL_INTERVAL_MS = 4000;
-const BACCARAT_FAILURE_STATUSES = new Set([
-  "error",
-  "failed",
-  "reverted",
-  "cancelled",
-  "canceled",
-  "rejected",
-  "transactionRejected",
-  "userRejected",
-  "buildError",
-]);
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const BACCARAT_ACTIONS_CLASS =
-  "surface-footer-divider dialog-footer-surface sticky bottom-0 z-10 mt-auto shrink-0 space-y-2 overflow-visible border-white/15 bg-black bg-[linear-gradient(180deg,rgb(0,0,0)_0%,rgb(0,0,0)_42%,rgb(0,0,0)_100%)] px-3 pb-[max(0.875rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3 text-white sm:px-4";
-const BACCARAT_ACTION_BUTTON_BASE =
-  "inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-[var(--radius-control)] px-4 py-3 text-sm font-semibold leading-none shadow-[var(--shadow-control)] transition-[background-color,border-color,color,filter,box-shadow] duration-[var(--motion-quick)]";
-const BACCARAT_APPROVE_BUTTON =
-  `${BACCARAT_ACTION_BUTTON_BASE} border border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning))] bg-[image:var(--gradient-warning)] text-[hsl(var(--warning-foreground))] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
-const BACCARAT_REVEAL_BUTTON =
-  `${BACCARAT_ACTION_BUTTON_BASE} border border-amber-300/35 bg-amber-500 bg-[image:var(--gradient-warning)] text-amber-950 [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03]`;
+const BACCARAT_APPROVE_BUTTON = gameActionButtonClass('warning');
+const BACCARAT_REVEAL_BUTTON = gameActionButtonClass('warning');
 
 const BET_OPTIONS = [
   {
     value: BaccaratBetType.PLAYER,
     label: "Player",
-    payout: "2x return",
     ariaLabel: "Bet on Player",
-    accentClassName: "bg-sky-300",
-    selectedClassName:
-      "border-sky-300/70 bg-sky-500/22 text-sky-50 shadow-[0_0_0_1px_rgba(125,211,252,0.35),0_12px_28px_rgba(14,116,144,0.26)]",
     actionClassName:
       "border border-sky-300/45 bg-sky-600 bg-[image:linear-gradient(180deg,rgba(56,189,248,0.95)_0%,rgba(2,132,199,0.94)_55%,rgba(3,105,161,0.98)_100%)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
   {
     value: BaccaratBetType.BANKER,
     label: "Banker",
-    payout: "1.95x return",
     ariaLabel: "Bet on Banker",
-    accentClassName: "bg-rose-300",
-    selectedClassName:
-      "border-rose-300/70 bg-rose-500/22 text-rose-50 shadow-[0_0_0_1px_rgba(253,164,175,0.35),0_12px_28px_rgba(190,18,60,0.24)]",
     actionClassName:
       "border border-rose-300/45 bg-rose-700 bg-[image:linear-gradient(180deg,rgba(244,63,94,0.96)_0%,rgba(190,18,60,0.94)_56%,rgba(136,19,55,0.98)_100%)] text-white [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
   {
     value: BaccaratBetType.TIE,
     label: "Tie",
-    payout: "9x return",
     ariaLabel: "Bet on Tie",
-    accentClassName: "bg-amber-300",
-    selectedClassName:
-      "border-amber-300/75 bg-amber-400/22 text-amber-50 shadow-[0_0_0_1px_rgba(252,211,77,0.36),0_12px_28px_rgba(180,83,9,0.24)]",
     actionClassName:
       "border border-amber-300/45 bg-amber-500 bg-[image:linear-gradient(180deg,rgba(251,191,36,0.98)_0%,rgba(217,119,6,0.96)_56%,rgba(146,64,14,0.98)_100%)] text-amber-950 [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.04]",
   },
@@ -114,70 +91,17 @@ const TABLE_BET_OPTIONS = [
   { ...BET_OPTIONS[0], widthClassName: "w-full" },
 ] as const;
 
-function BaccaratHandArea({
-  cards,
-  label,
-  tone,
-  value,
-}: {
-  cards: number[];
-  label: string;
-  tone: "player" | "banker";
-  value?: number;
-}) {
-  const hasCards = cards.length > 0;
-  const placeholders = tone === "player" ? [0, 1] : [2, 3];
-
-  return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-col items-center gap-2 rounded-[var(--radius-control)] border px-3 py-3 shadow-[var(--shadow-hairline)]",
-        tone === "player"
-          ? "border-sky-300/20 bg-sky-950/22"
-          : "border-rose-300/20 bg-rose-950/24"
-      )}
-      role="group"
-      aria-label={`${label} hand`}
-    >
-      <div className="flex w-full items-center justify-center gap-2">
-        <span className={cn("h-1.5 w-1.5 rounded-full", tone === "player" ? "bg-sky-300" : "bg-rose-300")} />
-        <span className="text-xs font-semibold tracking-normal text-white/78">{label}</span>
-      </div>
-      <div className="flex min-h-[6.25rem] items-center justify-center -space-x-5 pl-2" role="list" aria-label={`${label} cards`}>
-        {hasCards
-          ? cards.map((card, index) => (
-            <div
-              key={`${label}-${card}-${index}`}
-              role="listitem"
-              className="animate-deal-card relative z-[var(--card-z)] transition-transform duration-[var(--motion-quick)] ease-[var(--ease-standard)] [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:hover:z-10"
-              style={{ animationDelay: `${index * 50}ms`, '--card-z': index } as CSSProperties}
-            >
-              <PlayingCard value={card} className="shadow-2xl" />
-            </div>
-          ))
-          : placeholders.map((card, index) => (
-            <div
-              key={`${label}-placeholder-${card}`}
-              aria-hidden="true"
-              className="relative opacity-85"
-              style={{ transform: `rotate(${index === 0 ? -4 : 4}deg)`, zIndex: index }}
-            >
-              <PlayingCard value={card} hidden className="shadow-2xl" />
-            </div>
-          ))}
-      </div>
-      <div>
-        {hasCards && value !== undefined && (
-          <div className="flex min-h-8 flex-col items-center justify-center gap-0.5">
-            <span className="text-lg font-semibold text-white">{value}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+function BaccaratHandArea({ cards, label, value }: { cards: number[]; label: string; value?: number }) {
+  return <CardHand cards={cards.length ? cards : [null, null]} label={`${label} hand`} value={value} hideHoleCard={cards.length === 0} />;
 }
 
-export default function BaccaratDialog({
+export default function BaccaratDialog(props: BaccaratDialogProps) {
+  const { address } = useAccount();
+  // A wallet/land change must never inherit another owner's local round or requests.
+  return <BaccaratDialogContent key={baccaratOwnerScope(address, props.landId)} {...props} />;
+}
+
+function BaccaratDialogContent({
   open,
   onOpenChange,
   landId,
@@ -200,27 +124,38 @@ export default function BaccaratDialog({
   const [betType, setBetType] = useState<BaccaratBetType>(BaccaratBetType.BANKER);
   const [suppressBetOptionMotion, setSuppressBetOptionMotion] = useState(false);
   const [betAmount, setBetAmount] = useState("10");
+  const [readStatus, setReadStatus] = useState<"loading" | "ready" | "error" | "unsupported" | "disabled">("loading");
+  const [verifiedConfigToken, setVerifiedConfigToken] = useState<string | null>(null);
+  const [payoutRules, setPayoutRules] = useState<BaccaratPayoutRules | null>(null);
   const [tokenConfig, setTokenConfig] = useState<BaccaratTokenConfig | null>(null);
   const [activeGame, setActiveGame] = useState<BaccaratActiveGame | null>(null);
   const [allowanceWei, setAllowanceWei] = useState(BigInt(0));
-  const [result, setResult] = useState<BaccaratRevealResult | null>(null);
-  const [expiredResult, setExpiredResult] = useState<{ forfeitedAmount: string } | null>(null);
+  const [settlement, setSettlement] = useState<BaccaratSettlement | null>(null);
+  const [receiptRetrying, setReceiptRetrying] = useState(false);
+  const [receiptRetry, setReceiptRetry] = useState(0);
+  const receiptScopeRef = useRef(0);
+  const submittedRoundRef = useRef<BaccaratRoundIdentity | null>(null);
+  const settledHashesRef = useRef(new Set<string>());
   const [isLoading, setIsLoading] = useState(false);
   const [walletTxPending, setWalletTxPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [optimisticBalanceWei, setOptimisticBalanceWei] = useState<bigint | null>(null);
 
-  const hasResolvedRound = !!result || !!expiredResult;
-  const effectiveToken = activeGame?.isActive && !hasResolvedRound ? activeGame.bettingToken : selectedToken;
-  const { symbol: tokenSymbolRaw, decimals: tokenDecimals } = useTokenMetadata(effectiveToken);
-  const tokenSymbol = tokenSymbolRaw || "TOKEN";
+  const hasResolvedRound = !!settlement && hasCompleteBaccaratResult(settlement.result);
+  const awaitingReceipt = !!settlement && !hasResolvedRound;
+  const result = hasResolvedRound && !settlement.result.expired ? settlement.result : null;
+  const expiredResult = hasResolvedRound && settlement.result.expired ? settlement.result : null;
+  const effectiveToken = settlement?.round.token ?? (activeGame?.isActive ? activeGame.bettingToken : selectedToken);
+  const { symbol: tokenSymbolRaw, decimals: metadataDecimals, isReady: metadataReady, isError: metadataError, refetch: refetchMetadata } = useTokenMetadata(effectiveToken);
+  const tokenDecimals = settlement?.round.decimals ?? metadataDecimals;
+  const tokenSymbol = settlement?.round.symbol ?? tokenSymbolRaw ?? "TOKEN";
   const tokenLogo = useMemo(() => getCasinoTokenImage(effectiveToken), [effectiveToken]);
   const uiMinBet = useMemo(
-    () => tokenConfig ? getCasinoUiMinBet(effectiveToken, tokenDecimals, tokenConfig.minBet) : BigInt(0),
+    () => tokenConfig && tokenDecimals !== undefined ? getCasinoUiMinBet(effectiveToken, tokenDecimals, tokenConfig.minBet) : BigInt(0),
     [effectiveToken, tokenConfig, tokenDecimals]
   );
   const uiMaxBet = useMemo(
-    () => tokenConfig ? getCasinoUiMaxBet(effectiveToken, tokenDecimals, tokenConfig.maxBet) : BigInt(0),
+    () => tokenConfig && tokenDecimals !== undefined ? getCasinoUiMaxBet(effectiveToken, tokenDecimals, tokenConfig.maxBet) : BigInt(0),
     [effectiveToken, tokenConfig, tokenDecimals]
   );
   const { data: payoutPoolData, isLoading: isPayoutPoolLoading, error: payoutPoolError, refetch: refetchPayoutPool } = useBalance({
@@ -231,30 +166,30 @@ export default function BaccaratDialog({
       refetchInterval: open ? 10_000 : false,
     },
   });
-  const payoutPoolReadStatus: 'unknown' | 'loading' | 'ready' | 'error' = payoutPoolData?.value !== undefined
-    ? 'ready'
-    : isPayoutPoolLoading
-      ? 'loading'
-      : payoutPoolError || tokenConfig
-        ? 'error'
-        : 'unknown';
+  const payoutPoolReadStatus = getEconomicReadState({
+    hasSnapshot: payoutPoolData?.value !== undefined,
+    identityMatches: !!tokenConfig?.rewardPool && !!effectiveToken,
+    loading: isPayoutPoolLoading,
+    error: payoutPoolError,
+  });
   const payoutPoolBalance = payoutPoolData?.value ?? null;
-  const offeredMaxBet = getPoolBoundedMaxBet(uiMaxBet, payoutPoolBalance, BACCARAT_WORST_CASE_RETURN_FACTOR) ?? uiMaxBet;
+  const offeredMaxBet = payoutRules ? (getPoolBoundedMaxBet(uiMaxBet, payoutPoolBalance, baccaratWorstCaseReturn(payoutRules)) ?? uiMaxBet) : BigInt(0);
   const formattedMinBet = useMemo(
-    () => tokenConfig ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, effectiveToken, "min") : "0",
+    () => tokenConfig && tokenDecimals !== undefined ? formatCasinoLimitForToken(uiMinBet, tokenDecimals, effectiveToken, "min") : "—",
     [effectiveToken, tokenConfig, tokenDecimals, uiMinBet]
   );
   const formattedMaxBet = useMemo(
-    () => tokenConfig ? formatCasinoLimitForToken(offeredMaxBet, tokenDecimals, effectiveToken, "max") : "0",
+    () => tokenConfig && tokenDecimals !== undefined ? formatCasinoLimitForToken(offeredMaxBet, tokenDecimals, effectiveToken, "max") : "—",
     [effectiveToken, offeredMaxBet, tokenConfig, tokenDecimals]
   );
 
-  const { data: balanceData, refetch: refetchBalance } = useBalance({
+  const { data: balanceData, error: balanceError, isLoading: balanceLoading, refetch: refetchBalance } = useBalance({
     address,
     token: effectiveToken as `0x${string}` | undefined,
     query: { enabled: !!address && !!effectiveToken },
   });
 
+  const balanceReadState = getEconomicReadState({ hasSnapshot: balanceData?.value !== undefined, identityMatches: !!address && !!effectiveToken, loading: balanceLoading, error: balanceError });
   const { data: liveBlock } = useBlockNumber({
     watch: open && !!activeGame?.isActive,
     query: {
@@ -264,6 +199,7 @@ export default function BaccaratDialog({
   });
 
   const betWei = useMemo(() => {
+    if (tokenDecimals === undefined) return BigInt(0);
     try {
       return parseCasinoAmountInput(betAmount || "0", tokenDecimals);
     } catch {
@@ -271,17 +207,12 @@ export default function BaccaratDialog({
     }
   }, [betAmount, tokenDecimals]);
 
-  const potentialPayoutWei = useMemo(() => {
-    if (betWei <= BigInt(0)) return BigInt(0);
-    if (betType === BaccaratBetType.BANKER) return betWei + (betWei * BigInt(9500) / BigInt(10000));
-    if (betType === BaccaratBetType.TIE) return betWei * BigInt(9);
-    return betWei * BigInt(2);
-  }, [betType, betWei]);
-
-  const canRevealActiveGame = rouletteCanReveal(activeGame, liveBlock);
-  const revealBlocksRemaining = useMemo(() => (
-    rouletteRevealBlocksRemaining(activeGame, liveBlock)
-  ), [activeGame, liveBlock]);
+  const potentialPayoutWei = useMemo(() => payoutRules && betWei > BigInt(0)
+    ? baccaratPotentialReturn(betType, betWei, payoutRules) : null, [betType, betWei, payoutRules]);
+  const revealWindow = activeGame?.isActive
+    ? getCasinoRevealWindow(activeGame.revealBlock, liveBlock, BACCARAT_REVEAL_WINDOW_BLOCKS) : null;
+  const activeRoundExpired = activeGame?.isExpired === true || revealWindow?.expired === true;
+  const canRevealActiveGame = !!activeGame?.isActive && (activeRoundExpired || (revealWindow?.blocksUntilOpen === BigInt(0)) || (liveBlock === undefined && activeGame.canReveal));
   const activeGameBelongsToWallet = !activeGame?.isActive || (!!address && activeGame.player.toLowerCase() === address.toLowerCase());
   const balanceWei = optimisticBalanceWei ?? balanceData?.value ?? BigInt(0);
   const displayedBalanceWei = optimisticBalanceWei ?? balanceData?.value;
@@ -292,12 +223,21 @@ export default function BaccaratDialog({
   const amountAboveMax = !!tokenConfig && betWei > offeredMaxBet;
   const payoutPoolUnknown = payoutPoolReadStatus !== "ready";
   const poolLiquidityBinds = payoutPoolReadStatus === "ready" && offeredMaxBet < uiMaxBet;
-  const tokenDisabled = !tokenConfig?.supported || !tokenConfig.enabled;
-  const hasPendingGame = !!activeGame?.isActive && !hasResolvedRound;
-  const bettingLocked = walletTxPending || hasPendingGame || phase === "waiting" || phase === "revealing";
+  const gameDataReady = readStatus === "ready" && verifiedConfigToken === effectiveToken?.toLowerCase();
+  const tokenDisabled = readStatus === "unsupported" || readStatus === "disabled";
+  const amountIssue = !metadataReady || !tokenConfig ? undefined
+    : betWei <= BigInt(0) ? "Enter a valid bet amount."
+    : amountBelowMin ? `Minimum ${formattedMinBet} ${tokenSymbol}.`
+    : amountAboveMax ? `Maximum ${formattedMaxBet} ${tokenSymbol}.`
+    : !hasBalance ? `Your available ${tokenSymbol} balance is too low.` : undefined;
+  const hasPendingGame = !!activeGame?.isActive && !settlement;
+  const bettingLocked = walletTxPending || hasPendingGame || awaitingReceipt || !metadataReady || phase === "waiting" || phase === "revealing";
   const balanceScopeKey = `${address?.toLowerCase() ?? ""}:${effectiveToken?.toLowerCase() ?? ""}`;
   const canPlaceBet =
     casinoPolicy.playable &&
+    metadataReady &&
+    gameDataReady &&
+    !!payoutRules &&
     !!address &&
     !!effectiveToken &&
     !!tokenConfig &&
@@ -306,6 +246,7 @@ export default function BaccaratDialog({
     betWei >= uiMinBet &&
     betWei <= offeredMaxBet &&
     hasBalance &&
+    balanceReadState === "ready" &&
     hasApproval &&
     !payoutPoolUnknown &&
     !bettingLocked;
@@ -316,7 +257,7 @@ export default function BaccaratDialog({
     landId.toString(),
     selectedToken?.toLowerCase() ?? "",
     effectiveToken?.toLowerCase() ?? "",
-    tokenDecimals.toString(),
+    tokenDecimals?.toString() ?? "unknown",
   ].join(":");
   const loadingScopeKey = [
     address?.toLowerCase() ?? "",
@@ -337,6 +278,14 @@ export default function BaccaratDialog({
       allowanceGenerationRef.current += 1;
     };
   }, [refreshScopeKey]);
+
+  useEffect(() => {
+    // A selected-token change dismisses an old result, but cannot discard a
+    // confirmed reveal whose receipt still needs recovery.
+    setSettlement(current => current && hasCompleteBaccaratResult(current.result) ? null : current);
+  }, [selectedToken]);
+
+  useEffect(() => () => { receiptScopeRef.current += 1; }, []);
 
   const refetchBalanceAfterTx = useCallback(() => {
     dispatchPostTransactionRefresh();
@@ -384,7 +333,7 @@ export default function BaccaratDialog({
     const controlsLoading = options?.showLoading || loadingGenerationRef.current !== null;
     if (controlsLoading) {
       loadingGenerationRef.current = requestGeneration;
-      if (options?.showLoading) setIsLoading(true);
+      if (options?.showLoading) { setIsLoading(true); setReadStatus("loading"); }
     }
     const isCurrentRequest = () => (
       refreshScopeRef.current === refreshScopeKey &&
@@ -393,57 +342,46 @@ export default function BaccaratDialog({
 
     try {
       setError(null);
-      const [active, globalConfig] = await Promise.all([
-        baccaratGetActiveGame(landId),
-        baccaratGetConfig(),
-      ]);
+      const active = await baccaratGetActiveGame(landId);
       if (!isCurrentRequest()) return null;
-      if (!active || !globalConfig) {
-        throw new Error("Baccarat game state read failed");
-      }
-
-      const token = active?.isActive ? active.bettingToken : selectedToken;
-
-      if (!token || (!globalConfig.enabled && !active.isActive)) {
-        if (!isCurrentRequest()) return null;
-        setTokenConfig(null);
-        setActiveGame(null);
-        setAllowanceWei(BigInt(0));
-        setPhase("idle");
-        return active;
-      }
-
-      const cfg = await baccaratGetTokenConfig(token);
-      if (!isCurrentRequest()) return null;
-      if (!cfg) {
-        throw new Error("Baccarat token config read failed");
-      }
-
-      let approval = BigInt(0);
-      if (address && cfg?.supported) {
-        approval = await checkCasinoApproval(address, token);
-      }
-      if (!isCurrentRequest()) return null;
-
-      setTokenConfig(cfg);
-      if (active?.isActive) {
+      if (!active) throw new Error("Baccarat game state read failed");
+      // Recovery belongs to the paid round. Optional new-bet/config reads must
+      // never hide it or prevent a no-new-spend reveal.
+      if (active.isActive) {
         setActiveGame(active);
         setBetType(active.betType);
-        setBetAmount(formatUnits(active.betAmount, tokenDecimals));
         setPhase(active.canReveal || active.isExpired ? "revealing" : "waiting");
       } else if (!options?.keepPendingWhenMissing) {
         setActiveGame(null);
-        setPhase((current) => current === "betting" ? current : "idle");
+        setPhase(current => current === "betting" ? current : "idle");
       }
-      if (allowanceGenerationRef.current === allowanceGeneration) {
-        setAllowanceWei(approval);
+      const globalConfig = await baccaratGetConfig();
+      if (!isCurrentRequest()) return null;
+      if (!globalConfig || !validBaccaratPayoutRules(globalConfig)) throw new Error("Baccarat payout rules read failed");
+      setPayoutRules({ bankerCommissionBps: globalConfig.bankerCommissionBps, tiePayoutMultiplier: globalConfig.tiePayoutMultiplier });
+      const token = active.isActive ? active.bettingToken : selectedToken;
+      if (!token || !globalConfig.enabled) {
+        setTokenConfig(null);
+        setAllowanceWei(BigInt(0));
+        setReadStatus(globalConfig.enabled ? "unsupported" : "disabled");
+        return active;
       }
-
+      const cfg = await baccaratGetTokenConfig(token);
+      if (!isCurrentRequest()) return null;
+      if (!cfg) throw new Error("Baccarat token config read failed");
+      setTokenConfig(cfg);
+      setVerifiedConfigToken(token.toLowerCase());
+      let approval = BigInt(0);
+      if (address && cfg.supported) approval = await checkCasinoApproval(address, token);
+      if (!isCurrentRequest()) return null;
+      setReadStatus(!cfg.supported ? "unsupported" : !cfg.enabled ? "disabled" : "ready");
+      if (allowanceGenerationRef.current === allowanceGeneration) setAllowanceWei(approval);
       return active;
     } catch (err) {
       if (isCurrentRequest()) {
         console.error("Failed to load baccarat state:", err);
-        setError("Failed to load Baccarat data");
+        setReadStatus("error");
+        setError("Baccarat data unavailable. Retry to verify the game and betting limits.");
       }
       return null;
     } finally {
@@ -452,7 +390,13 @@ export default function BaccaratDialog({
         setIsLoading(false);
       }
     }
-  }, [address, casinoPolicy.playable, landId, open, refreshScopeKey, selectedToken, tokenDecimals]);
+  }, [address, casinoPolicy.playable, landId, open, refreshScopeKey, selectedToken]);
+
+  useEffect(() => {
+    if (activeGame?.isActive && metadataReady && tokenDecimals !== undefined && effectiveToken?.toLowerCase() === activeGame.bettingToken.toLowerCase()) {
+      setBetAmount(formatUnits(activeGame.betAmount, tokenDecimals));
+    }
+  }, [activeGame, effectiveToken, metadataReady, tokenDecimals]);
 
   useEffect(() => {
     if (!open || casinoPolicy.playable) return;
@@ -486,20 +430,15 @@ export default function BaccaratDialog({
     };
   }, [balanceScopeKey]);
 
-  useEffect(() => {
-    if (!open || !tokenConfig || activeGame?.isActive) return;
-    setBetAmount(loadBetPreference({
-      game: "baccarat",
-      token: effectiveToken,
-      minBet: uiMinBet,
-      maxBet: offeredMaxBet,
-      decimals: tokenDecimals,
-      fallback: formattedMinBet,
-    }));
-  }, [activeGame?.isActive, effectiveToken, formattedMinBet, offeredMaxBet, open, tokenConfig, tokenDecimals, uiMinBet]);
+  const rememberBetAmount = useCasinoBetPreference({
+    game: 'baccarat', scope: open ? loadingScopeKey : null,
+    enabled: !!tokenConfig && !activeGame?.isActive && readStatus === 'ready',
+    token: effectiveToken, decimals: tokenDecimals, minBet: uiMinBet, maxBet: offeredMaxBet,
+    onInitialize: setBetAmount,
+  });
 
   useEffect(() => {
-    const waitingForActiveGame = !activeGame?.isActive && phase === "waiting" && !hasResolvedRound;
+    const waitingForActiveGame = !activeGame?.isActive && phase === "waiting" && !settlement;
     if (!open || (!hasPendingGame && !waitingForActiveGame) || walletTxPending) return;
 
     let disposed = false;
@@ -517,14 +456,14 @@ export default function BaccaratDialog({
       disposed = true;
       if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
-  }, [activeGame?.isActive, hasPendingGame, hasResolvedRound, open, phase, refreshBaccaratState, walletTxPending]);
+  }, [activeGame?.isActive, hasPendingGame, settlement, open, phase, refreshBaccaratState, walletTxPending]);
 
   const handleStatusUpdate = useCallback((status: LifecycleStatus) => {
     const statusName = status.statusName ?? "";
     if (statusName === "transactionPending") {
       setWalletTxPending(true);
     }
-    if (statusName === "success" || BACCARAT_FAILURE_STATUSES.has(statusName)) {
+    if (statusName === "success" || isGameTransactionFailure(statusName)) {
       setWalletTxPending(false);
     }
   }, []);
@@ -533,8 +472,7 @@ export default function BaccaratDialog({
     setWalletTxPending(false);
     if (!txResult) return;
 
-    setResult(null);
-    setExpiredResult(null);
+    setSettlement(null);
     setPhase("waiting");
     applyOptimisticBalanceDelta(-betWei);
     refetchBalanceAfterTx();
@@ -546,27 +484,63 @@ export default function BaccaratDialog({
     }
   }, [applyOptimisticBalanceDelta, betWei, refetchBalanceAfterTx, refreshBaccaratState]);
 
-  const handleRevealComplete = useCallback((revealResult?: BaccaratRevealResult) => {
-    setWalletTxPending(false);
-    if (!revealResult) return;
+  const roundIdentity = useMemo((): BaccaratRoundIdentity | undefined => (
+    activeGame?.isActive
+      ? { owner: activeGame.player, landId, token: activeGame.bettingToken, decimals: tokenDecimals,
+          symbol: tokenSymbolRaw, wager: activeGame.betAmount, betType: activeGame.betType, revealBlock: activeGame.revealBlock }
+      : undefined
+  ), [activeGame, landId, tokenDecimals, tokenSymbolRaw]);
 
-    refetchBalanceAfterTx();
-    if (revealResult.expired) {
-      setExpiredResult({ forfeitedAmount: revealResult.forfeitedAmount ?? "0" });
-      setResult(null);
-    } else {
-      const payoutWei = parseUnits(revealResult.payout ?? "0", tokenDecimals);
-      if (payoutWei > BigInt(0)) {
-        applyOptimisticBalanceDelta(payoutWei);
-      }
-      setResult(revealResult);
-      setExpiredResult(null);
+  const acceptSettlement = useCallback((round: BaccaratRoundIdentity, revealResult: BaccaratRevealResult) => {
+    if (!baccaratRoundBelongsTo(round, address, landId)) return;
+    setSettlement({ round, result: revealResult });
+    if (!hasCompleteBaccaratResult(revealResult)) return;
+    const settlementKey = revealResult.transactionHash ?? `${round.owner}:${round.landId}:${round.revealBlock}`;
+    if (settledHashesRef.current.has(settlementKey)) return;
+    settledHashesRef.current.add(settlementKey);
+    if (!revealResult.expired) {
+      const payoutWei = revealResult.payoutWei ?? (revealResult.payout !== undefined && round.decimals !== undefined ? parseUnits(revealResult.payout, round.decimals) : BigInt(0));
+      if (payoutWei > BigInt(0)) applyOptimisticBalanceDelta(payoutWei);
     }
-
     setActiveGame(null);
     setPhase("idle");
     onGameComplete?.();
-  }, [applyOptimisticBalanceDelta, onGameComplete, refetchBalanceAfterTx, tokenDecimals]);
+  }, [address, applyOptimisticBalanceDelta, landId, onGameComplete]);
+
+  const handleRevealComplete = useCallback((revealResult?: BaccaratRevealResult) => {
+    setWalletTxPending(false);
+    if (!revealResult) return;
+    const round = submittedRoundRef.current ?? roundIdentity;
+    if (!round) return;
+    refetchBalanceAfterTx();
+    acceptSettlement(round, revealResult);
+  }, [acceptSettlement, refetchBalanceAfterTx, roundIdentity]);
+
+  useEffect(() => {
+    if (!open || !awaitingReceipt || !settlement?.result.transactionHash) return;
+    const scope = receiptScopeRef.current;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    const recover = async () => {
+      setReceiptRetrying(true);
+      try {
+        const receipt = await getBaseTransactionReceipt(settlement.result.transactionHash as `0x${string}`);
+        if (disposed || receiptScopeRef.current !== scope) return;
+        const recovered = parseBaccaratResultFromReceipts([receipt], settlement.round, LAND_CONTRACT_ADDRESS);
+        if (recovered && hasCompleteBaccaratResult(recovered)) {
+          acceptSettlement(settlement.round, recovered);
+          refetchBalanceAfterTx();
+          return;
+        }
+      } catch { /* Confirmed transaction; unavailable receipt is not a loss or a failed reveal. */ }
+      finally { if (!disposed && receiptScopeRef.current === scope) setReceiptRetrying(false); }
+      const delay = [1500, 4000, 8000][attempt++];
+      if (!disposed && receiptScopeRef.current === scope && delay !== undefined) timer = setTimeout(() => void recover(), delay);
+    };
+    void recover();
+    return () => { disposed = true; if (timer) clearTimeout(timer); };
+  }, [acceptSettlement, awaitingReceipt, open, receiptRetry, refetchBalanceAfterTx, settlement]);
 
   const handleApproveSuccess = useCallback(async () => {
     if (!address || !effectiveToken || refreshScopeRef.current !== refreshScopeKey) return;
@@ -592,8 +566,8 @@ export default function BaccaratDialog({
   const handleBetAmountChange = useCallback((value: string) => {
     if (!isPotentialCasinoAmountInput(value)) return;
     setBetAmount(value);
-    storeBetPreference("baccarat", effectiveToken, value, tokenDecimals);
-  }, [effectiveToken, tokenDecimals]);
+    rememberBetAmount(value);
+  }, [rememberBetAmount]);
 
   const handleClose = useCallback(() => {
     if (walletTxPending) {
@@ -601,14 +575,14 @@ export default function BaccaratDialog({
       return;
     }
     if (activeGame?.isActive && !hasResolvedRound) {
-      toast("Baccarat round remains active until revealed or expired.", { id: "baccarat-active-close" });
+      toast("Return to reveal your Baccarat result before its block deadline or your stake is forfeited.", { id: "baccarat-active-close" });
     }
     onOpenChange(false);
   }, [activeGame?.isActive, hasResolvedRound, onOpenChange, walletTxPending]);
 
   const handlePlayAgain = useCallback(() => {
-    setResult(null);
-    setExpiredResult(null);
+    setSettlement(null);
+    submittedRoundRef.current = null;
     setError(null);
     setPhase("idle");
     void refetchBalance();
@@ -616,21 +590,26 @@ export default function BaccaratDialog({
 
   const resultOutcome = result?.outcome !== undefined ? getBaccaratOutcomeLabel(result.outcome) : null;
   const resultBet = result?.betType !== undefined ? getBaccaratBetLabel(result.betType) : getBaccaratBetLabel(betType);
-  const isPushResult = !!result && !result.won && !!result.payout && result.payout !== "0";
-  const showTable = hasPendingGame || hasResolvedRound;
-  const showWagerPanel = !hasPendingGame && !hasResolvedRound;
+  const resolvedPayout = result?.payoutWei !== undefined && tokenDecimals !== undefined ? formatUnits(result.payoutWei, tokenDecimals) : result?.payout;
+  const resolvedForfeiture = expiredResult?.forfeitedWei !== undefined && tokenDecimals !== undefined ? formatUnits(expiredResult.forfeitedWei, tokenDecimals) : expiredResult?.forfeitedAmount;
+  const isPushResult = !!result && !result.won && (result.payoutWei !== undefined ? result.payoutWei > BigInt(0) : !!result.payout && result.payout !== "0");
+  const netResultWei = result?.payoutWei !== undefined && settlement ? result.payoutWei - settlement.round.wager : undefined;
+  const resultHeading = isPushResult ? "Bet returned" : result?.won ? "You won" : "You lost";
+  const resultNetAmount = netResultWei !== undefined && tokenDecimals !== undefined ? `${formatUnits(netResultWei < BigInt(0) ? -netResultWei : netResultWei, tokenDecimals)} ${tokenSymbol}` : undefined;
+  const showTable = hasPendingGame || !!settlement;
+  const showWagerPanel = !hasPendingGame && !settlement;
   const selectedBetOption = useMemo(
     () => BET_OPTIONS.find((option) => option.value === betType) ?? BET_OPTIONS[1],
     [betType]
   );
   const dealButtonClassName = useMemo(
-    () => `${BACCARAT_ACTION_BUTTON_BASE} ${selectedBetOption.actionClassName}`,
+    () => `${GAME_ACTION_BUTTON_BASE} ${selectedBetOption.actionClassName}`,
     [selectedBetOption.actionClassName]
   );
   const baccaratAnnouncement = expiredResult
-    ? `Baccarat round expired. ${expiredResult.forfeitedAmount} ${tokenSymbol} forfeited.`
+    ? `Baccarat round expired. ${resolvedForfeiture === undefined ? 'Verify token details to display the forfeited amount.' : `${resolvedForfeiture} ${tokenSymbol} forfeited.`}`
     : result && resultOutcome
-      ? `Baccarat result: ${resultOutcome} wins. ${resultBet} bet ${result.won ? "won" : isPushResult ? "pushed" : "lost"}. Payout ${result.payout ?? "0"} ${tokenSymbol}.`
+      ? `Baccarat result: ${resultHeading}${!isPushResult && resultNetAmount ? ` ${resultNetAmount}` : ""}. ${resultOutcome === "Tie" ? "The hands tied" : `${resultOutcome} had the winning hand`}. ${resolvedPayout === undefined ? 'Verify token details to display the returned amount.' : `Total returned ${resolvedPayout} ${tokenSymbol}.`}`
       : "";
   const suppressBetMotionForKeyboard = useCallback(() => {
     if (betMotionFrameRef.current !== null) {
@@ -674,30 +653,18 @@ export default function BaccaratDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : handleClose())}>
-      <DialogContent
-        padding="none"
-        className="blackjack-dialog-surface w-[min(96vw,34rem)] border-white/15 bg-[url('/icons/casinobj-bg.webp')] bg-cover bg-center bg-no-repeat text-white"
-        mobileMode="center"
-        surface="game"
-        size="full"
-        hideCloseButton
-        /* Money game with no visible close button: a stray backdrop tap must not
-           abandon a round — nor may a stray Escape press. */
-        onPointerDownOutside={(event) => event.preventDefault()}
-        onEscapeKeyDown={(event) => {
-          if (walletTxPending || hasPendingGame) event.preventDefault();
-        }}
+      <CasinoGameSurface
+        title="Baccarat"
+        description="Punto Banco Baccarat with Player, Banker, and Tie bets."
+        onClose={handleClose}
+        preventEscape={walletTxPending || hasPendingGame}
       >
-        <GameDialogHeading title="Baccarat" onClose={handleClose} />
-        <DialogDescription className="sr-only">
-          Punto Banco Baccarat with Player, Banker, and Tie bets.
-        </DialogDescription>
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {baccaratAnnouncement}
         </p>
 
         <div className="flex min-h-0 flex-1 flex-col bg-black/50 text-white">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-4 sm:px-4 sm:pt-5">
+          <div className="px-3 pb-4 pt-4 sm:px-4 sm:pt-5">
             {isLoading ? (
               <div className="flex min-h-[22rem] items-center justify-center" role="status" aria-live="polite">
                 <Loader2 aria-hidden="true" className="h-8 w-8 animate-spin text-white/70" />
@@ -707,20 +674,18 @@ export default function BaccaratDialog({
               <div className="mx-auto flex w-full max-w-[38rem] flex-col gap-3 sm:gap-4">
                 {showTable && (
                   <div className="rounded-[var(--radius-control)] border border-white/10 bg-black/35 p-3 shadow-[var(--shadow-hairline)]">
-                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    {result && <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                       <BaccaratHandArea
                         cards={result?.playerCards ?? []}
                         label="Player"
-                        tone="player"
                         value={result?.playerTotal}
                       />
                       <BaccaratHandArea
                         cards={result?.bankerCards ?? []}
                         label="Banker"
-                        tone="banker"
                         value={result?.bankerTotal}
                       />
-                    </div>
+                    </div>}
 
                     {(result || expiredResult) && (
                       <div className={cn(
@@ -735,36 +700,49 @@ export default function BaccaratDialog({
                           <>
                             <div className="text-lg font-semibold text-red-200">Round Expired</div>
                             <div className="mt-1 text-sm text-white/75">
-                              {expiredResult.forfeitedAmount} {tokenSymbol} forfeited.
+                              {resolvedForfeiture === undefined ? 'Verify token details to display the forfeited amount.' : `${resolvedForfeiture} ${tokenSymbol} forfeited.`}
                             </div>
                           </>
                         ) : (
                           <>
                             <div className="text-lg font-semibold">
-                              {resultOutcome} {result?.won ? "Wins" : isPushResult ? "Push" : "Wins"}
+                              {resultHeading}{!isPushResult && resultNetAmount ? ` ${resultNetAmount}` : ""}
                             </div>
                             <div className="mt-1 text-sm text-white/75">
-                              Bet: {resultBet} • Payout: {result?.payout ?? "0"} {tokenSymbol}
+                              Bet: {resultBet} • Total returned: {resolvedPayout === undefined ? 'Amount unavailable until token details are verified' : `${resolvedPayout} ${tokenSymbol}`}
                             </div>
+                            <p className="mt-1 text-sm text-white/75">{resultOutcome === "Tie" ? "The hands tied." : `${resultOutcome} had the winning hand.`}</p>
                           </>
                         )}
                       </div>
                     )}
 
-                    {hasPendingGame && (
-                      <div className="mt-3 border-t border-amber-300/25 px-1 pt-3 text-sm text-amber-50">
-                        <div className="font-semibold">Active round</div>
-                        <div className="mt-1 text-amber-50/80">
-                          {canRevealActiveGame
-                            ? "Reveal is ready."
-                            : `Reveal unlocks in ${revealBlocksRemaining} block${revealBlocksRemaining === 1 ? "" : "s"}.`}
-                        </div>
-                        {!activeGameBelongsToWallet && (
-                          <div className="mt-1 text-xs text-amber-100/75">
-                            This round belongs to another wallet.
-                          </div>
+                    {awaitingReceipt && (
+                      <div className="space-y-2 text-sm" role="status" aria-live="polite">
+                        <p className="font-semibold">Reveal confirmed. Result is still loading.</p>
+                        <p>Your {tokenDecimals === undefined ? '' : `${formatUnits(settlement.round.wager, tokenDecimals)} ${tokenSymbol} `}{getBaccaratBetLabel(settlement.round.betType)} bet is preserved while we retrieve its outcome.</p>
+                        {settlement.result.transactionHash && (
+                          <a className="underline" href={`https://basescan.org/tx/${settlement.result.transactionHash}`} target="_blank" rel="noopener noreferrer">View confirmed transaction</a>
                         )}
                       </div>
+                    )}
+
+                    {hasPendingGame && activeGame && (
+                      <section aria-label="Committed Baccarat round" className="space-y-2 px-1 text-sm text-amber-50">
+                        <p className="font-semibold">{tokenDecimals === undefined ? "Committed stake: amount unavailable" : `${formatUnits(activeGame.betAmount, tokenDecimals)} ${tokenSymbol} committed`} · {getBaccaratBetLabel(activeGame.betType)}</p>
+                        <ol className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/80" aria-label="Round progress">
+                          <li>1. Bet placed</li><li aria-current="step">2. {activeRoundExpired ? "Reveal deadline passed" : canRevealActiveGame ? "Reveal available" : "Waiting for reveal"}</li><li>3. Result</li>
+                        </ol>
+                        <p role="status">{activeRoundExpired
+                          ? "The reveal deadline passed and your stake is forfeited. Close the expired round to continue."
+                          : revealWindow?.remainingRevealBlocks === null
+                            ? "Checking the current block. Reveal promptly when available."
+                            : canRevealActiveGame
+                              ? revealWindow?.remainingRevealBlocks === BigInt(0) ? "Reveal now: this is the last valid block." : `Reveal now. ${revealWindow?.remainingRevealBlocks} blocks remain before your stake is forfeited.`
+                              : `Reveal unlocks in ${revealWindow?.blocksUntilOpen} blocks.`}</p>
+                        <p className="break-words text-xs text-white/75">Reveal window: blocks {revealWindow?.firstRevealBlock.toString()}–{revealWindow?.lastRevealBlock.toString()} (inclusive).</p>
+                        {!activeGameBelongsToWallet && <p>This round belongs to another wallet.</p>}
+                      </section>
                     )}
                   </div>
                 )}
@@ -828,11 +806,10 @@ export default function BaccaratDialog({
                     </div>
 
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                      <div className="min-w-0">
-                        <AmountField id={betAmountInputId} label="Bet amount" unit={tokenSymbol} surface="game" placeholder={formattedMinBet} aria-label="Baccarat bet amount" value={betAmount} onChange={e => handleBetAmountChange(e.target.value)} disabled={bettingLocked} />
-                        <div className="mt-2 text-xs text-white/60">
-                          Min {formattedMinBet} • Max {formattedMaxBet}
-                        </div>
+                      <div className="min-w-0 flex-1">
+                        <AmountField id={betAmountInputId} label="Bet amount" unit={tokenSymbol} surface="game" placeholder={formattedMinBet} aria-label="Baccarat bet amount" value={betAmount} onChange={e => handleBetAmountChange(e.target.value)} disabled={bettingLocked}
+                          error={amountIssue} hint={<p>Minimum {formattedMinBet} · Maximum {formattedMaxBet} {tokenSymbol}.</p>}
+                          balance={displayedBalanceWei !== undefined && displayedBalanceDecimals !== undefined ? formatUnits(displayedBalanceWei, displayedBalanceDecimals) : "Checking…"} />
                         {payoutPoolUnknown ? (
                           <div className="mt-2 text-xs text-amber-200" role="status">
                             <p>{payoutPoolReadStatus === "error"
@@ -851,16 +828,16 @@ export default function BaccaratDialog({
                         ) : null}
                       </div>
 
-                      <div className="min-w-0 space-y-1 text-sm text-white/80 sm:min-w-[12rem] sm:text-right">
+                      <div className="min-w-0 space-y-1 text-sm text-white/80 [overflow-wrap:anywhere] sm:max-w-[45%] sm:text-right">
                         <div className="flex justify-between gap-3 sm:justify-end">
-                          <span className="text-white/55">Payout</span>
-                          <span className="font-semibold text-white">{getBaccaratPayoutLabel(betType)}</span>
+                          <span className="text-white/75">Winning return</span>
+                          <span className="font-semibold text-white">{payoutRules ? baccaratReturnLabel(betType, payoutRules) : "Verifying rules…"}</span>
                         </div>
                         <div className="flex justify-between gap-3 sm:justify-end">
-                          <span className="text-white/55">Potential</span>
+                          <span className="text-white/75">Total returned</span>
                           <span className="inline-flex items-center gap-1 font-semibold text-white">
                             <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />
-                            {formatTokenAmount(potentialPayoutWei, tokenDecimals)} {tokenSymbol}
+                            {tokenDecimals === undefined || potentialPayoutWei === null ? '—' : formatUnits(potentialPayoutWei, tokenDecimals)} {tokenSymbol}
                           </span>
                         </div>
                       </div>
@@ -868,28 +845,44 @@ export default function BaccaratDialog({
                   </div>
                 )}
 
-                {error && <div className="text-center text-sm text-red-300">{error}</div>}
+                {showWagerPanel && <p className="text-sm leading-relaxed text-white/80">Placing a bet is step 1. You must submit a second transaction to reveal the result within {BACCARAT_REVEAL_WINDOW_BLOCKS.toString()} blocks after its reveal block, or your entire stake is forfeited. The exact deadline appears after your bet is confirmed.</p>}
+                <details className="rounded-lg border border-white/20 bg-black/45 p-3 text-sm text-white/85">
+                  <summary className="min-h-11 cursor-pointer content-center font-semibold">How to play Baccarat</summary>
+                  <div className="space-y-2 pt-2 leading-relaxed">
+                    <p>Choose Player, Banker, or Tie. The hand closest to 9 wins. Aces count as 1, cards 2–9 at face value, and 10/J/Q/K as 0. Only the last digit of the total counts.</p>
+                    <p>A natural 8 or 9 ends the deal. Otherwise Player draws on 0–5. If Player stands, Banker draws on 0–5. If Player draws, Banker draws on 0–2; on 3 unless Player drew 8; on 4 with Player’s third card 2–7; on 5 with 4–7; and on 6 with 6–7.</p>
+                    <p>{payoutRules ? `Player returns 2× the stake. Banker deducts ${payoutRules.bankerCommissionBps / 100}% commission from winnings (${baccaratReturnLabel(BaccaratBetType.BANKER, payoutRules)}). Tie returns ${1 + payoutRules.tiePayoutMultiplier}× the stake. All total returns include the original stake.` : "Payout rules are unavailable until game data is verified."} Player and Banker bets are returned when the hands tie.</p>
+                  </div>
+                </details>
+                {error && <div role="alert" className="space-y-2 text-center text-sm text-red-200"><p>{error}</p>{readStatus === "error" && <Button onClick={() => void refreshBaccaratState({ showLoading: false })}>Retry game data</Button>}</div>}
+                {balanceError && <div role="alert" className="space-y-2 text-center text-sm text-amber-100"><p>Your latest balance could not be verified. Displayed amounts are last known; new bets are paused.</p><Button onClick={() => { void Promise.allSettled([refetchBalance(), refreshBaccaratState({ showLoading: false })]); }}>Retry balance read</Button></div>}
+                {metadataError && <Button onClick={() => void refetchMetadata()}>Retry token details</Button>}
                 {tokenDisabled && selectedToken && (
                   <div className="text-center text-sm text-white/60">
-                    Baccarat is not enabled for the selected token.
+                    {readStatus === "unsupported" ? "The selected token is not supported for Baccarat." : "Baccarat betting is currently disabled."}
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          <div data-baccarat-action-footer className={BACCARAT_ACTIONS_CLASS}>
-            {hasPendingGame ? (
+          <div data-baccarat-action-footer className={GAME_ACTION_FOOTER_CLASS}>
+            {awaitingReceipt ? (
+              <Button className="w-full" disabled={receiptRetrying || !settlement.result.transactionHash} onClick={() => setReceiptRetry(value => value + 1)}>
+                {receiptRetrying ? 'Retrieving result...' : 'Retry result retrieval'}
+              </Button>
+            ) : hasPendingGame ? (
               <BaccaratTransaction
                 mode="reveal"
+                roundIdentity={roundIdentity}
                 landId={landId}
-                disabled={!activeGameBelongsToWallet || !canRevealActiveGame || walletTxPending}
-                buttonText={activeGame?.isExpired ? "Forfeit Expired Round" : canRevealActiveGame ? "Reveal Baccarat" : `Wait ${revealBlocksRemaining} Block${revealBlocksRemaining === 1 ? "" : "s"}`}
+                disabled={!activeGameBelongsToWallet || !canRevealActiveGame || walletTxPending || !roundIdentity}
+                buttonText={activeRoundExpired ? "Close expired round" : "Reveal result"}
                 buttonClassName={BACCARAT_REVEAL_BUTTON}
                 onStatusUpdate={handleStatusUpdate}
                 onComplete={handleRevealComplete}
+                onButtonClick={() => { submittedRoundRef.current = roundIdentity ?? null; }}
                 tokenSymbol={tokenSymbol}
-                tokenDecimals={tokenDecimals}
               />
             ) : hasResolvedRound ? (
               <Button
@@ -900,38 +893,13 @@ export default function BaccaratDialog({
               >
                 Play Again
               </Button>
-            ) : !address ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Connect wallet to play
-              </Button>
-            ) : !effectiveToken || !tokenConfig ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Select a supported token
-              </Button>
-            ) : tokenDisabled ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Baccarat unavailable for {tokenSymbol}
-              </Button>
-            ) : payoutPoolUnknown ? (
-              <Button className="w-full" variant="secondary" disabled>
-                {payoutPoolReadStatus === "error" ? "Reward pool unavailable" : "Checking reward pool..."}
-              </Button>
-            ) : betWei <= BigInt(0) ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Enter bet amount
-              </Button>
-            ) : amountBelowMin ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Minimum {formattedMinBet} {tokenSymbol}
-              </Button>
-            ) : amountAboveMax ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Maximum {formattedMaxBet} {tokenSymbol}
-              </Button>
-            ) : !hasBalance ? (
-              <Button className="w-full" variant="secondary" disabled>
-                Insufficient {tokenSymbol}
-              </Button>
+            ) : !address || !metadataReady || !effectiveToken || !tokenConfig || !gameDataReady || payoutPoolUnknown || balanceReadState !== "ready" || !!amountIssue ? (
+              <div className="space-y-2">
+                <Button className="w-full" variant="secondary" disabled aria-describedby={`${betAmountInputId}-availability`}>Deal {getBaccaratBetLabel(betType)}</Button>
+                <p id={`${betAmountInputId}-availability`} role="status" className="text-center text-xs text-white/80">
+                  {!address ? "Connect wallet to play." : !metadataReady ? "Verify token details to enable new bets." : readStatus === "error" ? "Retry game data to continue." : !gameDataReady && !tokenDisabled ? "Loading Baccarat limits…" : tokenDisabled ? "Baccarat betting is unavailable." : payoutPoolUnknown ? "Verify reward pool liquidity to continue." : balanceReadState !== "ready" ? "Verify your balance to enable new bets." : amountIssue}
+                </p>
+              </div>
             ) : !hasApproval ? (
               <ApproveTransaction
                 spenderAddress={LAND_CONTRACT_ADDRESS}
@@ -953,19 +921,17 @@ export default function BaccaratDialog({
                 onStatusUpdate={handleStatusUpdate}
                 onComplete={handlePlaceComplete}
                 tokenSymbol={tokenSymbol}
-                tokenDecimals={tokenDecimals}
               />
             )}
-            {displayedBalanceWei !== undefined && (
+            {displayedBalanceWei !== undefined && displayedBalanceDecimals !== undefined && (
               <div className="flex items-center justify-center gap-1.5 text-center text-xs text-white/55">
-                <span>Balance:</span>
-                <Image src={tokenLogo} alt={tokenSymbol} width={14} height={14} className="h-3.5 w-3.5 rounded-full" />
-                <span>{formatTokenAmount(displayedBalanceWei, displayedBalanceDecimals)} {tokenSymbol}</span>
+                <span>{balanceError ? "Last known balance:" : "Balance:"}</span>
+                <TokenAmount amount={displayedBalanceWei} decimals={displayedBalanceDecimals} unit={tokenSymbol} mode="compact" withIcon={false} />
               </div>
             )}
           </div>
         </div>
-      </DialogContent>
+      </CasinoGameSurface>
     </Dialog>
   );
 }

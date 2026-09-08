@@ -20,6 +20,7 @@ export const SWAP_PANEL_STRINGS = {
     approvingAndSwapping: 'Approving and swapping in one transaction',
     transactionPending: 'Transaction pending\u2026',
     completed: 'Swap successful',
+    approvalCompleted: 'Token approval confirmed. Review your swap, then confirm it.',
     generic: 'Swap execution failed',
   },
   errors: {
@@ -28,7 +29,7 @@ export const SWAP_PANEL_STRINGS = {
     switchToBase: 'Switch your wallet to Base to swap.',
     enterValidAmount: (symbol: string) => `Enter a valid ${symbol} amount.`,
     insufficientBalance: (symbol: string) => `Insufficient ${symbol} balance.`,
-    insufficientGas: 'Not enough ETH to cover gas for this swap.',
+    insufficientSwapValue: 'Not enough ETH for the swap amount.',
     quoteStale: 'Quote is stale. Fetching a fresh quote\u2026',
     quoteStillLoading: 'Still calculating the quote\u2026 please wait.',
     blockedPairFallback: 'This swap pair is unavailable.',

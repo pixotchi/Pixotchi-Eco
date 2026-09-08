@@ -14,6 +14,9 @@ import {
 } from '@/lib/airdrop-claim-polling';
 import { invalidateOwnerResources } from '@/lib/owner-resource-invalidation';
 import { formatTokenDecimal } from '@/lib/token-display';
+import { ClaimRecoveryCard } from '@/components/claim-recovery-card';
+import { handleExternalAnchorClick } from '@/lib/open-external';
+import { useOwnerOperationScope } from '@/hooks/useOwnerOperationScope';
 
 interface AirdropStatus {
     eligible: boolean;
@@ -21,23 +24,41 @@ interface AirdropStatus {
     leaf: string;
     pixotchi: string;
     claimed: boolean;
-    txHash?: string;
+    txHash?: string | null;
     status?: 'eligible' | 'pending' | 'claimed' | 'failed';
     attemptId?: string | null;
     operationId?: string | null;
 }
 
+function isAirdropStatus(value: unknown): value is AirdropStatus {
+    if (!value || typeof value !== 'object') return false;
+    const fields = value as Record<string, unknown>;
+    return typeof fields.eligible === 'boolean' && typeof fields.claimed === 'boolean'
+        && ['seed', 'leaf', 'pixotchi'].every(key => typeof fields[key] === 'string' && /^\d+$/.test(fields[key]))
+        && ['eligible', 'pending', 'claimed', 'failed'].includes(String(fields.status))
+        && ['attemptId', 'operationId', 'txHash'].every(key => fields[key] == null || typeof fields[key] === 'string');
+}
+
 export function AirdropClaimCard() {
+    if (process.env.NEXT_PUBLIC_SHOW_AIRDROP !== 'true') return null;
+    return <AirdropClaimContent />;
+}
+
+function AirdropClaimContent() {
     const { address } = useAccount();
     const ownerKey = address?.toLowerCase() ?? null;
+    const operationScope = useOwnerOperationScope(ownerKey);
     const ownerKeyRef = useRef<string | null>(ownerKey);
     const { signMessageAsync } = useSignMessage();
     const [status, setStatus] = useState<AirdropStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
     const [retryRevision, setRetryRevision] = useState(0);
     const [pendingPollAttempt, setPendingPollAttempt] = useState(0);
     const [claiming, setClaiming] = useState(false);
+    const [claimNeedsReconciliation, setClaimNeedsReconciliation] = useState(false);
+    const statusReadRevision = useRef(0);
     const [signingStep, setSigningStep] = useState<'idle' | 'signing' | 'claiming'>('idle');
 
     useLayoutEffect(() => {
@@ -45,9 +66,11 @@ export function AirdropClaimCard() {
         ownerKeyRef.current = ownerKey;
         setStatus(null);
         setLoadError(null);
+        setLastCheckedAt(null);
         setLoading(Boolean(ownerKey));
         setPendingPollAttempt(0);
         setClaiming(false);
+        setClaimNeedsReconciliation(false);
         setSigningStep('idle');
     }, [ownerKey]);
 
@@ -66,6 +89,9 @@ export function AirdropClaimCard() {
                 return;
             }
             const requestedOwner = address.toLowerCase();
+            const requestedRevision = ++statusReadRevision.current;
+            const isCurrent = () => !cancelled && ownerKeyRef.current === requestedOwner
+                && statusReadRevision.current === requestedRevision;
 
             try {
                 setLoading(true);
@@ -74,16 +100,20 @@ export function AirdropClaimCard() {
                 if (!res.ok) {
                     throw new Error(`Airdrop status request failed (${res.status})`);
                 }
-                const data = await res.json();
-                if (!cancelled && ownerKeyRef.current === requestedOwner) setStatus(data);
+                const data: unknown = await res.json();
+                if (!isAirdropStatus(data)) throw new Error('Invalid airdrop status response');
+                if (isCurrent()) {
+                    setStatus(data);
+                    setLastCheckedAt(Date.now());
+                    setClaimNeedsReconciliation(false);
+                }
             } catch (err) {
                 console.error('[AIRDROP] Failed to fetch status:', err);
-                if (!cancelled && ownerKeyRef.current === requestedOwner) {
-                    setStatus(null);
-                    setLoadError('Airdrop eligibility could not be loaded. Check your connection and retry.');
+                if (isCurrent()) {
+                    setLoadError('The latest airdrop status could not be checked. Check your connection and retry.');
                 }
             } finally {
-                if (!cancelled && ownerKeyRef.current === requestedOwner) setLoading(false);
+                if (isCurrent()) setLoading(false);
             }
         }
 
@@ -134,8 +164,20 @@ export function AirdropClaimCard() {
     };
 
     const handleClaim = async () => {
-        if (!address || !status?.eligible || status.claimed) return;
+        if (!address || !status?.eligible || status.claimed || status.status !== 'eligible'
+            || claiming || loading || loadError || claimNeedsReconciliation) return;
         const operationOwner = address.toLowerCase();
+        const operation = operationScope.capture();
+        let submissionAttempted = false;
+        const reconcileClaimStatus = () => {
+            // A failed response can follow a persisted failed or pending claim.
+            // Revoke the old eligibility until a newer status read succeeds.
+            statusReadRevision.current += 1;
+            setClaimNeedsReconciliation(true);
+            setLoading(true);
+            setLoadError(null);
+            setRetryRevision(revision => revision + 1);
+        };
 
         setClaiming(true);
         setSigningStep('signing');
@@ -144,6 +186,7 @@ export function AirdropClaimCard() {
             // Step 1: Get the message to sign from the API
             const messageRes = await fetch(`/api/airdrop/claim?address=${address}`);
             const messageData = await messageRes.json();
+            if (!operation.isCurrent()) return;
 
             if (!messageRes.ok) {
                 throw new Error(messageData.error || 'Failed to get claim message');
@@ -156,6 +199,7 @@ export function AirdropClaimCard() {
             try {
                 signature = await signMessageAsync({ message });
             } catch (signError: UntypedValue) {
+                if (!operation.isCurrent()) return;
                 // User rejected the signature
                 if (signError?.name === 'UserRejectedRequestError' || signError?.code === 4001) {
                     toast.error('Signature rejected. Please sign to claim your airdrop.');
@@ -164,11 +208,12 @@ export function AirdropClaimCard() {
                 throw signError;
             }
 
-            if (ownerKeyRef.current !== operationOwner) return;
+            if (!operation.isCurrent()) return;
 
             setSigningStep('claiming');
 
             // Step 3: Submit claim with signature
+            submissionAttempted = true;
             const res = await fetch('/api/airdrop/claim', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -180,6 +225,7 @@ export function AirdropClaimCard() {
             });
 
             const data = await res.json();
+            if (!operation.isCurrent()) return;
 
             if (res.ok && data.success) {
                 invalidateOwnerResources({
@@ -188,7 +234,7 @@ export function AirdropClaimCard() {
                     source: 'airdrop-claim',
                     transactionHash: typeof data.txHash === 'string' ? data.txHash : undefined,
                 });
-                if (ownerKeyRef.current === operationOwner) {
+                if (operation.isCurrent()) {
 
                     setStatus(prev => prev ? {
                         ...prev,
@@ -198,7 +244,7 @@ export function AirdropClaimCard() {
                     } : null);
                 }
             } else if (data.status === 'pending') {
-                if (ownerKeyRef.current === operationOwner) {
+                if (operation.isCurrent()) {
                     setStatus(prev => prev ? {
                         ...prev,
                         attemptId: data.attemptId ?? prev.attemptId,
@@ -208,26 +254,21 @@ export function AirdropClaimCard() {
                     toast('Claim submitted. Waiting for onchain confirmation.');
                 }
             } else {
-                if (ownerKeyRef.current === operationOwner) toast.error(data.error || 'Claim failed');
+                reconcileClaimStatus();
             }
         } catch (err: UntypedValue) {
             console.error('[AIRDROP] Claim error:', err);
-            if (ownerKeyRef.current === operationOwner) {
-                toast.error(err?.message || 'Failed to claim airdrop');
+            if (operation.isCurrent()) {
+                if (submissionAttempted) reconcileClaimStatus();
+                else toast.error(err?.message || 'Failed to claim airdrop');
             }
         } finally {
-            if (ownerKeyRef.current === operationOwner) {
+            if (operation.isCurrent()) {
                 setClaiming(false);
                 setSigningStep('idle');
             }
         }
     };
-
-    // Feature flag: Hides the card if env var is not set to 'true'
-    const showAirdrop = process.env.NEXT_PUBLIC_SHOW_AIRDROP === 'true';
-    if (!showAirdrop) {
-        return null;
-    }
 
     const panelClassName =
         "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
@@ -260,7 +301,14 @@ export function AirdropClaimCard() {
         );
     }
 
-    if (loadError || !status) {
+    if (claimNeedsReconciliation) {
+        return <ClaimRecoveryCard title="Checking your claim outcome"
+            description="The claim response was interrupted or unsuccessful. Check its current status before trying again."
+            address={address} reference={status?.operationId ?? status?.attemptId} txHash={status?.txHash}
+            updatedAt={lastCheckedAt} error={loadError} checking={loading} onCheckStatus={checkPendingClaimStatus} />;
+    }
+
+    if (!status || (loadError && status.status !== 'failed' && status.status !== 'pending' && status.status !== 'claimed' && !status.claimed)) {
         return (
             <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">Airdrop</h3>
@@ -285,7 +333,7 @@ export function AirdropClaimCard() {
     }
 
     // Not eligible state
-    if (!status.eligible) {
+    if (!status.eligible && status.status !== 'failed' && status.status !== 'claimed') {
         return (
             <div className="space-y-3">
                 <div className="flex items-center">
@@ -298,7 +346,7 @@ export function AirdropClaimCard() {
                     <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-foreground">No Allocation</p>
                         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                            You are not eligible for any airdrop right now. Keep playing and staying active to qualify for future rewards!
+                            This wallet has no allocation in the current airdrop.
                         </p>
                     </div>
                 </div>
@@ -326,7 +374,7 @@ export function AirdropClaimCard() {
 
     // Nothing claimable: never render an empty chip row with a live Claim
     // button (the old guard only covered the already-claimed case).
-    if (tokens.length === 0) {
+    if (tokens.length === 0 && status.status !== 'failed' && status.status !== 'claimed' && !status.claimed) {
         return null;
     }
 
@@ -383,18 +431,14 @@ export function AirdropClaimCard() {
                                 <p className="text-xs leading-relaxed text-muted-foreground">
                                     Thanks for playing and helping Pixotchi grow.
                                 </p>
+                                {status.txHash && /^0x[0-9a-f]{64}$/i.test(status.txHash) && <a className="inline-flex min-h-11 items-center text-sm text-info-strong underline underline-offset-4" href={`https://basescan.org/tx/${status.txHash}`} target="_blank" rel="noopener noreferrer" onClick={event => handleExternalAnchorClick(event, `https://basescan.org/tx/${status.txHash}`)}>View transaction</a>}
                             </div>
                         </div>
                     ) : status.status === 'failed' ? (
-                        <div className={featureCardClassName} role="alert">
-                            <Gift className={airdropGiftIconClassName} />
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-destructive">Claim needs review</p>
-                                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                                    The payout was not confirmed. It has been stopped from retrying automatically to protect your allocation.
-                                </p>
-                            </div>
-                        </div>
+                        <ClaimRecoveryCard title="Claim needs review"
+                            description="Your payout has not been confirmed. Check its status or contact support before trying again."
+                            address={address} reference={status.operationId ?? status.attemptId} txHash={status.txHash}
+                            updatedAt={lastCheckedAt} error={loadError} checking={loading} onCheckStatus={checkPendingClaimStatus} />
                     ) : (
                         // Unclaimed state
                         <div className="relative space-y-3">
@@ -432,7 +476,7 @@ export function AirdropClaimCard() {
                             </div>
                             <Button
                                 onClick={handleClaim}
-                                disabled={claiming || status.status === 'pending'}
+                                disabled={claiming || loading || Boolean(loadError) || status.status === 'pending'}
                                 className={baseActionClassName}
                                 size="sm"
                             >

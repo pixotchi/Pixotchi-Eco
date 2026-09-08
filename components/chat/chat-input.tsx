@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatComposer } from './chat-composer';
-import { useChat } from './chat-context';
+import { useChatComposer } from './chat-view-context';
 import type { ChatMode } from '@/lib/types';
 
 type ChatInputProps = {
@@ -14,16 +14,12 @@ export default function ChatInput({ modeOverride, message, onMessageChange: setM
   const {
     cancelActiveSend,
     isSending,
-    isSendingForMode,
-    mode,
+    activeMode,
     publicChatAuthenticated,
     publicChatLoading,
-    sendMessage,
     sendMessageForMode,
-  } = useChat();
-  const activeMode = modeOverride ?? mode;
-  const activeSending = modeOverride ? isSendingForMode(modeOverride) : isSending;
-  return <ChatComposer activeMode={activeMode} message={message} onMessageChange={setMessage} activeSending={activeSending}
-    publicChatAuthenticated={publicChatAuthenticated} publicChatLoading={publicChatLoading} cancelActiveSend={cancelActiveSend}
-    onSend={text => modeOverride ? sendMessageForMode(modeOverride, text) : sendMessage(text)} />;
+  } = useChatComposer(modeOverride);
+  return <ChatComposer activeMode={activeMode} message={message} onMessageChange={setMessage} activeSending={isSending}
+    publicChatAuthenticated={publicChatAuthenticated} publicChatLoading={publicChatLoading} cancelActiveSend={() => cancelActiveSend(activeMode)}
+    onSend={text => sendMessageForMode(activeMode, text)} />;
 }

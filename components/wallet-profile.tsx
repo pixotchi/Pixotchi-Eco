@@ -19,13 +19,12 @@ DialogTitle,
 } from "@/components/ui/dialog";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useAuthSurface } from "@/hooks/useAuthSurface";
-import { clearAppCaches } from "@/lib/cache-utils";
-import { clearPublicChatSession } from "@/lib/chat-auth-client";
+import { getAuthErrorMessage, readMiniAppPresentation, readWalletName } from "@/lib/auth-presentation-data";
+import { disconnectWalletIdentity } from "@/lib/disconnect-wallet-identity";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { clearOwnerResources } from "@/lib/owner-resource-invalidation";
-import { sessionStorageManager } from "@/lib/session-storage-manager";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { isSolanaEnabled } from "@/lib/solana-constants";
 import { cn,formatAddress } from "@/lib/utils";
@@ -39,11 +38,9 @@ Copy,
 Info,
 Key,
 Lightbulb,
-LogOut,
 RefreshCw,
 ShieldAlert,
 Wallet,
-X,
 } from "lucide-react";
 import React,{ useEffect,useMemo,useState } from "react";
 import toast from "react-hot-toast";
@@ -53,21 +50,12 @@ import TransferAssetsDialog from "./transactions/transfer-assets-dialog";
 import { StandardContainer } from "./ui/pixel-container";
 import { Skeleton } from "./ui/skeleton";
 
-const AUTH_CACHE_PREFIXES = [
-  "wagmi",
-  "_wagmi",
-  "walletconnect",
-  "wc@",
-  "privy",
-  "@privy",
-  "ock",
-  "coinbase",
-];
+
 
 const walletCardSurfaceClassName =
   "overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/95 bg-[image:var(--gradient-surface-strong)] p-0 shadow-[var(--shadow-raised)]";
 
-const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} chromatic-white-surface`;
+const walletChromaticWhiteSurfaceClassName = `${walletCardSurfaceClassName} surface-lifted`;
 
 const walletInnerGlowClassName =
   "relative overflow-hidden rounded-[calc(var(--radius-panel)-1px)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-20 before:bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.16),transparent_64%)]";
@@ -132,7 +120,7 @@ function WalletStatusPill({
   const toneClassName = {
     default: "border-[hsl(var(--border-strong)/0.28)] bg-background/55 text-foreground",
     success: "border-[hsl(var(--success)/0.26)] bg-[hsl(var(--success)/0.12)] text-value",
-    info: "border-[hsl(var(--info)/0.26)] bg-[hsl(var(--info)/0.10)] text-[hsl(var(--info))]",
+    info: "border-[hsl(var(--info)/0.26)] bg-[hsl(var(--info)/0.10)] text-info-strong",
     warning: "border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.13)] text-[hsl(var(--warning-foreground))]",
     muted: "border-border/55 bg-muted/65 text-muted-foreground",
     base: BASE_BRAND_BUTTON_CLASSNAME,
@@ -141,7 +129,7 @@ function WalletStatusPill({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-[11px] font-semibold leading-tight shadow-[var(--shadow-hairline)]",
+        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-[var(--radius-control)] border px-2.5 py-1 text-xs font-semibold leading-tight shadow-[var(--shadow-hairline)]",
         toneClassName
       )}
     >
@@ -170,21 +158,21 @@ function WalletInfoRow({
   return (
     <div
       className={cn(
-        "flex min-h-11 items-center justify-between gap-3 py-2.5",
+        "flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2.5",
         className
       )}
     >
-      <div className="min-w-min">
-        <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <div className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", description ? "basis-[8rem]" : "basis-auto")}>
+        <span className="block text-xs font-semibold text-muted-foreground">
           {label}
         </span>
         {description ? (
-          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+          <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
             {description}
           </span>
         ) : null}
       </div>
-      <div className="flex min-w-0 max-w-[66%] items-center justify-end gap-1.5 text-right text-xs font-semibold text-foreground">
+      <div className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-1.5 text-right text-xs font-semibold text-foreground [overflow-wrap:anywhere]">
         {children}
       </div>
     </div>
@@ -201,7 +189,7 @@ const EthModeToggleRow = () => {
   return (
     <WalletInfoRow
       label="ETH Mode"
-      description="Spend ETH in-game instead of SEED"
+      description="Pay with ETH for supported SEED purchases"
     >
       <Switch checked={isEthMode} onCheckedChange={() => toggleEthMode()} aria-label="ETH Mode" />
     </WalletInfoRow>
@@ -228,7 +216,7 @@ interface WalletProfileProps {
 
 export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const { address, connector } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { disconnectAsync } = useDisconnect();
   const {
     ready: privyReady,
     authenticated: privyAuthenticated,
@@ -276,7 +264,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   // Farcaster / Mini App state (evaluate before export gating)
   const isMiniApp = Boolean(fc?.isInMiniApp);
   const isFrameContextResolved = fc !== null;
-  const fcContext = (fc?.context as UntypedValue) ?? null;
+  const fcContext = useMemo(() => readMiniAppPresentation(fc?.context), [fc?.context]);
   const isInFrame = isMiniApp; // alias for clarity
   const isPrivySurface = authSurface === "privy" || authSurface === "privysolana";
 
@@ -415,9 +403,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       await performExport();
       toast.success("Export window opened. Follow the instructions to copy your key.");
       setExportDialogOpen(false);
-    } catch (error: UntypedValue) {
+    } catch (error: unknown) {
       console.error("Embedded wallet export failed", error);
-      const rawMessage = (error?.message || "").toString();
+      const rawMessage = getAuthErrorMessage(error, "");
       const needsReauth = /access token/i.test(rawMessage) || /mfa/i.test(rawMessage);
       const isMfaError = /mfa/i.test(rawMessage) && /enroll/i.test(rawMessage);
 
@@ -441,7 +429,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   useEffect(() => {
     const loc = fcContext?.location;
     if (loc && typeof loc === 'object') {
-      const ref = (loc as UntypedValue).referrerDomain || (loc as UntypedValue).referrer || null;
+      const ref = loc.referrer ?? null;
       setReferrerDomain(ref ?? null);
     } else {
       setReferrerDomain(null);
@@ -466,10 +454,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   const getWalletProviderName = () => {
     if (isSolana) {
       const solWallet = solanaPrivyWallets?.[0];
-      const solName =
-        (solWallet as UntypedValue)?.name ||
-        (solWallet as UntypedValue)?.standardWallet?.name ||
-        (solWallet as UntypedValue)?.walletClientType;
+      const solName = readWalletName(solWallet);
       return solName || "Solana Wallet";
     }
     if (!connector) return "Unknown";
@@ -519,46 +504,17 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
 
   const handleDisconnect = async () => {
     try {
-      // Remove address-owned assets synchronously; Privy logout and Wagmi
-      // disconnect are asynchronous and must not leave the old wallet actionable.
-      clearOwnerResources(address);
-      // First, close the dialog to provide immediate feedback
-      onOpenChange(false);
-      await sessionStorageManager.markPrivyLogoutIntent();
-
-      let privyLogoutSucceeded = true;
-
-      // According to Privy guidelines: logout Privy first, then disconnect Wagmi
-      // This ensures proper session cleanup before disconnecting the wallet connection
-      if (privyReady && privyAuthenticated && logout) {
-        try {
-          // Privy logout will clear user state and delete persisted session
-          await logout();
-          privyLogoutSucceeded = true;
-        } catch (logoutError) {
-          console.error('Privy logout failed:', logoutError);
+      const privyLogoutSucceeded = await disconnectWalletIdentity({
+        onStart: () => { clearOwnerResources(address); onOpenChange(false); },
+        logout: privyReady && privyAuthenticated ? logout : undefined,
+        // Privy owns its connector lifecycle; Mini App/demo wallets use Wagmi.
+        disconnect: isPrivySurface ? undefined : disconnectAsync,
+        onLogoutError: (error) => {
+          console.error('Privy logout failed:', error);
           toast.error('Failed to logout from Privy. Please try again.');
-          privyLogoutSucceeded = false;
-        }
-      }
-
-      // Privy owns its connector lifecycle on Privy surfaces. Calling Wagmi's
-      // disconnect there can desynchronize Privy's active wallet from Wagmi.
-      // Non-Privy surfaces (localhost demo / Mini App) remain Wagmi-owned.
-      if (!isPrivySurface) disconnect();
-
-      // Clear auth state to reset any surface and wallet-binding metadata
-      try {
-        await sessionStorageManager.clearAuthState();
-      } catch (storageError) {
-        console.warn('Failed to clear auth preferences:', storageError);
-      }
-
-      try {
-        await clearPublicChatSession();
-      } catch (chatSessionError) {
-        console.warn('Failed to clear public chat session:', chatSessionError);
-      }
+        },
+      });
+      if (privyLogoutSucceeded === null) return;
 
       // Clear URL query parameters and redirect to root
       if (typeof window !== 'undefined') {
@@ -574,17 +530,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
         toast.success("Wallet disconnected");
       }
 
-      // Clear caches asynchronously to avoid blocking UI
-      setTimeout(() => {
-        try {
-          clearAppCaches({
-            preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"]
-          });
-        } catch (cacheError) {
-          console.warn('Cache cleanup failed:', cacheError);
-        }
-      }, 100);
-
     } catch (error) {
       console.error('Disconnect failed:', error);
       toast.error("Failed to disconnect wallet completely");
@@ -595,23 +540,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   };
 
   const handleCloseMiniApp = async () => {
-    clearOwnerResources(address);
-    try {
-      await sessionStorageManager.clearAuthState();
-    } catch (storageError) {
-      console.warn('Failed to clear auth state before closing mini app:', storageError);
-    }
-
-    try {
-      await clearPublicChatSession();
-    } catch (chatSessionError) {
-      console.warn('Failed to clear public chat session before closing mini app:', chatSessionError);
-    }
-
-    await clearAppCaches({
-      onlyPrefixes: AUTH_CACHE_PREFIXES,
-      preserveLocalStorageKeys: ["pixotchi:tutorial", "pixotchi:cache_version"],
-    });
+    const result = await disconnectWalletIdentity({ onStart: () => clearOwnerResources(address) });
+    if (result === null) return;
 
     try {
       await sdk.actions.close();
@@ -631,7 +561,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
   return (
     <React.Fragment>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="lg" surface="soft" className="w-[min(94vw,28rem)] max-w-md">
+        <DialogContent adaptiveScroll size="lg" surface="soft" className="w-[min(94vw,28rem)] max-w-md max-[380px]:[--dialog-padding:12px]">
           <DialogHeader>
             <div className="flex items-center space-x-2">
               {/* Profile Avatar or Wallet icon - with 5-tap debug mode trigger */}
@@ -663,12 +593,12 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 }}
               >
                 {address ? (
-                  <WalletAvatar address={address} className="w-6 h-6" />
+                  <WalletAvatar address={address} className="w-[24px] h-[24px]" />
                 ) : (
-                  <Wallet className="w-6 h-6 text-primary" />
+                  <Wallet className="w-[24px] h-[24px] text-primary" />
                 )}
               </div>
-              <DialogTitle className="text-lg font-semibold">Wallet Profile</DialogTitle>
+              <DialogTitle className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">Wallet Profile</DialogTitle>
             </div>
             <DialogDescription>
               View your wallet details, balances, and connection information.
@@ -691,8 +621,8 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 <WalletSectionHeader title="Account" />
                 <StandardContainer padding="none" className={walletChromaticWhiteSurfaceClassName}>
                   <div className={walletChromaticWhiteInnerGlowClassName}>
-                    <div className="relative space-y-3 p-3">
-                      <div className="chromatic-white-surface flex flex-wrap items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
+                    <div className="relative space-y-3 p-3 max-[380px]:p-[8px]">
+                      <div className="surface-lifted flex flex-wrap items-center gap-3 rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[var(--shadow-hairline)]">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-white/30 bg-background/55 shadow-[var(--shadow-control)]">
                           {address ? (
                             <WalletAvatar address={address} className="h-9 w-9" />
@@ -708,7 +638,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                               {name || (address ? formatAddress(address) : getWalletProviderName())}
                             </p>
                           )}
-                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                             {name && address ? formatAddress(address) : getWalletProviderName()}
                           </p>
                         </div>
@@ -718,14 +648,14 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                             onClick={() => openExternalUrl("https://base.org/names")}
                             variant="outline"
                             size="compact"
-                            className={cn("basis-full px-3 text-xs", BASE_BRAND_BUTTON_CLASSNAME, "!bg-none")}
+                            className={cn("h-auto min-h-8 min-w-0 basis-full whitespace-normal px-[12px] py-1 text-xs leading-snug [overflow-wrap:anywhere]", BASE_BRAND_BUTTON_CLASSNAME, "!bg-none")}
                           >
                             Get Basename
                           </Button>
                         ) : null}
                       </div>
 
-                      <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-3">
+                      <div className="divide-y divide-border/55 rounded-[var(--radius-control)] bg-background/25 px-[12px]">
                         <WalletInfoRow
                           label="Provider"
                         >
@@ -827,9 +757,9 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                       )}
 
                       {!smartWalletLoading && !isSmartWallet && !isSolana && (
-                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-[hsl(var(--info))] shadow-[var(--shadow-hairline)]">
+                        <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-info-strong shadow-[var(--shadow-hairline)] max-[380px]:flex-col max-[380px]:p-[12px]">
                           <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                          <span className="text-xs leading-relaxed text-muted-foreground">
+                          <span className="min-w-0 text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
                             Smart wallets can combine approvals and purchases into one confirmation.
                           </span>
                         </div>
@@ -906,7 +836,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         </div>
 
                         <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 shadow-[var(--shadow-hairline)]">
-                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--info))]" />
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info-strong" />
                           <span className="text-xs leading-relaxed text-muted-foreground">
                             Your plants are owned by your Twin address on Base. Some features like Land NFTs are not available with Solana wallets.
                           </span>
@@ -921,7 +851,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               <AirdropClaimCard />
             </div>
           </DialogBody>
-          <DialogFooter sticky className="grid grid-cols-2 gap-2 space-x-0 max-[380px]:grid-cols-1">
+          <DialogFooter sticky className="grid grid-cols-2 gap-2 space-x-0 max-[380px]:grid-cols-1 [&>button]:h-auto [&>button]:min-h-[44px] [&>button]:min-w-0 [&>button]:whitespace-normal [&>button]:px-[12px] [&>button]:py-[12px] [&>button]:leading-snug [&>button]:[overflow-wrap:anywhere]">
             {canExportEmbeddedWallet && (
               <Button
                 variant="outline"
@@ -929,7 +859,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 onClick={handleOpenExportDialog}
                 className="w-full sm:col-span-2"
               >
-                <Key className="w-4 h-4 mr-2" />
                 {exportWalletLabel}
               </Button>
             )}
@@ -957,7 +886,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 onClick={handleCloseMiniApp}
                 className="w-full"
               >
-                <X className="w-4 h-4 mr-2" />
                 Close Mini App
               </Button>
             ) : (
@@ -967,7 +895,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                 onClick={handleDisconnect}
                 className="w-full text-muted-foreground"
               >
-                <LogOut className="w-4 h-4 mr-2" />
                 Disconnect Wallet
               </Button>
             )}
@@ -977,6 +904,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
       <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent
+          layer="nested"
           className="w-[min(94vw,28rem)] max-w-md"
           hideCloseButton={isExporting}
           /* Mirrors hideCloseButton: while the Privy export window is open the user

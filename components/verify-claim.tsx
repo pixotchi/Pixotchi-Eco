@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useOwnerOperationScope } from '@/hooks/useOwnerOperationScope';
+import type { OwnerOperationScope } from '@/lib/owner-operation-scope';
 import { useAccount } from 'wagmi';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { ClaimRecoveryCard } from '@/components/claim-recovery-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSignMessage } from 'wagmi';
@@ -30,6 +33,7 @@ const BASE_VERIFY_CONFIG = {
 interface VerifyClaimProps {
   onClaimSuccess: (claim: { strainId: number; mintTxHash?: string }) => void;
   strainId?: number; // Optional: Force specific strain or default to Zest(4)
+  appearance?: 'default' | 'compact';
 }
 
 type ClaimState = 'unclaimed' | 'retryable' | 'processing' | 'complete' | 'manual_review' | 'unavailable';
@@ -37,6 +41,7 @@ type ClaimState = 'unclaimed' | 'retryable' | 'processing' | 'complete' | 'manua
 type ClaimRecoveryDetails = {
   reservationId?: string;
   stage?: string;
+  txHash?: string;
 };
 
 function parseClaimState(value: unknown): ClaimState | null {
@@ -49,12 +54,23 @@ function parseClaimState(value: unknown): ClaimState | null {
     : null;
 }
 
-export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) {
+export function VerifyClaim({ onClaimSuccess, strainId = 4, appearance = 'default' }: VerifyClaimProps) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  if (!BASE_VERIFY_CONFIG.enabled) return null;
+  return <VerifyClaimContent key={address?.toLowerCase() ?? 'disconnected'} address={address} signMessageAsync={signMessageAsync} onClaimSuccess={onClaimSuccess} strainId={strainId} appearance={appearance} />;
+}
+
+/** Mounted separately per wallet so UI/recovery state cannot outlive its owner. */
+export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 'default', address, signMessageAsync, request = fetch }: VerifyClaimProps & {
+  address?: `0x${string}`;
+  signMessageAsync: (args: { message: string }) => Promise<`0x${string}`>;
+  request?: typeof fetch;
+}) {
+  const operationScope = useOwnerOperationScope(address?.toLowerCase() ?? null);
+  const compact = appearance === 'compact';
 
   const [loading, setLoading] = useState(false);
-  const claimHandoffRef = useRef(false);
   const [step, setStep] = useState<'idle' | 'verifying' | 'claiming' | 'success' | 'unverified'>('idle');
   const [error, setError] = useState<string | null>(null);
   
@@ -63,12 +79,16 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   const [claimRecovery, setClaimRecovery] = useState<ClaimRecoveryDetails | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusRefreshKey, setStatusRefreshKey] = useState(0);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Bonus availability from status endpoint
   const [bonuses, setBonuses] = useState<{ leaf: boolean; seed: boolean }>({ leaf: false, seed: false });
 
   // Check claim status from Redis on mount and when address changes
   useEffect(() => {
+    const operation = operationScope.capture();
+    const controller = new AbortController();
     async function checkClaimStatus() {
       if (!address) {
         setStatusLoading(false);
@@ -79,11 +99,14 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
       try {
         setStatusLoading(true);
-        const response = await fetch(`/api/verify/status?address=${address}`);
+        setStatusError(null);
+        const response = await request(`/api/verify/status?address=${address}`, { signal: controller.signal });
         if (!response.ok) {
           throw new Error(`Verify status request failed (${response.status})`);
         }
         const data = await response.json();
+        if (!operation.isCurrent() || controller.signal.aborted) return;
+        setLastCheckedAt(Date.now());
 
         // Hide only on an EXPLICIT disable: a structured error body without
         // `enabled` used to hide the free-claim CTA for the session.
@@ -98,23 +121,26 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           setClaimRecovery(data.claimData ? {
             reservationId: data.claimData.reservationId,
             stage: data.claimData.stage,
+            txHash: data.claimData.mintTxHash ?? data.claimData.txHash,
           } : null);
           if ((nextClaimState === 'unclaimed' || nextClaimState === 'retryable') && data.bonuses) {
             setBonuses(data.bonuses);
           }
         }
       } catch (err) {
+        if (!operation.isCurrent() || controller.signal.aborted) return;
         console.error('[VERIFY] Failed to check claim status:', err);
         // An outage cannot prove there is no post-submission reservation.
-        setClaimState('unavailable');
-        setClaimRecovery(null);
+        setClaimState(previous => previous === 'processing' || previous === 'manual_review' ? previous : 'unavailable');
+        setStatusError('The latest status check failed. Your claim details are saved here; please try again.');
       } finally {
-        setStatusLoading(false);
+        if (operation.isCurrent() && !controller.signal.aborted) setStatusLoading(false);
       }
     }
 
-    checkClaimStatus();
-  }, [address, statusRefreshKey]);
+    void checkClaimStatus();
+    return () => controller.abort();
+  }, [address, operationScope, request, statusRefreshKey]);
 
   const handleVerify = async () => {
     if (!address) {
@@ -122,6 +148,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       return;
     }
 
+    const operation = operationScope.capture();
     setLoading(true);
     setError(null);
     setStep('verifying');
@@ -156,9 +183,10 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       const messageText = message.prepareMessage();
       
       const signature = await signMessageAsync({ message: messageText });
+      if (!operation.isCurrent()) return;
 
       // 2. Check Verification via Backend
-      const response = await fetch('/api/verify/check', {
+      const response = await request('/api/verify/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,6 +198,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       });
 
       const data = await response.json();
+      if (!operation.isCurrent()) return;
 
       if (response.ok && data.verified) {
         if (data.alreadyClaimed) {
@@ -185,9 +214,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           setStep('idle');
         } else {
           setClaimState(data.retryable === true ? 'retryable' : 'unclaimed');
-          claimHandoffRef.current = true;
           setStep('claiming'); // Auto-proceed to claim for smoother UX
-          await handleClaim(data.token);
+          await handleClaim(data.token, operation);
         }
       } else if (response.status === 404) {
         // Not verified -> Redirect to Base Verify Mini App
@@ -198,27 +226,26 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       }
 
     } catch (err: UntypedValue) {
+      if (!operation.isCurrent()) return;
       console.error('Verify error:', err);
       setError(err.message || 'Failed to verify');
       setStep('idle');
     } finally {
-      // Ref, not state: `step` here is captured from the render that created
-      // this handler, so the old guard was always true and meaningless.
-      if (!claimHandoffRef.current) setLoading(false);
-      claimHandoffRef.current = false;
+      if (operation.isCurrent()) setLoading(false);
     }
   };
 
-  const handleClaim = async (token: string) => {
+  const handleClaim = async (token: string, operation: ReturnType<OwnerOperationScope['capture']>) => {
+    if (!operation.isCurrent()) return;
     setLoading(true);
     setStep('claiming');
     
     try {
-      const response = await fetch('/api/verify/claim', {
+      const response = await request('/api/verify/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userAddress: address,
+          userAddress: operation.owner,
           verificationToken: token,
           provider: 'x',
           strainId: strainId
@@ -226,6 +253,9 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
       });
 
       const data = await response.json();
+      // A submitted claim remains associated with its original wallet on the
+      // server. A late response must never celebrate/refresh the new wallet.
+      if (!operation.isCurrent()) return;
 
       if (response.ok && data.success) {
         if (data.status === 'complete') {
@@ -266,11 +296,12 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         throw new Error(data.error || 'Claim failed');
       }
     } catch (err: UntypedValue) {
+      if (!operation.isCurrent()) return;
       console.error('Claim error:', err);
       setError(err.message || 'Failed to claim');
       setStep('idle');
     } finally {
-      setLoading(false);
+      if (operation.isCurrent()) setLoading(false);
     }
   };
 
@@ -285,16 +316,12 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   // 1. Feature is disabled via env
   // 2. Still loading claim status
   // 3. User has already claimed (Redis is source of truth)
-  if (!BASE_VERIFY_CONFIG.enabled) {
-    return null;
-  }
-
-  if (statusLoading) {
+  if (statusLoading && claimState === null) {
     // Optionally show a loading skeleton, or just return null
     return null;
   }
 
-  if (claimState === 'complete') {
+  if (claimState === 'complete' && step !== 'success') {
     return null;
   }
 
@@ -307,6 +334,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           <Button
             variant="outline"
             fullWidth
+            disabled={statusLoading}
+            aria-busy={statusLoading}
             onClick={() => setStatusRefreshKey((value) => value + 1)}
           >
             Check Again
@@ -318,37 +347,13 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
   if (claimState === 'processing' || claimState === 'manual_review') {
     const needsReview = claimState === 'manual_review';
-    return (
-      <Card className="border-amber-400/30 bg-amber-950/20 font-sans">
-        <CardContent className="space-y-3 py-5 text-center">
-          {needsReview
-            ? <AlertCircle className="mx-auto h-8 w-8 text-amber-300" />
-            : <Loader2 className="mx-auto h-8 w-8 animate-spin text-amber-300" />}
-          <h3 className="font-bold text-foreground">
-            {needsReview ? 'Claim needs review' : 'Claim is being prepared'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {needsReview
-              ? 'This claim may already have reached the network, so it cannot be submitted again automatically. Contact support with the reservation ID.'
-              : 'Another claim attempt currently owns this reservation. You can check again shortly.'}
-          </p>
-          {claimRecovery?.reservationId && (
-            <p className="break-all text-xs text-muted-foreground">
-              Reservation: {claimRecovery.reservationId}
-            </p>
-          )}
-          {!needsReview && (
-            <Button
-              variant="outline"
-              fullWidth
-              onClick={() => setStatusRefreshKey((value) => value + 1)}
-            >
-              Check Status
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    );
+    return <ClaimRecoveryCard
+      title={needsReview ? 'Claim needs review' : 'Claim is being prepared'}
+      description={needsReview ? 'Your claim may already be on the network. Check its status or contact support before trying again.' : 'Your claim is in progress. You can check its status again shortly.'}
+      address={address} reference={claimRecovery?.reservationId} txHash={claimRecovery?.txHash}
+      updatedAt={lastCheckedAt} checking={statusLoading} error={statusError}
+      onCheckStatus={() => setStatusRefreshKey(value => value + 1)}
+    />;
   }
 
   if (step === 'success') {
@@ -357,7 +362,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
           <CheckCircle2 className="w-12 h-12 text-[hsl(var(--success))] mb-2" />
           <h3 className="text-lg font-bold text-[hsl(var(--success-strong))]">Claimed!</h3>
-          <p className="text-sm text-muted-foreground">Your {rewardDescription} {bonuses.leaf || bonuses.seed ? 'are' : 'is'} on the way.</p>
+          <p className="text-sm text-muted-foreground">Your free plant has been transferred to your wallet.</p>
         </CardContent>
       </Card>
     );
@@ -366,8 +371,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
 
   if (step === 'unverified') {
     return (
-      <Card className="relative overflow-hidden font-sans">
-        <div
+      <Card className={compact ? 'overflow-hidden border-primary/20' : 'relative overflow-hidden font-sans'}>
+        {!compact && <div
           className="absolute inset-0 z-0 bg-slate-900"
           style={{
             backgroundImage: 'url(/icons/bgclaim.png)',
@@ -375,22 +380,22 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
           }}
-        />
-        <div className="relative z-10 text-white">
-          <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+        />}
+        <div className={compact ? '' : 'relative z-10 text-white'}>
+          <CardHeader className={compact ? 'p-3 pb-2' : undefined}>
+          <CardTitle className={compact ? 'flex items-center gap-2 text-sm text-foreground' : 'flex items-center gap-2 text-white'}>
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
               <Image src="/icons/verified.svg" alt="Verified" width={24} height={24} />
             </div>
             Verification Required
           </CardTitle>
-            <CardDescription className="text-white/90">
+            <CardDescription className={compact ? 'text-xs text-muted-foreground' : 'text-white/90'}>
               You need to verify your X account first.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className={compact ? 'space-y-2 p-3 pt-0' : 'space-y-3'}>
             <Button
-              variant="imageCardPrimary"
+              variant={compact ? 'outline' : 'imageCardPrimary'}
               fullWidth
               className="font-sans"
               onClick={() => openExternalUrl('https://verify.base.dev')}
@@ -399,7 +404,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
             </Button>
             <Button
               variant="ghost"
-              className="w-full text-sm text-white/80 hover:text-white hover:bg-white/10 font-sans"
+              className={compact ? 'w-full text-xs text-foreground' : 'w-full text-sm text-white/80 hover:text-white hover:bg-white/10 font-sans'}
               onClick={() => {
                 setStep('idle');
                 handleVerify();
@@ -414,8 +419,8 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
   }
 
   return (
-    <Card className="relative overflow-hidden">
-      <div 
+    <Card className={compact ? 'overflow-hidden border-primary/20' : 'relative overflow-hidden'}>
+      {!compact && <div
         className="absolute inset-0 z-0 bg-slate-900"
         style={{
           backgroundImage: 'url(/icons/bgclaim.png)',
@@ -423,31 +428,31 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
         }}
-      />
-      <div className="relative z-10 font-sans text-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
+      />}
+      <div className={compact ? '' : 'relative z-10 font-sans text-white'}>
+        <CardHeader className={compact ? 'p-3 pb-2' : undefined}>
+          <CardTitle className={compact ? 'flex items-center gap-2 text-sm text-foreground' : 'flex items-center gap-2 text-white'}>
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
               <Image src="/icons/verified.svg" alt="" aria-hidden="true" width={24} height={24} />
             </div>
             {claimState === 'retryable' ? 'Retry your free plant claim' : 'Claim your free plant'}
           </CardTitle>
-          <CardDescription className="text-white/90">
+          <CardDescription className={compact ? 'text-xs text-muted-foreground' : 'text-white/90'}>
             {claimState === 'retryable'
               ? 'Your earlier attempt stopped before submission. Verify again to retry safely.'
               : <>Verify your X account to claim {rewardDescription}!</>}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className={compact ? 'space-y-2 p-3 pt-0' : 'space-y-4'}>
           {error && (
-            <div className="rounded border border-destructive/30 bg-destructive/15 p-3 text-sm text-white/90 font-sans flex gap-2 items-start">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-white" />
+            <div className={`rounded border border-destructive/30 bg-destructive/15 p-3 text-sm flex gap-2 items-start ${compact ? 'text-foreground' : 'text-white/90 font-sans'}`}>
+              <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${compact ? 'text-destructive' : 'text-white'}`} />
               <span>{error}</span>
             </div>
           )}
 
           <Button 
-            variant="imageCardPrimary"
+            variant={compact ? 'outline' : 'imageCardPrimary'}
             fullWidth
             className="font-sans" 
             onClick={handleVerify}
@@ -462,7 +467,7 @@ export function VerifyClaim({ onClaimSuccess, strainId = 4 }: VerifyClaimProps) 
               claimState === 'retryable' ? 'Verify & Retry Claim' : 'Verify & Claim'
             )}
           </Button>
-          <p className="text-xs text-white/80 text-center font-sans">
+          <p className={compact ? 'text-xs text-muted-foreground text-center' : 'text-xs text-white/80 text-center font-sans'}>
             Powered by Base Verify.
           </p>
         </CardContent>

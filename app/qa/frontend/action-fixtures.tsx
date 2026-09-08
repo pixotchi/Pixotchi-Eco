@@ -35,6 +35,8 @@ export function ActionFixtures() {
     <section aria-label="First-care fixture" className="max-w-lg space-y-3">
       <FirstCareGuide owner={owner} hasPlant urgent={urgent} />
       <Button onClick={() => completeFirstCareStep(owner, 'care')}>Confirm fixture care</Button>
+      {/* Model the successfully opened/verified Tasks boundary; requesting open alone never completes it. */}
+      <Button onClick={() => completeFirstCareStep(owner, 'tasks')}>Confirm fixture Tasks opened</Button>
       <Button onClick={() => setOwner(value => value === 'fixture-wallet-a' ? 'fixture-wallet-b' : 'fixture-wallet-a')}>Switch fixture wallet</Button>
       <Button onClick={() => setUrgent(value => !value)}>Toggle urgent care</Button>
       <output aria-label="Fixture owner">{owner}</output>

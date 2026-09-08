@@ -44,6 +44,7 @@ interface SwapBuyItemBundleProps {
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
+    onButtonClick?: () => void | boolean | Promise<void | boolean>;
 }
 
 /**
@@ -69,6 +70,7 @@ export default function SwapBuyItemBundle({
     buttonText,
     buttonClassName = 'w-full',
     disabled = false,
+    onButtonClick,
 }: SwapBuyItemBundleProps) {
     const { address } = useAccount();
 
@@ -150,6 +152,7 @@ export default function SwapBuyItemBundle({
             intentKey={`swap:purchase:${itemType}:${plant.id}`}
             onSuccess={handleSuccess}
             onError={onError}
+            onButtonClick={onButtonClick}
             buttonText={buttonText || defaultButtonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}

@@ -23,7 +23,7 @@ export const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
       ref={ref}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        "relative inline-flex min-h-11 min-w-14 items-center justify-center rounded-[var(--radius-control)] p-0",
+        "relative inline-flex min-h-[44px] min-w-[56px] items-center justify-center rounded-[var(--radius-control)] p-0",
         "transition-colors duration-[var(--motion-quick)] ease-[var(--ease-standard)] hover:bg-[hsl(var(--nav-hover-bg))]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
@@ -34,14 +34,14 @@ export const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
     >
       <span
         className={cn(
-          "relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
+          "relative inline-flex h-[28px] w-[48px] items-center rounded-full transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)]",
           checked ? "bg-[hsl(var(--success))]" : "bg-muted",
         )}
         aria-hidden="true"
       >
         <span
           className={cn(
-            "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none",
+            "inline-block h-[20px] w-[20px] transform rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none",
             checked ? "translate-x-[22px]" : "translate-x-[4px]",
           )}
         />

@@ -12,12 +12,12 @@ export default function MarketplacePanel({ landId }: MarketplacePanelProps) {
   const [marketOpen, setMarketOpen] = useState(false);
 
   return (
-    <div className="text-center py-4 space-y-2">
+    <div className="space-y-4">
       <div className="text-muted-foreground text-sm">
-        In this building you can trade SEED/LEAF by placing buy/sell orders.
+        Trade SEED and LEAF with other players at your chosen price.
       </div>
-      <div className="pt-2">
-        <Button size="compact" onClick={() => setMarketOpen(true)}>
+      <div>
+        <Button className="w-full text-sm" onClick={() => setMarketOpen(true)}>
           Open Marketplace
         </Button>
       </div>

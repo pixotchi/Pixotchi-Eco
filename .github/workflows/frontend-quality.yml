@@ -25,6 +25,7 @@ jobs:
       - run: npm ci
       - run: npx next typegen
       - run: npm run typecheck
+      - run: npm run frontend:types
       - run: npm run lint
       - run: npm run frontend:smoke
       - run: npm run app-fixes:smoke
@@ -33,7 +34,7 @@ jobs:
 
   browser-fixtures:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 75
     env:
       NEXT_PUBLIC_URL: http://localhost:3000
       NEXT_TELEMETRY_DISABLED: 1
@@ -46,6 +47,9 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium --only-shell
       - run: npx playwright install --with-deps webkit
+      - run: npm run frontend:p1
+      - run: npm run frontend:p2
+      - run: npm run frontend:p3
       - run: npm run frontend:test
       - uses: actions/upload-artifact@v4
         if: always()

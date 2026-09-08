@@ -155,6 +155,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         __typename
         id
         timestamp
+        nftId
         nftName
         gameName
         points
@@ -170,6 +171,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         __typename
         id
         timestamp
+        nftId
         nftName
         giver
         itemId
@@ -180,6 +182,7 @@ const GET_ALL_ACTIVITY_QUERY = `
         __typename
         id
         timestamp
+        nftId
         nftName
         giver
         itemId

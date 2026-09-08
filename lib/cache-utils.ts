@@ -3,6 +3,7 @@
 // Utilities to clear app-related caches and persisted wallet state
 
 type ClearOptions = {
+  clearResponseCaches?: boolean;
   unregisterServiceWorkers?: boolean;
   reloadAfter?: boolean;
   // LocalStorage keys to keep intact during clearing (exact key matches)
@@ -11,6 +12,15 @@ type ClearOptions = {
   // This lets us avoid touching third-party SDK state on migrations.
   onlyPrefixes?: string[];
 };
+
+const AUTH_STORAGE_PREFIXES = [
+  'wagmi', '_wagmi', 'walletconnect', 'wc@', 'privy', '@privy', 'ock', 'coinbase',
+];
+
+/** Sign-out is an identity reset, not a reset of player preferences or game progress. */
+export function clearAuthCaches() {
+  return clearAppCaches({ onlyPrefixes: AUTH_STORAGE_PREFIXES, clearResponseCaches: false });
+}
 
 const LOCALSTORAGE_KEY_PREFIXES = [
   // wagmi and connectors
@@ -95,7 +105,7 @@ export async function clearAppCaches(options: ClearOptions = {}) {
 
     // 3) Caches API
     try {
-      if (typeof caches !== "undefined" && caches.keys) {
+      if (options.clearResponseCaches !== false && typeof caches !== "undefined" && caches.keys) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }

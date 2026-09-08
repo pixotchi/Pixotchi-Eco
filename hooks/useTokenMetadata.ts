@@ -1,11 +1,13 @@
 "use client";
 
 import { useReadContracts } from "wagmi";
-import { Address, erc20Abi } from "viem";
+import { Address, erc20Abi, isAddress, zeroAddress } from "viem";
+import { resolveTokenMetadata } from '@/lib/token-metadata-state';
 
 export function useTokenMetadata(tokenAddress: string | undefined | null) {
-  const { data, isLoading } = useReadContracts({
-    contracts: tokenAddress && tokenAddress !== "0x0000000000000000000000000000000000000000"
+  const enabled = Boolean(tokenAddress && isAddress(tokenAddress) && tokenAddress.toLowerCase() !== zeroAddress);
+  const { data, isLoading, isError: queryFailed, error: queryError, refetch } = useReadContracts({
+    contracts: enabled
       ? [
           {
             address: tokenAddress as Address,
@@ -20,17 +22,19 @@ export function useTokenMetadata(tokenAddress: string | undefined | null) {
         ]
       : [],
     query: {
-      enabled: !!tokenAddress && tokenAddress !== "0x0000000000000000000000000000000000000000",
+      enabled,
       staleTime: Infinity,
     },
   });
 
-  const symbol = (data?.[0]?.result as string | undefined) ?? undefined;
-  const decimals = Number(data?.[1]?.result ?? 18);
+  const metadata = resolveTokenMetadata(enabled ? data : undefined, queryFailed);
+  const isError = enabled && (queryFailed || (data !== undefined && !metadata.isReady));
 
   return {
-    symbol,
-    decimals,
-    isLoading,
+    ...metadata,
+    isLoading: enabled && isLoading,
+    isError,
+    error: isError ? queryError ?? new Error('Token details could not be verified.') : null,
+    refetch,
   };
 }

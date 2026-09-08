@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
 Dialog,
 DialogContent,
@@ -16,21 +17,13 @@ import { Copy,Share2,Sparkles } from "lucide-react";
 import Image from "next/image";
 import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 import { toast } from "react-hot-toast";
+import { PLANT_ART_MAP } from '@/lib/constants';
 
 interface MintShareModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: MintShareData | null;
 }
-
-// Plant images matching strain IDs
-const PLANT_IMAGES: Record<number, string> = {
-  1: '/icons/plant1.svg',   // Flora
-  2: '/icons/plant2.svg',   // Taki
-  3: '/icons/plant3WithFrame.svg',  // Rosa
-  4: '/icons/plant4WithFrame.svg',  // Zest
-  5: '/icons/plant5.png',   // TYJ
-};
 
 const SHARE_LINK_RETRY_DELAYS_MS = [0, 750, 1500] as const;
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -226,7 +219,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
         <DialogHeader className="pr-5 sm:pr-6">
           <DialogTitle>Share your mint</DialogTitle>
           <DialogDescription>
-            Celebrate your new plant with friends and become eligible for more rewards.
+            Celebrate your new plant and invite friends to your farm.
           </DialogDescription>
         </DialogHeader>
 
@@ -262,7 +255,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 via-transparent to-blue-400/10 rounded-full blur-xl" />
 
                 <Image
-                  src={PLANT_IMAGES[(data.strainId || 1) as keyof typeof PLANT_IMAGES] || PLANT_IMAGES[1]}
+                  src={PLANT_ART_MAP[(data.strainId || 1) as keyof typeof PLANT_ART_MAP] || PLANT_ART_MAP[1]}
                   alt={`${data.strainName} plant`}
                   aria-label={`${data.strainName} strain plant illustration`}
                   width={128}
@@ -295,7 +288,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
-                  aria-label={`Share your ${data.strainName} mint on Twitter`}
+                  aria-label={`Share your ${data.strainName} mint on X`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   {isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}
@@ -306,12 +299,12 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
             {/* Share URL with inline copy button */}
             {shortUrl && !isGeneratingUrl && (
               <div className="relative">
-                <input
+                <Input
                   readOnly
                   value={shortUrl.replace('https://', '')}
                   data-share-url
                   onFocus={(e) => e.target.select()}
-                  className="h-11 w-full cursor-text rounded border border-border/50 bg-muted p-3 pr-14 font-mono text-xs text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="cursor-text border-border/50 bg-muted pr-14 font-mono text-muted-foreground"
                   aria-label="Share link - click to select"
                 />
                 <Button
@@ -334,7 +327,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
           </div>
         ) : (
           <p className="text-sm text-muted-foreground text-center">
-            Mint data unavailable. Try minting again to share your plant.
+            Your plant’s share details are unavailable. Close this window and find your existing plant in the Plants tab.
           </p>
         )}
       </DialogContent>

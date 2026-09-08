@@ -16,8 +16,8 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       md: 'p-4',
     };
     const surfaceStyles = {
-      default: 'border-[hsl(var(--edge-panel))] bg-card text-card-foreground',
-      raised: 'border-[hsl(var(--edge-panel))] bg-card text-card-foreground shadow-[var(--shadow-hairline)]',
+      default: 'surface-panel',
+      raised: 'surface-panel shadow-[var(--shadow-hairline)]',
     };
 
     return (
@@ -73,7 +73,7 @@ const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingEleme
     return (
       <h3
         ref={ref}
-        className={cn('text-base font-semibold leading-none tracking-normal', className)}
+        className={cn('type-section-title', className)}
         {...props}
       >
         {children}
@@ -89,7 +89,7 @@ const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLPara
     return (
       <p
         ref={ref}
-        className={cn('text-sm text-muted-foreground', className)}
+        className={cn('type-body text-muted-foreground', className)}
         {...props}
       >
         {children}

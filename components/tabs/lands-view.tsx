@@ -5,7 +5,7 @@ import { LandResourceBadges } from '@/components/land-resource-badges';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
 import { ResourceState } from '@/components/ui/resource-state';
 import { useQueryClient } from "@tanstack/react-query";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyFarm } from '@/components/empty-farm';
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
@@ -32,16 +32,19 @@ onOwnerResourceInvalidation,
 ownerInvalidationMatches,
 type OwnerResourceInvalidationDetail,
 } from "@/lib/owner-resource-invalidation";
+import { readMatchingLandBuildings } from '@/lib/land-building-snapshot';
+import { clearMissionLandForOwner, consumeMissionLand, getPendingMissionLand, getServerMissionLand, subscribeMissionLand } from '@/lib/mission-navigation';
 import { queryKeys } from "@/lib/query-keys";
 import { BuildingData,BuildingType,Land } from "@/lib/types";
 import { formatXP } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState } from "react";
+import { useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState,useSyncExternalStore } from "react";
 import { useAccount,useBlockNumber } from "wagmi";
 // Removed BalanceCard from tabs; status bar now shows balances globally
-import BuildingGrid from "@/components/building-grid";
+import BuildingGrid, { BuildingTile } from "@/components/building-grid";
 import { EditLandName } from "@/components/edit-land-name";
+import { AssetTitle } from '@/components/asset-title';
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
@@ -167,64 +170,12 @@ function readStoredBuildingType(): BuildingType {
   return readLocalStorage(BUILDING_TYPE_STORAGE_KEY) === 'town' ? 'town' : 'village';
 }
 
-/**
- * A grid tile for a cross-land utility panel, rendered alongside the real
- * buildings. Markup mirrors BuildingItem in building-grid.tsx (including its
- * denseLabels variant) so utility tiles line up with buildings on every layout.
- */
-function UtilityBuildingTile({
-  ariaLabel,
-  denseLabels = false,
-  glyph,
-  label,
-  onSelect,
-  selected,
-  sublabel,
-}: {
-  ariaLabel: string;
-  denseLabels?: boolean;
-  glyph: string;
-  label: string;
-  onSelect: () => void;
-  selected: boolean;
-  sublabel: string;
+function UtilityBuildingTile({ ariaLabel, glyph, label, onSelect, selected, sublabel }: {
+  ariaLabel: string; denseLabels?: boolean; glyph: string; label: string;
+  onSelect: () => void; selected: boolean; sublabel: string;
 }) {
-  return (
-    <div className={`${denseLabels ? 'w-20 min-w-0 ' : ''}space-y-1`}>
-      <div className="flex justify-center">
-        <button
-          type="button"
-          onClick={onSelect}
-          aria-label={ariaLabel}
-          aria-pressed={selected}
-          className={`building-button building-element rounded-[var(--radius-control)] border p-0 transition-[background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'}`}
-        >
-          <div className="building-element relative flex h-16 w-16 items-center justify-center rounded-[calc(var(--radius-control)-0.125rem)] p-2">
-            <span
-              className={`font-pixel text-[1.35rem] leading-none tracking-normal ${selected ? 'text-primary' : 'text-foreground/80'}`}
-              aria-hidden="true"
-            >
-              {glyph}
-            </span>
-          </div>
-        </button>
-      </div>
-      <div className={`${denseLabels ? 'min-w-0 ' : ''}text-center`}>
-        <div
-          className={denseLabels
-            ? "min-h-[1.75rem] text-xs font-semibold leading-tight [overflow-wrap:anywhere]"
-            : "text-xs font-semibold truncate"
-          }
-          title={label}
-        >
-          {label}
-        </div>
-        <div className={denseLabels ? "text-xs leading-tight text-muted-foreground" : "text-xs text-muted-foreground"}>
-          {sublabel}
-        </div>
-      </div>
-    </div>
-  );
+  return <BuildingTile ariaLabel={ariaLabel} label={label} subtitle={sublabel} selected={selected} onSelect={onSelect}
+    icon={<span className="font-pixel text-3xl" aria-hidden="true">{glyph}</span>} />;
 }
 
 export default function LandsView() {
@@ -245,6 +196,7 @@ export default function LandsView() {
 function LandsViewContent() {
   const { address } = useAccount();
   const ownerKey = address?.toLowerCase() ?? null;
+  const missionLandRequest = useSyncExternalStore(subscribeMissionLand, getPendingMissionLand, getServerMissionLand);
   const queryClient = useQueryClient();
   useSmartWallet();
   const { isTabVisible } = useTabVisibility();
@@ -257,13 +209,18 @@ function LandsViewContent() {
 
   // Building management state
   const [buildingType, setBuildingType] = useState<BuildingType>(() => readStoredBuildingType());
-  const [villageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
-  const [buildingsError, setBuildingsError] = useState<string | null>(null);
-  const [townBuildings, setTownBuildings] = useState<BuildingData[]>([]);
-  const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
+  const [rawVillageBuildings, setVillageBuildings] = useState<BuildingData[]>([]);
+  const [rawBuildingsError, setBuildingsError] = useState<string | null>(null);
+  const [rawTownBuildings, setTownBuildings] = useState<BuildingData[]>([]);
+  const [preferredBuildingId, setPreferredBuildingId] = useState<number | null>(null);
+  const setSelectedBuilding = useCallback((building: BuildingData | null) => setPreferredBuildingId(building?.id ?? null), []);
+  const [snapshotIdentity, setSnapshotIdentity] = useState<string | null>(null);
+  const [buildingReadIdentity, setBuildingReadIdentity] = useState<string | null>(null);
+  const [detailRequest, setDetailRequest] = useState(0);
+  const [missionDetailFocus, setMissionDetailFocus] = useState(false);
+  const detailRef = useRef<HTMLElement>(null);
   const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
-  const selectedBuildingId = selectedBuilding?.id ?? null;
-  const [buildingsLoading, setBuildingsLoading] = useState(false);
+  const [rawBuildingsLoading, setBuildingsLoading] = useState(false);
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
 
@@ -283,6 +240,10 @@ function LandsViewContent() {
   // Token approval state for land interactions
   const [leafAllowance, setLeafAllowance] = useState<bigint>(BigInt(0));
   const [seedAllowance, setSeedAllowance] = useState<bigint>(BigInt(0));
+  const [approvalRead, setApprovalRead] = useState<{ owner: string | null; status: 'loading' | 'ready' | 'error' }>({ owner: null, status: 'loading' });
+  const allowancesReady = approvalRead.owner === ownerKey && approvalRead.status === 'ready';
+  const allowancesError = approvalRead.owner === ownerKey && approvalRead.status === 'error'
+    ? 'LEAF and PIXOTCHI spending permissions could not be verified. Retry before upgrading.' : null;
 
   // Only the selected token id is local. `selectedLand` is derived from the
   // query cache so the dropdown, the stage and the warehouse panel can never
@@ -307,7 +268,7 @@ function LandsViewContent() {
     setBuildingsLoading(false);
     setBuildingsError(null);
     setIsMapOpen(false);
-  }, []);
+  }, [setSelectedBuilding]);
 
   const buildLandsInvariant = useCallback(
     (detail: OwnerResourceInvalidationDetail, baseline: Land[]): LandInvariant | undefined => {
@@ -359,9 +320,19 @@ function LandsViewContent() {
 
   const selectedLand = useMemo(() => {
     if (lands.length === 0) return null;
+    if (missionLandRequest?.owner === ownerKey) {
+      const target = lands.find(land => land.tokenId.toString() === missionLandRequest.landId && land.owner.toLowerCase() === ownerKey);
+      if (target) return target;
+    }
     return lands.find((land) => land.tokenId === preferredLandId) ?? lands[0];
-  }, [lands, preferredLandId]);
+  }, [lands, missionLandRequest, ownerKey, preferredLandId]);
   const selectedLandId = selectedLand?.tokenId ?? null;
+  const currentBuildingIdentity = ownerKey && selectedLandId !== null ? `${ownerKey}:${selectedLandId}` : null;
+  const { matches: snapshotMatches, villageBuildings, townBuildings, selectedBuilding } = readMatchingLandBuildings(
+    currentBuildingIdentity, snapshotIdentity, rawVillageBuildings, rawTownBuildings, buildingType, preferredBuildingId);
+  const selectedBuildingId = selectedBuilding?.id ?? null;
+  const buildingsError = buildingReadIdentity === currentBuildingIdentity ? rawBuildingsError : null;
+  const buildingsLoading = rawBuildingsLoading || (!snapshotMatches && !buildingsError);
   const hasFarmerHouse = townBuildings.some(building => building.id === 7 && building.level > 0);
   const quests = useLandQuestSlots({ owner: ownerKey, chainId: 8453, landId: selectedLandId,
     enabled: hasFarmerHouse && !buildingsError, poll: isVisible && isDocumentVisible });
@@ -383,7 +354,7 @@ function LandsViewContent() {
 
   // Map data hook. The full-range leaderboard read only happens once the map is
   // actually opened; the plot count stays eager so the header never shows 0.
-  const { totalSupply, neighborData } = useLandMap(lands, { enabled: isMapOpen });
+  const { totalSupply, neighborData, supplyStatus, neighborStatus, isRefreshing, retryMapData } = useLandMap(lands, { enabled: isMapOpen });
 
   // Fetch land contract approval status (LEAF + SEED)
   const fetchApprovalStatus = useCallback(async () => {
@@ -409,6 +380,7 @@ function LandsViewContent() {
 
     fetchApprovalStatusQueuedRef.current = null;
     fetchApprovalStatusPendingRef.current = requestIdentity;
+    setApprovalRead({ owner: ownerKey, status: 'loading' });
 
     try {
       const [currentLeafAllowance, currentSeedAllowance] = await Promise.all([
@@ -422,6 +394,7 @@ function LandsViewContent() {
       ) {
         setLeafAllowance(currentLeafAllowance);
         setSeedAllowance(currentSeedAllowance);
+        setApprovalRead({ owner: ownerKey, status: 'ready' });
       }
     } catch (error) {
       console.error("Failed to fetch land token approval status:", error);
@@ -430,8 +403,7 @@ function LandsViewContent() {
         && ownerGenerationRef.current === requestIdentity.generation
         && ownerKeyRef.current === requestIdentity.ownerKey
       ) {
-        setLeafAllowance(BigInt(0));
-        setSeedAllowance(BigInt(0));
+        setApprovalRead({ owner: ownerKey, status: 'error' });
       }
     } finally {
       const ownsPendingSlot = approvalFetchIdentityMatches(
@@ -484,7 +456,7 @@ function LandsViewContent() {
     if (previousOwner) {
       void queryClient.cancelQueries({ queryKey: queryKeys.landsByOwner(previousOwner) });
     }
-  }, [ownerKey, queryClient]);
+  }, [ownerKey, queryClient, setSelectedBuilding]);
 
   useLayoutEffect(() => {
     selectedLandIdRef.current = selectedLandId;
@@ -531,6 +503,7 @@ function LandsViewContent() {
     fetchBuildingDataQueuedRef.current = null;
     fetchBuildingDataPendingRef.current = requestIdentity;
     setBuildingsLoading(true);
+    setBuildingReadIdentity(`${ownerKey}:${landId}`);
     setBuildingsError(null);
 
     try {
@@ -549,6 +522,7 @@ function LandsViewContent() {
         selectedLandIdRef.current === landId &&
         buildingTypeRef.current === buildingType
       ) {
+        setSnapshotIdentity(`${ownerKey}:${landId}`);
         setVillageBuildings(villageData || []);
 
         // Add prebuilt utility buildings that are not part of TownFacet output
@@ -641,7 +615,9 @@ function LandsViewContent() {
         const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
 
         if (currentBuildings.length > 0) {
-          const preferredId = lastSelectedBuildingIdRef.current;
+          const mission = getPendingMissionLand();
+          const preferredId = mission?.owner === ownerKey && mission.landId === landId.toString() && mission.buildingType === buildingType
+            ? mission.buildingId : lastSelectedBuildingIdRef.current;
 
           // If we have a preferred ID (e.g. from previous selection), try to find it in the NEW data
           if (preferredId != null) {
@@ -711,7 +687,7 @@ function LandsViewContent() {
         }
       }
     }
-  }, [selectedLandId, buildingType, ownerKey]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
+  }, [selectedLandId, buildingType, ownerKey, setSelectedBuilding]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {
@@ -808,7 +784,7 @@ function LandsViewContent() {
 
     lastOwnerBuildingInvalidationRef.current = Date.now();
     refreshBuildingSnapshot();
-  }), [ownerKey, refreshBuildingSnapshot]);
+  }), [ownerKey, refreshBuildingSnapshot, setSelectedBuilding]);
 
   // Backward compatibility for panels not yet migrated to the owner-domain API.
   useEffect(() => {
@@ -844,7 +820,7 @@ function LandsViewContent() {
       window.removeEventListener("online", reconcile);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [address, isVisible, refreshBuildingSnapshot]);
+  }, [address, isVisible, refreshBuildingSnapshot, setSelectedBuilding]);
 
   // Remove aggressive image preloads; Next/Image will handle efficient lazy-loading
 
@@ -862,6 +838,7 @@ function LandsViewContent() {
     // Reset selected building so fetchBuildingData will pick first of new land
     setSelectedBuilding(null);
     setSelectedUtilityPanel(null);
+    setDetailRequest(0);
     (async () => {
       try {
         const latest = await getLandById(requestedLandId);
@@ -878,7 +855,7 @@ function LandsViewContent() {
       } catch { }
     })();
     return () => { cancelled = true; };
-  }, [ownerKey, patchLandInCache, selectedLandId]);
+  }, [ownerKey, patchLandInCache, selectedLandId, setSelectedBuilding]);
 
   // Track last selected building id to persist across land switches
   useEffect(() => {
@@ -897,6 +874,37 @@ function LandsViewContent() {
     writeLocalStorage(LAND_SELECTION_STORAGE_KEY, selectedLandId.toString());
   }, [selectedLandId]);
 
+  // A mission can arrive before this lazy view mounts or while Activity has
+  // suspended its effects. Keep it pending until the owner's land and building
+  // snapshots agree, then consume only this request (a newer click wins).
+  useEffect(() => {
+    clearMissionLandForOwner(ownerKey);
+    if (!missionLandRequest || missionLandRequest.owner !== ownerKey || landsLoading) return;
+    const targetLand = lands.find(land => land.tokenId.toString() === missionLandRequest.landId && land.owner.toLowerCase() === ownerKey);
+    if (!targetLand) {
+      if (!landsFailed) consumeMissionLand(missionLandRequest.requestId);
+      return;
+    }
+    setPreferredLandId(targetLand.tokenId);
+    setSelectedUtilityPanel(null);
+    setIsMapOpen(false);
+    if (buildingType !== missionLandRequest.buildingType) {
+      setBuildingType(missionLandRequest.buildingType);
+      return;
+    }
+    if (!snapshotMatches || buildingsLoading || buildingsError) return;
+    const targetBuilding = (buildingType === 'town' ? townBuildings : villageBuildings)
+      .find(building => building.id === missionLandRequest.buildingId);
+    if (targetBuilding) {
+      lastSelectedBuildingIdRef.current = targetBuilding.id;
+      setSelectedBuilding(targetBuilding);
+      setMissionDetailFocus(true);
+      setDetailRequest(value => value + 1);
+    }
+    consumeMissionLand(missionLandRequest.requestId);
+  }, [buildingType, buildingsError, buildingsLoading, lands, landsFailed, landsLoading, missionLandRequest,
+    ownerKey, setSelectedBuilding, snapshotMatches, townBuildings, villageBuildings]);
+
   // One shared Base block query drives both construction and quest deadlines.
   const hasUpgradingBuildings = [...villageBuildings, ...townBuildings].some(building => building.isUpgrading);
 
@@ -904,21 +912,49 @@ function LandsViewContent() {
     watch: (hasUpgradingBuildings || hasFarmerHouse) && isVisible && isDocumentVisible });
   const currentBlock = liveBlock ?? BigInt(0);
 
+  const cancelMissionReveal = useCallback(() => {
+    const request = getPendingMissionLand();
+    if (request) consumeMissionLand(request.requestId);
+  }, []);
+
+  const handleLandSelect = useCallback((landId: bigint) => {
+    cancelMissionReveal();
+    setPreferredLandId(landId);
+  }, [cancelMissionReveal]);
+
   const handleBuildingSelect = useCallback((type: BuildingType, building: BuildingData) => {
+    cancelMissionReveal();
+    setMissionDetailFocus(false);
     setSelectedUtilityPanel(null);
     setBuildingType(type);
     setSelectedBuilding(building);
-  }, []);
+    setDetailRequest(value => value + 1);
+  }, [cancelMissionReveal, setSelectedBuilding]);
 
   const handleBatchClaimUtilitySelect = useCallback(() => {
+    cancelMissionReveal();
+    setMissionDetailFocus(false);
     setBuildingType('village');
     setSelectedUtilityPanel('batch-claim');
-  }, []);
+    setDetailRequest(value => value + 1);
+  }, [cancelMissionReveal]);
 
   const handleBatchQuestUtilitySelect = useCallback(() => {
+    cancelMissionReveal();
+    setMissionDetailFocus(false);
     setBuildingType('town');
     setSelectedUtilityPanel('batch-quests');
-  }, []);
+    setDetailRequest(value => value + 1);
+  }, [cancelMissionReveal]);
+
+  useEffect(() => {
+    if (!detailRequest || (isDesktopLand && !missionDetailFocus)) return;
+    const frame = requestAnimationFrame(() => {
+      detailRef.current?.focus({ preventScroll: true });
+      detailRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detailRequest, isDesktopLand, missionDetailFocus]);
 
   const handleBatchQuestSuccess = useCallback(() => {
     invalidateOwnerResources({
@@ -965,12 +1001,7 @@ function LandsViewContent() {
 
   if (lands.length === 0) {
     return (
-      <EmptyState
-        className="min-h-[60dvh]"
-        icon={LandPlot}
-        title="No Lands Yet!"
-        description="Go to the Mint tab to get your first plot of land."
-      />
+      <EmptyFarm asset="land" />
     );
   }
 
@@ -995,9 +1026,9 @@ function LandsViewContent() {
                       <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
+                  <DropdownMenuContent matchTriggerWidth className=" [--menu-max-height:15rem] overflow-y-auto">
                     {lands.map((land) => (
-                      <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => setPreferredLandId(land.tokenId)}>
+                      <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => handleLandSelect(land.tokenId)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <LandPlot className="h-4 w-4 shrink-0" />
                           <span className="truncate"><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
@@ -1064,7 +1095,7 @@ function LandsViewContent() {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
                           const prevIndex = (idx - 1 + lands.length) % lands.length;
-                          setPreferredLandId(lands[prevIndex].tokenId);
+                          handleLandSelect(lands[prevIndex].tokenId);
                         }
                       }}
                       direction="previous"
@@ -1076,7 +1107,7 @@ function LandsViewContent() {
                         const idx = selectedLand ? lands.findIndex(l => l.tokenId === selectedLand.tokenId) : -1;
                         if (idx >= 0) {
                           const nextIndex = (idx + 1) % lands.length;
-                          setPreferredLandId(lands[nextIndex].tokenId);
+                          handleLandSelect(lands[nextIndex].tokenId);
                         }
                       }}
                       direction="next"
@@ -1088,10 +1119,7 @@ function LandsViewContent() {
               </div>
 
               <div className="text-center">
-                <div className="inline-flex max-w-full items-center justify-center gap-1">
-                  <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 break-words font-pixel text-base">{selectedLand.name || `Land #${selectedLand.tokenId}`}</h3>
-                  <EditLandName
+                <AssetTitle name={selectedLand.name || `Land #${selectedLand.tokenId}`} edit={<EditLandName
                     land={selectedLand}
                     onNameChanged={(landId, newName) => {
                       // Patch the shared cache entry so the selector, the map
@@ -1102,8 +1130,7 @@ function LandsViewContent() {
                     }}
                     iconSize={18}
                     className="h-11 min-h-11 w-11 min-w-11 shrink-0"
-                  />
-                </div>
+                  />} />
                 {selectedLand.name && <p className="text-sm text-muted-foreground">Land #{selectedLand.tokenId.toString()}</p>}
               </div>
             </CardContent>
@@ -1115,13 +1142,16 @@ function LandsViewContent() {
           {/* Building Management Section */}
           <TabCard className="xl:h-fit xl:w-full">
             <CardHeader>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Buildings</CardTitle>
-                <div className="xl:hidden">
+                <div className="max-w-full xl:hidden">
                   <ToggleGroup
                     ariaLabel="Land area"
+                    className="max-w-full flex-wrap"
+                    getButtonClassName={() => 'min-w-0 flex-1 whitespace-normal break-words'}
                     value={buildingType}
                     onValueChange={(v) => {
+                      cancelMissionReveal();
                       const newType = v as 'village' | 'town';
                       setSelectedUtilityPanel(null);
                       setBuildingType(newType);
@@ -1136,9 +1166,10 @@ function LandsViewContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,360px)_minmax(360px,520px)] xl:items-start xl:justify-center">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,1fr)] xl:items-start">
                 {/* Building Grid */}
-                <div className="space-y-4">
+                <div tabIndex={-1} aria-label="Choose a building" className="space-y-4 scroll-mt-4 focus:outline-none">
+                  {buildingsLoading && snapshotMatches && <p role="status" className="text-xs text-muted-foreground">Refreshing this land’s buildings…</p>}
                   {buildingsError ? <ResourceState status="error" title="Buildings unavailable" description={buildingsError} onRetry={() => { void fetchBuildingData(); }} /> : buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
                     <div className="text-center text-muted-foreground p-6">
                       Loading buildings...
@@ -1196,7 +1227,6 @@ function LandsViewContent() {
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('village', building)}
                             currentBlock={currentBlock}
-                            gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
                             extraItems={lands.length > 0 ? (
                               <UtilityBuildingTile
@@ -1227,7 +1257,6 @@ function LandsViewContent() {
                             selectedBuildingType={buildingType}
                             onBuildingSelect={(building) => handleBuildingSelect('town', building)}
                             currentBlock={currentBlock}
-                            gridClassName="grid grid-cols-3 gap-x-3 gap-y-5 justify-items-center"
                             denseLabels
                             extraItems={lands.length > 0 ? (
                               <UtilityBuildingTile
@@ -1249,10 +1278,16 @@ function LandsViewContent() {
                 </div>
 
                 {/* Building Details Panel */}
-                {selectedUtilityPanel === 'batch-claim' ? (
+                <section ref={detailRef} tabIndex={-1} aria-label="Selected building details" className="min-w-0 scroll-mt-4 space-y-3 focus:outline-none">
+                {snapshotMatches && !buildingsError && (selectedUtilityPanel === 'batch-claim' ? (
                   <BatchClaimCard
                     lands={lands}
                     onSuccess={handleBatchClaimSuccess}
+                    onOpenBuildings={villageBuildings.length ? () => {
+                      const production = villageBuildings.filter(entry => [0, 3, 5].includes(entry.id));
+                      const building = production.find(entry => entry.level > 0) ?? production[0] ?? villageBuildings[0];
+                      handleBuildingSelect('village', building);
+                    } : undefined}
                     variant="embedded"
                     showWhenEmpty
                   />
@@ -1260,6 +1295,10 @@ function LandsViewContent() {
                   <BatchQuestStartCard
                     lands={lands}
                     onSuccess={handleBatchQuestSuccess}
+                    onOpenFarmerHouse={townBuildings.some(entry => entry.id === 7) ? () => {
+                      const building = townBuildings.find(entry => entry.id === 7);
+                      if (building) handleBuildingSelect('town', building);
+                    } : undefined}
                     variant="embedded"
                     showWhenEmpty
                   />
@@ -1273,12 +1312,16 @@ function LandsViewContent() {
                     leafAllowance={leafAllowance}
                     onLeafApprovalSuccess={fetchApprovalStatus}
                     seedAllowance={seedAllowance}
+                    allowancesReady={allowancesReady}
+                    allowancesError={allowancesError}
+                    onRetryAllowances={() => void fetchApprovalStatus()}
                     onSeedApprovalSuccess={fetchApprovalStatus}
                     warehousePoints={selectedLand.accumulatedPlantPoints}
                     warehouseLifetime={selectedLand.accumulatedPlantLifetime}
                     villageBuildings={villageBuildings}
                   /></div>
-                )}
+                ))}
+                </section>
               </div>
             </CardContent>
           </TabCard>
@@ -1293,11 +1336,15 @@ function LandsViewContent() {
           userLands={lands}
           selectedLand={selectedLand}
           onSelectLand={(land) => {
-            setPreferredLandId(land.tokenId);
+            handleLandSelect(land.tokenId);
             setIsMapOpen(false);
           }}
           totalSupply={totalSupply}
           neighborData={neighborData}
+          supplyStatus={supplyStatus}
+          neighborStatus={neighborStatus}
+          isRefreshing={isRefreshing}
+          onRetryMapData={retryMapData}
         />
       )}
     </div>

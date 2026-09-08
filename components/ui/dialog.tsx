@@ -7,11 +7,59 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDialogFeedbackHostRef } from "@/components/ui/dialog-feedback-host";
 import { getDialogOpener, registerDialogEscape, routeNestedDialogEscape, trackDialogOpeners } from "@/lib/dialog-focus";
+import { ScrollArea } from './scroll-area';
 
 const DialogOpenContext = React.createContext(false);
 const DialogOpenChangeContext = React.createContext<(open: boolean) => void>(() => {});
 type DialogLayout = "custom" | "form" | "detail" | "game";
 const DialogLayoutContext = React.createContext<DialogLayout>("custom");
+const DialogScrollsTogetherContext = React.createContext(false);
+
+/** Keep the usual body scrollport until fixed chrome would crowd out its content.
+ * The DOM stays mounted when text size or the visible viewport changes. */
+function useAdaptiveDialogScroll(surface: HTMLDivElement | null, enabled: boolean) {
+  const [scrollTogether, setScrollTogether] = React.useState(false);
+  React.useLayoutEffect(() => {
+    if (!surface || !enabled) {
+      setScrollTogether(false);
+      return;
+    }
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const header = surface.querySelector<HTMLElement>('[data-dialog-header]');
+      const body = surface.querySelector<HTMLElement>('[data-dialog-body]');
+      const footer = surface.querySelector<HTMLElement>('[data-dialog-footer]');
+      if (!body) return;
+      const heightWithMargins = (element: HTMLElement | null) => {
+        if (!element) return 0;
+        const style = getComputedStyle(element);
+        return element.getBoundingClientRect().height + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+      };
+      const style = getComputedStyle(surface);
+      const available = surface.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const remaining = available - heightWithMargins(header) - heightWithMargins(footer);
+      const minimumBody = Math.min(240, surface.clientHeight * 0.4);
+      setScrollTogether(remaining < minimumBody && body.scrollHeight > remaining + 1);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    const resize = new ResizeObserver(schedule);
+    resize.observe(surface);
+    surface.querySelectorAll('[data-dialog-header], [data-dialog-body], [data-dialog-footer]').forEach(node => resize.observe(node));
+    const mutation = new MutationObserver(schedule);
+    mutation.observe(surface, { childList: true, subtree: true, characterData: true });
+    measure();
+    return () => { resize.disconnect(); mutation.disconnect(); cancelAnimationFrame(frame); };
+  }, [surface, enabled]);
+
+  React.useLayoutEffect(() => {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && surface?.querySelector('[data-dialog-scroll-content]')?.contains(focused)) {
+      focused.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [scrollTogether, surface]);
+  return scrollTogether;
+}
 
 const Dialog = ({
   defaultOpen = false,
@@ -71,7 +119,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
 type DialogSurface = "default" | "soft" | "game" | "danger";
-type DialogMobileMode = "auto" | "center" | "sheet";
+type DialogMobileMode = "center" | "sheet";
 type DialogLayer = "default" | "nested";
 
 const dialogSizeClassName: Record<DialogSize, string> = {
@@ -83,8 +131,8 @@ const dialogSizeClassName: Record<DialogSize, string> = {
 };
 
 const dialogSurfaceClassName: Record<DialogSurface, string> = {
-  default: "border-border/65 !bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
-  soft: "border-border/65 !bg-popover bg-[image:var(--gradient-dialog)] text-popover-foreground",
+  default: "border-[hsl(var(--edge-panel))] !bg-card text-card-foreground",
+  soft: "border-[hsl(var(--edge-panel))] !bg-popover text-popover-foreground",
   game: "border-white/15 !bg-slate-950 text-white shadow-[var(--shadow-modal)]",
   danger: "border-destructive/30 !bg-card bg-[image:var(--gradient-dialog)] text-card-foreground",
 };
@@ -93,6 +141,8 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     danger?: boolean;
+    /** Let header/footer scroll with the body if enlarged text or a short viewport leaves too little body space. */
+    adaptiveScroll?: boolean;
     padding?: "default" | "compact" | "none";
     frameClassName?: string;
     hideCloseButton?: boolean;
@@ -103,7 +153,8 @@ const DialogContent = React.forwardRef<
     mobileMode?: DialogMobileMode;
     overlayClassName?: string;
     size?: DialogSize;
-    stickyFooter?: boolean;
+    /** Styles for the visual surface; inherited style targets the viewport frame. */
+    surfaceStyle?: React.CSSProperties;
     surface?: DialogSurface;
     useSafeAreaInset?: boolean;
   }
@@ -111,15 +162,16 @@ const DialogContent = React.forwardRef<
   children,
   className,
   danger = false,
+  adaptiveScroll = false,
   padding = "default",
   frameClassName,
   hideCloseButton,
   layer = "default",
   layout = "custom",
-  mobileMode = "auto",
+  mobileMode = "center",
   overlayClassName,
   size = "md",
-  stickyFooter = false,
+  surfaceStyle,
   surface = "default",
   useSafeAreaInset = true,
   onOpenAutoFocus,
@@ -144,6 +196,8 @@ const DialogContent = React.forwardRef<
   const changeDialogOpen = React.useContext(DialogOpenChangeContext);
   const feedbackHostRef = useDialogFeedbackHostRef(dialogOpen);
   const frameRef = React.useRef<HTMLDivElement | null>(null);
+  const [surfaceNode, setSurfaceNode] = React.useState<HTMLDivElement | null>(null);
+  const scrollTogether = useAdaptiveDialogScroll(surfaceNode, adaptiveScroll);
   const escapeCleanup = React.useRef<(() => void) | null>(null);
   const escapeHandler = React.useRef<(event: KeyboardEvent) => void>(() => {});
   escapeHandler.current = (event) => {
@@ -171,7 +225,6 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={setFrameRef}
       data-viewport-debug-dialog-frame=""
-      data-sticky-footer={stickyFooter ? "true" : undefined}
       className={cn(
         // Radix Presence observes this node, so it needs its own exit animation.
         // This is opacity-only: unlike a transform, it does not change the
@@ -215,6 +268,14 @@ const DialogContent = React.forwardRef<
       onOpenAutoFocus={(event) => {
         openerRef.current = getDialogOpener();
         onOpenAutoFocus?.(event);
+        // Adaptive detail surfaces can scroll their heading away if the first
+        // body action receives browser autofocus. Start on the visible close
+        // control; a feature's explicit autofocus handler still takes precedence.
+        const close = adaptiveScroll ? frameRef.current?.querySelector<HTMLButtonElement>('[data-dialog-close]') : null;
+        if (!event.defaultPrevented && close) {
+          event.preventDefault();
+          close.focus({ preventScroll: true });
+        }
       }}
       onCloseAutoFocus={(event) => {
         onCloseAutoFocus?.(event);
@@ -232,8 +293,11 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div
+        ref={adaptiveScroll ? setSurfaceNode : undefined}
         data-viewport-debug-dialog-surface=""
         data-dialog-layout={layout}
+        data-dialog-scroll={scrollTogether ? 'content' : 'body'}
+        style={surfaceStyle}
         data-state={dialogOpen ? "open" : "closed"}
         className={cn(
           // Counterpart to the frame's pointer-events: none above. The second class
@@ -264,15 +328,29 @@ const DialogContent = React.forwardRef<
           className
         )}
       >
-        <DialogLayoutContext.Provider value={layout}>{children}</DialogLayoutContext.Provider>
+        <DialogLayoutContext.Provider value={layout}>
+          <DialogScrollsTogetherContext.Provider value={scrollTogether}>
+            {adaptiveScroll ? (
+              <ScrollArea
+                data-dialog-scroll-content=""
+                className={scrollTogether
+                  ? "-m-[var(--dialog-padding)] min-h-0 flex-1 overflow-y-auto overscroll-contain p-[var(--dialog-padding)]"
+                  : "contents"}
+              >
+                {children}
+              </ScrollArea>
+            ) : children}
+          </DialogScrollsTogetherContext.Provider>
+        </DialogLayoutContext.Provider>
         {!hideCloseButton && (
           <DialogPrimitive.Close
+            data-dialog-close=""
             aria-label="Close dialog"
             className={cn(
               // Position
-              "absolute top-3 right-3 md:top-4 md:right-4 z-10",
+              "absolute top-[12px] right-[12px] md:top-[16px] md:right-[16px] z-20",
               // Size and alignment
-              "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center",
+              "inline-flex h-[44px] min-h-[44px] w-[44px] min-w-[44px] items-center justify-center",
               // Visuals: match header/task/stake icon controls
               "rounded-[var(--radius-control)] border border-[hsl(var(--edge-panel))] !bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)]",
               "[@media(hover:hover)_and_(pointer:fine)]:hover:border-primary/45 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-[hsl(var(--nav-hover-bg))] [@media(hover:hover)_and_(pointer:fine)]:hover:text-primary [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[var(--shadow-glow)] [@media(hover:hover)_and_(pointer:fine)]:hover:brightness-[1.03] active:translate-y-0 active:scale-[0.985]",
@@ -285,7 +363,7 @@ const DialogContent = React.forwardRef<
             )}
           >
             {/* aria-label above is the accessible name; the icon is decorative. */}
-            <X className="h-4 w-4" aria-hidden="true" />
+            <X className="h-[20px] w-[20px]" aria-hidden="true" />
           </DialogPrimitive.Close>
         )}
       </div>
@@ -305,8 +383,9 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-dialog-header=""
     className={cn(
-      "surface-header-divider dialog-header-surface -mx-[var(--dialog-padding)] -mt-[var(--dialog-padding)] mb-0 flex shrink-0 flex-col space-y-2 px-[var(--dialog-padding)] pb-3 pt-[var(--dialog-padding)] pr-16 text-left",
+      "surface-header-divider dialog-header-surface -mx-[var(--dialog-padding)] -mt-[var(--dialog-padding)] mb-0 flex shrink-0 flex-col space-y-2 px-[var(--dialog-padding)] pb-3 pt-[var(--dialog-padding)] pr-[64px] text-left",
       className
     )}
     {...props}
@@ -320,13 +399,16 @@ const DialogFooter = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { sticky?: boolean }) => {
   const layout = React.useContext(DialogLayoutContext);
+  const scrollTogether = React.useContext(DialogScrollsTogetherContext);
   const fixed = sticky ?? layout === "form";
   return (
   <div
+    data-dialog-footer=""
     className={cn(
       "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end",
       fixed && "surface-footer-divider dialog-footer-surface sticky -bottom-[var(--dialog-padding)] z-10 -mx-[var(--dialog-padding)] -mb-[var(--dialog-padding)] overflow-visible px-[var(--dialog-padding)] pb-[max(0.75rem,env(safe-area-inset-bottom),var(--safe-area-inset-bottom),var(--browser-safe-area-bottom))] pt-3",
-      className
+      className,
+      scrollTogether && "static"
     )}
     {...props}
   />
@@ -337,12 +419,16 @@ DialogFooter.displayName = "DialogFooter";
 const DialogBody = ({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("surface-scroll-fade -mx-[min(0.375rem,var(--dialog-padding,0.375rem))] min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-3", className)}
+}: React.HTMLAttributes<HTMLDivElement>) => {
+  const scrollTogether = React.useContext(DialogScrollsTogetherContext);
+  return (
+  <ScrollArea
+    data-dialog-body=""
+    className={cn("surface-scroll-fade -mx-[min(0.375rem,var(--dialog-padding,0.375rem))] min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-3", className, scrollTogether && "flex-none overflow-visible")}
     {...props}
   />
-);
+  );
+};
 DialogBody.displayName = "DialogBody";
 
 const DialogTitle = React.forwardRef<
@@ -352,7 +438,7 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      "type-dialog-title [overflow-wrap:anywhere]",
       className
     )}
     {...props}
@@ -366,7 +452,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm leading-relaxed text-muted-foreground", className)}
+    className={cn("text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]", className)}
     {...props}
   />
 ));

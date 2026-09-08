@@ -6,19 +6,22 @@ import { PaymasterProvider } from "@/lib/paymaster-context";
 import { EthModeProvider } from "@/lib/eth-mode-context";
 import { SmartWalletProvider } from "@/lib/smart-wallet-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PrivyProvider } from "@privy-io/react-auth";
-import { WagmiProvider as CoreWagmiProvider, type Config } from "wagmi";
+import type { PrivyClientConfig, WalletListEntry } from "@privy-io/react-auth";
+import { ThemedPrivyProvider } from "@/components/auth/themed-privy-provider";
+import { HostWalletBoundary } from "@/components/auth/host-wallet-boundary";
+import { useSolanaBootstrap } from "@/hooks/useSolanaBootstrap";
+import { createRetryableResource } from "@/lib/retryable-resource";
+import { type Config } from "wagmi";
 import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
+import { SessionWagmiProvider } from "@/components/auth/session-wagmi-provider";
 import { FrameProvider } from "@/lib/frame-context";
 import {
-  HostEnvironmentProvider,
   type HostEnvironmentState,
   useHostEnvironment,
 } from "@/lib/host-environment";
 import dynamic from "next/dynamic";
 import { BalanceProvider } from "@/lib/balance-context";
 import { OwnerResourceQuerySync } from "@/components/owner-resource-query-sync";
-import { ThemeInitializer } from "@/components/theme-initializer";
 import { ServerThemeProvider } from "@/components/server-theme-provider";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import { SecretGardenListener } from "@/components/secret-garden-listener";
@@ -30,7 +33,6 @@ import { isSolanaEnabled } from '@/lib/solana-constants';
 import { ChatProvider } from "@/components/chat/chat-context";
 import { AppToaster } from "@/components/ui/app-toaster";
 import { PerformanceModeController } from "@/components/ui/performance-mode";
-import { ScrollFadeController } from "@/components/ui/scroll-fade-controller";
 import { SlideshowProvider, useSlideshow } from "@/components/tutorial/SlideshowProvider";
 import { StakingProvider } from '@/components/staking/staking-provider';
 import { onTasksDialogOpen, openTasksDialog } from "@/lib/app-events";
@@ -52,11 +54,6 @@ import {
 } from "@/lib/confirmed-miniapp-session";
 
 const DEFAULT_SOLANA_RPC_URL = 'https://api.mainnet-beta.solana.com';
-// Ready is sent outside the lazy wallet-config boundary, so a failed wallet
-// chunk cannot leave a Mini App host's splash screen up indefinitely. The SDK
-// action is fire-and-forget from the host's perspective; this only bounds how
-// long we retain the local attempt before reporting an unavailable bridge.
-const MINI_APP_READY_TIMEOUT_MS = 2_500;
 const DESKTOP_EVM_WALLET_LIST = [
   'metamask',
   'coinbase_wallet',
@@ -122,9 +119,9 @@ function toSolanaRpcSubscriptionsUrl(rpcUrl: string) {
 }
 
 type PrivySolanaBootstrap = {
-  connectors?: UntypedValue;
+  connectors?: ReturnType<typeof import('@/lib/solana-auth-availability').getPrivySolanaConnectors>;
   hasUsableConnectors: boolean;
-  rpcConfig?: UntypedValue;
+  rpcConfig?: PrivyClientConfig['solana'];
 };
 
 async function loadPrivySolanaBootstrap(): Promise<PrivySolanaBootstrap> {
@@ -192,32 +189,8 @@ function resolveWagmiConfigKey(
 
 const SnowEffect = dynamic(() => import("@/components/ui/snow-effect"), { ssr: false });
 
-let slideshowDialogModulePromise: Promise<{ default: ComponentType }> | null = null;
-let tasksDialogModulePromise: Promise<{ default: ComponentType }> | null = null;
-
-function loadSlideshowDialog() {
-  if (!slideshowDialogModulePromise) {
-    slideshowDialogModulePromise = (import("@/components/tutorial/SlideshowModal") as Promise<{
-      default: ComponentType;
-    }>).catch((error) => {
-      slideshowDialogModulePromise = null;
-      throw error;
-    });
-  }
-  return slideshowDialogModulePromise;
-}
-
-function loadTasksDialog() {
-  if (!tasksDialogModulePromise) {
-    tasksDialogModulePromise = (import("@/components/tasks/TasksInfoDialog") as Promise<{
-      default: ComponentType;
-    }>).catch((error) => {
-      tasksDialogModulePromise = null;
-      throw error;
-    });
-  }
-  return tasksDialogModulePromise;
-}
+const loadSlideshowDialog = createRetryableResource(() => import("@/components/tutorial/SlideshowModal"));
+const loadTasksDialog = createRetryableResource(() => import("@/components/tasks/TasksInfoDialog"));
 
 function DeferredSlideshowModal() {
   const { open, close } = useSlideshow();
@@ -456,16 +429,16 @@ function WagmiRouter({
 
   if (loadedConfig.key === 'privy') {
     return (
-      <PrivyWagmiProvider key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
+      <SessionWagmiProvider provider={PrivyWagmiProvider} key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
         {children}
-      </PrivyWagmiProvider>
+      </SessionWagmiProvider>
     );
   }
 
   return (
-    <CoreWagmiProvider key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
+    <SessionWagmiProvider key={`wagmi-${loadedConfig.key}`} config={loadedConfig.config}>
       {children}
-    </CoreWagmiProvider>
+    </SessionWagmiProvider>
   );
 }
 
@@ -504,24 +477,11 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
   );
   const [isMobilePrivyBrowser] = useState(() => isMobileWalletBrowser());
   const [solanaEnabled] = useState(isSolanaEnabled);
-  const [solanaBootstrap, setSolanaBootstrap] = useState<PrivySolanaBootstrap | null>(null);
   const [surfaceInitialized, setSurfaceInitialized] = useState(false);
   const [queryClient] = useState(createQueryClient);
-  const requiresSolanaBootstrap = authSurface === 'privysolana' && solanaEnabled;
-  const solanaBootstrapPending = requiresSolanaBootstrap && solanaBootstrap === null;
-
-  useEffect(() => {
-    if (!requiresSolanaBootstrap) return;
-    let active = true;
-
-    void loadPrivySolanaBootstrap().then((bootstrap) => {
-      if (active) setSolanaBootstrap(bootstrap);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [requiresSolanaBootstrap]);
+  const { state: solanaBootstrapState, result: solanaBootstrap, retry: retrySolanaBootstrap } = useSolanaBootstrap(
+    authSurface === 'privysolana', solanaEnabled, loadPrivySolanaBootstrap,
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -554,24 +514,24 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
       return () => mql.removeEventListener('change', apply);
     } catch {
       // Safari fallback
-      mql.addListener?.(apply as UntypedValue);
-      return () => mql.removeListener?.(apply as UntypedValue);
+      mql.addListener?.(apply);
+      return () => mql.removeListener?.(apply);
     }
   }, []);
 
   // Determine PrivyProvider wallet config based on surface
   const privyWalletConfig = useMemo(() => {
     const isSolanaMode = authSurface === 'privysolana';
-    const evmWalletList = (
+    const evmWalletList: WalletListEntry[] = [...(
       isMobilePrivyBrowser
         ? MOBILE_EVM_WALLET_LIST
         : DESKTOP_EVM_WALLET_LIST
-    ) as UntypedValue;
-    const solanaWalletList = (
+    )];
+    const solanaWalletList: WalletListEntry[] = [...(
       isMobilePrivyBrowser
         ? MOBILE_SOLANA_WALLET_LIST
         : DESKTOP_SOLANA_WALLET_LIST
-    ) as UntypedValue;
+    )];
     const solanaConnectors = solanaBootstrap?.connectors;
 
     // Solana-only mode: only show Solana wallets
@@ -597,13 +557,11 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
         };
       }
 
-      if (solanaBootstrap) {
-        console.warn('[Providers] Solana enabled but connectors failed to load. Falling back to EVM-only mode.');
-      }
+
     }
 
     // EVM-only mode (default): only show Ethereum wallets
-    // This runs if not Solana mode OR if Solana mode failed to load connectors
+    // Solana loading/failure is gated before mounting Privy; this configuration is never offered for that surface.
     return {
       embeddedWallets: {
         ethereum: { createOnLogin: 'users-without-wallets' as const },
@@ -620,9 +578,8 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
       solana: undefined,
     };
   }, [authSurface, isMobilePrivyBrowser, solanaBootstrap, solanaEnabled]);
-  const privyConfig = useMemo(() => ({
+  const privyConfig = useMemo<PrivyClientConfig>(() => ({
     appearance: {
-      theme: 'light' as const,
       walletChainType: privyWalletConfig.walletChainType,
       ...(privyWalletConfig.walletList && {
         walletList: privyWalletConfig.walletList,
@@ -649,23 +606,25 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
       <ServerThemeProvider
         defaultTheme="light"
         storageKey="pixotchi-theme"
-        themes={["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]}
       >
-        <ThemeInitializer />
         <SnowProvider>
           <AmbientAudioProvider>
             <PaymasterProvider>
-              {solanaBootstrapPending ? (
-                <>{props.fallback ?? null}</>
-              ) : (
-                <PrivyProvider
+              <HostWalletBoundary
+                state={solanaBootstrapState}
+                onRetry={retrySolanaBootstrap}
+                onUseEthereum={() => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('surface', 'privy');
+                  window.location.assign(url.toString());
+                }}
+              >
+                <ThemedPrivyProvider
                   appId={privyAppId}
                   config={privyConfig}
                 >
                   <QueryClientProvider client={queryClient}>
                     <OwnerResourceQuerySync />
-                    <HostEnvironmentProvider>
-                      <MiniAppReadySignal />
                       <ProvidersContent
                         authSurface={authSurface}
                         fallback={props.fallback}
@@ -673,65 +632,15 @@ export function Providers(props: { children: ReactNode; fallback?: ReactNode }) 
                       >
                         {props.children}
                       </ProvidersContent>
-                    </HostEnvironmentProvider>
                   </QueryClientProvider>
-                </PrivyProvider>
-              )}
+                </ThemedPrivyProvider>
+              </HostWalletBoundary>
             </PaymasterProvider>
           </AmbientAudioProvider>
         </SnowProvider>
       </ServerThemeProvider>
     </ErrorBoundary>
   );
-}
-
-function useMiniAppReadySignal(hostEnvironment: HostEnvironmentState) {
-  const readyStateRef = useRef<'idle' | 'pending' | 'settled'>('idle');
-
-  useEffect(() => {
-    if (
-      typeof window === 'undefined' ||
-      !hostEnvironment.initialized ||
-      !hostEnvironment.isMiniApp ||
-      readyStateRef.current !== 'idle'
-    ) {
-      return;
-    }
-
-    // Mark pending synchronously: React Strict Mode can re-run this effect
-    // before an asynchronous SDK action settles.
-    readyStateRef.current = 'pending';
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const readyAttempt = import('@farcaster/miniapp-sdk').then(({ sdk }) => sdk.actions.ready());
-    const readinessDeadline = new Promise<'timed_out'>((resolve) => {
-      timeoutId = setTimeout(() => resolve('timed_out'), MINI_APP_READY_TIMEOUT_MS);
-    });
-
-    void Promise.race([readyAttempt, readinessDeadline])
-      .then((outcome) => {
-        if (outcome === 'timed_out') {
-          console.warn(
-            `[Providers] sdk.actions.ready() did not settle within ${MINI_APP_READY_TIMEOUT_MS}ms; continuing without another ready attempt.`,
-          );
-        }
-      })
-      .catch((error) => {
-        console.warn('[Providers] Failed to signal sdk.actions.ready():', error);
-      })
-      .finally(() => {
-        if (timeoutId !== undefined) clearTimeout(timeoutId);
-        readyStateRef.current = 'settled';
-      });
-  }, [
-    hostEnvironment.initialized,
-    hostEnvironment.isMiniApp,
-  ]);
-}
-
-function MiniAppReadySignal() {
-  useMiniAppReadySignal(useHostEnvironment());
-  return null;
 }
 
 function ProvidersContent({
@@ -815,7 +724,6 @@ function ProvidersContent({
                     <SlideshowProvider>
                       <AppToaster />
                       <PerformanceModeController />
-                      <ScrollFadeController />
                       {children}
                       <DeferredSlideshowModal />
                     </SlideshowProvider>

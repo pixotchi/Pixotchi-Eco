@@ -254,11 +254,11 @@ assert.match(batchCard, /0x000000000000000000000000000000000000dEaD/);
 assert.match(batchCard, /useQuestRewardsAvailability/);
 assert.match(batchCard, /rewards\.isUnavailable \?/);
 assert.match(batchCard, /taskId: "s3_send_quest"/);
-// Partial read failures must surface, and the five-shot buildings:refresh burst
-// must coalesce into one re-scan rather than five multicall sweeps per land.
-assert.match(batchCard, /unreadableLands > 0 &&/);
+// A partial fleet cannot be submitted; retries keep the run fee and receipts.
+// Behavioral coalescing coverage lives in batch-reconciliation-smoke.ts.
+assert.match(batchCard, /scanError && <ResourceState/);
 assert.match(batchCard, /entry\) => !entry\.ok/);
-assert.match(batchCard, /REFRESH_DEBOUNCE_MS/);
+assert.match(batchCard, /useBatchReconciliation/);
 // The burn must be conditional, recorded durably once a submission identity is
 // known (with a success fallback), and cleared when the run finishes - otherwise
 // a multi-transaction fleet pays the fee more than once.
@@ -269,8 +269,8 @@ assert.match(batchCard, /onSuccess=\{handleBatchSuccess\}/);
 assert.match(batchCard, /address\?\.toLowerCase\(\) \?\? "disconnected"/);
 assert.match(batchCard, /status\.statusName === "transactionPending" \|\| status\.statusName === "transactionUnresolved"/);
 assert.match(batchCard, /markBatchQuestRunPending\(batchRunScope, Date\.now\(\), identity\)/);
-assert.match(batchCard, /feePending \? \(/);
-assert.match(batchCard, /buttonText="Confirming fee…"/);
+assert.match(batchCard, /feePending \? "Confirming fee…"/);
+assert.equal((batchCard.match(/<SmartWalletTransaction/g) ?? []).length, 1, 'pending fee recovery retains the same controller');
 assert.match(batchCard, /onStatusUpdate=\{handleBatchStatus\}/);
 assert.match(batchCard, /clearBatchQuestRun\(\)/);
 assert.match(batchCard, /pixotchiBalanceStatus === "ready" && pixotchiBalance >= burnAmountWei/);
@@ -295,7 +295,7 @@ assert.ok(walletGate < fundsGate, 'smart wallet gate must precede the balance ga
 // A slow smart-wallet probe must not flash "Smart Wallet Required" at a user who
 // has one, and must not leave the action live before either probe resolves.
 assert.match(batchCard, /!smartWalletLoading && !isSmartWallet \?/);
-assert.match(batchCard, /disabled=\{!rewards\.isReady \|\| smartWalletLoading\}/);
+assert.match(batchCard, /disabled=\{!scanReady \|\| feePending \|\| !rewards\.isReady \|\| !questConfiguration\.isReady \|\| smartWalletLoading/);
 
 const farmerHouse = projectFile('components/building-details/FarmerHousePanel.tsx');
 assert.match(farmerHouse, /useQuestRewardsAvailability/);
@@ -303,7 +303,8 @@ assert.doesNotMatch(farmerHouse, /QUEST_SEED_REWARDS_WALLET|QUEST_LEAF_REWARDS_W
 assert.doesNotMatch(farmerHouse, /CLIENT_ENV/);
 
 const rewardsHook = projectFile('hooks/useQuestRewardsAvailability.ts');
-assert.match(rewardsHook, /getQuestRewardSources/);
+assert.match(rewardsHook, /readQuestRewardsSnapshot/);
+assert.match(projectFile('lib/quest-rewards-read.ts'), /getQuestRewardSources/);
 
 const landsView = projectFile('components/tabs/lands-view.tsx');
 assert.match(landsView, /type LandUtilityPanel = 'batch-claim' \| 'batch-quests';/);

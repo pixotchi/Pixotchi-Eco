@@ -5,6 +5,11 @@ export const SPIN_PENDING_STORAGE_VERSION = 2 as const;
 const STORAGE_NAMESPACE = "pixotchi:spinleaf:pending";
 const LEGACY_STORAGE_NAMESPACE = "spinleaf:pending";
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+export const SPIN_PENDING_CHANGED_EVENT = 'pixotchi:spinleaf:pending-changed';
+
+function notifySpinPendingChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SPIN_PENDING_CHANGED_EVENT));
+}
 
 export type StoredSpinPending = {
   account: string;
@@ -109,6 +114,12 @@ export function writeStoredSpinPending(
       getSpinPendingStorageKey(normalized.account, normalized.plantId),
       JSON.stringify(normalized),
     );
+    // A successful call alone is insufficient in blocked/no-op browser storage.
+    // Preflight must prove that this exact reveal key is currently recoverable.
+    const stored = readStoredSpinPending(storage, normalized.account, normalized.plantId);
+    if (!stored || stored.commitment !== normalized.commitment || stored.secretHex !== normalized.secretHex
+      || stored.commitBlock !== normalized.commitBlock) return false;
+    notifySpinPendingChanged();
     return true;
   } catch {
     return false;
@@ -124,6 +135,7 @@ export function removeStoredSpinPending(
 
   try {
     storage.removeItem(getSpinPendingStorageKey(account, plantId));
+    notifySpinPendingChanged();
     return true;
   } catch {
     return false;

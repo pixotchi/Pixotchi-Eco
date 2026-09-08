@@ -21,6 +21,7 @@ export type BlackjackTransactionResult = {
         dealerUpCard?: number;
         gameResult?: BlackjackResult;
         payout?: string;
+        payoutWei?: bigint;
         busted?: boolean;
         lastActionCard?: number;
         lastActionHandIndex?: number;
@@ -30,7 +31,8 @@ export type BlackjackTransactionResult = {
             result: BlackjackResult;
             playerFinalValue: number;
             dealerFinalValue: number;
-            payout: string;
+            payout?: string;
+            payoutWei: bigint;
         }>;
 };
 
@@ -95,7 +97,7 @@ const normalizeSplitHandEvents = (
 
 
 /** Decode only this casino's receipt events; presentation and wallet execution stay outside. */
-export function parseBlackjackTransactionResult(receipts: readonly TransactionReceiptLike[], mode: 'deal' | 'action', action: BlackjackAction | undefined, tokenDecimals: number, contractAddress: string) {
+export function parseBlackjackTransactionResult(receipts: readonly TransactionReceiptLike[], mode: 'deal' | 'action', action: BlackjackAction | undefined, tokenDecimals: number | undefined, contractAddress: string) {
   let resultData: BlackjackTransactionResult = {
       success: true,
       actionTaken: mode === "action" ? action : undefined,
@@ -228,7 +230,8 @@ export function parseBlackjackTransactionResult(receipts: readonly TransactionRe
           handValue: gameCompleteData.playerFinalValue,
           splitValue: gameCompleteData.splitFinalValue,
           dealerValue: gameCompleteData.dealerFinalValue,
-          payout: formatUnits(gameCompleteData.payoutWei, tokenDecimals),
+          payout: tokenDecimals === undefined ? undefined : formatUnits(gameCompleteData.payoutWei, tokenDecimals),
+          payoutWei: gameCompleteData.payoutWei,
       };
   }
 
@@ -247,7 +250,8 @@ export function parseBlackjackTransactionResult(receipts: readonly TransactionRe
               result: entry.result,
               playerFinalValue: entry.playerFinalValue,
               dealerFinalValue: entry.dealerFinalValue,
-              payout: formatUnits(entry.payoutWei, tokenDecimals),
+              payout: tokenDecimals === undefined ? undefined : formatUnits(entry.payoutWei, tokenDecimals),
+              payoutWei: entry.payoutWei,
           }));
           const totalPayoutWei = gameCompleteData
               ? gameCompleteData.payoutWei
@@ -257,7 +261,8 @@ export function parseBlackjackTransactionResult(receipts: readonly TransactionRe
               ...resultData,
               splitResults,
               gameResult: summarizeSplitResult(normalizedSplitEvents.map(entry => entry.result)),
-              payout: formatUnits(totalPayoutWei, tokenDecimals),
+              payout: tokenDecimals === undefined ? undefined : formatUnits(totalPayoutWei, tokenDecimals),
+              payoutWei: totalPayoutWei,
               dealerValue: gameCompleteData?.dealerFinalValue ?? normalizedSplitEvents[0].dealerFinalValue,
           };
       } else {
@@ -266,7 +271,8 @@ export function parseBlackjackTransactionResult(receipts: readonly TransactionRe
               ...resultData,
               gameResult: gameCompleteData && gameCompleteData.result !== BlackjackResult.NONE ? gameCompleteData.result : final.result,
               handValue: gameCompleteData?.playerFinalValue ?? final.playerFinalValue,
-              payout: formatUnits(gameCompleteData?.payoutWei ?? final.payoutWei, tokenDecimals),
+              payout: tokenDecimals === undefined ? undefined : formatUnits(gameCompleteData?.payoutWei ?? final.payoutWei, tokenDecimals),
+              payoutWei: gameCompleteData?.payoutWei ?? final.payoutWei,
               dealerValue: gameCompleteData?.dealerFinalValue ?? final.dealerFinalValue,
           };
       }

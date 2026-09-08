@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
-import { openExternalUrl } from '@/lib/open-external';
+import { openBroadcastUrl } from '@/lib/broadcast-navigation';
+import { useOwnerOperationScope } from '@/hooks/useOwnerOperationScope';
 
 interface BroadcastMessageModalProps {
   message: BroadcastMessage | null;
@@ -17,7 +18,7 @@ interface BroadcastMessageModalProps {
 const typeConfig = {
   info: {
     icon: Info,
-    color: 'text-[hsl(var(--info))]',
+    color: 'text-info-strong',
     bg: 'bg-[hsl(var(--info)/0.12)]',
     border: 'border-[hsl(var(--info)/0.24)]',
   },
@@ -75,32 +76,53 @@ export function BroadcastMessageModal({
   const renderedMessage = message ?? lastMessageRef.current;
 
   const [unlockElapsed, setUnlockElapsed] = useState(false);
+  const [unlockMessageId, setUnlockMessageId] = useState<string | undefined>(undefined);
+  const [remainingSeconds, setRemainingSeconds] = useState(15);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const presentationScope = useOwnerOperationScope(message?.id ?? null);
+  const currentMessageId = message?.id;
+  const currentMessageDismissible = message?.dismissible;
   useEffect(() => {
-    if (!message || message.dismissible) {
+    setUnlockElapsed(false);
+    setUnlockMessageId(currentMessageId);
+    setRemainingSeconds(15);
+    setActionPending(false);
+    setActionError(null);
+    if (!currentMessageId || currentMessageDismissible) {
       setUnlockElapsed(false);
       return;
     }
-    const timer = window.setTimeout(() => setUnlockElapsed(true), NON_DISMISSIBLE_UNLOCK_MS);
-    return () => window.clearTimeout(timer);
-  }, [message]);
+    const deadline = Date.now() + NON_DISMISSIBLE_UNLOCK_MS;
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setRemainingSeconds(remaining);
+      if (remaining === 0) { setUnlockElapsed(true); window.clearInterval(timer); }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [currentMessageId, currentMessageDismissible]);
 
   if (!renderedMessage) return null;
   const activeMessage = renderedMessage;
-  const canDismiss = activeMessage.dismissible || unlockElapsed;
+  const canDismiss = activeMessage.dismissible || (unlockElapsed && unlockMessageId === activeMessage.id);
 
   const config = typeConfig[activeMessage.type] || typeConfig.info;
   const Icon = config.icon;
   const priorityLabel = priorityLabels[activeMessage.priority];
 
   const handleAction = async () => {
+    const operation = presentationScope.capture();
+    setActionPending(true);
+    setActionError(null);
+    try {
     if (activeMessage.action?.url) {
-      // Open in new tab for external links (handles both mini app and web)
-      if (activeMessage.action.url.startsWith('http')) {
-        await openExternalUrl(activeMessage.action.url);
-      } else {
-        // Internal navigation
-        window.location.href = activeMessage.action.url;
-      }
+      await openBroadcastUrl(activeMessage.action.url);
+      if (operation.isCurrent()) onDismiss();
+    }
+    } catch {
+      if (operation.isCurrent()) setActionError('Could not open this link. Please try again.');
+    } finally {
+      if (operation.isCurrent()) setActionPending(false);
     }
   };
 
@@ -146,6 +168,8 @@ export function BroadcastMessageModal({
               variant="outline"
               className="w-full"
               onClick={handleAction}
+              disabled={actionPending}
+              aria-busy={actionPending}
             >
               {activeMessage.action.label}
               {activeMessage.action.url.startsWith('http') && (
@@ -153,6 +177,7 @@ export function BroadcastMessageModal({
               )}
             </Button>
           )}
+          {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
 
           {/* Dismiss / delayed-unlock button */}
           {canDismiss && (
@@ -169,7 +194,7 @@ export function BroadcastMessageModal({
           {!canDismiss && (
             <div className="text-center">
               <p className="text-xs text-muted-foreground">
-                Please review this message before continuing
+                Continue will be available in {unlockMessageId === activeMessage.id ? remainingSeconds : 15} seconds.{activeMessage.action && ' You can open the announcement link now.'}
               </p>
             </div>
           )}

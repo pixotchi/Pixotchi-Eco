@@ -12,9 +12,10 @@ const MessageResponse = dynamic(
 );
 
 
-export function ChatMessageBubble({ content, displayName, kind, relativeTime, timestamp, onOpenProfile, ariaSetsize, ariaPosinset }: {
+export function ChatMessageBubble({ content, displayName, kind, relativeTime, timestamp, onOpenProfile, ariaSetsize, ariaPosinset, deliveryStatus }: {
   content: string; displayName: string; kind: 'own' | 'other' | 'assistant'; relativeTime: string; timestamp?: string;
   onOpenProfile?: () => void; ariaSetsize?: number; ariaPosinset?: number;
+  deliveryStatus?: 'failed' | 'cancelled';
 }) {
   const isAIMessage = kind === 'assistant';
   const isOwn = kind === 'own';
@@ -22,7 +23,7 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
 
   const bgColor = isOwn
     ? 'bg-primary text-primary-foreground'
-    : 'chat-white-surface border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
+    : 'surface-lifted border border-[hsl(var(--info)/0.24)] bg-card/95 bg-[image:var(--gradient-surface)] text-foreground shadow-[var(--shadow-hairline)]';
   const bubbleSize = isAIMessage
     ? 'max-w-[92%] sm:max-w-[82%] px-4 py-3'
     : 'max-w-[85%] sm:max-w-[75%] px-3 py-2';
@@ -67,7 +68,7 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
       >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            {isAIMessage && <Bot className="w-4 h-4 text-[hsl(var(--info))]" />}
+            {isAIMessage && <Bot className="w-4 h-4 text-info-strong" />}
             {isOwn && <User className="w-4 h-4" />}
             {displayNameNode}
             {/* No check icon next to resolved names any more: a blue check next
@@ -80,6 +81,9 @@ export function ChatMessageBubble({ content, displayName, kind, relativeTime, ti
           </time>
         </div>
 
+        {deliveryStatus && <p className="mb-2 text-xs font-semibold" role="status">
+          {deliveryStatus === 'failed' ? 'Response failed.' : 'Response stopped.'} Your question is saved in the input below. Send it again to retry.
+        </p>}
         <div
           className={cn(
             "text-sm leading-relaxed break-words [overflow-wrap:anywhere]",

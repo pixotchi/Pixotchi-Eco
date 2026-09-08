@@ -6,7 +6,7 @@ export interface StatusService {
   status: StatusLevel;
   latencyMs?: number;
   details?: string;
-  metrics?: Record<string, UntypedValue>;
+  metrics?: Record<string, unknown>;
 }
 
 export interface StatusSnapshot {
@@ -22,7 +22,7 @@ const STATUS_LEVELS = new Set<StatusLevel>([
   'unknown',
 ]);
 
-function isRecord(value: unknown): value is Record<string, UntypedValue> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -89,7 +89,7 @@ export function parseStatusSnapshot(value: unknown): StatusSnapshot | null {
   };
 }
 
-function publicRpcMetrics(metrics: Record<string, UntypedValue> | undefined) {
+export function publicRpcMetrics(metrics: Record<string, unknown> | undefined) {
   if (!metrics) return undefined;
   const healthyCount = metrics.healthyCount;
   const totalCount = metrics.totalCount;

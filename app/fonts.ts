@@ -4,17 +4,9 @@ import localFont from "next/font/local";
 // every cold load. The 200 and 300 weights had zero usages (no font-extralight /
 // font-light / font-thin anywhere), which cost ~78 KB of woff2 for nothing.
 //
-// Coinbase Sans ships no SemiBold: the family is ExtraLight, Light, Regular,
-// Medium and Bold. `font-semibold` is nonetheless the app's most-used weight
-// (282 uses, against 143 `font-medium` and 85 `font-bold`), and CSS weight
-// matching resolves an unavailable 600 *upwards* — so every one of those
-// rendered as Bold 700, byte-identical to `font-bold`. 71% of all weight
-// declarations landed on one face and two tiers of the type hierarchy became
-// indistinguishable, which is why dense UI read heavy and flat.
-//
-// Declaring Medium across 500-600 makes `font-semibold` a real mid weight and
-// gives `font-bold` its contrast back. The range descriptor costs no extra
-// bytes: it is the same single face, matched over a wider span.
+// Three real static weights: Regular 400, Medium 500, Bold 700.
+// Tailwind font-semibold aliases Medium in globals.css for compatibility;
+// shared title roles intentionally use Bold.
 export const coinbaseSans = localFont({
   src: [
     {
@@ -24,7 +16,7 @@ export const coinbaseSans = localFont({
     },
     {
       path: "../public/fonts/Coinbase-Sans/Coinbase_Sans-Medium-web-1.32.woff2",
-      weight: "500 600",
+      weight: "500",
       style: "normal"
     },
     {
@@ -54,4 +46,3 @@ export const pixelmix = localFont({
   fallback: ["monospace"],
   adjustFontFallback: false
 });
-

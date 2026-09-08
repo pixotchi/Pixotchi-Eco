@@ -1,20 +1,28 @@
 "use client";
 import { ResourceValue } from '@/components/ui/resource-value';
 import { ResourceState } from "@/components/ui/resource-state";
-import { parseSpinMetadata, parseSpinCommit } from "@/lib/spin-metadata";
+import { parseSpinMetadata, parseSpinCommit, type SpinMetadata, type SpinRewardPreview } from "@/lib/spin-metadata";
 import { readSafeUint } from "@/lib/contract-value";
 import { getSpinReadState } from "@/lib/spin-read-state";
+import { getSpinRevealState } from "@/lib/spin-reveal-state";
+import { readExpiredSpin, storeExpiredSpin, type ExpiredSpin } from "@/lib/spin-expired-storage";
+import { SpinLeafWheel } from "./spin-leaf-wheel";
+import { useSpinLeafWheel } from "@/hooks/useSpinLeafWheel";
+import { useArcadeCountdowns } from "@/hooks/useArcadeCountdowns";
+import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 import { ArcadeStatLine } from "./arcade-stat-line";
 
 import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import BoxGameTransaction from "@/components/transactions/box-game-transaction";
-import SpinGameTransaction from "@/components/transactions/spin-game-transaction";
+import SpinGameTransaction, { type SpinCompletion } from "@/components/transactions/spin-game-transaction";
 import type { LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { DisabledReason, InlineBalanceNotice, RewardResultPanel } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { getBaseLogClient } from "@/lib/base-rpc";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { clearSpinResultRecovery, formatSignedSpinValue, readSpinResultRecovery, type SpinResultRecovery } from "@/lib/spin-result-recovery";
+import { getBaseLogClient, getBaseTransactionReceipt } from "@/lib/base-rpc";
 import { BOX_GAME_ABI,PIXOTCHI_NFT_ADDRESS,SPIN_GAME_ABI } from "@/lib/contracts";
 import {
 invalidateOwnerResources,
@@ -22,6 +30,7 @@ isAbortError,
 retryOwnerRead,
 } from "@/lib/owner-resource-invalidation";
 import {
+extractBestSpinRewardFromLogs,
 SPIN_GAME_V2_COMMITTED_EVENT,
 SPIN_GAME_V2_FORFEITED_EVENT,
 SPIN_GAME_V2_PLAYED_EVENT,
@@ -50,13 +59,6 @@ type ArcadeDialogProps = {
 
 type GameId = "box" | "spin";
 
-interface RewardPreview {
-  index: number;
-  pointsDelta: number;
-  timeExtension: number;
-  leafAmount: bigint;
-}
-
 interface PendingCommit {
   player: string;
   commitBlock: number;
@@ -67,6 +69,7 @@ interface PendingCommit {
 type PendingReconciliation = {
   pending: PendingCommit | null;
   terminal: "forfeited" | "played" | null;
+  completed?: PendingCommit;
 };
 
 type PendingHydration = {
@@ -74,34 +77,14 @@ type PendingHydration = {
   stored: StoredSpinPending | null;
 };
 
-interface SpinState {
-  cooldown: number;
-  starCost: number;
-  rewards: RewardPreview[];
+type SpinState = SpinMetadata & {
   pending: PendingCommit | null;
-}
+};
 
 const LOG_LOOKBACK_BLOCKS = 1000;
 const LOG_LOOKBACK_BUFFER_BLOCKS = 64;
 const LOG_CHUNK_SIZE = BigInt(500);
-const BLOCK_TIME_SECONDS = 4;
 const BLOCK_POLL_INTERVAL_MS = 3000;
-const MIN_REVEAL_DELAY_SECONDS = 4;
-
-const WHEEL_SEGMENTS = 6;
-const SPIN_EXTRA_TURNS = 4;
-const FINAL_SPIN_DURATION_MS = 2200;
-const TRANSACTION_FAILURE_STATUSES = new Set([
-  "error",
-  "failed",
-  "reverted",
-  "cancelled",
-  "canceled",
-  "rejected",
-  "transactionRejected",
-  "userRejected",
-  "buildError",
-]);
 
 function buildCommitStateMessage(address: string, plantId: number, block: number): string {
   return `Pixotchi spin commit state\nAddress: ${address.toLowerCase()}\nPlant ID: ${plantId}\nBlock: ${block}`;
@@ -171,7 +154,12 @@ const GameSelector = ({
   </div>
 );
 
-export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
+export default function ArcadeDialog(props: ArcadeDialogProps) {
+  const { address } = useAccount();
+  return <ScopedArcadeDialog key={`${address?.toLowerCase() ?? ''}:${props.plant.id}`} {...props} />;
+}
+
+function ScopedArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
   const { address } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient();
@@ -181,7 +169,17 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [selectedGame, setSelectedGame] = useState<GameId>("box");
   const [seed, setSeed] = useState<number | null>(null);
   const [withStar, setWithStar] = useState(false);
-  const [cooldown, setCooldown] = useState({ normal: 0, star: 0 });
+  const [boxDeadlines, setBoxDeadlines] = useState({ normal: 0, star: 0 });
+  const boxIntentRef = useRef<{ seed: number; withStar: boolean } | null>(null);
+  const [resultRecovery, setResultRecovery] = useState<SpinResultRecovery | null>(null);
+  const latestSpinRoundRef = useRef<string | null>(null);
+  const resultAttemptRef = useRef(0);
+  const [checkingResult, setCheckingResult] = useState(false);
+  const [resultRecoveryError, setResultRecoveryError] = useState(false);
+  const [boxReadStatus, setBoxReadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [spinBlock, setSpinBlock] = useState<number | null>(null);
+  const [spinBlockError, setSpinBlockError] = useState(false);
+  const [expiredSpin, setExpiredSpin] = useState<ExpiredSpin | null>(null);
   const [boxReconcilePending, setBoxReconcilePending] = useState(false);
   const [arcadeTransactionPending, setArcadeTransactionPending] = useState(false);
   const [starsAvailable, setStarsAvailable] = useState(plant.stars ?? 0);
@@ -195,34 +193,25 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const [spinStorageHydratedFor, setSpinStorageHydratedFor] = useState<string | null>(null);
   const [persistedSpinCommitment, setPersistedSpinCommitment] = useState<`0x${string}` | null>(null);
   const [spinStorageUnavailable, setSpinStorageUnavailable] = useState(false);
-  // Ticks once per second while the spin tab is open so cooldown/reveal
-  // countdowns actually count down. (Two former write-only states drove
-  // twice-a-second re-renders here for values nothing rendered.)
-  const [nowTick, setNowTick] = useState(() => Date.now());
   const [spinRefreshKey, setSpinRefreshKey] = useState(0);
-  const lastUnlockBlocksRef = useRef<number | null>(null);
-  const wheelRotorRef = useRef<HTMLDivElement | null>(null);
   const [boxResultDetails, setBoxResultDetails] = useState<{
     pointsDelta: number;
     timeAdded: number;
+    seed: number;
+    withStar: boolean;
   } | null>(null);
-  const [wheelState, setWheelState] = useState<{
-    spinning: boolean;
-    revealReady: boolean;
-    rewardIndex?: number;
-  }>({ spinning: false, revealReady: false });
+  const wheel = useSpinLeafWheel({ active: open && selectedGame === "spin", pending: Boolean(spinMeta?.pending) });
+  const { start: startWheelSpin, finish: finishWheelSpin, stop: stopWheelSpin } = wheel;
   const [resultDetails, setResultDetails] = useState<{
     pointsDelta?: number;
     timeAdded?: number;
     leafAmount?: bigint;
+    transactionHash?: string | null;
   } | null>(null);
   const [lastSeenCommitBlock, setLastSeenCommitBlock] = useState<number | null>(null);
-  const wheelRotationRef = useRef(0);
-  const [currentRotation, setCurrentRotation] = useState(0);
-  const [targetRotation, setTargetRotation] = useState<number | null>(null);
-  const [revealDeadline, setRevealDeadline] = useState<number | null>(null);
   const [cooldownDeadline, setCooldownDeadline] = useState<number | null>(null);
   const [revealUnlockedAt, setRevealUnlockedAt] = useState<number | null>(null); // 3s delay after commit
+  const countdowns = useArcadeCountdowns({ ...boxDeadlines, spin: cooldownDeadline, reveal: revealUnlockedAt }, open);
   const lastHandledCommitRef = useRef<string | null>(null);
   const lastHandledRevealRef = useRef<string | null>(null);
   const lastHandledBoxRef = useRef<string | null>(null);
@@ -231,16 +220,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   const starMutationBaselineRef = useRef<number | null>(null);
   const boxCooldownAbortRef = useRef<AbortController | null>(null);
   const lastSeenCommitBlockRef = useRef<number | null>(null);
-  const revealDeadlineRef = useRef<number | null>(null);
   const spinStorageIdentity = address ? `${address.toLowerCase()}:${plantId}` : null;
+
+  useEffect(() => {
+    if (spinMeta?.pending) latestSpinRoundRef.current = spinMeta.pending.commitment;
+  }, [spinMeta?.pending]);
 
   useEffect(() => {
     lastSeenCommitBlockRef.current = lastSeenCommitBlock;
   }, [lastSeenCommitBlock]);
-
-  useEffect(() => {
-    revealDeadlineRef.current = revealDeadline;
-  }, [revealDeadline]);
 
   useEffect(() => {
     setPendingSecret(null);
@@ -249,7 +237,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     setSpinStorageUnavailable(false);
     setSpinMeta(null);
     setSpinMetaError(false);
-  }, [spinStorageIdentity]);
+    setExpiredSpin(address ? readExpiredSpin(getSpinStorage(), address, plantId) : null);
+    setResultRecovery(address ? readSpinResultRecovery(address, plantId) : null);
+  }, [address, plantId, spinStorageIdentity]);
 
   useEffect(() => {
     setStarsAvailable((current) => {
@@ -281,34 +271,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     });
   }, []);
 
-  const handleRewardUpdate = useCallback(
-    (index: number, reward: { pointDelta: bigint; timeExtension: bigint; leafAmount: bigint }) => {
-      setSpinMeta((prev) => {
-        if (!prev) return prev;
-        const existing = prev.rewards[index];
-        const nextReward = {
-          index,
-          pointsDelta: Number(reward.pointDelta),
-          timeExtension: Number(reward.timeExtension),
-          leafAmount: reward.leafAmount,
-        };
-        if (
-          existing &&
-          existing.pointsDelta === nextReward.pointsDelta &&
-          existing.timeExtension === nextReward.timeExtension &&
-          existing.leafAmount === nextReward.leafAmount
-        ) {
-          return prev;
-        }
-        const nextRewards = [...prev.rewards];
-        nextRewards[index] = nextReward;
-        return { ...prev, rewards: nextRewards };
-      });
-    },
-    [],
-  );
-
-  const rewardsAreEqual = useCallback((a: RewardPreview[], b: RewardPreview[]) => {
+  const rewardsAreEqual = useCallback((a: SpinRewardPreview[], b: SpinRewardPreview[]) => {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i += 1) {
       const ra = a[i];
@@ -368,8 +331,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (open) {
       const s = Math.max(1, (Date.now() % 9) + 1);
       setSeed(s);
+      if (address && readStoredSpinPending(getSpinStorage(), address, plantId)?.commitBlock) setSelectedGame('spin');
     }
-  }, [open]);
+  }, [address, open, plantId]);
 
   useEffect(() => {
     if (!open || selectedGame !== "spin" || !address) return;
@@ -402,11 +366,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     expectActive?: boolean;
     starMode?: boolean;
   } = {}) => {
-    if (!publicClient) return;
+    if (!publicClient) {
+      setBoxReadStatus('error');
+      return;
+    }
     const currentPlantId = plantId;
     const controller = new AbortController();
     boxCooldownAbortRef.current?.abort();
     boxCooldownAbortRef.current = controller;
+    setBoxReadStatus('loading');
 
     try {
       const readCooldown = async () => {
@@ -433,10 +401,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           })
         : await readCooldown();
       if (!controller.signal.aborted && currentPlantId === lastPlantIdRef.current) {
-        setCooldown(next);
+        const now = Date.now();
+        setBoxDeadlines({ normal: now + next.normal * 1000, star: now + next.star * 1000 });
+        setBoxReadStatus('ready');
       }
     } catch (error) {
-      if (!isAbortError(error)) console.warn("Failed to reconcile box cooldown", error);
+      if (!isAbortError(error)) {
+        console.warn("Failed to reconcile box cooldown", error);
+        if (!controller.signal.aborted) setBoxReadStatus('error');
+      }
     } finally {
       if (boxCooldownAbortRef.current === controller) {
         boxCooldownAbortRef.current = null;
@@ -447,26 +420,15 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
 
   // Fetch cooldowns when dialog opens or when plant changes.
   useEffect(() => {
-    if (!open || !publicClient) return;
+    if (!open) return;
     void refreshBoxCooldown();
-    return () => boxCooldownAbortRef.current?.abort();
+    const onResume = () => { if (document.visibilityState === 'visible') void refreshBoxCooldown(); };
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      boxCooldownAbortRef.current?.abort();
+      document.removeEventListener('visibilitychange', onResume);
+    };
   }, [open, publicClient, refreshBoxCooldown]);
-
-  // Countdown tick. Depends on a BOOLEAN, not the mutated values: the old dep
-  // array made every tick tear the interval down and rebuild it, so the 1000ms
-  // window restarted after each React commit and the countdown drifted.
-  const hasActiveBoxCooldown = cooldown.normal > 0 || cooldown.star > 0;
-  useEffect(() => {
-    if (!open || !hasActiveBoxCooldown) return;
-
-    const id = setInterval(() => {
-      setCooldown((prev: { normal: number; star: number }) => ({
-        normal: Math.max(0, prev.normal - 1),
-        star: Math.max(0, prev.star - 1),
-      }));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [open, hasActiveBoxCooldown]);
 
   const enrichPendingFromLogs = useCallback(async (): Promise<PendingReconciliation | null> => {
     if (!address) return null;
@@ -583,6 +545,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         return {
           pending: null,
           terminal: lastForfeit ? "forfeited" : "played",
+          completed: commitData,
         };
       }
 
@@ -602,11 +565,24 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     const reconciliation = await enrichPendingFromLogs();
 
     if (reconciliation?.terminal) {
+      if (reconciliation.terminal === 'forfeited' && reconciliation.completed) {
+        storeExpiredSpin(storage, { account: address, plantId, commitment: reconciliation.completed.commitment, commitBlock: reconciliation.completed.commitBlock, starsSpent: null });
+      }
       removeStoredSpinPending(storage, address, plantId);
       return { pending: null, stored: null };
     }
 
     if (reconciliation?.pending) {
+      const archived = readExpiredSpin(storage, address, plantId);
+      if (archived?.commitment.toLowerCase() === reconciliation.pending.commitment.toLowerCase()) {
+        // A newer prepared/submitted round can coexist with stale logs for the
+        // archived round. Preserve its key so proof-only recovery still matches.
+        const newerStored = stored?.commitment.toLowerCase() !== archived.commitment.toLowerCase() ? stored : null;
+        return {
+          pending: newerStored?.commitBlock ? { player: newerStored.account, commitment: newerStored.commitment, commitBlock: newerStored.commitBlock, secretHex: newerStored.secretHex } : null,
+          stored: newerStored,
+        };
+      }
       const matchingStored = stored?.commitment.toLowerCase()
         === reconciliation.pending.commitment.toLowerCase()
         ? stored
@@ -704,6 +680,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         setPersistedSpinCommitment(hydration.stored?.commitment ?? null);
         setSpinStorageUnavailable(false);
         setSpinStorageHydratedFor(spinStorageIdentity);
+        if (address) setExpiredSpin(readExpiredSpin(getSpinStorage(), address, plantId));
 
         const nextMeta: SpinState = {
           ...metadata,
@@ -737,10 +714,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     return () => {
       cancelled = true;
     };
-  }, [hydratePendingState, open, selectedGame, pendingEquals, plantId, publicClient, rewardsAreEqual, spinRefreshKey, spinStorageIdentity]);
+  }, [address, hydratePendingState, open, selectedGame, pendingEquals, plantId, publicClient, rewardsAreEqual, spinRefreshKey, spinStorageIdentity]);
 
   useEffect(() => {
-    if (!open || selectedGame !== "spin" || !publicClient) return;
+    if (!open || !publicClient || !spinMeta?.pending) return;
 
     let cancelled = false;
 
@@ -748,6 +725,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       try {
         const blockNumber = Number(await publicClient.getBlockNumber());
         if (cancelled) return;
+        setSpinBlock(blockNumber);
+        setSpinBlockError(false);
 
         if (spinMeta?.pending) {
           if (spinMeta.pending.commitBlock <= 0) {
@@ -756,39 +735,47 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             // reconciliation discovers the authoritative commit block.
             return;
           }
-          const revealUnlockBlocks = Math.max(0, spinMeta.pending.commitBlock + 2 - blockNumber);
-          const expiryBlocks = Math.max(0, spinMeta.pending.commitBlock + 1 + 256 - blockNumber);
-
-          // Stamp the reveal deadline only when the BLOCK COUNT changes: the old
-          // code re-stamped it on every 3s poll, so the waiting countdown
-          // visibly jumped back up while the chain stood still.
-          if (revealUnlockBlocks === 0 && revealDeadlineRef.current === null) {
-            setRevealDeadline(Date.now() + MIN_REVEAL_DELAY_SECONDS * 1000);
-            lastUnlockBlocksRef.current = 0;
-          } else if (revealUnlockBlocks > 0 && lastUnlockBlocksRef.current !== revealUnlockBlocks) {
-            lastUnlockBlocksRef.current = revealUnlockBlocks;
-            const secondsRemaining = Math.max(
-              MIN_REVEAL_DELAY_SECONDS,
-              revealUnlockBlocks * BLOCK_TIME_SECONDS,
-            );
-            setRevealDeadline(Date.now() + secondsRemaining * 1000);
-          }
-
-          if (expiryBlocks === 0) {
-            if (address) {
-              removeStoredSpinPending(getSpinStorage(), address, plantId);
+          if (getSpinRevealState(spinMeta.pending.commitBlock, blockNumber).status === 'expired' && address) {
+            // Another tab/device may already have revealed this round. Resolve
+            // logs before describing a missed reveal as a forfeiture.
+            const reconciliation = await enrichPendingFromLogs();
+            if (cancelled) return;
+            if (!reconciliation) {
+              setSpinBlock(null);
+              setSpinBlockError(true);
+              return;
             }
-            setPendingSecret(null);
-            setPersistedSpinCommitment(null);
-            setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
-            toast.error("Spin expired — stars forfeited.");
+            if (reconciliation.terminal === 'played') {
+              removeStoredSpinPending(getSpinStorage(), address, plantId);
+              setPendingSecret(null);
+              setPersistedSpinCommitment(null);
+              setSpinMeta(prev => prev ? { ...prev, pending: null } : prev);
+              setSpinRefreshKey(value => value + 1);
+              return;
+            }
+            if (reconciliation.pending && reconciliation.pending.commitment.toLowerCase() !== spinMeta.pending.commitment.toLowerCase()) {
+              setSpinRefreshKey(value => value + 1);
+              return;
+            }
+            const expired = { account: address, plantId, commitment: spinMeta.pending.commitment, commitBlock: spinMeta.pending.commitBlock, starsSpent: null };
+            setExpiredSpin(expired);
+            // Do not discard the only durable round reference on a storage failure.
+            if (storeExpiredSpin(getSpinStorage(), expired)) {
+              removeStoredSpinPending(getSpinStorage(), address, plantId);
+              setPendingSecret(null);
+              setPersistedSpinCommitment(null);
+              setSpinMeta(prev => prev ? { ...prev, pending: null } : prev);
+              setLoadingSpinMeta(true);
+              setSpinRefreshKey(value => value + 1);
+            }
           }
-        } else {
-          setRevealDeadline(null);
-          lastUnlockBlocksRef.current = null;
         }
       } catch (error) {
         console.warn("Failed to refresh spin countdown", error);
+        if (!cancelled) {
+          setSpinBlock(null);
+          setSpinBlockError(true);
+        }
       }
     };
 
@@ -799,35 +786,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       cancelled = true;
       clearInterval(interval);
     };
-  }, [address, open, selectedGame, publicClient, spinMeta, plantId]);
-
-  useEffect(() => {
-    if (!open || selectedGame !== "spin") return;
-
-    const interval = setInterval(() => {
-      setNowTick(Date.now());
-
-      if (revealDeadline !== null) {
-        const remaining = Math.max(0, Math.ceil((revealDeadline - Date.now()) / 1000));
-        if (remaining === 0) {
-          setRevealDeadline(null);
-        }
-      }
-
-      if (!spinMeta?.pending && cooldownDeadline !== null) {
-        const remaining = Math.max(0, Math.ceil((cooldownDeadline - Date.now()) / 1000));
-        if (remaining === 0) {
-          setCooldownDeadline(null);
-        }
-      }
-      // Check if reveal unlock time has passed and clear it to trigger re-render
-      if (revealUnlockedAt !== null && Date.now() >= revealUnlockedAt) {
-        setRevealUnlockedAt(null);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [open, selectedGame, revealDeadline, cooldownDeadline, spinMeta?.pending, revealUnlockedAt]);
+  }, [address, enrichPendingFromLogs, open, publicClient, spinMeta, plantId]);
 
   useEffect(() => {
     if (
@@ -912,44 +871,54 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     setSpinRefreshKey((key) => key + 1);
   }, [hydratePendingState, spinStorageIdentity]);
 
-  const startWheelSpin = useCallback(() => {
-    const rotor = wheelRotorRef.current;
-    if (rotor) {
-      // Clear the imperative overrides finishWheelSpin left behind so the idle
-      // spin animation class can take effect again.
-      rotor.style.animation = '';
-      rotor.style.transform = '';
-    }
-    setWheelState({ spinning: true, revealReady: false, rewardIndex: undefined });
-    setTargetRotation(null);
-  }, []);
-
-  const finishWheelSpin = useCallback((rewardIndex?: number | null) => {
-    const index = rewardIndex ?? Math.floor(Math.random() * WHEEL_SEGMENTS);
-    const segmentAngle = 360 / WHEEL_SEGMENTS;
-    const target = SPIN_EXTRA_TURNS * 360 + (WHEEL_SEGMENTS - 1 - index) * segmentAngle + segmentAngle / 2;
-    // Bake the animation's CURRENT angle into the base style before swapping to
-    // the settle transition. A CSS transition's before-change style excludes
-    // animation contributions, so without this the wheel visibly snapped back
-    // to 0deg and then swept to the target. (Same approach as the roulette
-    // wheel's RAF-continuation, see EuropeanRouletteWheel.tsx.)
-    const rotor = wheelRotorRef.current;
-    if (rotor) {
-      const computed = getComputedStyle(rotor).transform;
-      rotor.style.animation = 'none';
-      rotor.style.transform = computed === 'none' ? 'rotate(0deg)' : computed;
-      void rotor.offsetHeight; // commit the new base style before the transition arms
-    }
-    setWheelState({ spinning: false, revealReady: true, rewardIndex: index });
-    setTargetRotation(target);
-  }, []);
-
   const handleRevealSuccess = useCallback(() => {
     setPendingSecret(null);
     setPersistedSpinCommitment(null);
     setSpinMeta((prev) => (prev ? { ...prev, pending: null } : prev));
     setRevealUnlockedAt(null);
   }, []);
+
+  const handleSpinCompletion = useCallback((result: SpinCompletion, roundCommitment: string) => {
+    // A canonical receipt may return after the player has started another round.
+    // Its public recovery record is managed by the transaction adapter; never
+    // clear the new round's secret or animate its wheel from an older callback.
+    if (latestSpinRoundRef.current && latestSpinRoundRef.current !== roundCommitment) return;
+    resultAttemptRef.current += 1;
+    setCheckingResult(false);
+    if (result.state === 'resolved') {
+      setResultDetails({ ...result.reward, transactionHash: result.transactionHash });
+      finishWheelSpin(result.reward.rewardIndex);
+      setResultRecovery(null);
+      setResultRecoveryError(false);
+      if (address) clearSpinResultRecovery(address, plantId, result.transactionHash);
+    } else {
+      finishWheelSpin();
+      setResultDetails(null);
+      if (address) {
+        const recovery = { account: address, plantId, transactionHash: result.transactionHash };
+        setResultRecovery(recovery);
+      }
+    }
+  }, [address, finishWheelSpin, plantId]);
+
+  const recheckSpinResult = useCallback(async () => {
+    if (!resultRecovery?.transactionHash || checkingResult) return;
+    const attempt = ++resultAttemptRef.current;
+    setCheckingResult(true);
+    setResultRecoveryError(false);
+    try {
+      const receipt = await getBaseTransactionReceipt(resultRecovery.transactionHash);
+      if (attempt !== resultAttemptRef.current) return;
+      const reward = extractBestSpinRewardFromLogs(receipt.logs, { contract: PIXOTCHI_NFT_ADDRESS, player: resultRecovery.account, plantId: resultRecovery.plantId });
+      if (!reward) throw new Error('Matching reward is not available yet');
+      // This retry reads an already completed round and must not clear a newer pending spin.
+      setResultDetails({ ...reward, transactionHash: resultRecovery.transactionHash });
+      setResultRecovery(null);
+      clearSpinResultRecovery(resultRecovery.account, resultRecovery.plantId, resultRecovery.transactionHash);
+      if (!spinMeta?.pending) finishWheelSpin(reward.rewardIndex);
+    } catch { if (attempt === resultAttemptRef.current) setResultRecoveryError(true); }
+    finally { if (attempt === resultAttemptRef.current) setCheckingResult(false); }
+  }, [checkingResult, finishWheelSpin, resultRecovery, spinMeta?.pending]);
 
   const handleRecheckPending = useCallback(() => {
     void syncAfterTx()
@@ -963,22 +932,22 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
   }, [syncAfterTx]);
 
   const handleCommitButtonClick = useCallback(() => {
-    const wasAlreadyDurable = Boolean(
-      commitmentHex
-      && persistedSpinCommitment?.toLowerCase() === commitmentHex.toLowerCase(),
-    );
     const persisted = persistPreparedSpin();
-    if (!persisted && !wasAlreadyDurable) {
+    if (!persisted) {
+      setPersistedSpinCommitment(null);
       setSpinStorageUnavailable(true);
       toast.error("SpinLeaf could not secure the reveal key. No transaction was prepared.");
-      return;
+      return false;
     }
 
+    latestSpinRoundRef.current = commitmentHex;
+    resultAttemptRef.current += 1;
+    setCheckingResult(false);
     if (commitmentHex) setPersistedSpinCommitment(commitmentHex);
     setSpinStorageUnavailable(false);
     setResultDetails(null);
     startWheelSpin();
-  }, [commitmentHex, persistPreparedSpin, persistedSpinCommitment, startWheelSpin]);
+  }, [commitmentHex, persistPreparedSpin, startWheelSpin]);
 
   const handleSpinStatus = useCallback(
     (mode: "commit" | "reveal") => (status: LifecycleStatus) => {
@@ -996,11 +965,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         return;
       }
 
-      if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
+      if (isGameTransactionFailure(status.statusName)) {
         setArcadeTransactionPending(false);
         // Only reset wheel state on failure - DO NOT clear secret/pending!
         // The user needs the secret to retry the reveal transaction
-        setWheelState({ spinning: false, revealReady: false, rewardIndex: undefined });
+        stopWheelSpin();
         return;
       }
 
@@ -1026,6 +995,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           commitment: commitmentHex,
           secretHex,
         };
+        setSpinBlock(null);
         const persisted = persistPreparedSpin(blockNumber > 0 ? blockNumber : null);
         setPersistedSpinCommitment(persisted ? commitmentHex : persistedSpinCommitment);
         setSpinStorageUnavailable(!persisted && persistedSpinCommitment !== commitmentHex);
@@ -1057,7 +1027,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             setPendingSecret(hexToBytes(secretHex));
           } catch { }
         }
-        // Enable reveal button after 3 seconds
+        // Cosmetic spin duration only; chain eligibility must also be ready.
         setRevealUnlockedAt(Date.now() + 3000);
         startWheelSpin();
       }
@@ -1066,6 +1036,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
         const proof = transactionProof ?? "unkeyed";
         if (lastHandledRevealRef.current === proof) return;
         lastHandledRevealRef.current = proof;
+        handleRevealSuccess();
         invalidateOwnerResources({
           address,
           domains: ["plants", "balances"],
@@ -1081,6 +1052,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       }
     },
     [
+      handleRevealSuccess,
       address,
       commitmentHex,
       debitStarsOptimistically,
@@ -1092,49 +1064,20 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       secretHex,
       spinMeta,
       startWheelSpin,
+      stopWheelSpin,
     ],
   );
 
-  useEffect(() => {
-    if (!open || selectedGame !== "spin") return;
-
-    if (spinMeta?.pending) {
-      setWheelState((prev) => (prev.spinning ? prev : { ...prev, spinning: true }));
-    } else {
-      setWheelState((prev) =>
-        prev.spinning || prev.revealReady
-          ? { spinning: false, revealReady: false, rewardIndex: undefined }
-          : prev,
-      );
-    }
-  }, [open, selectedGame, spinMeta?.pending]);
-
-  useEffect(() => {
-    if (targetRotation === null) return;
-
-    const timeout = setTimeout(() => {
-      const normalized = ((targetRotation % 360) + 360) % 360;
-      wheelRotationRef.current = normalized;
-      setCurrentRotation(normalized);
-      setTargetRotation(null);
-      if (!spinMeta?.pending) {
-        setWheelState((prev) => ({ ...prev, spinning: false }));
-      }
-    }, FINAL_SPIN_DURATION_MS);
-
-    return () => clearTimeout(timeout);
-  }, [targetRotation, spinMeta?.pending]);
-
-  // NOTE: Duplicate useEffect removed - race condition bug fix
-
   const handleBoxStatus = useCallback((status: LifecycleStatus) => {
     if (status.statusName === "buildingTransaction" || status.statusName === "transactionPending") {
+      if (!boxIntentRef.current) boxIntentRef.current = { seed: seed ?? 1, withStar };
       setArcadeTransactionPending(true);
       lastHandledBoxRef.current = null;
       return;
     }
-    if (TRANSACTION_FAILURE_STATUSES.has(status.statusName ?? "")) {
+    if (isGameTransactionFailure(status.statusName)) {
       setArcadeTransactionPending(false);
+      boxIntentRef.current = null;
       return;
     }
     if (status.statusName !== "success") return;
@@ -1149,11 +1092,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     if (lastHandledBoxRef.current === proof) return;
     lastHandledBoxRef.current = proof;
 
-    if (withStar) debitStarsOptimistically(1);
-    setCooldown((current) => ({
-      ...current,
-      [withStar ? "star" : "normal"]: Math.max(1, current[withStar ? "star" : "normal"]),
-    }));
+    const paidWithStar = boxIntentRef.current?.withStar ?? withStar;
+    if (paidWithStar) debitStarsOptimistically(1);
+    setBoxDeadlines(current => ({ ...current, [paidWithStar ? "star" : "normal"]: Date.now() + 1000 }));
     setBoxReconcilePending(true);
     invalidateOwnerResources({
       address,
@@ -1163,17 +1104,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       transactionHash: txHash,
       transactionId: status.statusData?.transactionId,
     });
-    void refreshBoxCooldown({ expectActive: true, starMode: withStar });
-  }, [address, debitStarsOptimistically, refreshBoxCooldown, withStar]);
+    void refreshBoxCooldown({ expectActive: true, starMode: paidWithStar });
+  }, [address, debitStarsOptimistically, refreshBoxCooldown, seed, withStar]);
 
   // Derived from the deadline + the 1s tick: spinMeta.cooldown is a snapshot
   // from fetch time, so displaying it directly froze the countdown and kept the
   // spin button dead until the dialog was reopened.
-  const spinCooldown = cooldownDeadline !== null
-    ? Math.max(0, Math.ceil((cooldownDeadline - nowTick) / 1000))
-    : 0;
+  const spinCooldown = countdowns.spin;
   const spinStarCost = spinMeta?.starCost ?? 1;
   const pending = spinMeta?.pending;
+  const revealState = getSpinRevealState(pending?.commitBlock, spinBlock);
   const preparedSecretIsDurable = Boolean(
     commitmentHex
     && persistedSpinCommitment?.toLowerCase() === commitmentHex.toLowerCase(),
@@ -1194,7 +1134,8 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     address &&
     pending.player.toLowerCase() === address.toLowerCase() &&
     secretHex &&
-    (revealUnlockedAt === null || Date.now() >= revealUnlockedAt),
+    revealState.status === 'ready' &&
+    countdowns.reveal === 0,
   );
 
   const boxGrid = (
@@ -1204,6 +1145,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
           key={n}
           type="button"
           variant="outline"
+          disabled={arcadeTransactionPending || boxReconcilePending}
           onClick={() => {
             setSeed(n);
             setBoxResultDetails(null);
@@ -1237,11 +1179,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
     </div>
   );
 
-  const currentCooldown = withStar ? cooldown.star : cooldown.normal;
+  const currentCooldown = withStar ? countdowns.star : countdowns.normal;
   const disabled = !seed || !address || currentCooldown > 0;
   const boxStarCost = 1;
-  const boxPlayDisabled = disabled || arcadeTransactionPending || boxReconcilePending || (withStar && starsAvailable <= 0);
-  const spinPlayDisabled = pending ? !canReveal : !canCommit;
+  const boxPlayDisabled = disabled || boxReadStatus !== 'ready' || arcadeTransactionPending || boxReconcilePending || (withStar && starsAvailable <= 0);
+  const spinPlayDisabled = arcadeTransactionPending || (pending ? !canReveal : !canCommit);
   const boxHasInsufficientStars = withStar && starsAvailable < boxStarCost;
   const spinHasInsufficientStars = spinRead.canStart && !pending && starsAvailable < spinStarCost;
   const boxDisabledReason = !address
@@ -1250,6 +1192,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       ? "Choose a box to play."
       : boxReconcilePending
         ? "Confirming the new cooldown."
+      : boxReadStatus === 'error'
+        ? 'Box cooldown could not be verified. Retry before playing.'
+      : boxReadStatus !== 'ready'
+        ? 'Checking the Box cooldown...'
       : currentCooldown > 0
         ? `Box cooldown clears in ${formatDuration(currentCooldown)}.`
         : null;
@@ -1258,7 +1204,11 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       ? null
       : !secretHex
         ? "This pending spin has no local reveal key. Recheck it or wait for the onchain expiry."
-        : "The wheel is still preparing the result."
+        : revealState.status === 'expired'
+          ? 'The reveal window has elapsed. This spin can no longer earn a reward.'
+          : revealState.status === 'waiting'
+            ? `Reveal unlocks in ${revealState.blocksUntilReveal} block${revealState.blocksUntilReveal === 1 ? '' : 's'}.`
+            : spinBlockError ? 'The current block could not be verified. Recheck before revealing.' : 'Checking the reveal block...'
     : !address
       ? "Connect a wallet before spinning."
       : spinCooldown > 0
@@ -1272,10 +1222,21 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               : spinStorageHydratedFor !== spinStorageIdentity || !preparedSecretIsDurable
                 ? "Securing the spin reveal key..."
                 : null;
+  const spinStatusLabel = arcadeTransactionPending ? 'Transaction in progress'
+    : pending ? canReveal ? 'Ready to reveal' : !secretHex ? 'Reveal key unavailable'
+      : revealState.status === 'expired' ? 'Reveal window ended'
+      : revealState.status === 'waiting' ? `Waiting ${revealState.blocksUntilReveal} blocks`
+      : spinBlockError ? 'Block unavailable' : 'Checking reveal block'
+    : !address ? 'Connect a wallet' : !spinRead.canStart ? spinRead.title
+    : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown`
+    : spinStorageUnavailable ? 'Reveal key storage unavailable'
+    : spinHasInsufficientStars ? 'Not enough stars'
+    : !canCommit ? 'Securing the reveal key' : 'Ready to spin';
+
   const hasSpinReward = resultDetails
-    ? (resultDetails.pointsDelta ?? 0) !== 0 ||
-      (resultDetails.timeAdded ?? 0) !== 0 ||
-      (resultDetails.leafAmount !== undefined && resultDetails.leafAmount !== BigInt("0"))
+    ? (resultDetails.pointsDelta ?? 0) > 0 ||
+      (resultDetails.timeAdded ?? 0) > 0 ||
+      (resultDetails.leafAmount !== undefined && resultDetails.leafAmount > BigInt("0"))
     : false;
 
   const handleDialogOpenChange = useCallback((nextOpen: boolean) => {
@@ -1283,8 +1244,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
       toast("Wait for the transaction to finish before closing the Arcade.", { icon: "⏳" });
       return;
     }
+    if (!nextOpen && pending) toast('Your SpinLeaf round is still active. Return before the reveal window ends or the stars are forfeited.');
     onOpenChange(nextOpen);
-  }, [arcadeTransactionPending, onOpenChange]);
+  }, [arcadeTransactionPending, onOpenChange, pending]);
 
   // Gate arcade games for Solana users
   if (isSolana) {
@@ -1317,69 +1279,51 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             Pick a game, choose how you want to play, and use the bottom action when you are ready.
           </DialogDescription>
         </DialogHeader>
-        <div className="surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1">
+        <ScrollArea className="flex-1 overflow-y-auto py-3 pr-1">
           <div className="space-y-4">
+            {pending && (
+              <div className="rounded-[var(--radius-panel)] border border-warning/40 bg-warning/10 p-3 text-sm" role="status">
+                <p className="font-medium">SpinLeaf round active for Plant #{plantId}</p>
+                <p>{revealState.blocksUntilExpiry === null ? 'Checking the reveal window. Keep the saved reveal key on this device.' : revealState.blocksUntilExpiry === 1 ? 'Final reveal block. Reveal now; confirmation must arrive before the window ends.' : `Reveal within ${revealState.blocksUntilExpiry} blocks. Unrevealed stars are forfeited.`}</p>
+                {selectedGame !== 'spin' && <Button variant="link" onClick={() => setSelectedGame('spin')}>Return to SpinLeaf</Button>}
+              </div>
+            )}
+            {expiredSpin && (
+              <RewardResultPanel title="Previous SpinLeaf round expired" tone="warning">
+                <p>Plant #{expiredSpin.plantId}: the reveal window ended. {expiredSpin.starsSpent === null ? 'The stars spent on this round were forfeited.' : `${expiredSpin.starsSpent} star${expiredSpin.starsSpent === 1 ? '' : 's'} spent on this round were forfeited.`}</p>
+                <a className="underline" href={`https://basescan.org/block/${expiredSpin.commitBlock}`} target="_blank" rel="noopener noreferrer">View commit block</a>
+              </RewardResultPanel>
+            )}
             {selectedGame === 'box' && (
               <div className="space-y-4">
                 <div className="text-sm font-medium">Choose a box</div>
                 {boxGrid}
 
                 <div className="space-y-4 rounded-[var(--radius-panel)] bg-muted/25 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-foreground">Box play</div>
                       <p className="text-xs text-muted-foreground">Pick a box, then choose whether to spend a star.</p>
                     </div>
-                    {/* Original compact track look, with real switch semantics. */}
-                    <div
-                      className="grid shrink-0 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-border/55 bg-card/85 bg-[image:var(--gradient-control-track)] p-1"
-                      role="radiogroup"
-                      aria-label="Star spending"
-                    >
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
-                          !withStar
-                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
-                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
-                        )}
-                        onClick={() => setWithStar(false)}
-                        disabled={arcadeTransactionPending || boxReconcilePending}
-                        role="radio"
-                        aria-checked={!withStar}
-                      >
-                        No star
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "h-8 min-h-8 rounded-[calc(var(--radius-control)-0.25rem)] px-2 text-[11px]",
-                          withStar
-                            ? "border-primary/35 bg-primary/10 bg-[image:var(--gradient-selection)] text-primary"
-                            : "border-transparent bg-transparent shadow-none hover:bg-[hsl(var(--nav-hover-bg))]",
-                        )}
-                        onClick={() => setWithStar(true)}
-                        disabled={arcadeTransactionPending || boxReconcilePending}
-                        role="radio"
-                        aria-checked={withStar}
-                      >
-                        Use star
-                      </Button>
+                    <div inert={arcadeTransactionPending || boxReconcilePending} aria-disabled={arcadeTransactionPending || boxReconcilePending}>
+                      <ToggleGroup
+                        value={withStar ? "star" : "none"}
+                        onValueChange={value => setWithStar(value === "star")}
+                        options={[{ value: "none", label: "No star" }, { value: "star", label: "Use star" }]}
+                        size="lg"
+                        ariaLabel="Star spending"
+                      />
                     </div>
                   </div>
 
                   <div className="divide-y divide-border/60 text-sm">
                     <ArcadeStatLine label="Selected box" value={seed ? `Box ${seed}` : "None"} tone={seed ? "primary" : "warning"} />
-                    <ArcadeStatLine label="Cooldown" value={currentCooldown > 0 ? <ResourceValue resource="duration">{formatDuration(currentCooldown)}</ResourceValue> : "Ready"} tone={currentCooldown > 0 ? "warning" : "success"} />
+                    <ArcadeStatLine label="Cooldown" value={boxReadStatus !== 'ready' ? boxReadStatus === 'error' ? 'Unavailable' : 'Checking...' : currentCooldown > 0 ? <ResourceValue resource="duration">{formatDuration(currentCooldown)}</ResourceValue> : "Ready"} tone={boxReadStatus !== 'ready' ? 'default' : currentCooldown > 0 ? "warning" : "success"} />
                     <ArcadeStatLine label="Stars available" value={<ResourceValue resource="stars">{starsAvailable}</ResourceValue>} tone={boxHasInsufficientStars ? "danger" : "default"} />
                   </div>
 
                   {boxDisabledReason && <DisabledReason>{boxDisabledReason}</DisabledReason>}
+                  {boxReadStatus === 'error' && <Button variant="outline" onClick={() => void refreshBoxCooldown()}>Retry Box cooldown</Button>}
                 </div>
                 {boxResultDetails && (
                   <RewardResultPanel
@@ -1388,6 +1332,7 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                        used to render as "+N" in a green success panel. */
                     tone={(boxResultDetails.pointsDelta > 0 || boxResultDetails.timeAdded > 0) ? "success" : "warning"}
                   >
+                    <p className="mb-2 text-xs text-muted-foreground">Box {boxResultDetails.seed} · {boxResultDetails.withStar ? "1 star spent" : "No star spent"}</p>
                     {(boxResultDetails.pointsDelta || boxResultDetails.timeAdded) ? (
                       <div className="space-y-1">
                         {boxResultDetails.pointsDelta !== 0 && (
@@ -1421,85 +1366,21 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   </div>
                 </div>
 
-                <div className="relative mx-auto mt-6 flex h-56 w-56 items-center justify-center sm:h-60 sm:w-60">
-                  <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_32%,hsl(var(--scene-glow)/0.5)_0%,hsl(var(--scene-glow)/0.12)_48%,transparent_76%)] blur-xl" aria-hidden="true" />
-                  <div className="absolute inset-3 rounded-full border border-primary/15 bg-[conic-gradient(from_0deg,hsl(var(--primary)/0.16),hsl(var(--accent)/0.34),hsl(var(--scene-glow)/0.24),hsl(var(--primary)/0.16))] opacity-80 shadow-[var(--shadow-glow)]" aria-hidden="true" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="relative h-48 w-48 rounded-full border border-border/55 bg-card/90 bg-[image:var(--gradient-surface)] p-3 shadow-[0_24px_54px_-28px_hsl(var(--foreground)/0.5)] sm:h-56 sm:w-56" aria-hidden>
-                      <div
-                        ref={wheelRotorRef}
-                        className={cn(
-                          "absolute inset-4 flex items-center justify-center rounded-full border border-primary/35 bg-background/25 shadow-inner",
-                          targetRotation !== null ? "transition-transform duration-[2200ms] ease-out" : "",
-                          wheelState.spinning && targetRotation === null ? "animate-[spin-slow_1.5s_linear_infinite]" : "",
-                        )}
-                        style={
-                          targetRotation !== null
-                            ? { transform: `rotate(${targetRotation}deg)` }
-                            : wheelState.spinning
-                              ? undefined
-                              : { transform: `rotate(${currentRotation}deg)` }
-                        }
-                      >
-                        <svg viewBox="0 0 200 200" className="h-full w-full drop-shadow-sm">
-                          <circle cx="100" cy="100" r="88" fill="none" stroke="hsl(var(--primary) / 0.18)" strokeWidth="7" />
-                          <circle cx="100" cy="100" r="58" fill="none" stroke="hsl(var(--accent) / 0.22)" strokeWidth="2" />
-                          {[...Array(6)].map((_, index) => {
-                            const angle = index * 60;
-                            const radius = 68;
-                            const cx = 100 + Math.cos((angle * Math.PI) / 180) * radius;
-                            const cy = 100 + Math.sin((angle * Math.PI) / 180) * radius;
-                            const rotation = angle + 90;
-                            return (
-                              <g key={index} transform={`rotate(${rotation} ${cx} ${cy})`}>
-                                <image
-                                  href="/icons/spinleaf.png"
-                                  x={cx - 18}
-                                  y={cy - 18}
-                                  width={36}
-                                  height={36}
-                                  className="drop-shadow-sm"
-                                />
-                              </g>
-                            );
-                          })}
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-5 w-5 rounded-full border border-primary/35 bg-primary shadow-[0_0_18px_hsl(var(--primary)/0.32)]" />
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex h-24 w-24 flex-col items-center justify-center space-y-1 rounded-full border border-primary/25 bg-card/80 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] backdrop-blur-[var(--blur-surface)]">
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SpinLeaf</span>
-                          <span className="text-xs font-bold text-primary">{pending ? "In motion" : "Good luck"}</span>
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 rounded-full border border-white/15 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.25)]" />
-                    </div>
-                  </div>
-                  <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center">
-                    <div className="h-4 w-5 rounded-b-[var(--radius-nav)] bg-primary shadow-[0_8px_18px_-10px_hsl(var(--primary)/0.8)]" />
-                    <div className="h-0 w-0 border-l-[10px] border-r-[10px] border-t-[16px] border-l-transparent border-r-transparent border-t-primary drop-shadow-sm" />
-                  </div>
-                </div>
+                <SpinLeafWheel motion={wheel} pending={Boolean(pending)} rewards={spinRead.canStart ? spinMeta?.rewards ?? null : null} />
 
                 <div className="space-y-4 rounded-[var(--radius-panel)] bg-muted/25 p-4">
                   <div>
-                    <div className="text-sm font-medium">Get a spin with a Star</div>
+                    <div className="text-sm font-medium">{spinRead.canStart ? `Start a spin with ${spinStarCost} ${spinStarCost === 1 ? "star" : "stars"}` : "Start a spin"}</div>
                     <p className="text-xs text-muted-foreground">
-                      Use a star, wait for the wheel, then stop it to claim the result.
+                      This game requires two transactions: spend the shown stars to start, then reveal the result. Reveal within 256 blocks after the next block or the stars are forfeited. Return to this device to use your saved reveal key.
                     </p>
                   </div>
 
                   <div className="divide-y divide-border/60 text-sm">
                     <ArcadeStatLine
                       label="Status"
-                      value={
-                        !pending && !spinRead.canStart
-                          ? spinRead.title
-                          : pending ? (canReveal ? "Ready to stop" : "Wheel spinning") : spinCooldown > 0 ? `${formatDuration(spinCooldown)} cooldown` : "Ready to spin"
-                      }
-                      tone={!spinRead.canStart ? "default" : pending ? (canReveal ? "success" : "primary") : spinCooldown > 0 ? "warning" : "success"}
+                      value={spinStatusLabel}
+                      tone={!arcadeTransactionPending && (canCommit || canReveal) ? "success" : spinHasInsufficientStars || spinStorageUnavailable ? "warning" : "default"}
                     />
                     <ArcadeStatLine label="Stars available" value={<ResourceValue resource="stars">{starsAvailable}</ResourceValue>} tone={spinHasInsufficientStars ? "danger" : "default"} />
                     <ArcadeStatLine
@@ -1517,9 +1398,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                   {spinDisabledReason && (starsAvailable >= spinStarCost || Boolean(pending)) && (
                     <DisabledReason>{spinDisabledReason}</DisabledReason>
                   )}
+                  {!pending && spinStorageUnavailable && (
+                    <Button variant="outline" onClick={() => {
+                      const persisted = persistPreparedSpin();
+                      setPersistedSpinCommitment(persisted ? commitmentHex : null);
+                      setSpinStorageUnavailable(!persisted);
+                    }}>Retry reveal key storage</Button>
+                  )}
 
                   <div className="space-y-2">
-                    {pending && !secretHex && (
+                    {pending && (!secretHex || spinBlockError) && (
                       <Button
                         type="button"
                         variant="link"
@@ -1533,17 +1421,29 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 </div>
               </div>
             )}
+            {resultRecovery && (
+              <RewardResultPanel title="Spin confirmed · result unavailable" tone="warning">
+                <p>The reveal succeeded, but its reward could not be read. Retry to retrieve the result.</p>
+                {resultRecovery.transactionHash ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <Button variant="outline" disabled={checkingResult} onClick={() => void recheckSpinResult()}>{checkingResult ? "Checking result…" : "Retry SpinLeaf result"}</Button>
+                    <a className="inline-flex min-h-11 items-center underline" href={`https://basescan.org/tx/${resultRecovery.transactionHash}`} target="_blank" rel="noopener noreferrer">View reveal receipt</a>
+                  </div>
+                ) : <p className="mt-2">The wallet did not return a receipt hash. Open Activity to inspect this plant’s completed spin.</p>}
+                {resultRecoveryError && <p role="status" className="mt-2">The reward is still unavailable. Your receipt is saved; try again later.</p>}
+              </RewardResultPanel>
+            )}
             {selectedGame === "spin" && resultDetails && (
-              <RewardResultPanel className="mt-4" title="Spin Reward" tone={hasSpinReward ? "success" : "warning"}>
+              <RewardResultPanel className="mt-4" title={pending ? "Previous spin result" : "Spin Reward"} tone={hasSpinReward ? "success" : "warning"}>
                 <ul className="space-y-1">
                   {typeof resultDetails.pointsDelta === "number" && resultDetails.pointsDelta !== 0 && (
                     <li>
-                      PTS: <span className="font-medium text-foreground">{`${resultDetails.pointsDelta > 0 ? "+" : "-"}${formatScore(Math.abs(resultDetails.pointsDelta))}`}</span>
+                      PTS: <span className="font-medium text-foreground">{formatSignedSpinValue(resultDetails.pointsDelta, formatScore)}</span>
                     </li>
                   )}
                   {typeof resultDetails.timeAdded === "number" && resultDetails.timeAdded !== 0 && (
                     <li>
-                      Lifetime: <span className="font-medium text-foreground">{`${resultDetails.timeAdded > 0 ? "+" : "-"}${formatDuration(Math.abs(resultDetails.timeAdded))}`}</span>
+                      Lifetime: <span className="font-medium text-foreground">{formatSignedSpinValue(resultDetails.timeAdded, formatDuration)}</span>
                     </li>
                   )}
                   {typeof resultDetails.leafAmount === "bigint" && resultDetails.leafAmount !== BigInt("0") && (
@@ -1556,20 +1456,21 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                       <li className="text-muted-foreground">No reward this time. Better luck next spin!</li>
                     )}
                 </ul>
+                {resultDetails.transactionHash && <a className="mt-2 inline-flex min-h-11 items-center underline" href={`https://basescan.org/tx/${resultDetails.transactionHash}`} target="_blank" rel="noopener noreferrer">View spin receipt</a>}
               </RewardResultPanel>
             )}
           </div>
-        </div>
+        </ScrollArea>
         <DialogFooter sticky className="block space-y-3">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">
               <div className="truncate font-semibold text-foreground">
-                {selectedGame === "box" ? "Open a Box" : pending ? "Stop the Wheel" : spinRead.title}
+                {selectedGame === "box" ? "Open a Box" : spinStatusLabel}
               </div>
               <div className="truncate">
                 {selectedGame === "box"
                   ? seed ? `Box ${seed}${withStar ? " with star" : ""}` : "Choose a box to play"
-                  : pending ? canReveal ? "Ready to claim the result" : "Waiting for the result" : !spinRead.canStart ? "Cost and cooldown are not confirmed" : spinStarCost > 0 ? `${spinStarCost} star per spin` : "Ready to spin"}
+                  : pending ? "Your submitted spin is saved on this device" : spinRead.canStart ? `${spinStarCost} star${spinStarCost === 1 ? "" : "s"} per spin` : "Cost and cooldown are not confirmed"}
               </div>
             </div>
           </div>
@@ -1589,7 +1490,10 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
                 }
                 handleBoxStatus(status as LifecycleStatus);
               }}
-              onResult={(result) => setBoxResultDetails(result)}
+              onResult={(result) => {
+                setBoxResultDetails(result ? { ...result, ...(boxIntentRef.current ?? { seed: seed ?? 1, withStar }) } : null);
+                boxIntentRef.current = null;
+              }}
             />
           )}
 
@@ -1601,10 +1505,9 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
               disabled={spinPlayDisabled}
               buttonClassName="w-full"
               feedbackMode="toast"
-              buttonText={!spinRead.canStart ? spinRead.title : spinStarCost > 0 ? `Spin Leaf (${spinStarCost}★)` : "Spin Leaf"}
+              buttonText={!canCommit ? spinStatusLabel : spinStarCost > 0 ? `Start SpinLeaf (${spinStarCost} ${spinStarCost === 1 ? "star" : "stars"})` : "Start SpinLeaf"}
               onStatusUpdate={handleSpinStatus("commit")}
               onButtonClick={handleCommitButtonClick}
-              onRewardConfigUpdate={handleRewardUpdate}
             />
           )}
 
@@ -1630,28 +1533,16 @@ export default function ArcadeDialog({ open, onOpenChange, plant }: ArcadeDialog
             <SpinGameTransaction
               mode="reveal"
               plantId={plant.id}
+              commitBlock={pending.commitBlock}
               commitment={pending.commitment}
               secret={secretHex}
               disabled={spinPlayDisabled}
               buttonClassName="w-full"
               feedbackMode="toast"
-              buttonText="Stop Wheel"
+              buttonText="Reveal result"
               onStatusUpdate={handleSpinStatus("reveal")}
-              onComplete={(result) => {
-                handleRevealSuccess();
-                finishWheelSpin(result?.rewardIndex);
-                if (result) {
-                  setResultDetails({
-                    pointsDelta: result.pointsDelta,
-                    timeAdded: result.timeAdded,
-                    leafAmount: result.leafAmount,
-                  });
-                }
-              }}
-              onButtonClick={() => {
-                setWheelState((prev) => ({ ...prev, spinning: false, revealReady: true }));
-              }}
-              onRewardConfigUpdate={handleRewardUpdate}
+              onComplete={result => handleSpinCompletion(result, pending.commitment)}
+              onButtonClick={wheel.reveal}
             />
           )}
 

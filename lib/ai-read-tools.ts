@@ -1,4 +1,6 @@
 import 'server-only';
+import { readQuestRewardsSnapshot } from './quest-rewards-read';
+import { canSettleQuestRewards } from './quest-rewards-readiness';
 import { landPointsToNumber, readBuildingProduction } from './land-production';
 import { formatAddress } from "@/lib/utils";
 import { getPlantLifetime } from '@/lib/plant-lifetime';
@@ -185,16 +187,6 @@ const AI_ARCADE_STATUS_MAX_PLANTS = Number.parseInt(process.env.AI_ARCADE_STATUS
 const AI_QUEST_READINESS_MAX_LANDS = Number.parseInt(process.env.AI_QUEST_READINESS_MAX_LANDS || '', 10) || 60;
 const AI_LAND_RAID_REPORT_MAX_LANDS = Number.parseInt(process.env.AI_LAND_RAID_REPORT_MAX_LANDS || '', 10) || 60;
 const AI_BLACKJACK_ACTION_MAX_LANDS = Number.parseInt(process.env.AI_BLACKJACK_ACTION_MAX_LANDS || '', 10) || 40;
-const DEFAULT_QUEST_REWARDS_WALLET = '0xd528071FB9dC9715ea8da44e2c4433EAc017d1DB';
-function getQuestRewardsWallet(primaryEnvName: string): `0x${string}` {
-  const primary = process.env[primaryEnvName];
-  const fallback = process.env.NEXT_PUBLIC_QUEST_REWARDS_WALLET;
-  return getAddress(isAddress(primary || '') ? primary! : isAddress(fallback || '') ? fallback! : DEFAULT_QUEST_REWARDS_WALLET);
-}
-const QUEST_SEED_REWARDS_WALLET = getQuestRewardsWallet('NEXT_PUBLIC_QUEST_SEED_REWARDS_WALLET');
-const QUEST_LEAF_REWARDS_WALLET = getQuestRewardsWallet('NEXT_PUBLIC_QUEST_LEAF_REWARDS_WALLET');
-const MIN_QUEST_REWARDS_SEED_BALANCE = parseUnits('300', 18);
-const MIN_QUEST_REWARDS_LEAF_BALANCE = parseUnits('492750', 18);
 const QUEST_BLOCK_SECONDS = 2;
 const COORDINATE_INPUT_LIMIT = 1_000_000;
 
@@ -2735,7 +2727,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
           cache: 'Bundled public app URLs and known About-tab actions.',
           includeBlock: false,
           limitations: [
-            'Feedback and Tutorial are in-app About-tab actions, not private support inbox reads.',
+            'Feedback and Game guide are in-app About-tab actions, not private support inbox reads.',
             'Neural Seed cannot read admin feedback, private support tickets, internal dashboards, or private team channels.',
           ],
         },
@@ -2754,7 +2746,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
           ],
           inAppActions: [
             { id: 'about', label: 'About tab', routeHint: 'Open About from the main tab bar.' },
-            { id: 'tutorial', label: 'Tutorial', routeHint: 'Open About -> Tutorial.' },
+            { id: 'tutorial', label: 'Game guide', routeHint: 'Open About -> Game guide.' },
             { id: 'feedback', label: 'Feedback', routeHint: 'Open About -> Feedback. Requires connected wallet.' },
             { id: 'documentation', label: 'Documentation', routeHint: 'Use About/official community links when a dedicated docs button is visible.' },
           ],
@@ -3080,7 +3072,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
 
     get_name_change_readiness: tool({
       ...READ_TOOL_DEFAULTS,
-      description: 'Check owner/readiness guidance for renaming Pixotchi plants and lands. Plant names cost 350 SEED and land names are owner-only sponsored/free. Read-only; never renames.',
+      description: 'Check owner/readiness guidance for renaming Pixotchi plants and lands. Plant rename prices come from current contract configuration. Land renaming has no contract fee; network fees may apply. Read-only; never renames.',
       inputSchema: z.object({
         address: ADDRESS_INPUT,
         assetId: z.number().int().min(0).max(1000000).optional(),
@@ -3171,7 +3163,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
                 canSubmit: Boolean(land && sameAddress(land.owner, target) && landProposed?.validFormat && !sameName),
                 coordinates: land ? { x: Number(land.coordinateX), y: Number(land.coordinateY) } : null,
                 cost: {
-                  amountDisplay: 'Free / sponsored owner action',
+                  amountDisplay: 'No contract fee; network fees may apply',
                   amountRaw: '0',
                 },
                 currentName,
@@ -3191,7 +3183,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
             requestedAssets,
             rules: {
               landRename: {
-                costDisplay: 'Free / sponsored owner action',
+                costDisplay: 'No contract fee; network fees may apply',
                 maxBytes: ASSET_NAME_RULES.land.maxBytes,
                 minBytes: ASSET_NAME_RULES.land.minBytes,
                 ownerOnly: true,
@@ -4171,6 +4163,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
             `Scans at most ${AI_QUEST_READINESS_MAX_LANDS} lands per request unless narrowed by land IDs.`,
             'Quest slot state can change after every block; refresh the Farmer House UI before signing.',
             'Neural Seed cannot start, return, or finalize quests.',
+            'Loot-bag availability means its Open check remains available; the UI still verifies the selected bag with a contract simulation before submission.',
             'Quest/rewards custody wallet addresses, balances, thresholds, refills, and transfer details are intentionally redacted.',
           ],
         },
@@ -4179,27 +4172,13 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
           const allLands = await readLandsForInput(target, landIds, readClient);
           const scannedLands = allLands.slice(0, Math.min(allLands.length, AI_QUEST_READINESS_MAX_LANDS));
           const displayLimit = Math.min(limit, scannedLands.length);
-          const [
-            currentBlock,
-            seedRewardsBalance,
-            seedRewardsAllowance,
-            leafRewardsBalance,
-            leafRewardsAllowance,
-            buildingResults,
-          ] = await Promise.all([
+          const [currentBlock, funding, buildingResults] = await Promise.all([
             readClient.getBlockNumber(),
-            getTokenBalanceForToken(QUEST_SEED_REWARDS_WALLET, PIXOTCHI_TOKEN_ADDRESS, readClient).catch(() => BigInt(0)),
-            readErc20Allowance(readClient, PIXOTCHI_TOKEN_ADDRESS, QUEST_SEED_REWARDS_WALLET, LAND_CONTRACT_ADDRESS).catch(() => BigInt(0)),
-            getTokenBalanceForToken(QUEST_LEAF_REWARDS_WALLET, LEAF_CONTRACT_ADDRESS, readClient).catch(() => BigInt(0)),
-            readErc20Allowance(readClient, LEAF_CONTRACT_ADDRESS, QUEST_LEAF_REWARDS_WALLET, LAND_CONTRACT_ADDRESS).catch(() => BigInt(0)),
+            readQuestRewardsSnapshot(readClient).catch(() => null),
             getLandBuildingsBatch(scannedLands.map((land) => land.tokenId), { readClient }),
           ]);
           const buildingMap = new Map(buildingResults.map((entry) => [entry.landId.toString(), entry]));
-          const rewardsPoolUnavailable =
-            seedRewardsBalance < MIN_QUEST_REWARDS_SEED_BALANCE ||
-            seedRewardsAllowance < MIN_QUEST_REWARDS_SEED_BALANCE ||
-            leafRewardsBalance < MIN_QUEST_REWARDS_LEAF_BALANCE ||
-            leafRewardsAllowance < MIN_QUEST_REWARDS_LEAF_BALANCE;
+          const rewardsPoolUnavailable = !funding || !canSettleQuestRewards(funding);
           const questLands = await Promise.all(scannedLands.slice(0, displayLimit).map(async (land) => {
             const buildings = buildingMap.get(land.tokenId.toString());
             const farmerHouseLevel = getBuiltTownBuildingLevel(buildings, 7);
@@ -4227,7 +4206,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
               nextActions: [
                 farmerHouseLevel <= 0 ? 'Build Farmer House from the Town buildings panel to unlock quests.' : null,
                 rewardsPoolUnavailable && availableSlots > 0 ? 'Quest starts are temporarily unavailable in the Farmer House UI; refresh the panel and try again later.' : null,
-                rewardsPoolUnavailable && actionableSlots > 0 ? 'Open Farmer House and use Return now on ready-to-commit slots; opening loot bags is paused until rewards are ready.' : null,
+                rewardsPoolUnavailable && actionableSlots > 0 ? 'Wait before using Return on finished quests. For already committed loot bags, open Farmer House and use Open to check that bag before its deadline.' : null,
                 !rewardsPoolUnavailable && actionableSlots > 0 ? 'Open Farmer House and use Return now or Open now on ready slots.' : null,
                 !rewardsPoolUnavailable && availableSlots > 0 ? 'Open Farmer House and start an Easy, Med, or Hard quest from an available slot.' : null,
               ].filter(Boolean),
@@ -4268,7 +4247,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
             resetRule: 'After commit, finalize/open before pseudoRndBlock + 256 blocks or the contract resets the quest without loot.',
             rewardsPool: {
               availableForNewQuests: !rewardsPoolUnavailable,
-              availableForLootBags: !rewardsPoolUnavailable,
+              availableForLootBags: true, // Existing bags always retain the per-slot simulation/recovery action.
               fundingDetails: createCustodyRedaction('farmer_house_rewards_availability'),
             },
             scannedLandCount: scannedLands.length,

@@ -183,6 +183,8 @@ export async function GET(req: NextRequest) {
             pixotchi: reconciled.pixotchi || '0',
             claimed: claimStatus === 'claimed',
             status: claimStatus,
+            attemptId: reconciled.attemptId ?? null,
+            operationId: reconciled.operationId ?? null,
             claimedAt: reconciled.claimedAt || null,
             txHash: claimStatus === 'claimed' ? reconciled.txHash || null : null,
         });

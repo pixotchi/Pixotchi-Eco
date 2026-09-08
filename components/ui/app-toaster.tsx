@@ -8,7 +8,7 @@ export function AppToaster() {
     <Toaster
       position="top-center"
       toastOptions={{
-        className: "chat-white-surface",
+        className: "surface-lifted",
         duration: 4000,
         style: {
           backgroundColor: "hsl(var(--card))",

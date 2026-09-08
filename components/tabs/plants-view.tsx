@@ -1,12 +1,15 @@
 "use client";
 
 import EditPlantName from "@/components/edit-plant-name";
+import { AssetTitle } from '@/components/asset-title';
+import { PlantClaimSummary } from '@/components/plant-claim-summary';
+import { SpinPendingBanner } from '@/components/arcade/spin-pending-banner';
 import ApprovalActionTransaction from "@/components/transactions/approval-action-transaction";
 import ClaimRewardsTransaction from "@/components/transactions/claim-rewards-transaction";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyFarm } from '@/components/empty-farm';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { FirstCareGuide } from "@/components/first-care-guide";
 import { completeFirstCareStep } from '@/lib/first-care-progress';
@@ -27,14 +30,19 @@ import { Input } from "@/components/ui/input";
 import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
 import { InlineBalanceNotice } from "@/components/ui/premium";
-import { useItemCatalogs } from "@/hooks/useItemCatalogs";
+import { useReviveReadiness } from '@/hooks/useReviveReadiness';
+import { useCareSelection } from '@/hooks/useCareSelection';
+import { careItemRevision, getCareCapabilities } from '@/lib/care-catalog';
+import {
+  clearMissionPlantForOwner,
+  consumeMissionPlant,
+  readMissionPlant,
+  subscribeMissionPlant,
+} from '@/lib/mission-plant-navigation';
 import { useOwnerResourceList } from "@/hooks/useOwnerResourceList";
 
 import {
 getPlantsByOwner,
-checkTokenApproval,
-getRevivePrice,
-getTokenBalance,
 PIXOTCHI_NFT_ADDRESS,
 } from "@/lib/contracts";
 import {
@@ -43,15 +51,15 @@ type OwnerResourceInvalidationDetail,
 } from "@/lib/owner-resource-invalidation";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useTabVisibility } from "@/lib/tab-visibility-context";
-import { GardenItem,Plant,ShopItem,TransactionCall } from "@/lib/types";
-import { formatEth,formatScore,formatTokenAmount,getActiveFences,getPlantStatusText,getStrainName } from '@/lib/utils';
+import { GardenItem,Plant,TransactionCall } from "@/lib/types";
+import { formatEth,formatScore,formatTokenAmount,getPlantStatusText,getStrainName } from '@/lib/utils';
+import { usePlantProtection } from '@/hooks/usePlantProtection';
 import {
-ChevronDown,
-Flower2
+ChevronDown
 } from "lucide-react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useCallback,useEffect,useId,useMemo,useState } from "react";
+import { useCallback,useEffect,useId,useMemo,useState,useSyncExternalStore } from "react";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
 import PlantImage from "../PlantImage";
@@ -68,13 +76,12 @@ const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solan
 const ItemDetailsPanel = dynamic(() => import("@/components/item-details-panel"), {
   loading: () => (
     <div className="flex min-h-[16rem] items-center justify-center rounded-[var(--radius-panel)] border border-border/60 bg-card/80">
-      <BaseExpandedLoadingPageLoader text="Loading marketplace..." />
+      <BaseExpandedLoadingPageLoader text="Loading plant care…" />
     </div>
   ),
   ssr: false,
 });
 
-const DEFAULT_REVIVE_PRICE = BigInt(100) * (BigInt(10) ** BigInt(18));
 const REVIVE_ABI = [
   {
     inputs: [{ name: "_Id", type: "uint256" }],
@@ -85,11 +92,6 @@ const REVIVE_ABI = [
   },
 ] as const;
 
-type AllowanceState = {
-  status: "loading" | "known" | "error";
-  value: bigint | null;
-  owner: string | null;
-};
 // Removed BalanceCard from tabs; status bar now shows balances globally
 
 function FittedEthRewardValue({ amount }: { amount: string }) {
@@ -130,19 +132,15 @@ export default function PlantsView() {
   const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('dashboard');
-  const [selectedItem, setSelectedItem] = useState<ShopItem | GardenItem | null>(null);
-  const { shopItems, gardenItems } = useItemCatalogs();
-  const [itemType, setItemType] = useState<"shop" | "garden">("garden");
+  const { catalogs, selection: careSelection, setSelection: setCareSelection, itemType, item: selectedItem,
+    status: selectedCatalogStatus, changed: catalogChanged, requireCurrent: requireCurrentCareItem } = useCareSelection();
+  const { shopItems, gardenItems, shopStatus, gardenStatus, retryGarden, retryShop } = catalogs;
 
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [careReviewRequest, setCareReviewRequest] = useState(0);
   const [claimOpen, setClaimOpen] = useState(false);
   const [arcadeOpen, setArcadeOpen] = useState(false);
   const [claimConfirmationText, setClaimConfirmationText] = useState("");
-  const [revivePrice, setRevivePrice] = useState<bigint>(DEFAULT_REVIVE_PRICE);
-  const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
-  const [reviveDataLoading, setReviveDataLoading] = useState(false);
-  const [reviveAllowance, setReviveAllowance] = useState<AllowanceState>({ status: "loading", value: null, owner: null });
   const claimConfirmationId = useId();
   const claimConfirmationDescriptionId = `${claimConfirmationId}-description`;
 
@@ -163,7 +161,6 @@ export default function PlantsView() {
     setClaimOpen(false);
     setArcadeOpen(false);
     setClaimConfirmationText("");
-    setSeedBalance(BigInt(0));
   }, []);
 
   // The local mutation callbacks below reconcile with a stronger, action-aware
@@ -224,6 +221,67 @@ export default function PlantsView() {
     return plants.find((plant) => plant.id === preferredPlantId) ?? plants[0];
   }, [plants, preferredPlantId]);
 
+  const missionTarget = useSyncExternalStore(subscribeMissionPlant, readMissionPlant, () => null);
+  const cancelPlantMission = useCallback(() => {
+    const pending = readMissionPlant();
+    if (pending?.owner === ownerKey) consumeMissionPlant(pending);
+  }, [ownerKey]);
+  const choosePlant = (plantId: number) => {
+    cancelPlantMission();
+    setPreferredPlantId(plantId);
+  };
+  useEffect(() => {
+    clearMissionPlantForOwner(ownerKey);
+    if (!isVisible || !missionTarget || readMissionPlant() !== missionTarget || missionTarget.owner !== ownerKey || plantsLoading || plantsFailed) return;
+    const targetPlant = plants.find(plant => plant.id === missionTarget.plantId && plant.owner.toLowerCase() === ownerKey);
+    if (!targetPlant) {
+      consumeMissionPlant(missionTarget);
+      toast.error('This plant is no longer in your wallet. Choose one of your current plants.');
+      return;
+    }
+    setClaimOpen(false);
+    if (selectedPlant?.id !== targetPlant.id) {
+      setArcadeOpen(false);
+      setCareSelection(null);
+      setPreferredPlantId(targetPlant.id);
+      return;
+    }
+    if (missionTarget.action === 'arcade') {
+      setArcadeOpen(true);
+      consumeMissionPlant(missionTarget);
+      return;
+    }
+    setArcadeOpen(false);
+    // Care can change while Tasks is open. Route a now-dead plant to its
+    // existing revival review, never attempt a purchase from this shortcut.
+    if (targetPlant.status !== 4 && missionTarget.action === 'protection' && shopStatus === 'ready') {
+      const protection = shopItems.find(item => getCareCapabilities(item, 'shop').purchase === 'fence-v2');
+      if (protection) {
+        setCareSelection({ id: protection.id, itemType: 'shop', reviewedRevision: careItemRevision(protection, 'shop') });
+        setCareReviewRequest(request => request + 1);
+        consumeMissionPlant(missionTarget);
+        return;
+      }
+    }
+    setCareSelection(null);
+    const frame = requestAnimationFrame(() => {
+      // Leave the request pending if Activity hides this view before focusing.
+      if (readMissionPlant() !== missionTarget) return;
+      const region = document.getElementById(targetPlant.status === 4 ? 'plant-revival' : 'plant-care');
+      if (!region) return;
+      region.focus({ preventScroll: true });
+      region.scrollIntoView({ block: 'start', behavior: 'instant' });
+      // The catalog's own loading/retry UI remains available; after a delayed
+      // successful read, resume opening the actual protection item review.
+      if (targetPlant.status !== 4 && missionTarget.action === 'protection' && shopStatus !== 'ready') return;
+      consumeMissionPlant(missionTarget);
+      if (targetPlant.status !== 4 && missionTarget.action === 'protection') {
+        toast.error('Protection is unavailable in the current catalog.');
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isVisible, missionTarget, ownerKey, plants, plantsFailed, plantsLoading, selectedPlant?.id, setCareSelection, shopItems, shopStatus]);
+
   // A confirmed rename is already onchain, so writing it into the cache is a
   // correction rather than an optimistic guess. The next read overwrites it.
   const patchPlantInCache = useCallback((plantId: number, name: string) => {
@@ -234,68 +292,32 @@ export default function PlantsView() {
   const selectedPlantId = selectedPlant?.id ?? null;
   const selectedPlantStatus = selectedPlant?.status ?? null;
 
-  const fenceStatuses = useMemo(() => {
-    if (!selectedPlant) return [];
-    return getActiveFences(selectedPlant);
-  }, [selectedPlant]);
+  const fenceStatuses = usePlantProtection(selectedPlant, ownerKey);
 
   const hasActiveFence = fenceStatuses.length > 0;
 
-  const handleQuantityChange = (itemId: string, quantity: number) => {
+  const handleQuantityChange = (itemId: string, quantity: number, type = itemType) => {
     setItemQuantities(prev => ({
       ...prev,
-      [itemId]: quantity
+      [`${type}:${itemId}`]: quantity
     }));
   };
 
-  const getItemQuantity = useCallback((itemId: string) => {
+  const getItemQuantity = useCallback((itemId: string, type = itemType) => {
     // For regular wallets, default to 1 for garden items since they can't change quantity
     // For smart wallets, default to 0 (user selects quantity)
-    const defaultQuantity = (!isSmartWallet && !smartWalletLoading && itemType === 'garden') ? 1 : 0;
-    return itemQuantities[itemId] || defaultQuantity;
+    const defaultQuantity = (!isSmartWallet && !smartWalletLoading && type === 'garden') ? 1 : 0;
+    return itemQuantities[`${type}:${itemId}`] ?? defaultQuantity;
   }, [isSmartWallet, smartWalletLoading, itemType, itemQuantities]);
 
-  useEffect(() => {
-    if (!selectedPlantId || selectedPlantStatus !== 4) {
-      setReviveDataLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchReviveData = async () => {
-      setReviveDataLoading(true);
-      setReviveAllowance((previous) => ({ status: "loading", value: previous.value, owner: previous.owner }));
-
-      const [priceResult, balanceResult, allowanceResult] = await Promise.allSettled([
-        getRevivePrice(),
-        address ? getTokenBalance(address) : Promise.reject(new Error("Wallet address unavailable")),
-        address ? checkTokenApproval(address) : Promise.reject(new Error("Wallet address unavailable")),
-      ]);
-
-      if (cancelled) return;
-
-      if (priceResult.status === "fulfilled" && priceResult.value > BigInt(0)) {
-        setRevivePrice(priceResult.value);
-      }
-      if (balanceResult.status === "fulfilled") {
-        setSeedBalance(balanceResult.value);
-      }
-      if (allowanceResult.status === "fulfilled") {
-        setReviveAllowance({ status: "known", value: allowanceResult.value, owner: address?.toLowerCase() ?? null });
-      } else {
-        console.error("Failed to fetch SEED allowance for revive:", allowanceResult.reason);
-        setReviveAllowance((previous) => ({ status: "error", value: previous.value, owner: previous.owner }));
-      }
-      setReviveDataLoading(false);
-    };
-
-    void fetchReviveData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [address, selectedPlantId, selectedPlantStatus]);
+  const reviveReads = useReviveReadiness(address, selectedPlantId, selectedPlantStatus === 4 && !isSolana);
+  const revivePrice = reviveReads.price.data ?? BigInt(0);
+  const seedBalance = reviveReads.balance.data ?? BigInt(0);
+  const reviveAllowance = {
+    value: reviveReads.allowance.data ?? null,
+    status: reviveReads.allowance.isError ? 'error' : reviveReads.allowance.data === undefined ? 'loading' : 'known',
+    owner: address?.toLowerCase(),
+  };
 
   const onPurchaseSuccess = useCallback(() => {
     completeFirstCareStep(ownerKey, 'care');
@@ -384,14 +406,7 @@ export default function PlantsView() {
     && reviveAllowance.value !== null
     && reviveAllowance.value < revivePrice;
 
-  const renderNoPlantsView = () => (
-    <EmptyState
-      className="min-h-[60dvh]"
-      icon={Flower2}
-      title="No Plants Yet!"
-      description="Choose a strain and review its cost to begin."
-    />
-  );
+  const renderNoPlantsView = () => <EmptyFarm asset="plant" />;
 
   // Only block render if we have NO plants data at all
   // If we have plants, we show them (Activity API maintains state) and update silently
@@ -461,12 +476,12 @@ export default function PlantsView() {
                       <ChevronDown className="h-4 w-4 shrink-0" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent matchTriggerWidth className=" max-h-60 overflow-y-auto">
+                  <DropdownMenuContent matchTriggerWidth className=" [--menu-max-height:15rem] overflow-y-auto">
                     {plants.map((plant) => (
-                      <DropdownMenuItem key={plant.id} onSelect={() => setPreferredPlantId(plant.id)}>
+                      <DropdownMenuItem key={plant.id} onSelect={() => choosePlant(plant.id)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <PlantImage selectedPlant={plant} width={24} height={24} />
-                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Lvl {plant.level})</span>
+                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Level {plant.level})</span>
                         </div>
                       </DropdownMenuItem>
                     ))}
@@ -475,7 +490,12 @@ export default function PlantsView() {
               </CardContent>
             </TabCard>
           )}
-          {(selectedPlant.level <= 1 || selectedPlant.status >= 2) && <FirstCareGuide hasPlant owner={ownerKey} urgent={selectedPlant.status >= 2} />}
+          {(selectedPlant.level <= 1 || selectedPlant.status >= 2) && <FirstCareGuide hasPlant owner={ownerKey} urgent={selectedPlant.status >= 2} dead={selectedPlant.status === 4} onRevive={() => {
+            cancelPlantMission();
+            const region = document.getElementById('plant-revival');
+            region?.focus({ preventScroll: true });
+            region?.scrollIntoView({ block: 'start', behavior: 'instant' });
+          }} />}
           {/* Plant "Screen" Display */}
           <TabCard>
             <CardContent className="space-y-3">
@@ -515,7 +535,7 @@ export default function PlantsView() {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
                           const nextIndex = (idx - 1 + plants.length) % plants.length;
-                          setPreferredPlantId(plants[nextIndex].id);
+                          choosePlant(plants[nextIndex].id);
                         }
                       }}
                       direction="previous"
@@ -527,7 +547,7 @@ export default function PlantsView() {
                         const idx = selectedPlant ? plants.findIndex(p => p.id === selectedPlant.id) : -1;
                         if (idx >= 0) {
                           const nextIndex = (idx + 1) % plants.length;
-                          setPreferredPlantId(plants[nextIndex].id);
+                          choosePlant(plants[nextIndex].id);
                         }
                       }}
                       direction="next"
@@ -576,10 +596,7 @@ export default function PlantsView() {
 
               {/* Plant Name and Strain */}
               <div className="text-center">
-                <div className="inline-flex max-w-full items-center justify-center gap-1">
-                  <span className="w-7 shrink-0" aria-hidden="true" />
-                  <h3 className="min-w-0 break-words font-pixel text-base leading-relaxed">{selectedPlant.name || `Plant #${selectedPlant.id}`}</h3>
-                  <EditPlantName
+                <AssetTitle name={selectedPlant.name || `Plant #${selectedPlant.id}`} edit={<EditPlantName
                     plant={selectedPlant}
                     onNameChanged={(plantId, newName) => {
                       // Patch the cache, not a local copy: the list, the header
@@ -588,12 +605,11 @@ export default function PlantsView() {
                     }}
                     iconSize={18}
                     className="h-11 min-h-11 w-11 min-w-11 shrink-0"
-                  />
-                </div>
+                  />} />
                 <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1 font-semibold text-foreground/80">
                     <Image src="/icons/level.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" aria-hidden="true" />
-                    LVL {selectedPlant.level}
+                    Level {selectedPlant.level}
                   </span>
                   <span aria-hidden="true">•</span>
                   <span>{getStrainName(selectedPlant.strain)}</span>
@@ -615,6 +631,7 @@ export default function PlantsView() {
                     variant="ghost"
                     className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
                     onClick={() => {
+                      cancelPlantMission();
                       if (!selectedPlant || Number(selectedPlant.rewards) <= 0) {
                         toast.error('No rewards to claim');
                         return;
@@ -642,7 +659,7 @@ export default function PlantsView() {
                     type="button"
                     variant="ghost"
                     className="group h-auto min-h-0 w-full justify-stretch rounded-[var(--radius-panel)] bg-transparent p-0 text-left hover:bg-transparent"
-                    onClick={() => setArcadeOpen(true)}
+                    onClick={() => { cancelPlantMission(); setArcadeOpen(true); }}
                     title="Arcade games"
                     aria-label="Open arcade games"
                   >
@@ -671,15 +688,11 @@ export default function PlantsView() {
                 <DialogHeader>
                   <DialogTitle>Claim ETH Rewards?</DialogTitle>
                   <DialogDescription>
-                    Confirm this irreversible claim. Your current points will be burned and this plant will reset to level 0.
+                    Review what changes for {selectedPlant.name || `Plant #${selectedPlant.id}`} before claiming.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p id={claimConfirmationDescriptionId}>Claiming rewards will burn your current points and reset this plant&apos;s level to 0.</p>
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                    <span>{formatEth(selectedPlant.rewards)} ETH</span>
-                  </div>
+                  <PlantClaimSummary points={selectedPlant.score} level={selectedPlant.level} rewards={selectedPlant.rewards} descriptionId={claimConfirmationDescriptionId} />
                   <div className="space-y-2 pt-2">
                     <label htmlFor={claimConfirmationId} className="text-sm font-medium text-foreground">
                       Type <strong>CONFIRM</strong> to claim:
@@ -737,6 +750,7 @@ export default function PlantsView() {
           )}
 
           {/* Arcade Dialog */}
+          {!arcadeOpen && <SpinPendingBanner plantId={selectedPlant.id} onResume={() => { cancelPlantMission(); setArcadeOpen(true); }} />}
           {arcadeOpen && (
             <ArcadeDialog
               open={arcadeOpen}
@@ -750,7 +764,7 @@ export default function PlantsView() {
           <div className="min-w-0 tablet:w-full">
           {/* Items / Revive Section */}
           {selectedPlant.status === 4 ? (
-            <TabCard className="tablet:w-full">
+            <TabCard id="plant-revival" tabIndex={-1} aria-label="Revive plant" className="scroll-mt-4 tablet:w-full">
               <CardHeader>
                 <CardTitle>Revive Plant</CardTitle>
               </CardHeader>
@@ -768,23 +782,23 @@ export default function PlantsView() {
                       <div className="text-sm text-foreground">
                         <div className="font-medium">This plant is dead</div>
                         <div className="text-xs mt-1">
-                          Revive it to restore marketplace access and continue caring for it from the farm tab.
+                          Revive it to restore Plant care access and continue caring for it from the farm tab.
                         </div>
                       </div>
                     </div>
                   </StandardContainer>
 
-                  <div className="chromatic-white-surface space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+                  <div className="surface-lifted space-y-4 rounded-[var(--radius-panel)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Revive cost</span>
                       <ResourceValue resource="seed" className="font-semibold text-foreground">
-                        {reviveDataLoading ? "Loading..." : `${formatTokenAmount(revivePrice)} SEED`}
+                        {reviveReads.price.isError ? "Unavailable" : reviveReads.price.data === undefined ? "Loading..." : `${formatTokenAmount(revivePrice)} SEED`}
                       </ResourceValue>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Your SEED balance</span>
                       <span className="font-semibold text-foreground">
-                        {reviveDataLoading ? "Loading..." : `${formatTokenAmount(seedBalance)} SEED`}
+                        {reviveReads.balance.isError ? "Unavailable" : reviveReads.balance.data === undefined ? "Loading..." : `${formatTokenAmount(seedBalance)} SEED`}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
@@ -804,13 +818,7 @@ export default function PlantsView() {
                       <SolanaNotSupported feature="Revive action" />
                     ) : (
                       <>
-                        {!reviveAllowanceKnown ? (
-                          <Button className="w-full" disabled>
-                            {reviveAllowance.status === "loading"
-                              ? "Checking SEED allowance"
-                              : "SEED allowance unavailable"}
-                          </Button>
-                        ) : (
+                        {[{ label: 'revive price', query: reviveReads.price }, { label: 'SEED balance', query: reviveReads.balance }, { label: 'SEED permission', query: reviveReads.allowance }].map(resource => resource.query.isError && <Button key={resource.label} variant="outline" onClick={() => void resource.query.refetch()}>Retry {resource.label}</Button>)}
                           <ApprovalActionTransaction
                             intentKey={`plant:revive:${selectedPlant.id}`}
                             actionCalls={reviveCalls}
@@ -820,24 +828,15 @@ export default function PlantsView() {
                             approvalButtonText="Approve SEED"
                             actionButtonText="Revive Plant"
                             buttonClassName="w-full"
-                            disabled={reviveDataLoading || seedBalance < revivePrice}
-                            onApprovalSuccess={() => {
-                              setReviveAllowance((previous) => ({ status: "loading", value: previous.value, owner: previous.owner }));
-                              if (!address) return;
-                              void checkTokenApproval(address).then((value) => {
-                                setReviveAllowance({ status: "known", value, owner: address.toLowerCase() });
-                              }).catch((error) => {
-                                console.error("Failed to refresh SEED allowance after approval:", error);
-                                setReviveAllowance((previous) => ({ status: "error", value: previous.value, owner: previous.owner }));
-                              });
-                            }}
+                            disabled={!reviveReads.ready || seedBalance < revivePrice}
+                            onButtonClick={reviveReads.requireCurrent}
+                            onApprovalSuccess={() => { void reviveReads.allowance.refetch(); }}
                             onSuccess={reconcileReviveSuccess}
-                            onError={() => {
-                              toast.error('Revive failed');
+                            onError={(error) => {
+                              toast.error(error instanceof Error ? error.message : String(error));
                             }}
                           />
-                        )}
-                        {seedBalance < revivePrice && !reviveDataLoading && (
+                        {seedBalance < revivePrice && reviveReads.ready && (
                           <InlineBalanceNotice>
                             Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
                           </InlineBalanceNotice>
@@ -849,24 +848,31 @@ export default function PlantsView() {
               </CardContent>
             </TabCard>
           ) : (
-            <TabCard className="@container tablet:h-fit tablet:w-full">
+            <TabCard id="plant-care" tabIndex={-1} aria-label="Plant care" className="@container scroll-mt-4 tablet:h-fit tablet:w-full">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Plant care</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <PlantCareLayout selectionKey={selectedItem ? `${itemType}:${selectedItem.id}` : null} reviewRequest={careReviewRequest} reviewTitle={selectedItem?.name || 'Plant care'}
+                <PlantCareLayout selectionKey={careSelection ? `${itemType}:${careSelection.id}` : null} reviewRequest={careReviewRequest} reviewTitle={selectedItem?.name || 'Plant care'}
                   catalog={<PlantCareCatalog gardenItems={gardenItems} shopItems={shopItems} selectedItem={selectedItem} itemType={itemType}
+                    gardenStatus={gardenStatus} shopStatus={shopStatus} onRetryGarden={() => void retryGarden()} onRetryShop={() => void retryShop()}
                     onSelect={({ item, itemType: nextType }) => {
-                      setSelectedItem(item); setItemType(nextType);
-                      if (nextType === 'garden' && getItemQuantity(item.id) === 0) handleQuantityChange(item.id, 1);
+                      cancelPlantMission();
+                      setCareSelection({ id: item.id, itemType: nextType, reviewedRevision: careItemRevision(item, nextType) });
+                      if (nextType === 'garden' && getItemQuantity(item.id, nextType) === 0) handleQuantityChange(item.id, 1, nextType);
                       setCareReviewRequest(request => request + 1);
                     }} />}
                   details={<ItemDetailsPanel
                     selectedItem={selectedItem}
                     selectedPlant={selectedPlant}
                     itemType={itemType}
+                    catalogStatus={selectedCatalogStatus}
+                    catalogChanged={catalogChanged}
+                    onRetryCatalog={() => { void (itemType === 'garden' ? retryGarden() : retryShop()); }}
+                    onReviewCatalog={() => { if (selectedItem) setCareSelection({ id: selectedItem.id, itemType, reviewedRevision: careItemRevision(selectedItem, itemType) }); }}
+                    onBeforePurchase={requireCurrentCareItem}
                     onPurchaseSuccess={onPurchaseSuccess}
                     quantity={selectedItem ? getItemQuantity(selectedItem.id) : 0}
                     onQuantityChange={quantity => { if (selectedItem) handleQuantityChange(selectedItem.id, quantity); }}

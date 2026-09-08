@@ -406,7 +406,7 @@ export const CASINO_PAYOUT_MULTIPLIERS: Record<CasinoBetType, number> = {
 };
 
 // Red numbers in European roulette
-export const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+export { RED_NUMBERS } from "@/lib/casino-hardening-rules.mjs";
 
 // Helper to get bet type name
 export const BET_TYPE_NAMES: Record<CasinoBetType, string> = {

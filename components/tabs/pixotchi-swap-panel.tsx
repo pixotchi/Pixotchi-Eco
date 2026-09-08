@@ -1,6 +1,12 @@
 'use client';
 
-import { SwapAmountLayout, swapAmountFontSize } from "@/components/swap-amount-layout";
+import { swapAmountFontSize } from "@/components/swap-amount-layout";
+import { SwapAmountCard, SWAP_EDITABLE_AMOUNT_CLASS, SWAP_OUTPUT_AMOUNT_CLASS } from '@/components/transactions/swap-amount-card';
+import { SwapQuoteReview } from '@/components/transactions/swap-quote-review';
+import { SwapExecutionNotice } from '@/components/transactions/swap-execution-notice';
+import { useLastSwapTransaction } from '@/hooks/useLastSwapTransaction';
+import { getEconomicReadState } from '@/lib/economic-read-state';
+import { requireUnchangedSwapReview } from '@/lib/swap/review';
 import { useSwapQuote } from '@/hooks/useSwapQuote';
 import { fetchSwapJson, parseSwapBuildStep } from '@/lib/swap/response';
 import { withMonitoringAbort as withMonitorAbort, throwIfMonitoringAborted as throwIfAborted, waitForMonitorDelay } from '@/lib/transaction-monitor';
@@ -18,7 +24,7 @@ import {
 } from 'react';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   encodeFunctionData,
   type Address,
@@ -32,11 +38,12 @@ import { estimateNextSwapFee, requireSwapCallFunds } from '@/lib/swap/gas';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { DisabledReason, StatusChip } from '@/components/ui/premium';
+import { DisabledReason } from '@/components/ui/premium';
 import { TransactionRecoveryOptions } from '@/components/transactions/transaction-recovery-options';
 import { ERC20_TOKEN_ABI } from '@/lib/swap/base-swap-abi';
 import {
@@ -96,7 +103,6 @@ import {
 } from '@/lib/pending-evm-coordinator';
 import { cn } from '@/lib/utils';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
-import { CLIENT_ENV } from '@/lib/env-config';
 import { SWAP_PANEL_STRINGS as S } from './pixotchi-swap-panel.strings';
 
 type ExecutionStatus =
@@ -165,23 +171,14 @@ function isAbortError(error: unknown): boolean {
 }
 
 const OCK_COMPAT_FONT = 'ock-compat-font';
-const SWAP_CARD_CLASS =
-  'my-0.5 box-border flex min-h-[158px] w-full flex-col items-start rounded-[var(--radius-panel)] border border-border/55 bg-secondary/80 bg-[image:var(--gradient-panel)] p-4 shadow-[var(--surface-inset)]';
-const SWAP_LABEL_CLASS = `${OCK_COMPAT_FONT} flex w-full items-center justify-between text-sm text-muted-foreground`;
 const SWAP_TOKEN_TRIGGER_CLASS =
-  'flex min-h-11 min-w-[5.75rem] shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card/95 bg-[image:var(--gradient-surface)] px-3 py-2 shadow-[var(--shadow-control)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38] max-[360px]:min-w-[5.15rem] max-[360px]:gap-1.5 max-[360px]:px-2 max-[340px]:min-w-[4.75rem] max-[340px]:gap-1 max-[340px]:px-1.5';
-const SWAP_AMOUNT_INPUT_CLASS =
-  `${OCK_COMPAT_FONT} w-full min-w-0 border-none bg-transparent leading-none text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none`;
-const SWAP_AMOUNT_DISPLAY_CLASS =
-  `${OCK_COMPAT_FONT} w-full min-w-0 break-all bg-transparent leading-none text-foreground`;
+  'flex min-h-11 min-w-[5.75rem] shrink-0 items-center gap-2 rounded-[var(--radius-control)] border border-border/60 bg-card px-3 py-2 hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38] max-[360px]:min-w-[5.15rem] max-[360px]:gap-1.5 max-[360px]:px-2 max-[340px]:min-w-[4.75rem] max-[340px]:gap-1 max-[340px]:px-1.5';
 const SWAP_MAX_BUTTON_CLASS =
   `${OCK_COMPAT_FONT} flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-[0.38]`;
 const SWAP_DIRECTION_BUTTON_CLASS =
-  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-[3px] border-solid border-card/90 bg-card/95 bg-[image:var(--gradient-surface)] shadow-[var(--shadow-control)] hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
+  'relative z-10 mx-auto -my-5 flex h-11 min-h-11 w-16 items-center justify-center rounded-[var(--radius-control)] border-[3px] border-solid border-card/90 bg-card hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] active:bg-secondary focus:bg-secondary disabled:pointer-events-none disabled:opacity-[0.38]';
 const SWAP_PRIMARY_ACTION_CLASS =
   `${OCK_COMPAT_FONT} mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-primary bg-[image:var(--gradient-control-active)] px-4 py-3 font-semibold text-primary-foreground disabled:pointer-events-none disabled:opacity-[0.38]`;
-const SWAP_STATUS_TEXT_CLASS = `${OCK_COMPAT_FONT} text-sm text-muted-foreground`;
-const SWAP_BALANCE_ROW_CLASS = 'mt-2 flex min-h-11 w-full items-center justify-between';
 
 // Turns wallet/viem errors into something a user can actually read.
 // Viem rejection errors include a pile of metadata (chain id, RPC url, version,
@@ -294,13 +291,14 @@ function TokenSelector({
         collisionPadding={12}
         className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-panel)] p-2"
       >
+        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onSelect(next as UserSwapTokenId)}>
         {options.map((option) => {
           const optionToken = SWAP_TOKEN_MAP[option];
           return (
-            <DropdownMenuItem
+            <DropdownMenuRadioItem
               key={option}
-              onSelect={() => onSelect(option)}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-control)] px-3 py-2.5"
+              value={option}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-control)] pl-8 pr-3 py-2.5"
             >
               <span className="flex items-center gap-3">
                 <Image
@@ -313,29 +311,13 @@ function TokenSelector({
                 />
                 <span>{optionToken.displaySymbol}</span>
               </span>
-              {option === value ? (
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-              ) : null}
-            </DropdownMenuItem>
+            </DropdownMenuRadioItem>
           );
         })}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-
-
-function formatExecutionMessage(message?: string): string | null {
-  if (!message) {
-    return null;
-  }
-
-  if (/^0x[a-fA-F0-9]{64}$/.test(message)) {
-    return `${message.slice(0, 10)}...${message.slice(-8)}`;
-  }
-
-  return message;
 }
 
 
@@ -353,6 +335,7 @@ async function fetchSwapStep(address: Address, step: SwapQuoteStep, amountIn: st
 
 export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVisible?: boolean }) {
   const { address, chainId, connector } = useAccount();
+  const { lastTransaction, remember: rememberTransaction } = useLastSwapTransaction(address);
   const { data: walletClient } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
   const { isSponsored } = usePaymaster();
@@ -412,7 +395,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
 
   const {
     data: sellBalanceData,
-    isLoading: sellBalanceLoading,
+    isFetching: sellBalanceFetching,
+    error: sellBalanceError,
     refetch: refetchSellBalance,
   } = useBalance({
     address,
@@ -427,7 +411,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
   });
   const {
     data: buyBalanceData,
-    isLoading: buyBalanceLoading,
+    isFetching: buyBalanceFetching,
+    error: buyBalanceError,
     refetch: refetchBuyBalance,
   } = useBalance({
     address,
@@ -440,7 +425,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       enabled: Boolean(address),
     },
   });
-  const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
+  const { data: ethBalanceData, isFetching: ethBalanceFetching, error: ethBalanceError, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: BASE_CHAIN_ID,
     query: {
@@ -464,26 +449,31 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     [deferredSellAmount, sellToken],
   );
   const sellBalanceRaw = sellBalanceData?.value ?? BigInt(0);
+  const sellReadState = getEconomicReadState({ hasSnapshot: sellBalanceData !== undefined, identityMatches: Boolean(address), loading: sellBalanceFetching, error: sellBalanceError });
+  const buyReadState = getEconomicReadState({ hasSnapshot: buyBalanceData !== undefined, identityMatches: Boolean(address), loading: buyBalanceFetching, error: buyBalanceError });
+  const ethReadState = getEconomicReadState({ hasSnapshot: ethBalanceData !== undefined, identityMatches: Boolean(address), loading: ethBalanceFetching, error: ethBalanceError });
   const sellBalanceText = useMemo(() => {
     if (!address) return '';
-    if (sellBalanceLoading) return S.labels.loadingBalance;
+    if (sellReadState === 'loading' && !sellBalanceData) return S.labels.loadingBalance;
+    if (sellReadState === 'error' && !sellBalanceData) return 'Balance unavailable';
 
     return `${S.labels.balancePrefix}${formatTokenDisplay(
       sellBalanceRaw,
       SWAP_TOKEN_MAP[sellToken].decimals,
       sellToken === 'USDC' ? 2 : 6,
-    )}`;
-  }, [address, sellBalanceLoading, sellBalanceRaw, sellToken]);
+    )}${sellReadState !== 'ready' ? ' (last known)' : ''}`;
+  }, [address, sellReadState, sellBalanceData, sellBalanceRaw, sellToken]);
   const buyBalanceText = useMemo(() => {
     if (!address) return '';
-    if (buyBalanceLoading) return S.labels.loadingBalance;
+    if (buyReadState === 'loading' && !buyBalanceData) return S.labels.loadingBalance;
+    if (buyReadState === 'error' && !buyBalanceData) return 'Balance unavailable';
 
     return `${S.labels.balancePrefix}${formatTokenDisplay(
       buyBalanceData?.value ?? BigInt(0),
       SWAP_TOKEN_MAP[buyToken].decimals,
       buyToken === 'USDC' ? 2 : 6,
-    )}`;
-  }, [address, buyBalanceData?.value, buyBalanceLoading, buyToken]);
+    )}${buyReadState !== 'ready' ? ' (last known)' : ''}`;
+  }, [address, buyBalanceData, buyReadState, buyToken]);
 
   const { quoteState, fetchQuoteOnce, refreshQuoteNow, markQuoteActivity } = useSwapQuote({
     address, sellToken, buyToken, amountIn: parsedAmount, visible: isVisible, executing: isExecuting,
@@ -497,11 +487,11 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
           SWAP_TOKEN_MAP[buyToken].decimals,
           6,
         )
-      : '0.0';
+      : '—';
   const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
   const isDeferredLagging = sellAmount !== deferredSellAmount;
   const hasInsufficientBalance = Boolean(
-    address &&
+    address && sellReadState === 'ready' &&
       parsedAmount &&
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
@@ -510,6 +500,9 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     isSmartWallet &&
     typeof walletClient?.sendCalls === 'function' &&
     typeof walletClient?.waitForCallsStatus === 'function';
+  const spendingReadsReady = sellReadState === 'ready' && (usesSmartWalletBatch && isSponsored && sellToken !== 'ETH' || ethReadState === 'ready');
+  const balanceReadError = Boolean(sellBalanceError || buyBalanceError || ethBalanceError);
+  const retrySwapBalances = useCallback(() => Promise.allSettled([refetchSellBalance(), refetchBuyBalance(), refetchEthBalance()]), [refetchBuyBalance, refetchEthBalance, refetchSellBalance]);
   const feeQuery = useQuery({
     queryKey: ['swapFee', address, chainId, currentQuote?.quoteToken],
     queryFn: async ({ signal }) => {
@@ -538,6 +531,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     isSettingMax ||
     isRecoveryChecking ||
     isPeerBlocked ||
+    !spendingReadsReady ||
     !currentQuote ||
     currentQuote.strategy === 'blocked' ||
     !isAmountValid ||
@@ -607,7 +601,10 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       return step.message || S.execution.transactionPending;
     }
     if (step.status === 'complete') {
-      return S.execution.completed;
+      const completionMessage = step.message?.trim();
+      return completionMessage && !/^0x[0-9a-fA-F]{64}$/.test(completionMessage)
+        ? completionMessage
+        : S.execution.completed;
     }
     if (step.status === 'error') {
       return step.message || S.execution.generic;
@@ -1088,6 +1085,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       if (monitored.receipt.status !== 'success') {
         throw new Error('Approval transaction reverted.');
       }
+      rememberTransaction(extractTransactionHash(monitored.receipt), 'approval');
 
       // Belt-and-suspenders: re-read allowance after confirmation so the next
       // transaction sees state at the canonical receipt block, never a lagging
@@ -1107,6 +1105,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       monitorTrackedSubmission,
       readAllowance,
       readClient,
+      rememberTransaction,
       submitTrackedAttempt,
       updateExecutionStep,
       walletClient,
@@ -1240,7 +1239,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         // The bundler estimates account-execution fees and sponsorship. Native
         // swap value still has to be funded by the connected account.
         if (address && await readClient.getBalance({ address }) < BigInt(builtStep.transaction.value)) {
-          throw new Error(S.errors.insufficientGas);
+          throw new Error(S.errors.insufficientSwapValue);
         }
         return executeSmartWalletSwapBatch(
           builtStep,
@@ -1327,6 +1326,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
   const finalizeSwapSuccess = useCallback(
     async (receipt: TransactionReceipt) => {
       const transactionHash = extractTransactionHash(receipt);
+      rememberTransaction(transactionHash, 'swap');
       // One receipt-keyed global reconciliation and one pair-specific pass.
       // Both are delayed just enough for lagging RPC replicas, and both are
       // cancellable/coalesced instead of accumulating after repeated swaps.
@@ -1364,6 +1364,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       refetchBuyBalance,
       refetchEthBalance,
       refetchSellBalance,
+      rememberTransaction,
       trackSwapMission,
     ],
   );
@@ -1411,12 +1412,13 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         updateExecutionStep(0, {
           status: 'complete',
           txHash: transactionHash,
-          message: transactionHash,
+          message: stage === 'approval' ? S.execution.approvalCompleted : transactionHash,
         });
         if (stage === 'swap') {
           await finalizeSwapSuccess(monitored.receipt);
         } else {
-          toast.success('Token approval confirmed. Review your swap, then confirm it.');
+          rememberTransaction(transactionHash, 'approval');
+          toast.success(S.execution.approvalCompleted);
           completionResetTimerRef.current = window.setTimeout(() => {
             completionResetTimerRef.current = null;
             setExecutionSteps(null);
@@ -1448,6 +1450,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       approvalControllerId,
       finalizeSwapSuccess,
       monitorTrackedSubmission,
+      rememberTransaction,
       swapControllerId,
       updateExecutionStep,
     ],
@@ -1563,6 +1566,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
             toast.error(quote?.blockedReason || S.errors.quoteStale);
             return;
           }
+          requireUnchangedSwapReview(initialQuote, quote);
         }
 
         setExecutionSteps(
@@ -1629,8 +1633,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       return;
     }
 
-    if (sellBalanceLoading) {
-      toast(S.labels.loadingBalance);
+    if (sellReadState !== 'ready') {
+      toast(sellReadState === 'error' ? 'Balance unavailable. Retry balances before using Max.' : S.labels.loadingBalance);
       return;
     }
 
@@ -1673,7 +1677,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         setIsSettingMax(false);
       }
     }
-  }, [address, buildStep, fetchQuoteOnce, isSponsored, markQuoteActivity, readClient, sellBalanceLoading, sellBalanceRaw, sellToken, usesSmartWalletBatch]);
+  }, [address, buildStep, fetchQuoteOnce, isSponsored, markQuoteActivity, readClient, sellReadState, sellBalanceRaw, sellToken, usesSmartWalletBatch]);
 
   const handleSellTokenSelect = useCallback(
     (next: UserSwapTokenId) => {
@@ -1724,19 +1728,6 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
 
   const isQuoteLoading = quoteState.status === 'loading';
   const showQuoteLoadingText = isQuoteLoading || isDeferredLagging;
-  const showQuoteSummary = CLIENT_ENV.SWAP_QUOTE_SUMMARY_ENABLED;
-  const quoteSummary = showQuoteSummary && currentQuote && currentQuote.strategy !== 'blocked'
-    ? {
-        minReceived: formatTokenDisplay(
-          BigInt(currentQuote.minOut),
-          SWAP_TOKEN_MAP[buyToken].decimals,
-          SWAP_TOKEN_MAP[buyToken].decimals,
-        ),
-        route: currentQuote.steps.map((step) => step.routeLabel).filter(Boolean).join(' -> '),
-        slippage: `${(currentQuote.marketSlippageBps / 100).toFixed(2)}%`,
-        tax: currentQuote.taxBps > 0 ? `${(currentQuote.taxBps / 100).toFixed(2)}%` : '0%',
-      }
-    : null;
   const disabledReason = useMemo(() => {
     if (isExecuting) return null;
     if (isRecoveryChecking) return 'Confirmation delayed.';
@@ -1747,6 +1738,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     }
     if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
     if (!walletClient?.account) return S.errors.walletClientUnavailable;
+    if (!spendingReadsReady) return balanceReadError ? 'Balance unavailable. Retry the balance check.' : 'Checking spendable balances…';
     if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
@@ -1773,6 +1765,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     sellAmount,
     sellToken,
     walletClient?.account,
+    balanceReadError,
+    spendingReadsReady,
   ]);
   const actionButtonLabel = useMemo(() => {
     if (!actionDisabled || isExecuting) return S.buttons.swap;
@@ -1780,6 +1774,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     if (isPeerBlocked) return 'Wallet Transaction Pending';
     if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
     if (!walletClient?.account) return 'Connect Wallet';
+    if (!spendingReadsReady) return balanceReadError ? 'Balance Unavailable' : 'Checking Balances…';
     if (!sellAmount.trim()) return S.buttons.swap;
     if (!isAmountValid) return 'Enter Valid Amount';
     if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
@@ -1806,6 +1801,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     sellAmount,
     sellToken,
     walletClient?.account,
+    balanceReadError,
+    spendingReadsReady,
   ]);
   const handleSwitchToBase = useCallback(() => {
     if (chainId === BASE_CHAIN_ID || isSwitchingChain) return;
@@ -1822,73 +1819,30 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         aria-describedby={messageId}
       >
         <div className="space-y-0.5">
-          <div
-            className={SWAP_CARD_CLASS}
-            data-testid="ockSwapAmountInput_Container"
-          >
-            <SwapAmountLayout
-              label={<label className={SWAP_LABEL_CLASS} htmlFor={sellAmountId}>{S.labels.sell}</label>}
-              selector={<TokenSelector
-                value={sellToken}
-                options={allowedSources}
-                onSelect={handleSellTokenSelect}
-                disabled={isExecuting || isSettingMax}
-              />}
-            >
-              <input
-                id={sellAmountId}
-                value={sellAmount}
-                onChange={(event) => {
-                  markQuoteActivity();
-                  const nextAmount = sanitizeSwapDecimalInput(event.target.value);
-                  if (nextAmount !== null) {
-                    setSellAmount(nextAmount);
-                  }
-                }}
-                inputMode="decimal"
-                placeholder="0.0"
-                disabled={isExecuting || isSettingMax}
-                aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
-                className={SWAP_AMOUNT_INPUT_CLASS}
-                style={{ fontSize: swapAmountFontSize(sellAmount) }}
-              />
-
-            </SwapAmountLayout>
-            <div className={SWAP_BALANCE_ROW_CLASS}>
-              <div
-                className={cn(SWAP_STATUS_TEXT_CLASS, 'flex items-center gap-1')}
-                role="status"
-                aria-live="polite"
-              >
-                {showQuoteLoadingText ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    <span>
-                      {quoteState.status === 'loading' && (quoteState.retryAttempt ?? 0) > 0
-                        ? S.quote.retrying
-                        : S.quote.loading}
-                    </span>
-                  </>
-                ) : (
-                  '\u00A0'
-                )}
-              </div>
-              <div className={cn(SWAP_STATUS_TEXT_CLASS, 'flex grow items-center justify-end')}>
-                {sellBalanceText ? <span>{sellBalanceText}</span> : null}
-                {address ? (
-                  <button
-                    type="button"
-                    className={SWAP_MAX_BUTTON_CLASS}
-                    onClick={handleSetMax}
-                    disabled={isExecuting || isSettingMax || sellBalanceLoading || sellBalanceRaw <= BigInt(0)}
-                    aria-label={`${S.labels.max} ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}
-                  >
-                    {isSettingMax ? 'Checking...' : S.labels.max}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
+          <SwapAmountCard
+            label={<label htmlFor={sellAmountId}>{S.labels.sell}</label>}
+            selector={<TokenSelector value={sellToken} options={allowedSources} onSelect={handleSellTokenSelect} disabled={isExecuting || isSettingMax} />}
+            amount={<input
+              id={sellAmountId} value={sellAmount}
+              onChange={(event) => {
+                markQuoteActivity();
+                const nextAmount = sanitizeSwapDecimalInput(event.target.value);
+                if (nextAmount !== null) setSellAmount(nextAmount);
+              }}
+              inputMode="decimal" placeholder="0.0" disabled={isExecuting || isSettingMax}
+              aria-label={S.aria.sellAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol)}
+              className={SWAP_EDITABLE_AMOUNT_CLASS}
+              style={{ fontSize: `min(${swapAmountFontSize(sellAmount)}, var(--swap-amount-max))` }}
+            />}
+            balance={sellBalanceText}
+            max={address ? <button type="button" className={SWAP_MAX_BUTTON_CLASS} onClick={handleSetMax}
+              disabled={isExecuting || isSettingMax || sellReadState !== 'ready' || sellBalanceRaw <= BigInt(0)}
+              aria-label={`${S.labels.max} ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`}>{isSettingMax ? 'Checking…' : S.labels.max}</button> : null}
+            status={showQuoteLoadingText ? <span role="status" className="inline-flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              {quoteState.status === 'loading' && (quoteState.retryAttempt ?? 0) > 0 ? S.quote.retrying : S.quote.loading}
+            </span> : null}
+          />
 
           <button
             type="button"
@@ -1914,63 +1868,28 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
             </svg>
           </button>
 
-          <div
-            className={SWAP_CARD_CLASS}
-            data-testid="ockSwapAmountInput_Container"
-          >
-            <SwapAmountLayout
-              label={<div className={SWAP_LABEL_CLASS}>{S.labels.buy}</div>}
-              selector={<TokenSelector
-                value={buyToken}
-                options={allowedTargets}
-                onSelect={handleBuyTokenSelect}
-                disabled={isExecuting || isSettingMax}
-              />}
-            >
-              <div
-                className={SWAP_AMOUNT_DISPLAY_CLASS}
-                style={{ fontSize: swapAmountFontSize(buyAmountDisplay) }}
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-                aria-label={S.aria.buyAmount(SWAP_TOKEN_MAP[buyToken].displaySymbol)}
-              >
-                {buyAmountDisplay}
-              </div>
+          <SwapAmountCard
+            output
+            label={<span>{S.labels.buy} <span className="text-xs">· estimated</span></span>}
+            selector={<TokenSelector value={buyToken} options={allowedTargets} onSelect={handleBuyTokenSelect} disabled={isExecuting || isSettingMax} />}
+            amount={<div className={SWAP_OUTPUT_AMOUNT_CLASS}
+              style={{ fontSize: `min(${swapAmountFontSize(buyAmountDisplay)}, var(--swap-amount-max))` }}
+              role="status" aria-live="polite" aria-atomic="true" aria-label={S.aria.buyAmount(SWAP_TOKEN_MAP[buyToken].displaySymbol)}>{buyAmountDisplay}</div>}
+            balance={buyBalanceText}
+          />
 
-            </SwapAmountLayout>
-            <div className={SWAP_BALANCE_ROW_CLASS}>
-              <div className={SWAP_STATUS_TEXT_CLASS}>
-                {'\u00A0'}
-              </div>
-              <div className={cn(SWAP_STATUS_TEXT_CLASS, 'flex grow items-center justify-end')}>
-                {buyBalanceText ? <span>{buyBalanceText}</span> : null}
-              </div>
-            </div>
-          </div>
-
-          {showQuoteSummary && quoteSummary && (
-            <div className="mt-3 rounded-[var(--radius-panel)] border border-border/70 bg-background/55 p-3 text-xs text-muted-foreground shadow-[var(--shadow-hairline)]">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="font-semibold text-foreground">Quote summary</span>
-                <StatusChip tone="info">{quoteSummary.route || 'Direct route'}</StatusChip>
-              </div>
-              <div className="grid gap-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span>Minimum received</span>
-                  <span className="min-w-0 text-right font-semibold text-foreground [overflow-wrap:anywhere]">{quoteSummary.minReceived} {SWAP_TOKEN_MAP[buyToken].displaySymbol}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span>Market slippage</span>
-                  <span className="font-semibold text-foreground">{quoteSummary.slippage}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span>Token tax</span>
-                  <span className="font-semibold text-foreground">{quoteSummary.tax}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {balanceReadError && <div role="alert" className="mt-2 space-y-1 text-xs text-muted-foreground">
+            <p>Some balances could not be verified. Last-known amounts are shown when available.</p>
+            <Button type="button" variant="outline" size="sm" disabled={sellBalanceFetching || buyBalanceFetching || ethBalanceFetching}
+              onClick={() => void retrySwapBalances()}>Retry balances</Button>
+          </div>}
+          {quoteState.status === 'error' && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refreshQuoteNow()}>Retry quote</Button>}
+          {currentQuote && <SwapQuoteReview quote={currentQuote} fee={!usesSmartWalletBatch && !hasInsufficientBalance ? <div>
+            {feeQuery.isError ? <Button type="button" variant="outline" size="sm" disabled={feeQuery.isFetching} onClick={() => void feeQuery.refetch()}>Retry fee estimate</Button>
+              : feeQuery.data ? <p>{feeQuery.data.stage === 'approval' ? 'Approval' : 'Swap'} network fee budget: {formatTokenEstimate(feeQuery.data.fee, 18, 8)} ETH, including a buffer.
+                {feeQuery.data.stage === 'approval' ? ' The swap fee is checked after approval.' : ''}</p>
+                : <p>Checking network fee…</p>}
+          </div> : undefined} />}
 
           {chainId !== BASE_CHAIN_ID ? (
             <Button
@@ -2009,31 +1928,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
               onContinue={handleAcknowledgeStaleTransaction}
             />
           ) : null}
-          {currentQuote && !usesSmartWalletBatch && !hasInsufficientBalance ? (
-            <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">
-              {feeQuery.isError ? (
-                <Button type="button" variant="outline" size="sm" disabled={feeQuery.isFetching} onClick={() => void feeQuery.refetch()}>Retry fee estimate</Button>
-              ) : feeQuery.data ? (
-                <span>{feeQuery.data.stage === 'approval' ? 'Approval' : 'Swap'} fee budget: {formatTokenEstimate(feeQuery.data.fee, 18, 8)} ETH, including a buffer.
-                  {feeQuery.data.stage === 'approval' ? ' The swap fee is checked after approval.' : ''}</span>
-              ) : null}
-            </div>
-          ) : null}
-          <div
-            id={messageId}
-            className={cn(
-              SWAP_STATUS_TEXT_CLASS,
-              'flex',
-              /* Collapses when empty: the fixed h-7 slot reserved 28px of dead
-                 space under the swap button for the whole session. */
-              formatExecutionMessage(swapMessage)?.trim() ? 'h-7 pt-2' : 'h-0 overflow-hidden',
-            )}
-            data-testid="ockSwapMessage_Message"
-            role="status"
-            aria-live="polite"
-          >
-            {formatExecutionMessage(swapMessage) || '\u00A0'}
-          </div>
+          <SwapExecutionNotice id={messageId} message={swapMessage}
+            currentHash={executionSteps?.find(step => step.txHash)?.txHash} lastTransaction={lastTransaction} />
         </div>
       </form>
     </div>

@@ -1,10 +1,11 @@
 import { isSolanaEnabled } from '@/lib/solana-constants';
+import type { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 
-export function getPrivySolanaConnectors(): UntypedValue | undefined {
+export function getPrivySolanaConnectors(): ReturnType<typeof toSolanaWalletConnectors> | undefined {
   if (!isSolanaEnabled()) return undefined;
 
   try {
-    const privySolana = require('@privy-io/react-auth/solana');
+    const privySolana: typeof import('@privy-io/react-auth/solana') = require('@privy-io/react-auth/solana');
     if (privySolana?.toSolanaWalletConnectors) {
       return privySolana.toSolanaWalletConnectors({
         shouldAutoConnect: true,
@@ -17,9 +18,9 @@ export function getPrivySolanaConnectors(): UntypedValue | undefined {
   return undefined;
 }
 
-export function hasUsableSolanaConnectors(connectors: UntypedValue): boolean {
+export function hasUsableSolanaConnectors(connectors: unknown): boolean {
   if (!connectors) return false;
-  const connectorList = typeof connectors.get === 'function'
+  const connectorList: unknown = typeof connectors === 'object' && 'get' in connectors && typeof connectors.get === 'function'
     ? connectors.get()
     : connectors;
 
@@ -27,12 +28,13 @@ export function hasUsableSolanaConnectors(connectors: UntypedValue): boolean {
     return false;
   }
 
-  return connectorList.some((connector: UntypedValue) => {
+  return connectorList.some((connector: unknown) => {
     if (!connector || typeof connector !== 'object') return false;
-    if (Array.isArray(connector.wallets)) {
+    if ('wallets' in connector && Array.isArray(connector.wallets)) {
       return connector.wallets.length > 0;
     }
-    return Boolean(connector.walletClientType || connector.connectorType);
+    return ('walletClientType' in connector && typeof connector.walletClientType === 'string')
+      || ('connectorType' in connector && typeof connector.connectorType === 'string');
   });
 }
 

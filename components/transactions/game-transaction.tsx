@@ -23,6 +23,8 @@ import {
   type LifecycleStatus,
   type TransactionProof,
   type TransactionFeedbackMode,
+  type TransactionPreflight,
+  type TransactionConfirmationContext,
 } from "./transaction-kit";
 
 export type GameTransactionEffects = "none" | {
@@ -42,13 +44,14 @@ export type GameTransactionProps = {
   atomicity?: "single" | "required";
   buttonClassName?: string;
   buttonText: string;
+  pendingText?: string;
   calls: TransactionCall[];
   disabled?: boolean;
   effects: GameTransactionEffects;
   feedbackMode?: TransactionFeedbackMode;
   hideStatus?: boolean;
   intentKey: string;
-  onButtonClick?: () => void;
+  onButtonClick?: TransactionPreflight;
   onError?: (error: unknown) => void;
   onStatusUpdate?: (status: LifecycleStatus) => void;
   onSuccess?: (proof: TransactionProof) => void | Promise<void>;
@@ -65,6 +68,7 @@ export default function GameTransaction({
   atomicity,
   buttonClassName = "",
   buttonText,
+  pendingText,
   calls,
   disabled = false,
   effects,
@@ -112,7 +116,8 @@ export default function GameTransaction({
     if (!successHandledRef.current) onError?.(error);
   }, [onError]);
 
-  const handleConfirmed = useCallback(async (status: LifecycleStatus) => {
+  const handleConfirmed = useCallback(async (status: LifecycleStatus, confirmation: TransactionConfirmationContext) => {
+    if (!confirmation.isCurrent()) return;
     const proof = getLifecycleTransactionProof({ ...status, statusName: "success" });
     if (!proof) throw new Error("Canonical transaction proof is unavailable for reconciliation.");
     const receiptBlock = getHighestTransactionReceiptBlock(status.statusData.transactionReceipts);
@@ -131,6 +136,7 @@ export default function GameTransaction({
         throw new Error("Transaction confirmed; state refresh delayed.");
       }
     }
+    if (!confirmation.isCurrent()) return;
     if (status.statusData.correlationId) {
       try {
         track("game_transaction_reconciliation", {
@@ -179,7 +185,7 @@ export default function GameTransaction({
       // UI observers cannot alter transaction state.
     }
     if (status.statusName === "buildingTransaction") setOutcome(successMessage ?? `${buttonText} completed`);
-    if (status.statusName === "transactionPending") successHandledRef.current = false;
+    if (status.statusName === "buildingTransaction" || status.statusName === "transactionPending") successHandledRef.current = false;
     if (status.statusName === "success" && !successHandledRef.current) {
       successHandledRef.current = true;
       void handleSuccess(status).catch((error) => {
@@ -199,6 +205,8 @@ export default function GameTransaction({
 
   return (
     <Transaction
+      canSubmit={!isSubmissionDisabled}
+      onBeforeSubmit={onButtonClick}
       calls={transformedCalls}
       capabilities={getBuilderCapabilities()}
       effects={intent.effects}
@@ -212,8 +220,8 @@ export default function GameTransaction({
       <TransactionButton
         className={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
         disabled={isSubmissionDisabled}
-        onClick={onButtonClick}
         text={buttonText}
+        pendingText={pendingText}
       />
       {showInlineStatus && <TransactionStatus suppressSuccess={successFeedback === 'feature'} />}
       {showGlobalToast && <GlobalTransactionToast successMessage={outcome} suppressSuccess={successFeedback === 'feature'} />}

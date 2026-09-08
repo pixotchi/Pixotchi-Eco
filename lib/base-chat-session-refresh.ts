@@ -10,6 +10,14 @@ export type BaseChatSessionRefreshRequest = {
   requestId: string;
 };
 
+export function parseBaseChatRefreshRequest(value: unknown): BaseChatSessionRefreshRequest | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.requestId !== 'string' || !record.requestId.trim()) return null;
+  if (record.reason !== 'chat-auth-failure' && record.reason !== 'mission-auth-failure' && record.reason !== 'session-validation') return null;
+  return { requestId: record.requestId, reason: record.reason };
+}
+
 export type BaseChatSessionRefreshResult = {
   message?: string;
   requestId: string;

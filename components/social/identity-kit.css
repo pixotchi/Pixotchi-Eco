@@ -1,0 +1,75 @@
+/* The EIK portal cannot receive an app class; its exact shipped backdrop
+   selector is the one required global integration hook. Controls are scoped
+   to the app-owned profile-follow-button class, never substring selectors. */
+.transaction-modal-backdrop { z-index: var(--z-transaction); }
+button.profile-follow-button { transform: none; scale: 1; transition: background-color var(--motion-quick) var(--ease-standard), color var(--motion-quick) var(--ease-standard), opacity var(--motion-quick) var(--ease-standard); }
+button.profile-follow-button > * { transform: none; scale: 1; }
+@media (hover: hover) and (pointer: fine) {
+  button.profile-follow-button:hover, button.profile-follow-button:hover > * { transform: none; scale: 1; }
+}
+button.profile-follow-button.follow-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--primary) / 0.5) !important;
+  background-color: hsl(var(--primary)) !important;
+  background-image: var(--gradient-control-active) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  --tw-shadow: var(--shadow-control);
+  /* Override the external control's elevation without removing keyboard rings. */
+  box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow) !important;
+}
+
+button.profile-follow-button.follow-button-following,
+button.profile-follow-button.follow-button[aria-pressed="true"] {
+  border-color: hsl(var(--success) / 0.58) !important;
+  background-color: hsl(var(--success)) !important;
+  background-image: var(--gradient-success) !important;
+  color: hsl(var(--success-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button.pending {
+  border-color: hsl(var(--info) / 0.58) !important;
+  background-color: hsl(var(--info)) !important;
+  background-image:
+    linear-gradient(180deg,
+      color-mix(in hsl, hsl(var(--info)) 84%, white) 0%,
+      hsl(var(--info)) 52%,
+      color-mix(in hsl, hsl(var(--info)) 88%, black) 100%) !important;
+  color: hsl(var(--info-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button-block,
+button.profile-follow-button.follow-button-blocked {
+  border-color: hsl(var(--destructive) / 0.58) !important;
+  background-color: hsl(var(--destructive)) !important;
+  background-image: var(--gradient-danger) !important;
+  color: hsl(var(--destructive-foreground)) !important;
+}
+
+button.profile-follow-button.follow-button-mute,
+button.profile-follow-button.follow-button-muted {
+  border-color: hsl(var(--accent-foreground) / 0.24) !important;
+  background-color: hsl(var(--accent)) !important;
+  background-image: none !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.profile-follow-button.follow-button:hover {
+    filter: brightness(1.03);
+  }
+}
+
+button.profile-follow-button.follow-button p,
+button.profile-follow-button.follow-button svg,
+button.profile-follow-button.follow-button svg * {
+  color: currentColor !important;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+button.profile-follow-button.follow-button p {
+  margin: 0;
+}

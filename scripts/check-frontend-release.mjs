@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
+
+async function fixtureRoutes(directory = path.resolve('app/qa')) {
+  const routes = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const location = path.join(directory, entry.name);
+    if (entry.isDirectory()) routes.push(...await fixtureRoutes(location));
+    else if (entry.name === 'page.tsx') routes.push('/' + path.relative(path.resolve('app'), directory).replaceAll('\\', '/'));
+  }
+  return routes;
+}
 
 const port = 3002;
 const origin = `http://localhost:${port}`;
@@ -24,10 +36,16 @@ try {
   assert.ok(response, `Release server did not start: ${output}`);
   assert.equal(response.status, 404, 'Development fixtures must never be published');
   assert.doesNotMatch(await response.text(), /data-fixtures-ready|Swap controller fixture/);
+  const routes = await fixtureRoutes();
+  for (const route of routes.filter(route => route !== '/qa/frontend')) {
+    const fixture = await fetch(`${origin}${route}`, { signal: AbortSignal.timeout(10_000) });
+    assert.equal(fixture.status, 404, `${route} must never be published`);
+    assert.doesNotMatch(await fixture.text(), /data-(?:fixtures|focus|ai)-ready|Regression fixtures/);
+  }
   const root = await fetch(origin, { signal: AbortSignal.timeout(10_000) });
   assert.equal(root.status, 200);
   assert.match(root.headers.get('content-security-policy') ?? '', /upgrade-insecure-requests/);
-  console.log('Release isolation passed: QA route is 404 and production CSP is intact.');
+  console.log(`Release isolation passed: all ${routes.length} QA routes are 404 and production CSP is intact.`);
 } finally {
   server.kill();
 }

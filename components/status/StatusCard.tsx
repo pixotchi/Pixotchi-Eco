@@ -1,6 +1,7 @@
 "use client";
 
-import { StatusLevel,StatusService } from "@/lib/status-checks";
+import { publicRpcMetrics } from "@/lib/status-snapshot";
+import type { StatusLevel,StatusService } from "@/lib/status-snapshot";
 import { cn } from "@/lib/utils";
 import { AlertTriangle,CheckCircle2,Info,WifiOff } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
@@ -40,7 +41,7 @@ const formatLatency = (ms?: number) => {
 
 export function StatusCard({ service }: StatusCardProps) {
   const rpcMetrics = service.id === "rpc"
-    ? (service.metrics as { healthyCount?: number; totalCount?: number } | undefined)
+    ? publicRpcMetrics(service.metrics)
     : undefined;
   const tone = statusToneMap[service.status] ?? statusToneMap.unknown;
   const Icon = tone.icon;
@@ -52,7 +53,7 @@ export function StatusCard({ service }: StatusCardProps) {
   ];
 
   return (
-    <article className="chromatic-white-surface rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
+    <article className="surface-lifted rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/90 bg-[image:var(--gradient-surface)] p-4 shadow-[var(--shadow-hairline)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -64,7 +65,7 @@ export function StatusCard({ service }: StatusCardProps) {
             <Icon className={cn("h-5 w-5", tone.iconClassName)} aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold leading-tight text-foreground">{service.label}</h3>
+            <h2 className="text-base font-semibold leading-tight text-foreground">{service.label}</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {service.status === "operational"
                 ? "Service is responding normally."

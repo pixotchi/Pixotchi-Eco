@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
+import type { LifecycleStatus } from './transaction-kit';
 import { PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { buildSwapAndApproveCalls, useSwapDeadline } from "@/lib/swap/bundle-calls";
 
@@ -22,6 +23,8 @@ interface SwapMintBundleProps {
     minSeedOut: bigint; // Minimum SEED to receive (mint price, acts as slippage protection)
     onSuccess?: (tx: UntypedValue) => void;
     onError?: (error: UntypedValue) => void;
+    onButtonClick?: () => void | boolean | Promise<void | boolean>;
+    onStatusUpdate?: (status: LifecycleStatus) => void;
     buttonText?: string;
     buttonClassName?: string;
     disabled?: boolean;
@@ -44,6 +47,8 @@ export default function SwapMintBundle({
     minSeedOut,
     onSuccess,
     onError,
+    onButtonClick,
+    onStatusUpdate,
     buttonText = 'Mint with ETH',
     buttonClassName = 'w-full',
     disabled = false,
@@ -87,6 +92,8 @@ export default function SwapMintBundle({
             intentKey="swap:mint-plant"
             onSuccess={onSuccess}
             onError={onError}
+            onButtonClick={onButtonClick}
+            onStatusUpdate={onStatusUpdate}
             buttonText={buttonText}
             buttonClassName={buttonClassName}
             disabled={disabled || !isValid}

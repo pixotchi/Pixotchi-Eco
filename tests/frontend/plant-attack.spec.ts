@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { openFrontendFixture } from './helpers/bootstrap';
 
 test.beforeEach(async ({ page }, testInfo) => {
   await page.clock.install({ time: new Date('2026-09-05T09:59:00Z') });
+  // Let Next/React finish asynchronous boot before stopping browser timers.
+  await openFrontendFixture(page, testInfo, 'plant-attack');
   await page.clock.pauseAt(new Date('2026-09-05T10:00:00Z'));
-  await page.goto('/qa/frontend');
-  await expect(page.locator('[data-fixtures-ready=true]')).toBeVisible();
+  await page.getByRole('button', { name: 'Restart fixture timer' }).click();
   await page.evaluate(theme => document.documentElement.classList.add(theme), testInfo.project.name.endsWith('dark') ? 'dark' : 'light');
 });
 

@@ -688,6 +688,8 @@ export type AIToolCallTrace = {
 };
 
 export type AIChatMessage = {
+  /** Local send outcome; never inferred from a resolved SDK send promise. */
+  deliveryStatus?: 'failed' | 'cancelled';
   id: string;
   conversationId: string;
   address: string;

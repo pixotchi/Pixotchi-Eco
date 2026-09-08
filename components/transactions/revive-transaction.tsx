@@ -23,6 +23,7 @@ interface ReviveTransactionProps {
   buttonText?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  onButtonClick?: () => void | Promise<void>;
   showToast?: boolean;
   onStatusUpdate?: (status: LifecycleStatus) => void;
 }
@@ -34,6 +35,7 @@ export default function ReviveTransaction({
   buttonText = "Revive",
   buttonClassName,
   disabled = false,
+  onButtonClick,
   showToast = true,
   onStatusUpdate,
 }: ReviveTransactionProps) {
@@ -57,6 +59,7 @@ export default function ReviveTransaction({
       buttonText={buttonText}
       buttonClassName={buttonClassName}
       disabled={disabled}
+      onButtonClick={onButtonClick}
       showToast={showToast}
       onStatusUpdate={onStatusUpdate}
     />

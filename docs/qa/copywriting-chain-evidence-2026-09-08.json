@@ -1,0 +1,1141 @@
+{
+  "fetchedAt": "2026-09-08T18:38:13.978Z",
+  "chain": "Base mainnet",
+  "chainId": 8453,
+  "contract": "0xeb4e16c804AE9275a655AbBc20cD0658A91F9235",
+  "publicProvider": "https://base-rpc.publicnode.com",
+  "pinnedBlock": {
+    "number": "51051672",
+    "hash": "0x8b3fdee1ab36a032928b4c6fffd6d64137173ed7e4e2a0ef1c3cc5a37f97197e",
+    "timestampSeconds": "1788892691",
+    "timestampUtc": "2026-09-08T18:38:11.000Z"
+  },
+  "strains": [
+    {
+      "id": "1",
+      "mintPrice": "10000000000000000000",
+      "totalSupply": "100",
+      "totalMinted": "10000",
+      "maxSupply": "10000",
+      "name": "Flora",
+      "isActive": true,
+      "getStrainTotalLeft": "0",
+      "strainInitialTOD": "86400",
+      "payment": {
+        "strainId": "1",
+        "token": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+        "price": "10000000000000000000",
+        "symbol": "SEED",
+        "decimals": 18,
+        "formattedPrice": "10"
+      }
+    },
+    {
+      "id": "2",
+      "mintPrice": "20000000000000000000",
+      "totalSupply": "70",
+      "totalMinted": "2924",
+      "maxSupply": "7000",
+      "name": "Taki",
+      "isActive": true,
+      "getStrainTotalLeft": "4076",
+      "strainInitialTOD": "86400",
+      "payment": {
+        "strainId": "2",
+        "token": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+        "price": "20000000000000000000",
+        "symbol": "SEED",
+        "decimals": 18,
+        "formattedPrice": "20"
+      }
+    },
+    {
+      "id": "3",
+      "mintPrice": "40000000000000000000",
+      "totalSupply": "18",
+      "totalMinted": "1945",
+      "maxSupply": "2500",
+      "name": "ROSA",
+      "isActive": true,
+      "getStrainTotalLeft": "555",
+      "strainInitialTOD": "86400",
+      "payment": {
+        "strainId": "3",
+        "token": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+        "price": "40000000000000000000",
+        "symbol": "SEED",
+        "decimals": 18,
+        "formattedPrice": "40"
+      }
+    },
+    {
+      "id": "4",
+      "mintPrice": "10000000000000000000",
+      "totalSupply": "46",
+      "totalMinted": "7334",
+      "maxSupply": "7500",
+      "name": "ZEST",
+      "isActive": true,
+      "getStrainTotalLeft": "166",
+      "strainInitialTOD": "86400",
+      "payment": {
+        "strainId": "4",
+        "token": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+        "price": "10000000000000000000",
+        "symbol": "SEED",
+        "decimals": 18,
+        "formattedPrice": "10"
+      }
+    },
+    {
+      "id": "5",
+      "mintPrice": "500000000000000000000",
+      "totalSupply": "11",
+      "totalMinted": "242",
+      "maxSupply": "750",
+      "name": "TYJ",
+      "isActive": true,
+      "getStrainTotalLeft": "508",
+      "strainInitialTOD": "86400",
+      "payment": {
+        "strainId": "5",
+        "token": "0x50F88fe97f72CD3E75b9Eb4f747F59BcEBA80d59",
+        "price": "500000000000000000000",
+        "symbol": "jesse",
+        "decimals": 18,
+        "formattedPrice": "500"
+      }
+    }
+  ],
+  "tokens": [
+    {
+      "address": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+      "symbol": "SEED",
+      "decimals": 18,
+      "name": "Seed"
+    },
+    {
+      "address": "0x50F88fe97f72CD3E75b9Eb4f747F59BcEBA80d59",
+      "symbol": "jesse",
+      "decimals": 18,
+      "name": "jesse"
+    }
+  ],
+  "evidenceLimits": [
+    "Read-only call snapshot pinned to the stated block; current configuration may later change.",
+    "Equal strainInitialTOD alone does not prove all possible gameplay semantics are identical.",
+    "Current verified NFTLogic/GameLogic/ConfigLogic source bytecode was matched to current pinned chain; all external extension gameplay branches were not exhaustively independently audited.",
+    "getAllStrainInfo returns active strains only; getStrainCounter identifies configured range.",
+    "Storage offsets follow packed GameStorage.Data declarations in verified source."
+  ],
+  "selectorImplementations": [
+    {
+      "signature": "mint(uint256)",
+      "selector": "0xa0712d68",
+      "implementation": "0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3",
+      "bytecodeKeccak256": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+    },
+    {
+      "signature": "getAllStrainInfo()",
+      "selector": "0xd12b4e6d",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "getStrainPaymentInfo(uint256)",
+      "selector": "0xac8db04a",
+      "implementation": "0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3",
+      "bytecodeKeccak256": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+    },
+    {
+      "signature": "redeem(uint256)",
+      "selector": "0xdb006a75",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "level(uint256)",
+      "selector": "0x05c58df2",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "getStatus(uint256)",
+      "selector": "0x5c622a0e",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "attack(uint256,uint256)",
+      "selector": "0xe1fa7638",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "pendingEth(uint256)",
+      "selector": "0xccc73973",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "signature": "getKillCooldownSeconds()",
+      "selector": "0xa49f7872",
+      "implementation": "0x0000000000000000000000000000000000000000",
+      "bytecodeKeccak256": null
+    },
+    {
+      "signature": "kill(uint256,uint256)",
+      "selector": "0xe2c352ed",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "bytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    }
+  ],
+  "extensions": [
+    {
+      "metadata": {
+        "name": "ConfigLogic",
+        "metadataURI": "ipfs://QmbSVWdyMmcfqG6qrWQ45TkxYBPJg91ayFEGikcfmjup3q",
+        "implementation": "0x529c06F4a8268245E0c611B305ae5aA080356FA6"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x7d57498c",
+          "functionSignature": "initializeConfigLogic()"
+        },
+        {
+          "functionSelector": "0x338abd03",
+          "functionSignature": "setChangePlantNamePrice(uint256)"
+        },
+        {
+          "functionSelector": "0xb303c03a",
+          "functionSignature": "setConfig(bool,uint256)"
+        },
+        {
+          "functionSelector": "0x7e50dd30",
+          "functionSignature": "setKillIsActive(bool)"
+        },
+        {
+          "functionSelector": "0x325cb44b",
+          "functionSignature": "setPRECISION(uint256)"
+        },
+        {
+          "functionSelector": "0x56d3163d",
+          "functionSignature": "setRenderer(address)"
+        },
+        {
+          "functionSelector": "0x1bddb706",
+          "functionSignature": "setRevShareWallet(address)"
+        },
+        {
+          "functionSelector": "0x88b00837",
+          "functionSignature": "setStrain(uint256,uint256,uint256,string,string,bool,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xcdff1d05",
+          "functionSignature": "setTOD(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x144fa6d7",
+          "functionSignature": "setToken(address)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "GameLogic",
+        "metadataURI": "ipfs://QmbRgyjRRJh963NiaYbNhayZDmgy5syBo7n1paDXbgh5Zk",
+        "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x78770724",
+          "functionSignature": "getPlantName(uint256)"
+        },
+        {
+          "functionSelector": "0xe1fa7638",
+          "functionSignature": "attack(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x96379a9b",
+          "functionSignature": "canKill(address)"
+        },
+        {
+          "functionSelector": "0xd12b4e6d",
+          "functionSignature": "getAllStrainInfo()"
+        },
+        {
+          "functionSelector": "0xfa94ada0",
+          "functionSignature": "getKillCooldownRemaining(address)"
+        },
+        {
+          "functionSelector": "0x5c622a0e",
+          "functionSignature": "getStatus(uint256)"
+        },
+        {
+          "functionSelector": "0xf929b585",
+          "functionSignature": "isApprovedFn(uint256,address)"
+        },
+        {
+          "functionSelector": "0xb559bbb4",
+          "functionSignature": "isPlantAlive(uint256)"
+        },
+        {
+          "functionSelector": "0xe2c352ed",
+          "functionSignature": "kill(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x05c58df2",
+          "functionSignature": "level(uint256)"
+        },
+        {
+          "functionSelector": "0xf251b76a",
+          "functionSignature": "onAttack(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x0573ea94",
+          "functionSignature": "pass(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xccc73973",
+          "functionSignature": "pendingEth(uint256)"
+        },
+        {
+          "functionSelector": "0xdb006a75",
+          "functionSignature": "redeem(uint256)"
+        },
+        {
+          "functionSelector": "0x114da366",
+          "functionSignature": "setPlantName(uint256,string)"
+        },
+        {
+          "functionSelector": "0x6d7b7fc9",
+          "functionSignature": "statusToString(uint8)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "GardenLogic",
+        "metadataURI": "ipfs://QmZW56yCGHxEamHYAFiZ6hMKcfL7VPs441Kjgm9aWrtdCS",
+        "implementation": "0xf7B68c0fb0eF7ab22ACD647F2BbEc0e1913a02e6"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x7a6494de",
+          "functionSignature": "Revive(uint256)"
+        },
+        {
+          "functionSelector": "0x715488b0",
+          "functionSignature": "buyAccessory(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x79c5cb1c",
+          "functionSignature": "createItem(string,uint256,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xa53c1f87",
+          "functionSignature": "createItems((uint256,string,uint256,uint256,uint256)[])"
+        },
+        {
+          "functionSelector": "0xeba475b5",
+          "functionSignature": "editGardenItems((uint256,string,uint256,uint256,uint256)[])"
+        },
+        {
+          "functionSelector": "0x99cc726d",
+          "functionSignature": "editItem(uint256,uint256,uint256,string,uint256)"
+        },
+        {
+          "functionSelector": "0xac6ca58b",
+          "functionSignature": "getAllGardenItem()"
+        },
+        {
+          "functionSelector": "0x4864d053",
+          "functionSignature": "getGardenItem(uint256)"
+        },
+        {
+          "functionSelector": "0xb34c2f52",
+          "functionSignature": "getRevivePrice()"
+        },
+        {
+          "functionSelector": "0x143b35f0",
+          "functionSignature": "initializeGardenLogic()"
+        },
+        {
+          "functionSelector": "0x843bd641",
+          "functionSignature": "itemExists(uint256)"
+        },
+        {
+          "functionSelector": "0x2901a4e3",
+          "functionSignature": "setRevivePrice(uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "NFTLogic",
+        "metadataURI": "ipfs://QmY8YxGom2UMZAf9Ry2UTunzX8bZeWERHV1YkApkL7QCBM",
+        "implementation": "0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xa217fddf",
+          "functionSignature": "DEFAULT_ADMIN_ROLE()"
+        },
+        {
+          "functionSelector": "0x54a475ba",
+          "functionSignature": "_getPlantsByOwner(address)"
+        },
+        {
+          "functionSelector": "0x095ea7b3",
+          "functionSignature": "approve(address,uint256)"
+        },
+        {
+          "functionSelector": "0x70a08231",
+          "functionSignature": "balanceOf(address)"
+        },
+        {
+          "functionSelector": "0x42966c68",
+          "functionSignature": "burn(uint256)"
+        },
+        {
+          "functionSelector": "0x081812fc",
+          "functionSignature": "getApproved(uint256)"
+        },
+        {
+          "functionSelector": "0x2a5d5138",
+          "functionSignature": "getPlantInfo(uint256)"
+        },
+        {
+          "functionSelector": "0x572a9d6a",
+          "functionSignature": "getPlantInfoExtended(uint256)"
+        },
+        {
+          "functionSelector": "0x03226d49",
+          "functionSignature": "getPlantScore(uint256)"
+        },
+        {
+          "functionSelector": "0x83a59548",
+          "functionSignature": "getPlantStatusRange(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x213b093a",
+          "functionSignature": "getPlantTimeUntilStarving(uint256)"
+        },
+        {
+          "functionSelector": "0x1123d4de",
+          "functionSignature": "getPlantsByOwner(address)"
+        },
+        {
+          "functionSelector": "0xd1c1438e",
+          "functionSignature": "getPlantsByOwnerExtended(address)"
+        },
+        {
+          "functionSelector": "0xba9a58e0",
+          "functionSignature": "getPlantsInfo(uint256[])"
+        },
+        {
+          "functionSelector": "0x59cfe1f5",
+          "functionSignature": "getPlantsInfoExtended(uint256[])"
+        },
+        {
+          "functionSelector": "0x248a9ca3",
+          "functionSignature": "getRoleAdmin(bytes32)"
+        },
+        {
+          "functionSelector": "0x9010d07c",
+          "functionSignature": "getRoleMember(bytes32,uint256)"
+        },
+        {
+          "functionSelector": "0xca15c873",
+          "functionSignature": "getRoleMemberCount(bytes32)"
+        },
+        {
+          "functionSelector": "0xac8db04a",
+          "functionSignature": "getStrainPaymentInfo(uint256)"
+        },
+        {
+          "functionSelector": "0x2f2ff15d",
+          "functionSignature": "grantRole(bytes32,address)"
+        },
+        {
+          "functionSelector": "0x91d14854",
+          "functionSignature": "hasRole(bytes32,address)"
+        },
+        {
+          "functionSelector": "0xa32fa5b3",
+          "functionSignature": "hasRoleWithSwitch(bytes32,address)"
+        },
+        {
+          "functionSelector": "0x837aa729",
+          "functionSignature": "initializeNFTLogic()"
+        },
+        {
+          "functionSelector": "0xe985e9c5",
+          "functionSignature": "isApprovedForAll(address,address)"
+        },
+        {
+          "functionSelector": "0xa0712d68",
+          "functionSignature": "mint(uint256)"
+        },
+        {
+          "functionSelector": "0x06fdde03",
+          "functionSignature": "name()"
+        },
+        {
+          "functionSelector": "0x6352211e",
+          "functionSignature": "ownerOf(uint256)"
+        },
+        {
+          "functionSelector": "0x5f0c851d",
+          "functionSignature": "removeTokenIdFromOwner(uint32,address)"
+        },
+        {
+          "functionSelector": "0x36568abe",
+          "functionSignature": "renounceRole(bytes32,address)"
+        },
+        {
+          "functionSelector": "0xd547741f",
+          "functionSignature": "revokeRole(bytes32,address)"
+        },
+        {
+          "functionSelector": "0x42842e0e",
+          "functionSignature": "safeTransferFrom(address,address,uint256)"
+        },
+        {
+          "functionSelector": "0xb88d4fde",
+          "functionSignature": "safeTransferFrom(address,address,uint256,bytes)"
+        },
+        {
+          "functionSelector": "0xab705ef7",
+          "functionSignature": "setAltToken(address)"
+        },
+        {
+          "functionSelector": "0xa22cb465",
+          "functionSignature": "setApprovalForAll(address,bool)"
+        },
+        {
+          "functionSelector": "0xf1173b04",
+          "functionSignature": "setStrainAltToken(uint256,bool,uint256)"
+        },
+        {
+          "functionSelector": "0x01ffc9a7",
+          "functionSignature": "supportsInterface(bytes4)"
+        },
+        {
+          "functionSelector": "0x95d89b41",
+          "functionSignature": "symbol()"
+        },
+        {
+          "functionSelector": "0x4e9dfa77",
+          "functionSignature": "tokenBurnAndRedistribute(address,uint256)"
+        },
+        {
+          "functionSelector": "0xc87b56dd",
+          "functionSignature": "tokenURI(uint256)"
+        },
+        {
+          "functionSelector": "0x18160ddd",
+          "functionSignature": "totalSupply()"
+        },
+        {
+          "functionSelector": "0x23b872dd",
+          "functionSignature": "transferFrom(address,address,uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "Renderer",
+        "metadataURI": "ipfs://QmTX5bj7yMudtcTm6Yrx9rBJUjkJrExmfXnGR3Zcn7XNXW",
+        "implementation": "0x71dF7F436b1957b53781348337E02875F5dF260d"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x6ec445a1",
+          "functionSignature": "calculateImageLevel(uint256)"
+        },
+        {
+          "functionSelector": "0x517f28f9",
+          "functionSignature": "getImageUri(uint256,string)"
+        },
+        {
+          "functionSelector": "0x59fffcc2",
+          "functionSignature": "prepareTokenURI((uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[]),string)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ReinitializerUtil",
+        "metadataURI": "ipfs://QmarPXjDtCVnLR75WV2emD7Xv8qEbHXgoDUfpotwocPFqS",
+        "implementation": "0x82a9aF882bFD2990239c32baC59f5A51a19Cfd4C"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xa2280d67",
+          "functionSignature": "getReinitializerCursor()"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "BoxGame",
+        "metadataURI": "ipfs://QmeJjx52aSVH5jpmYNQNcJXdWMC3Vceeh14ohGwao6K19d",
+        "implementation": "0xDAc475D196882D825d188dD870BDe546451f24AA"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x660db682",
+          "functionSignature": "boxGameGetCoolDownTimePerNFT(uint256)"
+        },
+        {
+          "functionSelector": "0x5d8eca00",
+          "functionSignature": "boxGameGetCoolDownTimeWithStar(uint256)"
+        },
+        {
+          "functionSelector": "0x96ac0b9f",
+          "functionSignature": "boxGameInitialize()"
+        },
+        {
+          "functionSelector": "0x51927290",
+          "functionSignature": "boxGameInitialize2()"
+        },
+        {
+          "functionSelector": "0x52f3e0c4",
+          "functionSignature": "boxGamePlay(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xab64d0ee",
+          "functionSignature": "boxGamePlayWithStar(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x3733c0eb",
+          "functionSignature": "boxGameSetGlobalCoolDownTime(uint256)"
+        },
+        {
+          "functionSelector": "0xa3a6b7d8",
+          "functionSignature": "boxGameSetPointRewards(uint256[5])"
+        },
+        {
+          "functionSelector": "0x5a2c2ddd",
+          "functionSignature": "boxGameSetTimeRewards(uint256[5])"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "SpinGame",
+        "metadataURI": "ipfs://QmbnZvpbufCqc1518Yd7QFcRSQrCu9Yv2mgKNZLaSPFmZk",
+        "implementation": "0x37B25D2F50A777A3817cAd4C31e856dBE73E435C"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xca22a598",
+          "functionSignature": "SpinGameInitialize()"
+        },
+        {
+          "functionSelector": "0xb0584a42",
+          "functionSignature": "spinGameGetCoolDownTimePerNFT(uint256)"
+        },
+        {
+          "functionSelector": "0xd3e9bcc7",
+          "functionSignature": "spinGameGetCoolDownTimeWithStar(uint256)"
+        },
+        {
+          "functionSelector": "0x1e3f0436",
+          "functionSignature": "spinGameInitialize2()"
+        },
+        {
+          "functionSelector": "0xf162093c",
+          "functionSignature": "spinGamePlay(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xc0ba8cc7",
+          "functionSignature": "spinGamePlayWithStar(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xfa354a5e",
+          "functionSignature": "spinGameSetCoolDownTime(uint256)"
+        },
+        {
+          "functionSelector": "0x38672dbf",
+          "functionSignature": "spinGameSetIsPercentage(bool[])"
+        },
+        {
+          "functionSelector": "0xfb44c631",
+          "functionSignature": "spinGameSetPointRewards(uint256[])"
+        },
+        {
+          "functionSelector": "0x969ebb78",
+          "functionSignature": "spinGameSetTimeRewards(int256[])"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ShopLogic",
+        "metadataURI": "ipfs://QmYQf9HEVCPuTh1xFvQdSb8sTFT6Du73xnpW2SJKiTNq3v",
+        "implementation": "0xb0d799fc56c4C3D555A54bc776841050A3acB086"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x99c6f8ea",
+          "functionSignature": "reinitializer_8_ShopLogic()"
+        },
+        {
+          "functionSelector": "0x15bc285e",
+          "functionSignature": "shopBuyItem(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x20038ee7",
+          "functionSignature": "shopDoesItemExist(uint256)"
+        },
+        {
+          "functionSelector": "0xebc603d9",
+          "functionSignature": "shopGetAllItems()"
+        },
+        {
+          "functionSelector": "0x206905bd",
+          "functionSignature": "shopGetPurchasedItems(uint256)"
+        },
+        {
+          "functionSelector": "0xa9b228d9",
+          "functionSignature": "shopIsEffectOngoing(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xec840144",
+          "functionSignature": "shopModifyItem(uint256,string,uint256,uint256,uint256,uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ERC721AExtension",
+        "metadataURI": "ipfs://QmWuff9b8R8BjkbALao1nQuG2C9urNDRmWwJTacoVyTr2n",
+        "implementation": "0x0a1dded52a6B79B9d6052727303243c76f5e921b"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xdb44fe07",
+          "functionSignature": "isBurned(uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "DebugLogic",
+        "metadataURI": "ipfs://QmdBBPnWhVLoLk34yJkxMZMGntkdfmQeZAcv3fnyR3Wd4s",
+        "implementation": "0x4c48B72524A5FC2E514E5b353A990931ac4cA0D7"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xca1e4d2c",
+          "functionSignature": "debugGetBurnedPlants(uint256)"
+        },
+        {
+          "functionSelector": "0x9ac8703b",
+          "functionSignature": "debugGetIdsByOwner(address)"
+        },
+        {
+          "functionSelector": "0x3358a21e",
+          "functionSignature": "debugGetIdsByOwnerLength(address)"
+        },
+        {
+          "functionSelector": "0x53f86cf1",
+          "functionSignature": "debugGetOwnerIndexById(uint32)"
+        },
+        {
+          "functionSelector": "0xc67de364",
+          "functionSignature": "debugGetPlantStars(uint256)"
+        },
+        {
+          "functionSelector": "0x4c62f050",
+          "functionSignature": "debugSetBurnedPlants(uint256,bool)"
+        },
+        {
+          "functionSelector": "0x46717d77",
+          "functionSignature": "debugSetIdsByOwner(address,uint32[])"
+        },
+        {
+          "functionSelector": "0x330385bf",
+          "functionSignature": "debugSetOwnerIndexById(uint32,uint32)"
+        },
+        {
+          "functionSelector": "0xc56e4c4d",
+          "functionSignature": "debugSetPlantStars(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x711159f2",
+          "functionSignature": "removeDuplicateTokenIds(address)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "AirdropLogic",
+        "metadataURI": "ipfs://QmTmqYEvWkQECDvF1PF94EPceaUSX6a6B33QgqWAUyPMto",
+        "implementation": "0x1AdB309f0d75E8f1A4a987Cc34c4f897F3d0f453"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x8dbac9e2",
+          "functionSignature": "airdropExtendLifetime(uint256[],uint256)"
+        },
+        {
+          "functionSelector": "0x47e4d123",
+          "functionSignature": "airdropGetAliveAndDeadTokenIds()"
+        },
+        {
+          "functionSelector": "0x16081c4f",
+          "functionSignature": "airdropGetAliveTokenIds()"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "LandToPlant",
+        "metadataURI": "ipfs://QmfVt4MpGGUgGGaBVfDLUcxfrpDGjn24ztn5jVnALzoQBQ",
+        "implementation": "0x89aEc497483f8D2dabE2b507067357135E2d284D"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x3895d938",
+          "functionSignature": "allowedCaller()"
+        },
+        {
+          "functionSelector": "0x11db8447",
+          "functionSignature": "landToPlantAssignLifeTime(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xac73d7ed",
+          "functionSignature": "landToPlantAssignPlantPoints(uint256,uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "SpinGameV2",
+        "metadataURI": "ipfs://bafkreie2riubcytequcmkambcvloaicgao7ywg4m2u6p45zl3xe3m7ker4",
+        "implementation": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x58d052c1",
+          "functionSignature": "SpinGameV2Initialize()"
+        },
+        {
+          "functionSelector": "0x3417ae16",
+          "functionSignature": "getCoolDownTime()"
+        },
+        {
+          "functionSelector": "0xe2912b10",
+          "functionSignature": "getLeafToken()"
+        },
+        {
+          "functionSelector": "0x1c4b774b",
+          "functionSignature": "getReward(uint256)"
+        },
+        {
+          "functionSelector": "0x5e7303d4",
+          "functionSignature": "getStarCost()"
+        },
+        {
+          "functionSelector": "0x6e16de11",
+          "functionSignature": "setCoolDownTime(uint256)"
+        },
+        {
+          "functionSelector": "0x2491c2b5",
+          "functionSignature": "setLeafToken(address)"
+        },
+        {
+          "functionSelector": "0x4c038dc4",
+          "functionSignature": "setReward(uint256,int256,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x6900719c",
+          "functionSignature": "setRewardLeaf(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x1e57d412",
+          "functionSignature": "setRewardPoints(uint256,int256)"
+        },
+        {
+          "functionSelector": "0x5e07cad1",
+          "functionSignature": "setRewardTime(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x6e9b2dc0",
+          "functionSignature": "setStarCost(uint256)"
+        },
+        {
+          "functionSelector": "0xb5bfe757",
+          "functionSignature": "spinGameV2Commit(uint256,bytes32)"
+        },
+        {
+          "functionSelector": "0xb5d1c14c",
+          "functionSignature": "spinGameV2Forfeit(uint256)"
+        },
+        {
+          "functionSelector": "0x8983c37a",
+          "functionSignature": "spinGameV2GetCoolDownTimePerNFT(uint256)"
+        },
+        {
+          "functionSelector": "0xbf498f89",
+          "functionSignature": "spinGameV2Play(uint256,bytes32)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "FenceV2",
+        "metadataURI": "",
+        "implementation": "0xe2238E607823243f4B9aa91cff016CEBed2E855E"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x090555ac",
+          "functionSignature": "fenceV2EffectUntil(uint256)"
+        },
+        {
+          "functionSelector": "0x934b2cae",
+          "functionSignature": "fenceV2GetConfig()"
+        },
+        {
+          "functionSelector": "0xf6a721ef",
+          "functionSignature": "fenceV2GetPurchaseStats(uint256)"
+        },
+        {
+          "functionSelector": "0xbb98b45a",
+          "functionSignature": "fenceV2HasFenceV1(uint256)"
+        },
+        {
+          "functionSelector": "0x2b3be3c0",
+          "functionSignature": "fenceV2Initialize(uint256)"
+        },
+        {
+          "functionSelector": "0xe6d7a33b",
+          "functionSignature": "fenceV2IsEffectOngoing(uint256)"
+        },
+        {
+          "functionSelector": "0x3b9a0c58",
+          "functionSignature": "fenceV2Purchase(uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x4a444730",
+          "functionSignature": "fenceV2Quote(uint256)"
+        },
+        {
+          "functionSelector": "0x584ab818",
+          "functionSignature": "fenceV2SetPricePerDay(uint256)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "SolanaAdapterExtension",
+        "metadataURI": "ipfs://Qma2orYQTyEd6r2k7CL8CKxLmjhfRVfLiNTiZJBApJ43LX",
+        "implementation": "0x83aAbf80e73246C9116D89aa3E49eA129762b8B2"
+      },
+      "functions": [
+        {
+          "functionSelector": "0x49ce35c9",
+          "functionSignature": "attackFor(address,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x5c3ebbb6",
+          "functionSignature": "buyGardenItemFor(address,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x0990cb33",
+          "functionSignature": "buyShopItemFor(address,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xe10f6046",
+          "functionSignature": "claimRewardsFor(address,uint256)"
+        },
+        {
+          "functionSelector": "0x14223ca6",
+          "functionSignature": "getChangePlantNamePrice()"
+        },
+        {
+          "functionSelector": "0x601c0abb",
+          "functionSignature": "getGardenItemPrice(uint256)"
+        },
+        {
+          "functionSelector": "0x0577e359",
+          "functionSignature": "getMintPriceByStrain(uint256)"
+        },
+        {
+          "functionSelector": "0x9843e203",
+          "functionSignature": "getShopItemPrice(uint256)"
+        },
+        {
+          "functionSelector": "0x3b9052dc",
+          "functionSignature": "getSolanaAdapter()"
+        },
+        {
+          "functionSelector": "0x543fe6ec",
+          "functionSignature": "getSolanaStats()"
+        },
+        {
+          "functionSelector": "0xf504f994",
+          "functionSignature": "initializeSolanaAdapter(address)"
+        },
+        {
+          "functionSelector": "0xda1919b3",
+          "functionSignature": "mintFor(address,uint256)"
+        },
+        {
+          "functionSelector": "0x63b746d3",
+          "functionSignature": "playBoxGameFor(address,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0xd770046d",
+          "functionSignature": "playSpinGameFor(address,uint256,uint256)"
+        },
+        {
+          "functionSelector": "0x74c135b3",
+          "functionSignature": "setPlantNameFor(address,uint256,string)"
+        },
+        {
+          "functionSelector": "0xca6d006f",
+          "functionSignature": "setSolanaAdapter(address)"
+        },
+        {
+          "functionSelector": "0xd359ac93",
+          "functionSignature": "setSolanaPaused(bool)"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "StrainMaxSupplyLogic",
+        "metadataURI": "ipfs://QmcJJeLpB29Sr3Q8M2eE7Xcrfgm4udz4LtFtCn6ufccm4t",
+        "implementation": "0x87524C230cF8C32b4f4d89E278747555006420cf"
+      },
+      "functions": [
+        {
+          "functionSelector": "0xebb80780",
+          "functionSignature": "getStrainCounter()"
+        },
+        {
+          "functionSelector": "0x7fb11691",
+          "functionSignature": "getStrainInfo(uint256)"
+        },
+        {
+          "functionSelector": "0x61553f36",
+          "functionSignature": "getStrainMaxSupply(uint256)"
+        },
+        {
+          "functionSelector": "0x4eca2b81",
+          "functionSignature": "setStrainMaxSupply(uint256,uint256)"
+        }
+      ]
+    }
+  ],
+  "verifiedSources": [
+    {
+      "name": "GameLogic",
+      "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "sourceUrl": "https://base.blockscout.com/address/0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf?tab=contract",
+      "sourceApiUrl": "https://base.blockscout.com/api/v2/smart-contracts/0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf",
+      "verified": true,
+      "fullyVerified": true,
+      "verifiedAt": "2026-01-11T00:25:21.789710Z",
+      "compiler": "0.8.23+commit.f704f362",
+      "sourceFile": "extensions/GameLogic/src/game/GameLogic.sol",
+      "localSource": "output/strain-current-source/GameLogic.sol",
+      "sourceSha256": "9f520d88fcf4ed9ac7f024e5df357de8a77e06e69afd430b3ac897415a59b515",
+      "deployedBytecodeMatchesPinnedBlock": true,
+      "deployedBytecodeKeccak256": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+    },
+    {
+      "name": "NFTLogic",
+      "implementation": "0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3",
+      "sourceUrl": "https://base.blockscout.com/address/0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3?tab=contract",
+      "sourceApiUrl": "https://base.blockscout.com/api/v2/smart-contracts/0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3",
+      "verified": true,
+      "fullyVerified": true,
+      "verifiedAt": "2025-11-24T02:20:00.630026Z",
+      "compiler": "v0.8.23+commit.f704f362",
+      "sourceFile": "extensions/NFTLogic/src/nft/NFTLogic.sol",
+      "localSource": "output/strain-current-source/NFTLogic.sol",
+      "sourceSha256": "fbf89ad60dd2a0fb59bfcb748f318dcf4ab79858c06c7c348c543cfa37c7545b",
+      "deployedBytecodeMatchesPinnedBlock": true,
+      "deployedBytecodeKeccak256": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+    },
+    {
+      "name": "ConfigLogic",
+      "implementation": "0x529c06F4a8268245E0c611B305ae5aA080356FA6",
+      "sourceUrl": "https://base.blockscout.com/address/0x529c06F4a8268245E0c611B305ae5aA080356FA6?tab=contract",
+      "sourceApiUrl": "https://base.blockscout.com/api/v2/smart-contracts/0x529c06F4a8268245E0c611B305ae5aA080356FA6",
+      "verified": true,
+      "fullyVerified": true,
+      "verifiedAt": "2025-08-11T19:44:55.758820Z",
+      "compiler": "v0.8.28+commit.7893614a",
+      "sourceFile": "src/game/ConfigLogic.sol",
+      "localSource": "output/strain-current-source/ConfigLogic.sol",
+      "sourceSha256": "a6d68439f519014a02983df2575457e2aabe6cf48243e3d7795cc39b30982754",
+      "deployedBytecodeMatchesPinnedBlock": true,
+      "deployedBytecodeKeccak256": "0x6696d1235dae57e5f55b6431f41566ae716907bbc236a14d3a839f557e346251"
+    }
+  ],
+  "gameStorageRead": [
+    {
+      "name": "PRECISION",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0000",
+      "value": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+      "integerValue": "1000000000000000000"
+    },
+    {
+      "name": "la",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0003",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "integerValue": "2"
+    },
+    {
+      "name": "lb",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0004",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "integerValue": "2"
+    },
+    {
+      "name": "mintActiveAndRevSharePacked",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0010",
+      "value": "0x00000000000000000000005ec5ac18393fd99c4e1c79b13637d65de8a994ff01",
+      "integerValue": "138509662929307146503737318999705363834802615418625"
+    },
+    {
+      "name": "burnPercentage",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0011",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000046",
+      "integerValue": "70"
+    },
+    {
+      "name": "strainCounter",
+      "slot": "0xc7fc9545a7a1c6d926eb226aca9b0331d15be911879e1d18bd76f146a8dc0014",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000005",
+      "integerValue": "5"
+    }
+  ],
+  "strainCounter": "5",
+  "sourceConclusions": [
+    "Five active strains returned by getAllStrainInfo currently all have configured strainInitialTOD=86400 seconds. NFTLogic mint uses this duration, with 1 day fallback for configured zero. ConfigLogic allows per-strain changes.",
+    "NFTLogic mint initializes score=0 and stars=0 for every strain. Strain-dependent fields in NFTLogic are artwork/name, activity, price/payment token, supply, and starting duration. GameLogic status, level, attack and pending ETH formulas contain no per-strain advantage branch.",
+    "GameLogic redeem clears full plant score (PTS), ethOwed and reward debt, then transfers pending ETH to owner. Its level function returns1 for zero score; lifetime/stars are not modified by redeem.",
+    "GameLogic attack selects random%100, gives attacker win for random<=30 (31 of100 outcomes), and transfers0.5% of loser score/rewarddebt. Attacker cooldown30minutes, target protection from repeatattack1hour. Those are current code constants, not evidence of cryptographic unbiased randomness.",
+    "GameLogic kill grants1star to killer and burns dead NFT; dead-owner pendingETH is settled to prior owner. It does not transfer deadplant score to killer. Walletkill cooldown1hour.",
+    "GameLogic isPlantAlive treats exact deadline as alive (>=timestamp); deadline passing makes dead. getStatus has strict8/12/16-hour comparisons with uncovered exact boundary values; generic care copy should not promise exhaustive interval behavior."
+  ],
+  "supplementaryReadProvider": "https://mainnet.base.org",
+  "supplementaryReadRecordedAt": "2026-09-08T18:44:30.532Z",
+  "gameStorageInterpretation": {
+    "mintIsActive": true,
+    "burnPercentage": 70,
+    "levelParameters": {
+      "la": 2,
+      "lb": 2
+    },
+    "storageLayoutSource": "output/strain-current-source/NFTLogic-bs-21-GameStorage.sol"
+  }
+}

@@ -28,6 +28,8 @@ export function isGmTaskId(value: unknown): value is GmTaskId {
 
 export type GmSectionKey = 's1' | 's2' | 's3' | 's4';
 
+export const GM_SECTION_REWARDS: Readonly<Record<GmSectionKey, number>> = { s1: 30, s2: 20, s3: 25, s4: 25 };
+
 export type GmMissionDay = {
   date: GmDay;
   s1: {

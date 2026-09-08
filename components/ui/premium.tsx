@@ -22,6 +22,7 @@ export function StatusChip({
   children,
   className,
   tone = "neutral",
+  ...props
 }: React.HTMLAttributes<HTMLSpanElement> & {
   tone?: keyof typeof STATUS_CHIP_TONE_TO_VARIANT;
 }) {
@@ -29,6 +30,7 @@ export function StatusChip({
     <Badge
       variant={STATUS_CHIP_TONE_TO_VARIANT[tone]}
       className={className}
+      {...props}
     >
       {children}
     </Badge>
@@ -38,6 +40,7 @@ export function StatusChip({
 export function InlineBalanceNotice({
   children,
   className,
+  ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   if (!children) return null;
   return (
@@ -53,6 +56,7 @@ export function InlineBalanceNotice({
       )}
       role="status"
       aria-live="polite"
+      {...props}
     >
       <Info className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
       <div className="min-w-0 [overflow-wrap:anywhere]">{children}</div>
@@ -64,6 +68,7 @@ export function DisabledReason({
   children,
   className,
   icon,
+  ...props
 }: React.HTMLAttributes<HTMLDivElement> & { icon?: React.ReactNode }) {
   if (!children) return null;
   return (
@@ -74,6 +79,7 @@ export function DisabledReason({
       )}
       role="status"
       aria-live="polite"
+      {...props}
     >
       <span className="mt-0.5 text-primary">{icon ?? <Info className="h-3.5 w-3.5" aria-hidden="true" />}</span>
       <span>{children}</span>
@@ -86,7 +92,8 @@ export function RewardResultPanel({
   className,
   title = "Result",
   tone = "success",
-}: React.HTMLAttributes<HTMLDivElement> & {
+  ...props
+}: Omit<React.HTMLAttributes<HTMLDivElement>, "title"> & {
   title?: React.ReactNode;
   tone?: "success" | "warning" | "info";
 }) {
@@ -98,7 +105,7 @@ export function RewardResultPanel({
   const Icon = tone === "success" ? CheckCircle2 : Sparkles;
 
   return (
-    <div className={cn("rounded-[var(--radius-panel)] border p-3 text-sm shadow-[var(--shadow-hairline)]", toneClassName, className)} role="status" aria-live="polite">
+    <div className={cn("rounded-[var(--radius-panel)] border p-3 text-sm shadow-[var(--shadow-hairline)]", toneClassName, className)} role="status" aria-live="polite" {...props}>
       <div className="flex items-center gap-2 font-semibold text-foreground">
         <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
         <span>{title}</span>

@@ -25,9 +25,12 @@ const LEGACY_PLAYED_V2_EVENT = parseAbiItem(
 );
 
 type DecodableLog = {
+  address?: string;
   data?: Hex;
   topics?: readonly Hex[];
 };
+
+type SpinSubject = { contract: string; player: string; plantId: number };
 
 type ScoredSpinRewardResult = SpinRewardResult & {
   score: number;
@@ -52,10 +55,11 @@ function scoreSpinReward(
   return score;
 }
 
-function decodeSpinRewardLog(log: DecodableLog): ScoredSpinRewardResult | null {
-  if (!log.data || !log.topics?.length) {
+function decodeSpinRewardLog(log: DecodableLog, subject?: SpinSubject): ScoredSpinRewardResult | null {
+  if (!log?.data || !log?.topics?.length) {
     return null;
   }
+  if (subject && (typeof log.address !== 'string' || log.address.toLowerCase() !== subject.contract.toLowerCase())) return null;
 
   const decodeAttempts = [
     [SPIN_GAME_V2_PLAYED_EVENT],
@@ -73,6 +77,7 @@ function decodeSpinRewardLog(log: DecodableLog): ScoredSpinRewardResult | null {
       });
 
       if (decoded.eventName === 'SpinGameV2Played') {
+        if (subject && (decoded.args.nftId !== BigInt(subject.plantId) || decoded.args.player.toLowerCase() !== subject.player.toLowerCase())) continue;
         const pointsDelta = Number(decoded.args.pointsDelta ?? 0);
         const timeAdded = Number(decoded.args.timeAdded ?? 0);
         const leafAmount = BigInt(decoded.args.leafAmount ?? 0);
@@ -95,6 +100,8 @@ function decodeSpinRewardLog(log: DecodableLog): ScoredSpinRewardResult | null {
         decoded.eventName === 'Played' ||
         decoded.eventName === 'PlayedV2'
       ) {
+        // Generic Played events can also describe Box or other games.
+        if (subject && (decoded.args.id !== BigInt(subject.plantId) || !/spin/i.test(decoded.args.gameName))) continue;
         const reward: SpinRewardResult = {
           pointsDelta: Number(decoded.args.points ?? 0),
           timeAdded: Number(decoded.args.timeExtension ?? 0),
@@ -119,11 +126,12 @@ function decodeSpinRewardLog(log: DecodableLog): ScoredSpinRewardResult | null {
 
 export function extractBestSpinRewardFromLogs(
   logs: readonly DecodableLog[],
+  subject?: SpinSubject,
 ): SpinRewardResult | undefined {
   let best: ScoredSpinRewardResult | undefined;
 
   for (const log of logs) {
-    const reward = decodeSpinRewardLog(log);
+    const reward = decodeSpinRewardLog(log, subject);
     if (!reward) continue;
 
     if (!best || reward.score > best.score) {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useEnsAvatar } from '@/components/hooks/useEnsAvatar';
@@ -52,6 +52,8 @@ export function WalletAvatar({
   style,
 }: WalletAvatarProps) {
   const { avatar } = useEnsAvatar(address);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const sourceKey = `${address?.toLowerCase() ?? ''}:${avatar ?? ''}`;
   const fallbackStyle = {
     background: getFallbackGradient(address),
   } satisfies CSSProperties;
@@ -64,7 +66,7 @@ export function WalletAvatar({
       )}
       style={style}
     >
-      {avatar ? (
+      {avatar && failedSource !== sourceKey ? (
         <Image
           src={avatar}
           alt=""
@@ -72,6 +74,7 @@ export function WalletAvatar({
           sizes="40px"
           unoptimized
           className="object-cover"
+          onError={() => setFailedSource(sourceKey)}
         />
       ) : (
         <div

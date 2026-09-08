@@ -2,6 +2,7 @@
 import { ResourceValue } from '@/components/ui/resource-value';
 
 import { parseAmountInput } from "@/lib/amount-input";
+import { getEconomicReadState } from "@/lib/economic-read-state";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -83,7 +84,7 @@ function formatToken(amount?: bigint): string {
 
 const MIN_REFRESH_INTERVAL_MS = 1000;
 const MIN_REFRESH_FEEDBACK_MS = 650;
-const stakingTileClassName = "chromatic-white-surface rounded-[var(--radius-control)] border border-border/60 bg-card/90 bg-[image:var(--gradient-surface)] p-2 shadow-[var(--shadow-hairline)]";
+const stakingTileClassName = "surface-inset min-w-0 rounded-[var(--radius-control)] p-3 [overflow-wrap:anywhere]";
 
 export default function StakingDialog({ open, onOpenChange }: StakingDialogProps) {
   const { address } = useAccount();
@@ -98,6 +99,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const [totalStaked, setTotalStaked] = useState<bigint | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [snapshotOwner, setSnapshotOwner] = useState<string | null>(null);
+  const [snapshotFresh, setSnapshotFresh] = useState(false);
   const [missionTrackingMessage, setMissionTrackingMessage] = useState<string | null>(null);
   const refreshGenerationRef = useRef(0);
   const refreshRequestRef = useRef<{
@@ -149,6 +152,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       openRef.current;
 
     setLoading(true);
+    setSnapshotFresh(false);
     setRefreshError(null);
     
     try {
@@ -176,19 +180,26 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         stakingHttpResponse.json() as Promise<StakingApiResponse>,
       ]);
       
-      if (!balanceResponse.success) {
+      if (balanceResponse.success !== true) {
         throw new Error(`Balance API error: ${balanceResponse.error}`);
       }
       
-      if (!stakingResponse.success) {
+      if (stakingResponse.success !== true) {
         throw new Error(`Staking API error: ${stakingResponse.error}`);
       }
 
+      if (!stakingResponse.stake || typeof stakingResponse.approved !== 'boolean') {
+        throw new Error('Staking snapshot is incomplete');
+      }
+      if ([balanceResponse.balance, stakingResponse.stake.staked, stakingResponse.stake.rewards]
+        .some(value => typeof value !== 'string' || !/^\d+$/.test(value))) {
+        throw new Error('Staking snapshot contains an invalid amount');
+      }
       const nextSeedBalance = BigInt(balanceResponse.balance);
-      const nextStakeInfo = stakingResponse.stake ? {
+      const nextStakeInfo = {
         staked: BigInt(stakingResponse.stake.staked),
         rewards: BigInt(stakingResponse.stake.rewards)
-      } : null;
+      };
 
       const ratioPayload = stakingResponse.rewardRatio ?? null;
       let nextRewardRatio: { numerator: bigint; denominator: bigint } | null = null;
@@ -227,6 +238,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       setRewardRatio(nextRewardRatio);
       setRewardTimeUnit(nextRewardTimeUnit);
       setTotalStaked(nextTotalStaked);
+      setSnapshotOwner(requestAddress);
+      setSnapshotFresh(true);
       hasLoadedSnapshotRef.current = true;
     } catch (error) {
       if ((error as Error)?.name === 'AbortError' || !isCurrentRequest()) {
@@ -239,8 +252,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       // redundant on-chain approval over a transient API hiccup.
       setRefreshError(
         hasLoadedSnapshotRef.current
-          ? 'Could not refresh staking data. Showing the last known values.'
-          : 'Could not load staking data. Please try again.',
+          ? 'Could not refresh staking data. Showing the last known values. Actions are paused until a refresh succeeds.'
+          : 'Could not load staking data. Actions are paused until a refresh succeeds.',
       );
     } finally {
       if (refreshRequestRef.current?.generation === generation) {
@@ -269,12 +282,14 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       setRewardRatio(null);
       setRewardTimeUnit(null);
       setTotalStaked(null);
+      setSnapshotOwner(null);
       setAmount('');
       setRefreshError(null);
       setMissionTrackingMessage(null);
     }
 
     if (!open || !address) {
+      setSnapshotFresh(false);
       setLoading(false);
       setManualRefreshing(false);
       return;
@@ -363,15 +378,26 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   };
 
   const sanitizedAmount = amount.trim();
+  const hasCurrentSnapshot = Boolean(address && snapshotOwner === address.toLowerCase());
+  const readState = getEconomicReadState({
+    hasSnapshot: snapshotOwner !== null && snapshotFresh,
+    identityMatches: hasCurrentSnapshot,
+    loading,
+    error: refreshError,
+  });
+  const dataReady = open && readState === 'ready';
+  const displayToken = (value?: bigint) => hasCurrentSnapshot
+    ? `${formatToken(value)}${readState !== 'ready' ? ' (last known)' : ''}`
+    : readState === 'error' ? 'Unavailable' : 'Loading…';
   const safeParseUnits = parseAmountInput;
   const parsed = safeParseUnits(sanitizedAmount);
   const amountValidPositive = parsed !== null && parsed > BigInt(0);
   const stakedBal = stakeInfo?.staked ?? BigInt(0);
-  const exceedsStake = mode === 'stake' && amountValidPositive && parsed! > seedBalance;
-  const exceedsUnstake = mode === 'unstake' && amountValidPositive && parsed! > stakedBal;
-  const disableStakeBtn = loading || !address || mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
-  const disableUnstakeBtn = loading || !address || mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
-  const disableClaimRewardsBtn = loading || !stakeInfo || stakeInfo.rewards <= BigInt(0);
+  const exceedsStake = dataReady && mode === 'stake' && amountValidPositive && parsed! > seedBalance;
+  const exceedsUnstake = dataReady && mode === 'unstake' && amountValidPositive && parsed! > stakedBal;
+  const disableStakeBtn = !dataReady || mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
+  const disableUnstakeBtn = !dataReady || mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
+  const disableClaimRewardsBtn = !dataReady || !stakeInfo || stakeInfo.rewards <= BigInt(0);
   const helperText = sanitizedAmount !== "" && !amountValidPositive
     ? "Enter a valid amount (max 18 decimals)"
     : (exceedsStake ? "Amount exceeds wallet balance" : (exceedsUnstake ? "Amount exceeds staked balance" : ""));
@@ -421,7 +447,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     };
   }, [rewardRatio, rewardTimeUnit, stakeInfo?.staked, totalStaked]);
 
-  const footerTransactionButtonClassName = "max-[340px]:px-2 max-[340px]:text-xs";
+  const footerTransactionButtonClassName = "h-auto min-h-11 whitespace-normal [overflow-wrap:anywhere] max-[340px]:px-2";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -438,8 +464,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
         <DialogBody className="pr-1">
         {/* Mode switch placed below description with positive spacing */}
-        <div className="mb-2 mt-1 flex items-center justify-between">
+        <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2">
           <ToggleGroup
+            className="max-w-full flex-wrap"
             ariaLabel="Staking action"
             value={mode}
             onValueChange={(v) => setMode((v as 'stake' | 'unstake') || 'stake')}
@@ -464,65 +491,65 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
         <div className="space-y-3 pb-2">
           {mode === 'stake' ? (
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 text-xs">
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   SEED Balance
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(seedBalance)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{displayToken(seedBalance)}</div>
               </div>
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.rewards)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{displayToken(stakeInfo?.rewards)}</div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2 text-xs">
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/PixotchiKit/COIN.svg" alt="SEED" width={16} height={16} />
                   Staked SEED
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.staked)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{displayToken(stakeInfo?.staked)}</div>
               </div>
               <div className={stakingTileClassName}>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Image src="/icons/leaf.png" alt="LEAF" width={16} height={16} />
                   Unclaimed LEAF
                 </div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{loading ? "..." : formatToken(stakeInfo?.rewards)}</div>
+                <div className="mt-1 text-sm font-semibold tabular-nums">{displayToken(stakeInfo?.rewards)}</div>
               </div>
             </div>
           )}
 
-          {rewardRateInfo && (
+          {hasCurrentSnapshot && rewardRateInfo && (
             <div className={`${stakingTileClassName} text-xs`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Reward Rate 
+                  Reward Rate {readState !== 'ready' && '(last known)'}
                 </span>
               </div>
               <div className="mt-1.5 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="shrink-0 text-muted-foreground">Per SEED</span>
-                  <ResourceValue resource="leaf" className="max-w-[60%] text-right font-semibold leading-tight">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                  <span className="min-w-0 text-muted-foreground">Per SEED</span>
+                  <ResourceValue resource="leaf" className="ml-auto text-right font-semibold leading-tight">
                     {formatRewardDisplay(rewardRateInfo.ratePerUnit)} LEAF / {rewardRateInfo.periodLabel}
                   </ResourceValue>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="shrink-0 text-muted-foreground">Your rewards</span>
-                  <ResourceValue resource="leaf" className="max-w-[60%] text-right font-semibold leading-tight">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                  <span className="min-w-0 text-muted-foreground">Your rate</span>
+                  <ResourceValue resource="leaf" className="ml-auto text-right font-semibold leading-tight">
                     {formatRewardDisplay(rewardRateInfo.estimated)} LEAF / {rewardRateInfo.periodLabel}
                   </ResourceValue>
                 </div>
                 {typeof rewardRateInfo.totalStaked === 'number' && rewardRateInfo.totalStaked >= 0 && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="shrink-0 text-muted-foreground">Total staked</span>
-                    <ResourceValue resource="seed" className="max-w-[60%] text-right font-semibold leading-tight">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                    <span className="min-w-0 text-muted-foreground">Total staked</span>
+                    <ResourceValue resource="seed" className="ml-auto text-right font-semibold leading-tight">
                       {totalStaked !== null ? formatTokenAmount(totalStaked) : '0'} SEED
                     </ResourceValue>
                   </div>
@@ -533,7 +560,12 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
           {refreshError && (
             <Alert variant="warning">
-              <AlertDescription>{refreshError}</AlertDescription>
+              <AlertDescription className="space-y-2">
+                <p>{refreshError}</p>
+                <Button variant="outline" size="touchCompact" className="h-auto whitespace-normal [overflow-wrap:anywhere]" onClick={handleManualRefresh} disabled={loading || manualRefreshing}>
+                  Retry staking data
+                </Button>
+              </AlertDescription>
             </Alert>
           )}
 
@@ -545,8 +577,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
           <AmountField id="staking-amount" label={mode === 'stake' ? 'Amount to stake' : 'Amount to unstake'} unit="SEED"
             value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0" onMax={() => setMaxAmount(mode)}
-            maxDisabled={loading || Boolean(refreshError) || (mode === 'stake' ? seedBalance : (stakeInfo?.staked ?? BigInt(0))) <= BigInt(0)}
-            error={helperText || undefined} balance={loading ? 'Loading…' : refreshError ? 'Unavailable' : mode === 'stake' ? formatToken(seedBalance) : formatToken(stakeInfo?.staked)} />
+            maxDisabled={!dataReady || (mode === 'stake' ? seedBalance : (stakeInfo?.staked ?? BigInt(0))) <= BigInt(0)}
+            error={helperText || undefined} balance={displayToken(mode === 'stake' ? seedBalance : stakeInfo?.staked)} />
 
         </div>
         </DialogBody>
@@ -564,8 +596,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                     intentKey="staking:approve-seed"
                     calls={[buildApproveStakeCall()]}
                     buttonText="Approve SEED for Staking"
+                    pendingText="Approving SEED…"
                     buttonClassName={footerTransactionButtonClassName}
-                    disabled={loading || !address}
+                    disabled={!dataReady}
                    onSuccess={() => {
                       setApproved(true);
                       void refresh({ force: true });
@@ -578,8 +611,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    effects={{ domains: ["balances", "rewards"] }}
                    trackStreak={false}
                    intentKey="staking:stake"
-                   calls={[buildStakeCall(amount)]}
+                   calls={amountValidPositive ? [buildStakeCall(parsed)] : []}
                    buttonText="Stake"
+                   pendingText="Staking…"
                    disabled={disableStakeBtn}
                    buttonClassName={footerTransactionButtonClassName}
                    onSuccess={(tx: UntypedValue) => {
@@ -603,8 +637,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  effects={{ domains: ["allowances", "balances"] }}
                  trackStreak={false}
                  intentKey="staking:unstake"
-                 calls={[buildUnstakeCall(amount)]}
+                 calls={amountValidPositive ? [buildUnstakeCall(parsed)] : []}
                  buttonText="Unstake"
+                 pendingText="Unstaking…"
                  disabled={disableUnstakeBtn}
                  buttonClassName={footerTransactionButtonClassName}
                  onSuccess={() => {
@@ -622,7 +657,8 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               trackStreak={false}
               intentKey="staking:claim-rewards"
               calls={[buildClaimRewardsCall()]}
-              buttonText={stakeInfo && stakeInfo.rewards <= BigInt(0) ? "No rewards to claim" : "Claim Rewards"}
+              buttonText={dataReady && stakeInfo && stakeInfo.rewards <= BigInt(0) ? "No rewards to claim" : "Claim Rewards"}
+              pendingText="Claiming rewards…"
               disabled={disableClaimRewardsBtn}
               buttonClassName={footerTransactionButtonClassName}
               onSuccess={(tx: UntypedValue) => {

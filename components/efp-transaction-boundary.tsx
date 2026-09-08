@@ -717,6 +717,7 @@ function SafeEfpTransactionModal() {
         ) : (
           <Transaction
             key={`${workflow.workflowId}:${workflow.currentTxIndex}`}
+            canSubmit={!unsupportedChain && !preparedCall.error && preparedCall.calls.length > 0}
             calls={preparedCall.calls}
             capabilities={capabilities}
             effects="none"

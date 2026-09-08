@@ -5,6 +5,21 @@ export type TransactionFeedback = {
   icon: 'loading' | 'wallet' | 'check' | 'info' | 'error';
 };
 
+/** Fallback only: feature actions can supply an explicit pending label. */
+export function getPendingActionLabel(idleText: string): string {
+  const text = idleText.trim().toLowerCase();
+  if (/^approve\b/.test(text)) return text.includes('+') ? 'Processing approval and action…' : 'Approving…';
+  if (/^unstake\b/.test(text)) return 'Unstaking…';
+  if (/^stake\b/.test(text)) return 'Staking…';
+  if (/\bmint\b/.test(text)) return 'Minting…';
+  if (/\bclaim\b/.test(text)) return 'Claiming…';
+  if (/\b(buy|purchase)\b/.test(text)) return 'Purchasing…';
+  if (/\btransfer\b/.test(text)) return 'Transferring…';
+  if (/\bspin\b/.test(text)) return 'Spinning…';
+  if (/\bdeal\b/.test(text)) return 'Dealing…';
+  return 'Processing…';
+}
+
 export function friendlyTransactionError(message: string): string {
   const text = message.toLowerCase();
   if (/user rejected|rejected the request|user denied/.test(text)) {
@@ -12,6 +27,12 @@ export function friendlyTransactionError(message: string): string {
   }
   if (/wallet client unavailable|wallet not connected|connect.*wallet/.test(text)) {
     return 'Connect your wallet, then try again.';
+  }
+  if (/quote changed|eth price changed|purchase changed/.test(text)) {
+    return 'Review the updated quote and purchase details, then confirm again.';
+  }
+  if (/quote could not be verified|wait for.*quote/.test(text)) {
+    return 'Retry the quote before confirming this purchase.';
   }
   if (/atomic execution|atomic bundled/.test(text)) {
     return 'This action needs a wallet that can approve all its steps together. Try a supported smart wallet.';

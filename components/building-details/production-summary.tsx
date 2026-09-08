@@ -7,10 +7,10 @@ import { getVillageProductionRates } from '@/lib/land-production';
 export function ProductionSummary({ building }: { building: Pick<BuildingData, 'level' | 'isUpgrading' | 'productionRatePlantPointsPerDay' | 'productionRatePlantLifetimePerDay' | 'accumulatedPoints' | 'accumulatedLifetime'> }) {
   const production = getVillageProductionRates(building);
   const rows = [
-    { label: 'Points per day', amount: production.pointsPerDay, kind: 'points' },
-    { label: 'Lifetime per day', amount: production.lifetimePerDaySeconds, kind: 'lifetime' },
-    { label: 'Stored points', amount: building.accumulatedPoints, kind: 'points' },
-    { label: 'Stored lifetime', amount: building.accumulatedLifetime, kind: 'lifetime' },
+    { label: 'Plant points per day', amount: production.pointsPerDay, kind: 'points' },
+    { label: 'Plant lifetime per day', amount: production.lifetimePerDaySeconds, kind: 'lifetime' },
+    { label: 'Stored plant points', amount: building.accumulatedPoints, kind: 'points' },
+    { label: 'Stored plant lifetime', amount: building.accumulatedLifetime, kind: 'lifetime' },
   ].filter(row => row.amount > BigInt(0));
   return <dl className="space-y-3 text-sm">
     {rows.map(row => <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">

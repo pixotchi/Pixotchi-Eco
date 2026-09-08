@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import { THEME_NAMES } from '@/lib/theme-utils';
 
 interface ServerThemeProviderProps {
   children: React.ReactNode;
@@ -15,7 +16,7 @@ export function ServerThemeProvider({
   children,
   defaultTheme = 'light',
   storageKey = 'pixotchi-theme',
-  themes = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"]
+  themes = THEME_NAMES
 }: ServerThemeProviderProps) {
 
   return (

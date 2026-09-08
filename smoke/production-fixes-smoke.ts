@@ -343,7 +343,7 @@ assert.equal((arcade.match(/feedbackMode="toast"/g) || []).length, 3);
 assert.equal((arcade.match(/feedbackMode="inline"/g) || []).length, 1);
 assert.match(arcade, /Recover SpinLeaf commit/);
 assert.doesNotMatch(arcade, /showToast=\{false\}/);
-assert.match(arcade, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
+assert.match(arcade, /<ScrollArea className="flex-1 overflow-y-auto py-3 pr-1"/);
 
 const dialogUi = projectFile('components/ui/dialog.tsx');
 assert.match(dialogUi, /const fixed = sticky \?\? layout === "form"/);
@@ -356,7 +356,9 @@ assert.match(tasksInfoDialog, /data-task-summary-card/);
 // margin (that hack depended on DialogContent clipping and broke centring
 // whenever header padding changed).
 assert.doesNotMatch(tasksInfoDialog, /mr-\[-2\.75rem\]/);
-assert.match(tasksInfoDialog, /<DialogDescription className="leading-relaxed">[\s\S]*\{!effectiveDisabled && summaryCard\}[\s\S]*<\/DialogHeader>/);
+// Long descriptions and the summary share the scrolling body so enlarged
+// text cannot consume the complete fixed header/footer viewport.
+assert.match(tasksInfoDialog, /<DialogBody[^>]*>[\s\S]*<DialogDescription className="leading-relaxed">[\s\S]*data-task-summary-card[\s\S]*<\/DialogBody>/);
 assert.doesNotMatch(tasksInfoDialog, /sticky top-3 z-10/);
 assert.doesNotMatch(tasksInfoDialog, /sticky top-0 z-10/);
 assert.match(tasksInfoDialog, /<DialogBody className="space-y-4 pr-1">/);
@@ -367,7 +369,7 @@ const premiumUi = projectFile('components/ui/premium.tsx');
 assert.doesNotMatch(premiumUi, /ActionBar/);
 
 const marketplaceDialog = projectFile('components/transactions/marketplace-dialog.tsx');
-assert.match(marketplaceDialog, /surface-scroll-fade flex-1 overflow-y-auto py-3 pr-1/);
+assert.match(marketplaceDialog, /<ScrollArea className="flex-1 overflow-y-auto py-3 pr-1"/);
 assert.equal((marketplaceDialog.match(/<AmountField\b/g) || []).length, 2);
 assert.equal((marketplaceDialog.match(/buttonText="Create Order"/g) || []).length, 1);
 assert.match(marketplaceDialog, /<AmountField id=\{amountInputId\}/);
@@ -798,7 +800,7 @@ assert.match(transactionKit, /promotePendingEvmCoordinatorAttemptToMonitor/);
 assert.match(transactionKit, /setIsPeerBlocked\(true\)/);
 assert.match(transactionKit, /withPendingEvmMonitorLease/);
 assert.match(transactionKit, /stableCallsRef\.current\?\.digest !== nextPendingCallsDigest/);
-assert.match(transactionKit, /onConfirmedRef\.current\?\.\(status\)/);
+assert.match(transactionKit, /onConfirmedRef\.current\?\.\(status, \{ isCurrent \}\)/);
 assert.match(transactionKit, /isDefinitivePendingEvmPreSubmissionError/);
 assert.match(transactionKit, /isDefinitiveUnsupportedEvmBatchError/);
 assert.doesNotMatch(transactionKit, /firstReceiptLogs/);
@@ -1385,17 +1387,28 @@ const wagmiRouterSource = providers.slice(
 const fallbackGateIndex = wagmiRouterSource.indexOf(
   "if (loadedConfig?.key !== desiredConfigKey) return",
 );
-const coreProviderIndex = wagmiRouterSource.indexOf('<CoreWagmiProvider');
+const coreProviderIndex = wagmiRouterSource.indexOf('<SessionWagmiProvider key=');
+const privyProviderIndex = wagmiRouterSource.indexOf('<SessionWagmiProvider provider={PrivyWagmiProvider}');
 assert.ok(fallbackGateIndex >= 0);
 assert.ok(coreProviderIndex > fallbackGateIndex);
+assert.ok(privyProviderIndex > fallbackGateIndex);
+const sessionWagmiProvider = projectFile('components/auth/session-wagmi-provider.tsx');
+assert.match(sessionWagmiProvider, /reconnectOnMount=\{reconnectAllowed && isWalletReconnectAllowed\(\)\}/);
+assert.match(sessionWagmiProvider, /<SignedOutWalletGuard\s*\/>/);
 assert.doesNotMatch(wagmiRouterSource, /<MiniAppReadySignal/);
 const providerTreeSource = providers.slice(providers.indexOf('return (', providers.indexOf('export function Providers')));
-const hostProviderIndex = providerTreeSource.indexOf('<HostEnvironmentProvider>');
-const miniAppReadyIndex = providerTreeSource.indexOf('<MiniAppReadySignal />');
+const hostBoundaryIndex = providerTreeSource.indexOf('<HostWalletBoundary');
 const providersContentIndex = providerTreeSource.indexOf('<ProvidersContent');
+assert.ok(hostBoundaryIndex >= 0);
+assert.ok(providersContentIndex > hostBoundaryIndex);
+const hostWalletBoundary = projectFile('components/auth/host-wallet-boundary.tsx');
+const hostProviderIndex = hostWalletBoundary.indexOf('<HostEnvironmentProvider>');
+const miniAppReadyIndex = hostWalletBoundary.indexOf('<MiniAppReadySignal />', hostProviderIndex);
+const walletGateIndex = hostWalletBoundary.indexOf('<HostAwareWalletGate', hostProviderIndex);
 assert.ok(hostProviderIndex >= 0);
 assert.ok(miniAppReadyIndex > hostProviderIndex);
-assert.ok(providersContentIndex > miniAppReadyIndex);
+assert.ok(walletGateIndex > miniAppReadyIndex);
+assert.match(hostWalletBoundary, /host\.isMiniApp \? 'ready' : props\.state/);
 const providersContentSource = providers.slice(providers.indexOf('function ProvidersContent('));
 assert.doesNotMatch(providersContentSource, /useMiniAppReadySignal\(/);
 
@@ -1443,7 +1456,7 @@ const itemDetailsPanel = projectFile('components/item-details-panel.tsx');
 assert.match(itemDetailsPanel, /ApprovalActionTransaction/);
 assert.match(itemDetailsPanel, /getBuyShopItemCall/);
 assert.match(itemDetailsPanel, /getBuyGardenItemCall/);
-assert.match(itemDetailsPanel, /batchButtonText=\{approvalActionButtonText\}/);
+assert.match(itemDetailsPanel, /batchButtonText=\{disabledMessage \|\| approvalActionButtonText\}/);
 assert.doesNotMatch(itemDetailsPanel, /ApproveTransaction/);
 
 const envConfig = projectFile('lib/env-config.ts');
@@ -1453,27 +1466,33 @@ const envExample = projectFile('.env.example');
 assert.match(envExample, /NEXT_PUBLIC_SWAP_QUOTE_SUMMARY_ENABLED=false/);
 
 const swapPanelQuoteFlag = projectFile('components/tabs/pixotchi-swap-panel.tsx');
-assert.match(swapPanelQuoteFlag, /const showQuoteSummary = CLIENT_ENV\.SWAP_QUOTE_SUMMARY_ENABLED/);
-assert.match(swapPanelQuoteFlag, /\{showQuoteSummary && quoteSummary && \(/);
+// Financial review is now mandatory for every current quote, independent of the old optional summary flag.
+assert.match(swapPanelQuoteFlag, /currentQuote && <SwapQuoteReview quote=\{currentQuote\}/);
+assert.doesNotMatch(swapPanelQuoteFlag, /showQuoteSummary &&/);
 
 const blackjackDialog = projectFile('components/transactions/BlackjackDialog.tsx');
-assert.match(blackjackDialog, /mobileMode="center"/);
-assert.doesNotMatch(blackjackDialog, /mobileMode="sheet"/);
-assert.match(blackjackDialog, /hideCloseButton/);
-assert.match(blackjackDialog, /<GameDialogHeading title="Blackjack" onClose=\{handleClose\}/);
-assert.doesNotMatch(blackjackDialog, /<DialogHeader/);
-assert.match(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS/);
+const baccaratDialog = projectFile('components/transactions/BaccaratDialog.tsx');
+const casinoGameSurface = projectFile('components/transactions/casino-game-surface.tsx');
+const gameDialogStyles = projectFile('components/transactions/game-dialog-styles.ts');
+assert.match(casinoGameSurface, /mobileMode="center"/);
+assert.match(casinoGameSurface, /layout="game"/);
+assert.match(casinoGameSurface, /hideCloseButton/);
+assert.match(casinoGameSurface, /padding=\{variant === 'roulette' \? 'compact' : 'none'\}/);
+assert.match(casinoGameSurface, /<GameDialogHeading title=\{title\} onClose=\{onClose\}/);
+assert.match(blackjackDialog, /<CasinoGameSurface\s+title="Blackjack"/);
+assert.match(blackjackDialog, /preventEscape=\{walletTxPending \|\| gameState.isActive\}/);
+assert.match(blackjackDialog, /GAME_INSET_ACTION_FOOTER_CLASS/);
 assert.match(blackjackDialog, /data-blackjack-action-footer/);
-assert.match(blackjackDialog, /dialog-footer-surface sticky/);
-assert.match(blackjackDialog, /bg-\[linear-gradient\(180deg,rgb\(0,0,0\)_0%,rgb\(0,0,0\)_42%,rgb\(0,0,0\)_100%\)\]/);
-assert.doesNotMatch(blackjackDialog, /BLACKJACK_STICKY_ACTIONS_CLASS = .*bg-black\/75/);
+assert.match(gameDialogStyles, /dialog-footer-surface sticky/);
+assert.match(gameDialogStyles, /bg-black bg-\[image:linear-gradient\(#000,#000\)\]/);
+assert.match(baccaratDialog, /<CasinoGameSurface\s+title="Baccarat"/);
 
 const casinoDialog = projectFile('components/transactions/CasinoDialog.tsx');
-assert.match(casinoDialog, /mobileMode="center"/);
-assert.doesNotMatch(casinoDialog, /mobileMode="sheet"/);
-assert.match(casinoDialog, /hideCloseButton/);
-assert.match(casinoDialog, /<GameDialogHeading title="Roulette" onClose=\{\(\) => handleClose\(false\)\}/);
-assert.doesNotMatch(casinoDialog, /<DialogHeader/);
+assert.match(casinoDialog, /<CasinoGameSurface\s+variant="roulette"\s+title="Roulette"/);
+for (const gameDialog of [blackjackDialog, baccaratDialog, casinoDialog]) {
+  assert.match(gameDialog, /import \{ CasinoGameSurface \} from ['"]\.\/casino-game-surface['"]/);
+  assert.doesNotMatch(gameDialog, /<DialogContent|<DialogHeader|mobileMode=|overflow-y-auto|padding="(?:compact|none)"/);
+}
 assert.match(casinoDialog, /showRoundResult = !!result && !isSpinning && !wheelSpinning/);
 assert.match(casinoDialog, /No win this spin/);
 assert.doesNotMatch(casinoDialog, /<span className="font-bold">No win<\/span>/);
@@ -1491,16 +1510,22 @@ assert.throws(() => projectFile('components/transactions/universal-transaction.t
 const batchClaimCard = projectFile('components/transactions/batch-claim-card.tsx');
 assert.match(
   batchClaimCard,
-  /Nothing ready[\s\S]{0,700}Smart Wallet Required[\s\S]{0,500}No accumulated village production/,
-  'Batch Claim should disclose its wallet prerequisite even when nothing is claimable',
+  /Nothing ready[\s\S]{0,500}No buildings meet the batch minimum[\s\S]{0,400}onClick=\{onOpenBuildings\}>View village production/,
+  'An empty Batch Claim should explain the production prerequisite and offer its production route',
 );
+assert.match(batchClaimCard, /scanError && !submittedItems[\s\S]{0,150}Production unavailable/,
+  'An incomplete production read must fail closed before displaying a ready-zero state');
+assert.match(batchClaimCard, /!submittedItems && !isSmartWallet[\s\S]{0,800}Smart Wallet Required[\s\S]{0,600}onClick=\{onOpenBuildings\}>Collect from a building/,
+  'Unsupported batch wallets must retain the prerequisite and supported individual collection route');
 
 const batchQuestCard = projectFile('components/transactions/batch-quest-start-card.tsx');
 assert.match(
   batchQuestCard,
-  /!smartWalletLoading && !isSmartWallet[\s\S]{0,500}Smart Wallet Required[\s\S]{0,700}No idle farmers right now/,
-  'Batch Quests should show the wallet prerequisite independently of farmer availability',
+  /!submittedBatch && !feePending && !smartWalletLoading && !isSmartWallet[\s\S]{0,500}Smart Wallet Required[\s\S]{0,600}onClick=\{onOpenFarmerHouse\}>Manage farmers individually/,
+  'Batch Quests should offer the supported farmer route only outside a pending operation',
 );
+assert.match(batchQuestCard, /!hasAnySlots \?[\s\S]{0,600}None of your lands have a Farmer House[\s\S]{0,350}onClick=\{onOpenFarmerHouse\}>View Farmer House/,
+  'An empty quest fleet should prioritize the missing Farmer House and provide a next step');
 
 assert.doesNotMatch(
   landsView,
@@ -1557,7 +1582,7 @@ assert.match(plantNameTransaction, /<GameTransaction/);
 
 const swapPanel = projectFile('components/tabs/pixotchi-swap-panel.tsx');
 assert.match(swapPanel, /hasInsufficientGas/);
-assert.match(swapPanel, /S\.errors\.insufficientGas/);
+assert.match(swapPanel, /S\.errors\.insufficientSwapValue/);
 assert.match(swapPanel, /withPendingEvmSubmissionGuard/);
 assert.match(swapPanel, /finalizePendingEvmRecord/);
 assert.match(swapPanel, /withPendingEvmMonitorLease/);

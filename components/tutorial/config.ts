@@ -1,4 +1,6 @@
-export const TUTORIAL_VERSION = "v1";
+export const TUTORIAL_VERSION = "v2";
+
+export const QUICK_START_SLIDE_IDS = ['first-plant', 'first-care', 'next-step'] as const;
 
 export const TUTORIAL_SLIDE_IDS = [
   "swap",
@@ -15,4 +17,4 @@ export const TUTORIAL_SLIDE_IDS = [
 
 export const TASKS_TUTORIAL_SLIDE_ID = "tasks" as const;
 
-export type TutorialSlideId = (typeof TUTORIAL_SLIDE_IDS)[number];
+export type TutorialSlideId = (typeof TUTORIAL_SLIDE_IDS)[number] | (typeof QUICK_START_SLIDE_IDS)[number];

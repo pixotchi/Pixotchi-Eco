@@ -1,0 +1,139 @@
+/* Feature-owned styles; shared tokens and primitives remain in globals.css. */
+
+@layer utilities {
+  .login-shell-safe-top {
+    padding-top: max(0px, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top));
+  }
+
+  .login-safe-area {
+    justify-content: flex-start;
+    padding-top: 1rem !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+  }
+  .login-fallback-safe-area {
+    padding-top: max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
+  }
+  @media (min-width: 48rem) {
+    .login-safe-area {
+      justify-content: safe center;
+    }
+  }
+  @media (orientation: landscape) and (min-width: 40rem) and (max-height: 30rem) {
+    .login-safe-area {
+      flex-direction: row !important;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .login-hero-copy,
+    .login-auth-actions,
+    .login-auth-actions-placeholder {
+      width: auto !important;
+      max-width: 20rem !important;
+      flex: 1 1 0 !important;
+    }
+
+    .login-hero-copy,
+    .login-auth-actions {
+      align-self: center;
+      border: 1px solid hsl(var(--edge-panel)) !important;
+      border-radius: var(--radius-panel) !important;
+      background-color: hsl(var(--card) / 0.82) !important;
+      padding: 1rem !important;
+      box-shadow: var(--shadow-hairline);
+    }
+
+    .login-hero {
+      margin-bottom: 1rem;
+      gap: 0.5rem;
+    }
+
+    .login-hero img {
+      width: 3.5rem;
+      height: 3.5rem;
+    }
+
+    .login-intro-copy {
+      margin-bottom: 0;
+    }
+
+    .login-auth-actions-placeholder {
+      height: 19rem;
+    }
+
+    .not-found-shell {
+      padding-top: 1rem !important;
+      padding-bottom: 1rem !important;
+    }
+
+    .not-found-content {
+      gap: 1rem;
+    }
+
+    .not-found-art {
+      width: 4rem;
+      height: 4rem;
+    }
+
+    .not-found-copy > :not(:last-child) {
+      margin-bottom: 0.5rem;
+    }
+
+    .not-found-title {
+      font-size: 1.5rem !important;
+      line-height: 2rem !important;
+    }
+  }
+}
+
+.login-theme-cycle {
+  --login-theme-transition-duration: var(--motion-modal);
+  position: relative;
+  isolation: isolate;
+  color: hsl(var(--foreground));
+  transition: color var(--login-theme-transition-duration) var(--ease-standard);
+}
+
+.login-theme-cycle .app-shell-inner[data-connected="false"] {
+  max-width: 100%;
+}
+.login-theme-cycle :is(button, [role="alert"], .login-web-app-alert) {
+  transition-duration: var(--login-theme-transition-duration);
+  transition-property: background-color, border-color, color, opacity;
+  transition-timing-function: var(--ease-standard);
+}
+
+.login-theme-cycle :is(button, [role="button"], .surface-control) {
+  background-image: none !important;
+}
+
+.login-theme-cycle .login-web-app-alert {
+  background-color: hsl(var(--card) / 0.86);
+  background-image: none !important;
+  border-color: hsl(var(--edge-panel));
+}
+
+.login-theme-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: hsl(var(--background));
+}
+
+.login-theme-layer {
+  position: absolute;
+  inset: 0;
+  background-color: hsl(var(--background));
+  background-image: var(--gradient-content-well);
+  background-position: center top;
+  background-size: 160% 120%;
+  opacity: 0;
+  transition: opacity var(--login-theme-transition-duration) var(--ease-standard);
+}
+
+.login-theme-layer.is-active {
+  opacity: 1;
+}

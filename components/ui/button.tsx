@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * kept as call-site aliases (16 call sites) but there is a single source now.
  */
 const CONTROL_SURFACE_VARIANT =
-  "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary";
+  "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong";
 
 /*
  * Base-brand action surface (deliberately theme-independent: it is Base's own
@@ -42,18 +42,18 @@ const buttonVariants = cva(
          * element behind the buttons, so an active background here would double up.
          */
         navSliding:
-          "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-[hsl(var(--selected-control-foreground))] data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
+          "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary-strong hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-[hsl(var(--selected-control-foreground))] data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
         headerIcon: CONTROL_SURFACE_VARIANT,
         statusAction: CONTROL_SURFACE_VARIANT,
         surfaceControl: CONTROL_SURFACE_VARIANT,
         imageCardPrimary:
           "border border-white/30 bg-slate-950 bg-[image:linear-gradient(180deg,hsl(222_47%_20%)_0%,hsl(222_47%_11%)_56%,hsl(229_84%_5%)_100%)] text-white shadow-[0_10px_24px_-14px_rgba(2,6,23,0.9)] hover:brightness-[1.06] hover:text-white hover:shadow-[0_14px_30px_-16px_rgba(2,6,23,0.95)]",
         outline:
-          "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
+          "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
         secondary:
-          "border border-[hsl(var(--edge-panel))] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        ghost: "hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-[hsl(var(--edge-panel))] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
+        ghost: "hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
+        link: "text-primary-strong underline-offset-4 hover:underline",
       },
       /*
        * Heights are deliberate, not a ladder: sm / default / touchCompact / icon all
@@ -70,6 +70,8 @@ const buttonVariants = cva(
         sm: "h-11 min-h-11 px-3 py-2 text-sm",
         default: "h-11 min-h-11 px-4 py-2",
         icon: "h-11 min-h-11 w-11 min-w-11",
+        // Header chrome is icon-only: text zoom must not push adjacent controls off-screen.
+        headerIcon: "h-[44px] min-h-[44px] w-[44px] min-w-[44px] shrink-0 p-0 [&>svg]:h-[20px] [&>svg]:w-[20px] [&>img]:h-[20px] [&>img]:w-[20px]",
         lg: "h-12 min-h-12 px-6 text-base",
       },
       fullWidth: {
@@ -109,19 +111,46 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ...props
   }, ref) => {
     if (asChild) {
-      // asChild renders a <span>/<a>/<Link>, where the `disabled` attribute is invalid.
-      // Forward the state as aria-disabled instead — the cva base string carries matching
-      // aria-disabled:* styles. This is hardening, not true disabling: a keyboard user can
-      // still activate an <a>, so do not rely on it to gate a destructive action.
+      const inactive = disabled || loading || props["aria-disabled"] === true || props["aria-disabled"] === "true";
+      const preventActivation = (event: React.SyntheticEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      const preventKeyActivation = (event: React.KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") preventActivation(event);
+      };
+      // Slot composes child handlers before its own. Guard the child too, so its
+      // own click handler (including Next Link navigation) cannot bypass disabled.
+      const guardedChild = inactive && React.isValidElement<React.HTMLAttributes<HTMLElement>>(children)
+        ? React.cloneElement(children, {
+            "aria-disabled": true,
+            tabIndex: -1,
+            onClick: preventActivation,
+            onClickCapture: preventActivation,
+            onAuxClick: preventActivation,
+            onContextMenu: preventActivation,
+            onKeyDown: preventKeyActivation,
+            onKeyDownCapture: preventKeyActivation,
+          })
+        : children;
       return (
         <Slot
           {...props}
+          {...(inactive ? {
+            onClick: preventActivation,
+            onClickCapture: preventActivation,
+            onAuxClick: preventActivation,
+            onContextMenu: preventActivation,
+            onKeyDown: preventKeyActivation,
+            onKeyDownCapture: preventKeyActivation,
+            tabIndex: -1,
+          } : {})}
           className={cn(buttonVariants({ variant, size, fullWidth }), className)}
           ref={ref}
           aria-busy={loading || props["aria-busy"] || undefined}
-          aria-disabled={disabled || loading || undefined}
+          aria-disabled={inactive || undefined}
         >
-          {children}
+          {guardedChild}
         </Slot>
       );
     }

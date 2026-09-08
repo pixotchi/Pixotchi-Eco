@@ -5,18 +5,12 @@ import { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { PLANT_ART_MAP } from '@/lib/constants';
 
 export const dynamic = "force-dynamic";
 
 const DEPLOYMENT_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 const BASE_URL = process.env.NEXT_PUBLIC_URL || DEPLOYMENT_URL || "https://mini.pixotchi.tech";
-const PLANT_IMAGE_BY_STRAIN: Record<number, string> = {
-  1: "/icons/plant1.svg",
-  2: "/icons/plant2.svg",
-  3: "/icons/plant3WithFrame.svg",
-  4: "/icons/plant4WithFrame.svg",
-  5: "/icons/plant5.png",
-};
 
 // `generateMetadata` and the page render request the same record. React cache
 // keeps that lookup request-scoped so social metadata does not double Redis IO.
@@ -58,7 +52,7 @@ export async function generateMetadata(
     // Fallback metadata if share link expired or doesn't exist
     return {
       title: "Pixotchi Mini - Plant & Earn",
-      description: "Join Pixotchi Mini – Plant your SEED and climb the leaderboard to earn ETH rewards!",
+      description: "Mint a plant, grow its PTS, and explore Pixotchi Mini on Base.",
       alternates: {
         canonical: shareUrl,
       },
@@ -99,13 +93,13 @@ export async function generateMetadata(
 
   return {
     title: `I just minted a ${data.name}!`,
-    description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
+    description: "Mint a plant, grow its PTS, and explore Pixotchi Mini on Base.",
     alternates: {
       canonical: shareUrl,
     },
     openGraph: {
       title: `I just minted a ${data.name}!`,
-      description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
+      description: "Mint a plant, grow its PTS, and explore Pixotchi Mini on Base.",
       url: shareUrl,
       type: "website",
       images: [{ url: farcasterImageUrl, width: 1200, height: 800, alt: data.name }],
@@ -113,7 +107,7 @@ export async function generateMetadata(
     twitter: {
       card: "summary_large_image",
       title: `I just minted a ${data.name}!`,
-      description: "Join me in Pixotchi Mini – Plant your own SEED and climb the leaderboard to earn ETH rewards!",
+      description: "Mint a plant, grow its PTS, and explore Pixotchi Mini on Base.",
       images: [twitterImageUrl],
     },
     other: {
@@ -142,7 +136,7 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
 
   const plantName = data.name || "Plant";
   const strainId = Number(data.strain || 1);
-  const plantImage = PLANT_IMAGE_BY_STRAIN[strainId] || PLANT_IMAGE_BY_STRAIN[1];
+  const plantImage = PLANT_ART_MAP[strainId as keyof typeof PLANT_ART_MAP] || PLANT_ART_MAP[1];
 
   // Keep this page stable so social crawlers can render the mint-specific OG image.
   return (
@@ -161,7 +155,7 @@ export default async function ShortMintSharePage({ params }: { params: Promise<{
             I just minted a {plantName}!
           </h1>
           <p className="mx-auto max-w-xl text-sm text-muted-foreground sm:text-base">
-            Join me in Pixotchi Mini, plant your own SEED, and climb the leaderboard to earn ETH rewards.
+            Mint a plant, grow its PTS, and explore Pixotchi Mini on Base.
           </p>
         </div>
         <Button asChild size="lg" className="px-8">

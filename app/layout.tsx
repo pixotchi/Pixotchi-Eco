@@ -3,7 +3,7 @@ import "./ock-compat.css";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { coinbaseSans, pixelmix } from "./fonts";
-import { getThemeMetaColor } from "@/lib/theme-utils";
+import { ThemeInitializer } from "@/components/theme-initializer";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -11,11 +11,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
-  // A single unscoped theme-color, derived from the palette rather than hardcoded.
-  // Media-scoped values fought the runtime theme sync: themes are class-based and
-  // independent of the OS setting, and defaultTheme is "light" with enableSystem
-  // false, so the pre-hydration paint is always the light palette.
-  themeColor: getThemeMetaColor("light")
+  // ThemeInitializer derives browser chrome directly from the active CSS palette.
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -197,13 +193,13 @@ export default function RootLayout({
             })
           }}
         />
-        {/* theme-color is emitted by the Viewport export above and kept in sync at
-            runtime by ThemeInitializer; a second hardcoded tag here would be dead. */}
+        {/* Browser theme-color is derived from the applied CSS palette. */}
         <meta name="msapplication-TileColor" content="#1f2d42" />
         {/* Fonts are self-hosted via next/font/local */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" crossOrigin="" />
       </head>
       <body className="bg-background">
+        <ThemeInitializer />
         {children}
         {process.env.VERCEL ? <Analytics /> : null}
       </body>

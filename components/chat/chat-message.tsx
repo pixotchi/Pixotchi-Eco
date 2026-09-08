@@ -102,6 +102,7 @@ function ChatMessageComponent({
     kind={isAIMessage ? 'assistant' : isOwnPublicMessage || isUserAIMessage ? 'own' : 'other'}
     relativeTime={relativeTime} timestamp={Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : undefined}
     ariaSetsize={ariaSetsize} ariaPosinset={ariaPosinset}
+    deliveryStatus={'deliveryStatus' in message ? message.deliveryStatus : undefined}
     onOpenProfile={onOpenProfile ? () => { onOpenProfile(message.address); trackProfileVisit(); } : undefined} />;
 }
 
