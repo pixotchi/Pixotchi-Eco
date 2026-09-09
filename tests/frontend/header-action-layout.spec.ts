@@ -85,7 +85,7 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
   await header.screenshot({ path: test.info().outputPath(`header${enlarged ? '-200pct' : ''}.png`) });
 });
 
-test('status actions retain full touch targets across phone and tablet widths', async ({ page }) => {
+test('status actions stay compact on mobile and fit across phone and tablet widths', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   for (const width of [320, 390, 820, 864]) {
     await page.setViewportSize({ width, height: 844 });
@@ -94,7 +94,7 @@ test('status actions retain full touch targets across phone and tablet widths', 
     for (const action of await actions.all()) {
       const bounds = (await action.boundingBox())!;
       expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBe(width < 864 ? 32 : 44);
       expect(bounds.x).toBeGreaterThanOrEqual(0);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
       await action.click({ trial: true });

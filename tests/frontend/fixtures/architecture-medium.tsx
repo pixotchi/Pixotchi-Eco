@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { Activity, useEffect, useRef, useState, type RefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from 'next-themes';
 import { ServerThemeProvider } from '@/components/server-theme-provider';
 import { useTheme } from 'next-themes';
 import { useGameNavigation } from '@/hooks/useGameNavigation';
 import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { parseActivityViewState, useActivityViewState } from '@/hooks/useActivityViewState';
 import { FarmViewProvider, useFarmView } from '@/lib/farm-view-context';
 import { navigateToGameTab } from '@/lib/game-navigation';
 import { clearAuthCaches } from '@/lib/cache-utils';
@@ -22,19 +23,56 @@ import { createRetryableTab } from '@/components/retryable-tab';
 import AdminDashboard from '@/app/admin/page';
 import BalanceCard from '@/components/balance-card';
 import type { StatusSnapshot } from '@/lib/status-snapshot';
+import type { Tab } from '@/lib/types';
 
 const parameters = new URLSearchParams(location.search);
 const snapshot: StatusSnapshot = { generatedAt: parameters.has('stale') ? '2020-01-01T00:00:00.000Z' : new Date().toISOString(), overall: 'operational', services: [{ id: 'app', label: 'Ecosystem App', status: 'operational' }] };
 
 function FarmView() {
-  const { dashboardView, setDashboardView, mintType, setMintType } = useFarmView();
-  return <><button onClick={() => setDashboardView('lands')}>Show lands</button><output aria-label="Farm view">{dashboardView}</output><button onClick={() => { setMintType('land'); navigateToGameTab('mint'); }}>Mint a land</button><output aria-label="Mint type">{mintType}</output></>;
+  const { dashboardView, setDashboardView, mintType } = useFarmView();
+  return <><button onClick={() => setDashboardView('lands')}>Show lands</button><button onClick={() => setDashboardView('plants')}>Show plants</button><output aria-label="Farm view">{dashboardView}</output><button onClick={() => navigateToGameTab('mint', { mintType: 'land' })}>Mint a land</button><button onClick={() => navigateToGameTab('dashboard', { dashboardView: 'lands' })}>Go to my lands</button><output aria-label="Mint type">{mintType}</output></>;
 }
+
+type RankingFilter = 'all' | 'dead' | 'attackable';
+function RankingView({ mini, pendingFilter }: { mini: boolean; pendingFilter: RefObject<(filter: RankingFilter) => void> }) {
+  const [filter, setFilter] = useWebQueryState<RankingFilter>({ key: 'leaderboardFilter', defaultValue: 'all', enabled: !mini, parse: value => value === 'all' || value === 'dead' || value === 'attackable' ? value : null, serialize: value => value === 'all' ? null : value });
+  const [page, setPage] = useWebQueryState({ key: 'leaderboardPage', defaultValue: 1, enabled: !mini, parse: value => value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null, serialize: value => value <= 1 ? null : String(value) });
+  useEffect(() => {
+    // Retain this setter after Activity hides the panel, like a pending async
+    // operation completing after navigation. It must not write into another tab.
+    pendingFilter.current = setFilter;
+  }, [pendingFilter, setFilter]);
+  return <section aria-label="Ranking panel"><select aria-label="Ranking filter" value={filter} onChange={event => { setPage(1); setFilter(event.target.value as RankingFilter); }}><option value="all">All</option><option value="dead">Dead</option><option value="attackable">Attackable</option></select><output aria-label="Ranking page">{page}</output><button onClick={() => setPage(value => value + 1)}>Next ranking page</button><input aria-label="Ranking draft" defaultValue="" /></section>;
+}
+
+function ActivityView({ mini, activeTab }: { mini: boolean; activeTab: Tab }) {
+  const { feeds, setPage, setCategory, setDirection, reset } = useActivityViewState(!mini);
+  const [view, setView] = useWebQueryState<'all' | 'my'>({ key: 'activityView', defaultValue: 'all', enabled: !mini, parse: value => value === 'all' || value === 'my' ? value : null, serialize: value => value === 'all' ? null : value });
+  const [historyMismatch, setHistoryMismatch] = useState<string | null>(null);
+  useEffect(() => {
+    if (mini || activeTab !== 'activity') return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('tab') !== 'activity') return;
+    const expected = parseActivityViewState(params.get('activityFeeds'), params);
+    // Consumer effects (such as pagination clamping) must see the restored
+    // history entry immediately, before they can write a stale retained value.
+    if (JSON.stringify(feeds) !== JSON.stringify(expected)) {
+      setHistoryMismatch(`Observed ${JSON.stringify(feeds)} while the URL described ${JSON.stringify(expected)}`);
+    }
+  }, [activeTab, feeds, mini]);
+  return <section aria-label="Activity panel"><output aria-label="Activity feeds">{JSON.stringify(feeds)}</output><output aria-label="Activity history mismatch">{historyMismatch ?? 'none'}</output><select aria-label="Activity scope" value={view} onChange={event => setView(event.target.value as 'all' | 'my')}><option value="all">All</option><option value="my">Mine</option></select><button onClick={() => setPage('my', value => value + 1)}>Next personal activity page</button><button onClick={() => setCategory('all', 'casino')}>Show casino activity</button><button onClick={() => { setCategory('my', 'attacks'); setDirection('my', 'incoming'); }}>Show incoming attacks</button><button onClick={() => { reset('all'); reset('my'); setView('all'); }}>Reset activity</button></section>;
+}
+
 function Navigation() {
   const mini = parameters.has('mini');
   const { activeTab, setActiveTab, contentScrollRef, onContentScroll } = useGameNavigation(mini);
-  const [filter, setFilter] = useWebQueryState({ key: 'leaderboardFilter', defaultValue: 'all', enabled: !mini, parse: value => value, serialize: value => value === 'all' ? null : value });
-  return <><button onClick={() => setActiveTab('dashboard')}>Farm</button><button onClick={() => setActiveTab('swap')}>Swap</button><button onClick={() => setActiveTab('leaderboard')}>Ranking</button><output aria-label="Active tab">{activeTab}</output><input aria-label="Ranking filter" value={filter} onChange={event => setFilter(event.target.value)} /><FarmViewProvider isMiniApp={mini}><FarmView /><div ref={contentScrollRef} onScroll={onContentScroll} data-testid="scroller" style={{ height: 150, overflow: 'auto' }}><div style={{ height: 1200 }}>{activeTab} content</div></div></FarmViewProvider></>;
+  const [connected, setConnected] = useState(false);
+  const [visited, setVisited] = useState<ReadonlySet<Tab>>(() => new Set([activeTab]));
+  const pendingFilter = useRef<(filter: RankingFilter) => void>(() => {});
+  if (!visited.has(activeTab)) setVisited(new Set(visited).add(activeTab));
+  // Match the app: the navigation hook mounts before the connected Farm provider.
+  useEffect(() => setConnected(true), []);
+  return <><button onClick={() => setActiveTab('dashboard')}>Farm</button><button onClick={() => setActiveTab('mint')}>Mint</button><button onClick={() => setActiveTab('swap')}>Swap</button><button onClick={() => setActiveTab('leaderboard')}>Ranking</button><button onClick={() => setActiveTab('activity')}>Activity</button><button onClick={() => pendingFilter.current('attackable')}>Complete background Ranking change</button><output aria-label="Active tab">{activeTab}</output>{connected && <FarmViewProvider isMiniApp={mini}><FarmView /><Activity mode={activeTab === 'leaderboard' ? 'visible' : 'hidden'}>{visited.has('leaderboard') && <RankingView mini={mini} pendingFilter={pendingFilter} />}</Activity><Activity mode={activeTab === 'activity' ? 'visible' : 'hidden'}>{visited.has('activity') && <ActivityView mini={mini} activeTab={activeTab} />}</Activity><div ref={contentScrollRef} onScroll={onContentScroll} data-testid="scroller" style={{ height: 150, overflow: 'auto' }}><div style={{ height: 1200 }}>{activeTab} content</div></div></FarmViewProvider>}</>;
 }
 
 function Auth() {

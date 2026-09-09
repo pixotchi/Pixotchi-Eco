@@ -23,25 +23,170 @@ async function open(page: import('@playwright/test').Page, query: string) {
   await page.addStyleTag({ content: '[role="dialog"] { position: fixed; inset: 1rem; overflow: auto; background: white; } [data-dialog-layout] { pointer-events: auto; }' });
 }
 
-test('ARC-01 web tab view, filter, scroll, Back/Forward and refresh continuity', async ({ page }) => {
-  await open(page, 'dashboardView=lands&leaderboardFilter=mine');
+function query(page: import('@playwright/test').Page) {
+  return Object.fromEntries(new URL(page.url()).searchParams);
+}
+
+test('ARC-01 web URLs contain only active tab state while retaining selections, scroll and reload continuity', async ({ page }) => {
+  await page.addInitScript(() => history.replaceState({ ...history.state, fixtureState: { keep: 42 } }, '', location.href));
+  await open(page, 'dashboardView=lands&leaderboardFilter=dead&surface=base&utm_source=shared&custom=keep#buildings');
   await expect(page.getByLabel('Farm view')).toHaveText('lands');
+  await expect.poll(() => query(page)).toEqual({ dashboardView: 'lands', surface: 'base', utm_source: 'shared', custom: 'keep' });
+  expect(await page.evaluate(() => history.state.fixtureState)).toEqual({ keep: 42 });
   await page.getByTestId('scroller').evaluate(element => { element.scrollTop = 450; element.dispatchEvent(new Event('scroll', { bubbles: true })); });
   await page.getByRole('button', { name: 'Swap', exact: true }).click();
   await expect(page.getByLabel('Farm view')).toHaveText('lands');
-  await expect(page.getByLabel('Ranking filter')).toHaveValue('mine');
-  await page.getByRole('button', { name: 'Farm', exact: true }).click();
-  await expect.poll(() => page.getByTestId('scroller').evaluate(element => element.scrollTop)).toBe(450);
+  await expect.poll(() => query(page)).toEqual({ tab: 'swap', surface: 'base', utm_source: 'shared', custom: 'keep' });
+  expect(new URL(page.url()).hash).toBe('#buildings');
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
+  await expect.poll(() => query(page)).toEqual({ tab: 'leaderboard', leaderboardFilter: 'dead', surface: 'base', utm_source: 'shared', custom: 'keep' });
+  expect(await page.evaluate(() => history.state.fixtureState)).toEqual({ keep: 42 });
   await page.goBack();
   await expect(page.getByLabel('Active tab')).toHaveText('swap');
+  expect(await page.evaluate(() => history.state.fixtureState)).toEqual({ keep: 42 });
   await page.goForward();
-  await expect(page.getByLabel('Active tab')).toHaveText('dashboard');
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
+  await page.getByRole('button', { name: 'Farm', exact: true }).click();
+  await expect.poll(() => page.getByTestId('scroller').evaluate(element => element.scrollTop)).toBe(450);
+  await page.getByRole('button', { name: 'Swap', exact: true }).click();
   await page.reload(); await page.addScriptTag({ content: bundle });
+  await expect(page.getByLabel('Active tab')).toHaveText('swap');
+  await expect.poll(() => query(page)).toEqual({ tab: 'swap', surface: 'base', utm_source: 'shared', custom: 'keep' });
+  expect(await page.evaluate(() => history.state.fixtureState)).toEqual({ keep: 42 });
+  await page.getByRole('button', { name: 'Farm', exact: true }).click();
   await expect(page.getByLabel('Farm view')).toHaveText('lands');
-  await expect(page.getByLabel('Ranking filter')).toHaveValue('mine');
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
 });
+
+test('ARC-01 Back and Forward restore their own active URL instead of a newer cached filter', async ({ page }) => {
+  await open(page, 'tab=leaderboard&leaderboardFilter=dead&leaderboardPage=3&surface=base');
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
+  await expect(page.getByLabel('Ranking page')).toHaveText('3');
+  await page.getByRole('button', { name: 'Swap', exact: true }).click();
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await page.getByLabel('Ranking filter').selectOption('attackable');
+  await expect(page.getByLabel('Ranking page')).toHaveText('1');
+  await expect.poll(() => query(page)).toEqual({ tab: 'leaderboard', leaderboardFilter: 'attackable', surface: 'base' });
+  const entries = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  expect(await page.evaluate(() => history.length)).toBe(entries);
+  await page.goBack();
+  await expect(page.getByLabel('Active tab')).toHaveText('swap');
+  await page.goBack();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
+  await expect(page.getByLabel('Ranking page')).toHaveText('3');
+  await expect.poll(() => query(page)).toEqual({ tab: 'leaderboard', leaderboardFilter: 'dead', leaderboardPage: '3', surface: 'base' });
+  await page.goForward();
+  await expect(page.getByLabel('Active tab')).toHaveText('swap');
+  await page.goForward();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('attackable');
+  await expect(page.getByLabel('Ranking page')).toHaveText('1');
+  await page.reload(); await page.addScriptTag({ content: bundle });
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('attackable');
+});
+
+test('ARC-01 hidden React Activity updates retain local state without leaking query keys into another tab', async ({ page }) => {
+  await open(page, 'tab=leaderboard&leaderboardFilter=dead&leaderboardPage=3&surface=base');
+  await page.getByLabel('Ranking draft').fill('Keep this unfinished selection');
+  await page.getByRole('button', { name: 'Swap', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Ranking panel' })).toBeHidden();
+  await page.getByRole('button', { name: 'Complete background Ranking change' }).click();
+  await expect.poll(() => query(page)).toEqual({ tab: 'swap', surface: 'base' });
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('attackable');
+  await expect(page.getByLabel('Ranking page')).toHaveText('3');
+  await expect(page.getByLabel('Ranking draft')).toHaveValue('Keep this unfinished selection');
+  await expect.poll(() => query(page)).toEqual({ tab: 'leaderboard', leaderboardFilter: 'attackable', leaderboardPage: '3', surface: 'base' });
+});
+
+test('ARC-01 typed cross-tab navigation writes target options into one new history entry', async ({ page }) => {
+  await open(page, 'surface=base#destination');
+  await expect(page.getByLabel('Farm view')).toHaveText('plants');
+  const entries = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'Go to my lands' }).click();
+  await expect(page.getByLabel('Farm view')).toHaveText('lands');
+  await expect.poll(() => query(page)).toEqual({ dashboardView: 'lands', surface: 'base' });
+  expect(await page.evaluate(() => history.length)).toBe(entries);
+  await page.getByRole('button', { name: 'Show plants' }).click();
+  await expect.poll(() => query(page)).toEqual({ surface: 'base' });
+  await page.getByRole('button', { name: 'Mint a land' }).click();
+  await expect(page.getByLabel('Active tab')).toHaveText('mint');
+  await expect(page.getByLabel('Mint type')).toHaveText('land');
+  await expect.poll(() => query(page)).toEqual({ tab: 'mint', mintType: 'land', surface: 'base' });
+  expect(await page.evaluate(() => history.length)).toBe(entries + 1);
+  await page.goBack();
+  await expect(page.getByLabel('Active tab')).toHaveText('dashboard');
+  await expect(page.getByLabel('Farm view')).toHaveText('plants');
+  await expect.poll(() => query(page)).toEqual({ surface: 'base' });
+  await page.goForward();
+  await expect(page.getByLabel('Mint type')).toHaveText('land');
+  await page.getByRole('button', { name: 'Go to my lands' }).click();
+  await expect(page.getByLabel('Active tab')).toHaveText('dashboard');
+  await expect(page.getByLabel('Farm view')).toHaveText('lands');
+  await expect.poll(() => query(page)).toEqual({ dashboardView: 'lands', surface: 'base' });
+  expect(new URL(page.url()).hash).toBe('#destination');
+  await page.goBack();
+  await expect(page.getByLabel('Active tab')).toHaveText('mint');
+  await expect(page.getByLabel('Mint type')).toHaveText('land');
+});
+
+test('ARC-01 old Activity deep links migrate once, survive hidden panels and reset to a clean default URL', async ({ page }) => {
+  await open(page, 'tab=activity&activityView=my&activityPage=2&activityFilter=attacks&activityDirection=incoming&surface=base');
+  await expect(page.getByLabel('Activity scope')).toHaveValue('my');
+  await expect(page.getByLabel('Activity feeds')).toHaveText(JSON.stringify({ all: { page: 1, category: 'all', direction: 'all' }, my: { page: 2, category: 'attacks', direction: 'incoming' } }));
+  await expect.poll(() => query(page)).toEqual({ tab: 'activity', activityView: 'my', activityFeeds: JSON.stringify({ my: { page: 2, category: 'attacks', direction: 'incoming' } }), surface: 'base' });
+  await page.getByRole('button', { name: 'Next personal activity page' }).click();
+  await page.getByRole('button', { name: 'Swap', exact: true }).click();
+  await expect.poll(() => query(page)).toEqual({ tab: 'swap', surface: 'base' });
+  await page.getByRole('button', { name: 'Activity', exact: true }).click();
+  await expect(page.getByLabel('Activity feeds')).toContainText('"page":3');
+  await page.reload(); await page.addScriptTag({ content: bundle });
+  await expect(page.getByLabel('Activity feeds')).toContainText('"page":3');
+  await page.getByRole('button', { name: 'Reset activity' }).click();
+  await expect.poll(() => query(page)).toEqual({ tab: 'activity', surface: 'base' });
+  await expect(page.getByLabel('Activity feeds')).toHaveText(JSON.stringify({ all: { page: 1, category: 'all', direction: 'all' }, my: { page: 1, category: 'all', direction: 'all' } }));
+  await page.reload(); await page.addScriptTag({ content: bundle });
+  await expect(page.getByLabel('Activity scope')).toHaveValue('all');
+  await expect.poll(() => query(page)).toEqual({ tab: 'activity', surface: 'base' });
+});
+
+test('ARC-01 Activity consumer effects see restored history before retained filters can overwrite it', async ({ page }) => {
+  await open(page, `tab=activity&activityFeeds=${encodeURIComponent(JSON.stringify({ all: { page: 3 } }))}&surface=base`);
+  const initialFeeds = JSON.stringify({ all: { page: 3, category: 'all', direction: 'all' }, my: { page: 1, category: 'all', direction: 'all' } });
+  await expect(page.getByLabel('Activity feeds')).toHaveText(initialFeeds);
+  await expect(page.getByLabel('Activity history mismatch')).toHaveText('none');
+  await page.getByRole('button', { name: 'Mint', exact: true }).click();
+  await page.getByRole('button', { name: 'Activity', exact: true }).click();
+  await page.getByRole('button', { name: 'Show casino activity' }).click();
+  await expect.poll(() => query(page)).toEqual({ tab: 'activity', activityFeeds: JSON.stringify({ all: { category: 'casino' } }), surface: 'base' });
+  await page.getByRole('button', { name: 'Mint', exact: true }).click();
+  await page.evaluate(() => history.go(-3));
+  await expect(page.getByLabel('Active tab')).toHaveText('activity');
+  await expect(page.getByLabel('Activity feeds')).toHaveText(initialFeeds);
+  await expect(page.getByLabel('Activity history mismatch')).toHaveText('none');
+  await expect.poll(() => query(page)).toEqual({ tab: 'activity', activityFeeds: JSON.stringify({ all: { page: 3 } }), surface: 'base' });
+});
+
+test('ARC-01 invalid and default deep-link values are removed without losing global parameters', async ({ page }) => {
+  for (const invalidPage of ['0', '-1', '1.5', '3garbage', '1e2', '9007199254740992']) {
+    await open(page, `tab=leaderboard&leaderboardFilter=all&leaderboardMine=0&leaderboardBoard=plants&leaderboardPage=${invalidPage}&surface=base#ranking`);
+    await expect(page.getByLabel('Ranking page')).toHaveText('1');
+    await expect.poll(() => query(page)).toEqual({ tab: 'leaderboard', surface: 'base' });
+    expect(new URL(page.url()).hash).toBe('#ranking');
+  }
+  await open(page, 'tab=not-a-tab&dashboardView=not-a-view&leaderboardFilter=mine&mintType=invalid&surface=base#home');
+  await expect(page.getByLabel('Active tab')).toHaveText('dashboard');
+  await expect(page.getByLabel('Farm view')).toHaveText('plants');
+  await expect.poll(() => query(page)).toEqual({ surface: 'base' });
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('all');
+});
+
 test('ARC-01 Mini App view persists and typed mint navigation works', async ({ page }) => {
-  await open(page, 'mini=1');
+  await open(page, 'mini=1&surface=base#mini');
+  const initialUrl = page.url();
   await page.getByRole('button', { name: 'Show lands' }).click();
   await page.getByRole('button', { name: 'Swap', exact: true }).click();
   await page.getByRole('button', { name: 'Farm', exact: true }).click();
@@ -49,7 +194,12 @@ test('ARC-01 Mini App view persists and typed mint navigation works', async ({ p
   await page.getByRole('button', { name: 'Mint a land' }).click();
   await expect(page.getByLabel('Active tab')).toHaveText('mint');
   await expect(page.getByLabel('Mint type')).toHaveText('land');
-  expect(new URL(page.url()).searchParams.has('tab')).toBe(false);
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await page.getByLabel('Ranking filter').selectOption('dead');
+  await page.getByRole('button', { name: 'Swap', exact: true }).click();
+  await page.getByRole('button', { name: 'Ranking', exact: true }).click();
+  await expect(page.getByLabel('Ranking filter')).toHaveValue('dead');
+  expect(page.url()).toBe(initialUrl);
 });
 test('ARC-03 disconnect preserves preference, guidance and durable proof across reload', async ({ page }) => {
   await open(page, 'scenario=cache');

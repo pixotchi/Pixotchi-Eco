@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { useWebQueryState } from '@/hooks/useWebQueryState';
+import { useWebQueryState, WEB_QUERY_STATE_EVENT } from '@/hooks/useWebQueryState';
 import { GAME_NAVIGATION_EVENT, isGameTab } from '@/lib/game-navigation';
+import { navigateWebQueryTab } from '@/lib/web-query-state';
 import type { Tab } from '@/lib/types';
 
 export function useGameNavigation(isMiniApp: boolean) {
@@ -15,18 +16,26 @@ export function useGameNavigation(isMiniApp: boolean) {
   const positions = useRef<Partial<Record<Tab, number>>>({});
   const visibleTab = useRef(activeTab);
 
-  // Retain inactive query keys: each view owns its key and defaults. History
-  // entries then represent the complete UI state, including Back/Forward.
+  // Apply the tab and its destination view in one history entry. Inactive
+  // selections live in history state, while only the current tab is in the URL.
   useEffect(() => {
     const navigate = (event: Event) => {
       const detail: unknown = (event as CustomEvent<unknown>).detail;
       if (typeof detail === 'object' && detail !== null && 'tab' in detail && isGameTab(detail.tab)) {
-        setActiveTab(detail.tab);
+        if (isMiniApp) {
+          setActiveTab(detail.tab);
+        } else {
+          navigateWebQueryTab(detail.tab, {
+            dashboardView: 'dashboardView' in detail && (detail.dashboardView === 'plants' || detail.dashboardView === 'lands') ? detail.dashboardView : undefined,
+            mintType: 'mintType' in detail && (detail.mintType === 'plant' || detail.mintType === 'land') ? detail.mintType : undefined,
+          });
+          window.dispatchEvent(new Event(WEB_QUERY_STATE_EVENT));
+        }
       }
     };
     window.addEventListener(GAME_NAVIGATION_EVENT, navigate);
     return () => window.removeEventListener(GAME_NAVIGATION_EVENT, navigate);
-  }, [setActiveTab]);
+  }, [isMiniApp, setActiveTab]);
 
   const onContentScroll = useCallback(() => {
     const scroller = contentScrollRef.current;

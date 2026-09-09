@@ -61,6 +61,9 @@ export function FarmViewProvider({
   });
 
   useEffect(() => {
+    // Web navigation applies tab + view atomically in useGameNavigation.
+    // Mini Apps have no URL channel, so the shared provider handles the view.
+    if (!isMiniApp) return;
     const onNavigate = (event: Event) => {
       const detail: unknown = (event as CustomEvent<unknown>).detail;
       if (!detail || typeof detail !== 'object' || !('tab' in detail)) return;
@@ -71,7 +74,7 @@ export function FarmViewProvider({
     };
     window.addEventListener(GAME_NAVIGATION_EVENT, onNavigate);
     return () => window.removeEventListener(GAME_NAVIGATION_EVENT, onNavigate);
-  }, [setDashboardView, setMintType]);
+  }, [isMiniApp, setDashboardView, setMintType]);
 
   // Land minting is EVM-only and the shared toggle is hidden for Solana wallets
   // on the Mint tab, so a lingering mintType of 'land' (via ?mintType=land or a

@@ -47,6 +47,7 @@ import { DisabledReason, InlineBalanceNotice } from "@/components/ui/premium";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useWebQueryState } from "@/hooks/useWebQueryState";
+import { parseQueryPage } from "@/lib/web-query-state";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOwnerOperationScope } from "@/hooks/useOwnerOperationScope";
 import { assertKillReadiness, assertReviveReadiness, readReviveReadiness, type ReviveRead } from "@/lib/ranking-action-readiness";
@@ -143,11 +144,7 @@ export default function LeaderboardTab() {
     key: "leaderboardPage",
     defaultValue: 1,
     enabled: !frame?.isInMiniApp,
-    parse: (rawValue) => {
-      if (!rawValue) return null;
-      const parsed = Number.parseInt(rawValue, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    },
+    parse: parseQueryPage,
     serialize: (value) => (value <= 1 ? null : value.toString()),
   });
 

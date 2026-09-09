@@ -333,17 +333,16 @@ const myActivityRoute = projectFile('app/api/activity/my/route.ts');
 assert.match(myActivityRoute, /getCachedMyActivityFeed\(address\)/);
 assert.match(myActivityRoute, /\{ activities, count: activities\.length, landIds, plantIds \}/);
 
-// The shell delegates navigation to the query-state hook, which edits only its
-// own key. Activity keys no longer need a central allowlist to survive a switch.
+// The shell delegates scoped URL/history ownership to the query-state bridge.
+// Behavior across tab switches and history is covered by architecture-medium.
 const gameShell = projectFile('app/(game)/page.tsx');
 assert.match(gameShell, /useGameNavigation\(isMiniApp\)/);
 const navigation = projectFile('hooks/useGameNavigation.ts');
 assert.match(navigation, /key: 'tab'/);
 assert.match(navigation, /useWebQueryState<Tab>/);
-assert.doesNotMatch(navigation, /searchParams\.delete/, 'Tab navigation must not strip other views\' query keys');
 const queryState = projectFile('hooks/useWebQueryState.ts');
-assert.match(queryState, /new URL\(window\.location\.href\)/);
-assert.match(queryState, /url\.searchParams\.set\(keyRef\.current, serialized\)/);
-assert.match(queryState, /url\.searchParams\.delete\(keyRef\.current\)/);
+assert.match(queryState, /readWebQueryValue/);
+assert.match(queryState, /writeWebQueryValue/);
+assert.match(navigation, /navigateWebQueryTab/);
 
 console.log('Activity filters smoke passed');
