@@ -218,7 +218,7 @@ export default function GameTransaction({
       resetAfter={5000}
     >
       <TransactionButton
-        className={`${buttonClassName} inline-flex items-center justify-center whitespace-nowrap leading-none`}
+        className={buttonClassName}
         disabled={isSubmissionDisabled}
         text={buttonText}
         pendingText={pendingText}

@@ -92,7 +92,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
         variant="headerIcon"
         size="headerIcon"
         onClick={handleOpenChat}
-        className={`relative ${className}`}
+        className={`relative [&>img]:h-[24px] [&>img]:w-[24px] ${className}`}
         title="Open Public Chat"
         aria-label={unreadLabel}
         aria-haspopup="dialog"
@@ -103,7 +103,7 @@ export default function ChatButton({ className = "" }: ChatButtonProps) {
           alt=""
           width={24}
           height={24}
-          className="w-6 h-6"
+          className="h-6 w-6"
           aria-hidden="true"
           preload
         />

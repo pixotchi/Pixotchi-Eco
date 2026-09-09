@@ -19,6 +19,13 @@ contracts/
 scripts/*
 !scripts/check-base-rpc-hardening.mjs
 !scripts/check-frontend-release.mjs
+!scripts/check-frontend-p1.mjs
+!scripts/check-frontend-p2.mjs
+!scripts/check-frontend-p3.mjs
+!scripts/check-frontend-type-boundaries.mjs
+!scripts/frontend-type-boundaries.json
+!scripts/test-casino-p1.mjs
+!scripts/test-arcade-p1.mjs
 !scripts/run-eslint-chunked.mjs
 !scripts/run-react-server-smoke.mjs
 !scripts/art/
@@ -28,6 +35,7 @@ pixotchi-onchain/
 tools/
 v22/
 output/
+test-results/
 # Environment variables
 .env
 .env.local
@@ -66,3 +74,5 @@ reset-claims-log.json
 reset-claims.js
 tsconfig.tsbuildinfo
 CLAUDE.md
+/tmp
+/docs/research

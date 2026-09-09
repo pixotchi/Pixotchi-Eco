@@ -18,15 +18,15 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
   const chat = header.getByRole('button', { name: /^Open public chat/ });
   const wallet = header.getByRole('button', { name: 'Open wallet profile', exact: true });
   const theme = header.getByRole('button', { name: /^Current theme:/ });
-  for (const button of [chat, wallet, theme]) {
+  for (const [button, glyphSize] of [[chat, 24], [wallet, 24], [theme, 20]] as const) {
     const bounds = await button.boundingBox();
     expect(bounds?.width).toBe(44);
     expect(bounds?.height).toBe(44);
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     const glyph = button.locator(':scope > img, :scope > svg').first();
-    expect((await glyph.boundingBox())?.width).toBe(20);
-    expect((await glyph.boundingBox())?.height).toBe(20);
+    expect((await glyph.boundingBox())?.width).toBe(glyphSize);
+    expect((await glyph.boundingBox())?.height).toBe(glyphSize);
   }
   const swatch = theme.locator(':scope > span[aria-hidden="true"]');
   expect((await swatch.boundingBox())?.width).toBe(10);

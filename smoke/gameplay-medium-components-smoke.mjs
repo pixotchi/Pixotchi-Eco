@@ -11,6 +11,7 @@ import { chromium, webkit, expect } from '@playwright/test';
 
 const cwd = process.cwd();
 const missionsOnly = process.argv.includes('--missions-only');
+const batchEligibilityOnly = process.argv.includes('--batch-eligibility-only');
 const boundary = `
 import React, { useEffect, useRef } from 'react';
 const params = new URLSearchParams(location.search);
@@ -21,7 +22,7 @@ export const useAccount = () => ({ address: params.has('solana') || params.get('
 export const useBlockNumber = () => ({ data: 1000n });
 export const useBalance = () => ({ data: { value: 1000000000000000000n }, isLoading:false, isError:false, refetch:async()=>{} });
 export const useBalances = () => ({ seedBalance:100000000000000000000000n, seedBalanceStatus:'ready', refreshBalances:async()=>{} });
-export const useSmartWallet = () => ({ isSmartWallet:false, isLoading:false });
+export const useSmartWallet = () => state.smartWallet ?? ({ isSmartWallet:false, isLoading:false });
 export const useEthModeSafe = () => ({ isEthMode:false });
 export const useIsSolanaWallet = () => params.has('solana');
 export const useTwinAddress = () => address;
@@ -81,6 +82,7 @@ export function Transaction(props) {
  return <button data-controller={id.current} disabled={props.disabled} onClick={click}>{props.buttonText || 'Buy Item'}</button>;
 }
 export default function Boundary(props) {
+ if (props.variant === 'embedded' && 'lands' in props) return <div data-batch-panel>Batch utility panel</div>;
  if ('selectedBuilding' in props) return <div data-detail-land={String(props.landId)} data-detail-building={props.selectedBuilding.id}>Details level {props.selectedBuilding.level}<button disabled={!props.allowancesReady}>Upgrade</button>{props.allowancesError && <button onClick={props.onRetryAllowances}>Retry land permission</button>}</div>;
  return <Transaction {...props} />;
 }
@@ -104,6 +106,7 @@ import { state, address } from 'medium-boundary';
 const params = new URLSearchParams(location.search);
 const plant = { id:7,name:'Original',owner:address,status:1,level:1,score:0,rewards:0,stars:0,strain:0,extensions:[],timeUntilStarving:Math.floor(Date.now()/1000)+864000,fenceV2:{v1Active:false,isActive:false,activeUntil:0} };
 state.lands = [1,2].map(id=>({tokenId:BigInt(id),name:'Land '+id,owner:address,coordinateX:BigInt(id),coordinateY:0n,experiencePoints:0n,accumulatedPlantPoints:0n,accumulatedPlantLifetime:0n}));
+state.allLands = state.lands;
 const client = new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:false}}});
 state.client=client;
 window.addEventListener(GAME_NAVIGATION_EVENT,e=>state.navigation=e.detail);
@@ -124,9 +127,14 @@ function MissionLand() {
  return <><button onClick={()=>setVisible(false)}>Hide lands</button><Activity mode={visible?'visible':'hidden'}>{mounted?<LandsView/>:null}</Activity></>;
 }
 const scenario=params.get('scenario');
+function BatchEligibility() {
+ const [,setRevision]=useState(0);
+ state.batchEligibility=(smart,count,loading=false)=>{state.smartWallet={isSmartWallet:smart,isLoading:loading};state.lands=state.allLands.slice(0,count);setRevision(n=>n+1)};
+ return <LandsView/>;
+}
 if(scenario==='mission-land'){state.owner=address;state.landsLoaded=false;localStorage.setItem('pixotchi:selected-land-id','1');localStorage.setItem('pixotchi:selected-building-type','village');localStorage.setItem('pixotchi:selected-building-id','0');}
-const app=scenario==='mission-land'?<MissionLand/>:scenario==='lands'?<LandsView/>:scenario==='profile'?<PlantProfileDialog open onOpenChange={()=>{}} plant={plant}/>:scenario==='rename'?<EditPlantName plant={plant}/>:scenario==='empty'?<><EmptyFarm asset="plant"/><EmptyFarm asset="land"/></>:scenario==='revive'?<Revive/>:scenario==='fence'?<ItemDetailsPanel selectedItem={{id:'8',name:'Fence',category:'fence-v2',price:1n,effectTime:0}} selectedPlant={plant} itemType="shop" quantity={1} onPurchaseSuccess={()=>{}}/>:<Care/>;
-createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{maxWidth:['lands','mission-land'].includes(scenario)?'none':420,margin:'auto',padding:16}}>{app}</main></QueryClientProvider>);
+const app=scenario==='batch-eligibility'?<BatchEligibility/>:scenario==='mission-land'?<MissionLand/>:scenario==='lands'?<LandsView/>:scenario==='profile'?<PlantProfileDialog open onOpenChange={()=>{}} plant={plant}/>:scenario==='rename'?<EditPlantName plant={plant}/>:scenario==='empty'?<><EmptyFarm asset="plant"/><EmptyFarm asset="land"/></>:scenario==='revive'?<Revive/>:scenario==='fence'?<ItemDetailsPanel selectedItem={{id:'8',name:'Fence',category:'fence-v2',price:1n,effectTime:0}} selectedPlant={plant} itemType="shop" quantity={1} onPurchaseSuccess={()=>{}}/>:<Care/>;
+createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{maxWidth:['lands','mission-land','batch-eligibility'].includes(scenario)?'none':420,margin:'auto',padding:16}}>{app}</main></QueryClientProvider>);
 `;
 const mocks = new Set(['lib/contracts','lib/balance-context','lib/smart-wallet-context','lib/eth-mode-context','lib/mission-tracking','lib/farm-view-context','lib/tab-visibility-context','lib/efp-service',
   'components/solana','components/hooks/usePrimaryName','components/transactions/game-transaction','components/transactions/solana-bridge-button','components/transactions/swap-buy-item-bundle','components/transactions/swap-fence-purchase-bundle',
@@ -162,6 +170,30 @@ async function run(browserType,viewport){
  const settle=async(kind,value,fail=false)=>{await page.waitForFunction(k=>window.gameplayMedium.reads[k]?.length,kind);await page.evaluate(({kind,value,fail})=>{const r=window.gameplayMedium.reads[kind].shift();if(fail)r.reject(new Error('Injected read failure'));else r.resolve(value);},{kind,value,fail});};
   const garden=price=>[{id:'1',name:'Water',price,points:0,timeExtension:86400},{id:'2',name:'Mystery sprout',price:2n,points:0,timeExtension:0}];
  try {
+  if(batchEligibilityOnly) {
+   await go('scenario=batch-eligibility');
+   await settle('village',[{id:0,level:1,maxLevel:4,isUpgrading:false}]);await settle('town',[{id:7,level:1,maxLevel:3,isUpgrading:false}]);await settle('landLeaf',10n);await settle('landSeed',10n);
+   const configure=async(smart,count,loading=false)=>page.evaluate(({smart,count,loading})=>window.gameplayMedium.batchEligibility(smart,count,loading),{smart,count,loading});
+   const claim=page.getByRole('button',{name:'Open batch claim',exact:true});
+   const quests=page.getByRole('button',{name:'Open batch quests',exact:true});
+   for(const [smart,count,loading] of [[false,2,false],[false,1,false],[true,1,false],[true,2,true]]) {
+    await configure(smart,count,loading);
+    for(const section of ['village','town']) {
+     if(viewport.width<1280)await page.getByRole('radio',{name:section==='village'?'Village':'Town',exact:true}).click();
+     await expect(claim).toHaveCount(0);await expect(quests).toHaveCount(0);
+    }
+   }
+   await configure(true,2);
+   if(viewport.width<1280)await page.getByRole('radio',{name:'Village',exact:true}).click();
+   await expect(claim).toBeVisible();await claim.click();await expect(page.locator('[data-batch-panel]')).toBeVisible();
+   await configure(false,2);await expect(claim).toHaveCount(0);await expect(page.locator('[data-batch-panel]')).toHaveCount(0);
+   await configure(true,2);
+   if(viewport.width<1280)await page.getByRole('radio',{name:'Town',exact:true}).click();
+   await expect(quests).toBeVisible();await quests.click();await expect(page.locator('[data-batch-panel]')).toBeVisible();
+   await configure(true,1);await expect(quests).toHaveCount(0);await expect(page.locator('[data-batch-panel]')).toHaveCount(0);
+   assert.deepEqual(pageErrors,[]);console.log(browserType.name()+' '+viewport.width+': batch eligibility, pending detection, and loss of wallet/land eligibility passed');
+   return;
+  }
   if(missionsOnly) {
    const target={owner:'0x1111111111111111111111111111111111111111',landId:'2',buildingType:'town',buildingId:7};
    const settleBuildings=async({fail=false}={})=>{

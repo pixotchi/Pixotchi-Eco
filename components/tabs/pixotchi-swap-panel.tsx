@@ -223,23 +223,11 @@ function TokenSelector({
 }) {
   const token = SWAP_TOKEN_MAP[value];
   const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
-          // Radix restores focus automatically, but in some Farcaster webview
-          // contexts it doesn't. Forcing focus back here is a no-op in normal
-          // browsers and a safety net inside MiniApp.
-          window.setTimeout(() => triggerRef.current?.focus(), 0);
-        }
-      }}
-    >
+    <DropdownMenu onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button
-          ref={triggerRef}
           type="button"
           data-testid="ockTokenSelectButton_Button"
           className={cn(

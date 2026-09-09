@@ -49,7 +49,7 @@ import { SolanaNotSupported,useIsSolanaWallet } from "@/components/solana";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useLandMap } from "@/hooks/useLandMap";
 import { useOwnerResourceList } from "@/hooks/useOwnerResourceList";
-import { ArrowLeft,ChevronDown,LandPlot } from "lucide-react";
+import { ChevronDown,LandPlot } from "lucide-react";
 import LandImage from "../LandImage";
 
 import { useSmartWallet } from "@/lib/smart-wallet-context";
@@ -198,7 +198,7 @@ function LandsViewContent() {
   const ownerKey = address?.toLowerCase() ?? null;
   const missionLandRequest = useSyncExternalStore(subscribeMissionLand, getPendingMissionLand, getServerMissionLand);
   const queryClient = useQueryClient();
-  useSmartWallet();
+  const { isSmartWallet, isLoading: smartWalletLoading } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
   const isVisible = isTabVisible('dashboard');
   const isDocumentVisible = useDocumentVisible();
@@ -219,9 +219,7 @@ function LandsViewContent() {
   const [detailRequest, setDetailRequest] = useState(0);
   const [missionDetailFocus, setMissionDetailFocus] = useState(false);
   const detailRef = useRef<HTMLElement>(null);
-  const buildingGridRef = useRef<HTMLDivElement>(null);
-  const buildingReturnRef = useRef<{ trigger: HTMLButtonElement; scroller: HTMLElement | null; scrollTop: number } | null>(null);
-  const [selectedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
+  const [requestedUtilityPanel, setSelectedUtilityPanel] = useState<LandUtilityPanel | null>(null);
   const [rawBuildingsLoading, setBuildingsLoading] = useState(false);
   // Remember last selected building id to persist across land switches
   const lastSelectedBuildingIdRef = useRef<number | null>(readStoredNumber(BUILDING_ID_STORAGE_KEY));
@@ -319,6 +317,11 @@ function LandsViewContent() {
     queryFn: readLands,
     queryKey: landsQueryKey,
   });
+
+  const canUseBatchUtilities = !smartWalletLoading && isSmartWallet && lands.length > 1;
+  // Gate the selected panel as well as its tiles, including the render when
+  // wallet detection or land ownership changes.
+  const selectedUtilityPanel = canUseBatchUtilities ? requestedUtilityPanel : null;
 
   const selectedLand = useMemo(() => {
     if (lands.length === 0) return null;
@@ -841,7 +844,6 @@ function LandsViewContent() {
     setSelectedBuilding(null);
     setSelectedUtilityPanel(null);
     setDetailRequest(0);
-    buildingReturnRef.current = null;
     (async () => {
       try {
         const latest = await getLandById(requestedLandId);
@@ -935,38 +937,22 @@ function LandsViewContent() {
   }, [cancelMissionReveal, setSelectedBuilding]);
 
   const handleBatchClaimUtilitySelect = useCallback(() => {
+    if (!canUseBatchUtilities) return;
     cancelMissionReveal();
     setMissionDetailFocus(false);
     setBuildingType('village');
     setSelectedUtilityPanel('batch-claim');
     setDetailRequest(value => value + 1);
-  }, [cancelMissionReveal]);
+  }, [canUseBatchUtilities, cancelMissionReveal]);
 
   const handleBatchQuestUtilitySelect = useCallback(() => {
+    if (!canUseBatchUtilities) return;
     cancelMissionReveal();
     setMissionDetailFocus(false);
     setBuildingType('town');
     setSelectedUtilityPanel('batch-quests');
     setDetailRequest(value => value + 1);
-  }, [cancelMissionReveal]);
-
-  const returnToBuildings = useCallback(() => {
-    // Returning is navigation only: retain the selected panel and its mounted
-    // transaction controller, drafts and pending receipt state.
-    setDetailRequest(0);
-    setMissionDetailFocus(false);
-    const previous = buildingReturnRef.current;
-    const grid = buildingGridRef.current;
-    const trigger = previous?.trigger.isConnected && grid?.contains(previous.trigger)
-      ? previous.trigger
-      : grid?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ?? grid;
-    trigger?.focus({ preventScroll: true });
-    if (previous?.scroller?.isConnected && trigger === previous.trigger) {
-      previous.scroller.scrollTo({ top: previous.scrollTop, behavior: 'instant' });
-    } else {
-      trigger?.scrollIntoView({ block: 'center', behavior: 'instant' });
-    }
-  }, []);
+  }, [canUseBatchUtilities, cancelMissionReveal]);
 
   useEffect(() => {
     if (!detailRequest || (isDesktopLand && !missionDetailFocus)) return;
@@ -1189,14 +1175,7 @@ function LandsViewContent() {
             <CardContent>
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,1fr)] xl:items-start">
                 {/* Building Grid */}
-                <div ref={buildingGridRef} tabIndex={-1} aria-label="Choose a building" className="space-y-4 scroll-mt-4 focus:outline-none"
-                  onClickCapture={(event) => {
-                    if (isDesktopLand || !(event.target instanceof Element)) return;
-                    const trigger = event.target.closest<HTMLButtonElement>('button[aria-pressed]');
-                    if (!trigger || !event.currentTarget.contains(trigger)) return;
-                    const scroller = event.currentTarget.closest<HTMLElement>('[data-viewport-shell="content"]');
-                    buildingReturnRef.current = { trigger, scroller, scrollTop: scroller?.scrollTop ?? 0 };
-                  }}>
+                <div aria-label="Choose a building" className="space-y-4">
                   {buildingsLoading && snapshotMatches && <p role="status" className="text-xs text-muted-foreground">Refreshing this land’s buildings…</p>}
                   {buildingsError ? <ResourceState status="error" title="Buildings unavailable" description={buildingsError} onRetry={() => { void fetchBuildingData(); }} /> : buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
                     <div className="text-center text-muted-foreground p-6">
@@ -1213,7 +1192,7 @@ function LandsViewContent() {
                           selectedBuildingType={buildingType}
                           onBuildingSelect={(building) => handleBuildingSelect(buildingType, building)}
                           currentBlock={currentBlock}
-                          extraItems={lands.length > 0 ? (
+                          extraItems={canUseBatchUtilities ? (
                             buildingType === 'village' ? (
                               <UtilityBuildingTile
                                 ariaLabel="Open batch claim"
@@ -1256,7 +1235,7 @@ function LandsViewContent() {
                             onBuildingSelect={(building) => handleBuildingSelect('village', building)}
                             currentBlock={currentBlock}
                             denseLabels
-                            extraItems={lands.length > 0 ? (
+                            extraItems={canUseBatchUtilities ? (
                               <UtilityBuildingTile
                                 ariaLabel="Open batch claim"
                                 denseLabels
@@ -1286,7 +1265,7 @@ function LandsViewContent() {
                             onBuildingSelect={(building) => handleBuildingSelect('town', building)}
                             currentBlock={currentBlock}
                             denseLabels
-                            extraItems={lands.length > 0 ? (
+                            extraItems={canUseBatchUtilities ? (
                               <UtilityBuildingTile
                                 ariaLabel="Open batch quests"
                                 denseLabels
@@ -1307,12 +1286,6 @@ function LandsViewContent() {
 
                 {/* Building Details Panel */}
                 <section ref={detailRef} tabIndex={-1} aria-label="Selected building details" className="min-w-0 scroll-mt-4 space-y-3 focus:outline-none">
-                {snapshotMatches && !buildingsError && (selectedBuilding || selectedUtilityPanel) && (
-                  <Button type="button" variant="ghost" className="min-h-11 max-w-full justify-start whitespace-normal xl:hidden" onClick={returnToBuildings}>
-                    <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    Back to buildings
-                  </Button>
-                )}
                 {snapshotMatches && !buildingsError && (selectedUtilityPanel === 'batch-claim' ? (
                   <BatchClaimCard
                     lands={lands}

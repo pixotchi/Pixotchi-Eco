@@ -7,7 +7,7 @@ async function description(locator: Locator) {
     .map(id => document.getElementById(id)?.textContent ?? '').join(' '));
 }
 
-test('land navigation restores its source and map details preserve the canvas and controls', async ({ page }, testInfo) => {
+test('building selection keeps its details and map details preserve the canvas and controls', async ({ page }, testInfo) => {
   const submitted: string[] = [];
   page.on('request', request => {
     if (request.method() !== 'POST') return;
@@ -30,31 +30,22 @@ test('land navigation restores its source and map details preserve the canvas an
   const grid = page.getByLabel('Choose a building', { exact: true });
   const tile = grid.getByRole('button', { name: 'Select Solar Panels', exact: true });
   await expect(tile).toBeVisible({ timeout: 60_000 });
-  const scroller = page.locator('[data-viewport-shell=content]');
   const details = page.getByRole('region', { name: 'Selected building details', exact: true });
 
-  await test.step('Return to the same building tile without replacing its detail/controller subtree', async () => {
+  await test.step('Reselect a building without replacing its detail/controller subtree', async () => {
     await tile.scrollIntoViewIfNeeded();
-    const originalScroll = await scroller.evaluate(node => node.scrollTop);
     await tile.click();
     await expect(details.getByRole('heading', { name: 'Solar Panels', exact: true })).toBeVisible();
     const detailCard = details.locator('.surface-detail').first();
     await detailCard.evaluate(node => node.setAttribute('data-navigation-continuity', 'retained'));
-    const back = details.getByRole('button', { name: 'Back to buildings', exact: true });
+    await expect(details.getByRole('button', { name: 'Back to buildings', exact: true })).toHaveCount(0);
     if ((page.viewportSize()?.width ?? 0) < 1280) {
       await expect(details).toBeFocused();
-      await expect(back).toBeInViewport();
-      await page.screenshot({ path: testInfo.outputPath('building-return-navigation.png') });
-      await back.click();
-      await expect(tile).toBeFocused();
-      await expect.poll(async () => Math.abs((await scroller.evaluate(node => node.scrollTop)) - originalScroll)).toBeLessThan(2);
+      await page.screenshot({ path: testInfo.outputPath('building-selection.png') });
+      await tile.scrollIntoViewIfNeeded();
+      await tile.focus();
       await tile.press('Enter');
       await expect(details).toBeFocused();
-      await expect(detailCard).toHaveAttribute('data-navigation-continuity', 'retained');
-      await back.click();
-      await expect(tile).toBeFocused();
-    } else {
-      await expect(back).toBeHidden();
     }
     await expect(tile).toHaveAttribute('aria-pressed', 'true');
     await expect(detailCard).toHaveAttribute('data-navigation-continuity', 'retained');

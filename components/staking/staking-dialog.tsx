@@ -447,7 +447,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     };
   }, [rewardRatio, rewardTimeUnit, stakeInfo?.staked, totalStaked]);
 
-  const footerTransactionButtonClassName = "h-auto min-h-11 whitespace-normal [overflow-wrap:anywhere] max-[340px]:px-2";
+  const footerTransactionButtonClassName = "h-auto min-h-11 flex-1 whitespace-normal [overflow-wrap:anywhere] max-[340px]:px-2";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -585,11 +585,11 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
       <DialogFooter className="block">
         <div className="w-full space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
+            <div className={!approved && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
           {mode === 'stake' ? (
             !approved ? (
-                <div className="space-y-2">
+                <div className="flex flex-1 flex-col">
                   <GameTransaction
                     effects={{ domains: ["balances", "rewards"] }}
                     trackStreak={false}
@@ -606,7 +606,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                  />
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="flex flex-1 flex-col">
                  <GameTransaction
                    effects={{ domains: ["balances", "rewards"] }}
                    trackStreak={false}
@@ -632,7 +632,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
               </div>
             )
           ) : (
-            <div className="space-y-2">
+            <div className="flex flex-1 flex-col">
                <GameTransaction
                  effects={{ domains: ["allowances", "balances"] }}
                  trackStreak={false}
@@ -651,7 +651,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           )}
             </div>
 
-          <div className={!approved && mode === "stake" ? "col-span-2 space-y-2" : "space-y-2"}>
+          <div className={!approved && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
             <GameTransaction
               effects={{ domains: ["balances", "rewards"] }}
               trackStreak={false}

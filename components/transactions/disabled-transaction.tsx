@@ -16,10 +16,11 @@ export default function DisabledTransaction({
   return (
     <button
       type="button"
-      className={cn(buttonVariants({ variant: 'default' }), 'cursor-not-allowed opacity-60 select-none', buttonClassName)}
+      className={cn(buttonVariants({ variant: 'default' }), 'cursor-not-allowed opacity-60 select-none', buttonClassName,
+        'h-auto min-w-0 max-w-full whitespace-normal leading-snug [overflow-wrap:anywhere]')}
       disabled
     >
       {buttonText}
     </button>
   );
-} 
+}

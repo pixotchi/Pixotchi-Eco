@@ -768,6 +768,7 @@ export default function App() {
                     }}
                     onPointerEnter={() => void ensureWalletProfileLoaded()}
                     onFocus={() => void ensureWalletProfileLoaded()}
+                    className="[&>img]:h-[24px] [&>img]:w-[24px]"
                     aria-label="Open wallet profile"
                     title="Open wallet profile"
                   >
@@ -776,7 +777,7 @@ export default function App() {
                       alt=""
                       width={24}
                       height={24}
-                      className="w-6 h-6"
+                      className="h-6 w-6"
                       aria-hidden="true"
                       preload
                     />

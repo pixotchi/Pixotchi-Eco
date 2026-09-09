@@ -304,8 +304,9 @@ export function getLifecycleTransactionProof(
 function Spinner({ className }: { className?: string }) {
   return (
     <div
-      className="flex h-full items-center justify-center"
+      className="flex shrink-0 items-center justify-center"
       data-testid="ockSpinner"
+      aria-hidden="true"
     >
       <div
         className={cn(
@@ -2284,7 +2285,7 @@ export function TransactionButton({
       return (
         <>
           <Spinner />
-          <span>{pendingText ?? getPendingActionLabel(idleText)}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{pendingText ?? getPendingActionLabel(idleText)}</span>
         </>
       );
     }
@@ -2369,6 +2370,9 @@ export function TransactionButton({
         TEXT_HEADLINE,
         TEXT_INVERSE,
         className,
+        // Status labels can be longer than the idle action. Let the control
+        // grow instead of clipping text inside a caller's fixed height.
+        "h-auto min-w-0 max-w-full whitespace-normal leading-snug [overflow-wrap:anywhere]",
       )}
       onClick={handleSubmit}
       type="button"
@@ -2377,7 +2381,9 @@ export function TransactionButton({
       aria-live="polite"
       data-testid="ockTransactionButton_Button"
     >
-      {buttonContent}
+      {typeof buttonContent === "string"
+        ? <span className="min-w-0 [overflow-wrap:anywhere]">{buttonContent}</span>
+        : buttonContent}
     </button>
   );
 }
