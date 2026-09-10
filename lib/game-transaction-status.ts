@@ -1,6 +1,6 @@
 /** Shared terminal failures only; submitted, unresolved and syncing proofs stay pending. */
 const GAME_TRANSACTION_FAILURES: ReadonlySet<string> = new Set([
-  "error", "failed", "reverted", "cancelled", "canceled", "rejected",
+  "error", "failed", "reverted", "superseded", "cancelled", "canceled", "rejected",
   "transactionRejected", "userRejected", "buildError",
 ]);
 

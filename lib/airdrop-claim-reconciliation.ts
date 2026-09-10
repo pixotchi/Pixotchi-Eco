@@ -7,9 +7,9 @@ const USER_OPERATION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const TRANSACTION_HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 
 /**
- * CDP may expose intermediate operation states while a bundler is processing
- * the request. Only its terminal states are safe to persist as terminal claim
- * states; a broadcast operation remains pending until its Base receipt exists.
+ * Descriptive provider classification only. A terminal provider state is not
+ * proof of payout/nonpayment; airDrop execution requires a matching safe-chain
+ * UserOperationEvent and transfer proof before settling or allowing replacement.
  */
 export function getAirdropOperationOutcome(status: unknown): AirdropOperationOutcome {
   switch (status) {

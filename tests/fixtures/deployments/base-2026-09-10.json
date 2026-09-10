@@ -1,0 +1,3934 @@
+{
+  "chainId": 8453,
+  "blockNumber": "51136574",
+  "contracts": {
+    "0xeb4e16c804ae9275a655abbc20cd0658a91f9235": {
+      "runtimeHash": "0x44b7b6e63ea0fe8ca81532a66a6604d63c7b205965c70a3a3c6ac5028a4587b8",
+      "routes": {
+        "0x7d57498c": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x338abd03": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0xb303c03a": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x7e50dd30": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x325cb44b": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x56d3163d": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x1bddb706": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x88b00837": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0xcdff1d05": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x144fa6d7": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+        "0x78770724": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xe1fa7638": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x96379a9b": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xd12b4e6d": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xfa94ada0": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x5c622a0e": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xf929b585": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xb559bbb4": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xe2c352ed": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x05c58df2": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xf251b76a": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x0573ea94": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xccc73973": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0xdb006a75": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x114da366": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x6d7b7fc9": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+        "0x7a6494de": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x715488b0": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x79c5cb1c": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0xa53c1f87": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0xeba475b5": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x99cc726d": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0xac6ca58b": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x4864d053": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0xb34c2f52": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x143b35f0": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x843bd641": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0x2901a4e3": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+        "0xa217fddf": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x54a475ba": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x095ea7b3": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x70a08231": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x42966c68": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x081812fc": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x2a5d5138": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x572a9d6a": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x03226d49": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x83a59548": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x213b093a": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x1123d4de": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xd1c1438e": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xba9a58e0": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x59cfe1f5": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x248a9ca3": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x9010d07c": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xca15c873": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xac8db04a": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x2f2ff15d": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x91d14854": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xa32fa5b3": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x837aa729": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xe985e9c5": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xa0712d68": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x06fdde03": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x6352211e": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x5f0c851d": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x36568abe": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xd547741f": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x42842e0e": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xb88d4fde": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xab705ef7": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xa22cb465": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xf1173b04": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x01ffc9a7": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x95d89b41": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x4e9dfa77": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0xc87b56dd": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x18160ddd": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x23b872dd": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+        "0x6ec445a1": "0x71df7f436b1957b53781348337e02875f5df260d",
+        "0x517f28f9": "0x71df7f436b1957b53781348337e02875f5df260d",
+        "0x59fffcc2": "0x71df7f436b1957b53781348337e02875f5df260d",
+        "0xa2280d67": "0x82a9af882bfd2990239c32bac59f5a51a19cfd4c",
+        "0x660db682": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x5d8eca00": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x96ac0b9f": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x51927290": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x52f3e0c4": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0xab64d0ee": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x3733c0eb": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0xa3a6b7d8": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0x5a2c2ddd": "0xdac475d196882d825d188dd870bde546451f24aa",
+        "0xca22a598": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xb0584a42": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xd3e9bcc7": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0x1e3f0436": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xf162093c": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xc0ba8cc7": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xfa354a5e": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0x38672dbf": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0xfb44c631": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0x969ebb78": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+        "0x99c6f8ea": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0x15bc285e": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0x20038ee7": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0xebc603d9": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0x206905bd": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0xa9b228d9": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0xec840144": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+        "0xdb44fe07": "0x0a1dded52a6b79b9d6052727303243c76f5e921b",
+        "0xca1e4d2c": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x9ac8703b": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x3358a21e": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x53f86cf1": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0xc67de364": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x4c62f050": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x46717d77": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x330385bf": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0xc56e4c4d": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x711159f2": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+        "0x8dbac9e2": "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453",
+        "0x47e4d123": "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453",
+        "0x16081c4f": "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453",
+        "0x3895d938": "0x89aec497483f8d2dabe2b507067357135e2d284d",
+        "0x11db8447": "0x89aec497483f8d2dabe2b507067357135e2d284d",
+        "0xac73d7ed": "0x89aec497483f8d2dabe2b507067357135e2d284d",
+        "0x58d052c1": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x3417ae16": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0xe2912b10": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x1c4b774b": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x5e7303d4": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x6e16de11": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x2491c2b5": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x4c038dc4": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x6900719c": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x1e57d412": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x5e07cad1": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x6e9b2dc0": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0xb5bfe757": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0xb5d1c14c": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x8983c37a": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0xbf498f89": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+        "0x090555ac": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x934b2cae": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0xf6a721ef": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0xbb98b45a": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x2b3be3c0": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0xe6d7a33b": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x3b9a0c58": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x4a444730": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x584ab818": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+        "0x49ce35c9": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x5c3ebbb6": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x0990cb33": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xe10f6046": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x14223ca6": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x601c0abb": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x0577e359": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x9843e203": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x3b9052dc": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x543fe6ec": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xf504f994": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xda1919b3": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x63b746d3": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xd770046d": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0x74c135b3": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xca6d006f": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xd359ac93": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+        "0xebb80780": "0x87524c230cf8c32b4f4d89e278747555006420cf",
+        "0x7fb11691": "0x87524c230cf8c32b4f4d89e278747555006420cf",
+        "0x61553f36": "0x87524c230cf8c32b4f4d89e278747555006420cf",
+        "0x4eca2b81": "0x87524c230cf8c32b4f4d89e278747555006420cf"
+      },
+      "implementation": "0xeb4e16c804ae9275a655abbc20cd0658a91f9235"
+    },
+    "0x3f1f8f0c4be4bceb45e6597afe0de861b8c3278c": {
+      "runtimeHash": "0x3cf78e6cc7df74f26f11c372233dc5d99844ec0a70d2fff8b3d6cad02a29d5cf",
+      "routes": {
+        "0x1f931c1c": "0x2b883f7fac21f8d8e3a35ff05209415584eaf1cc",
+        "0x7a0ed627": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+        "0xadfca15e": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+        "0x52ef6b2c": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+        "0xcdffacc6": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+        "0x01ffc9a7": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x729ad39e": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x095ea7b3": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x70a08231": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xe8a3d485": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x4f558e79": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x081812fc": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x9df164d3": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xe985e9c5": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xd5abeb01": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x1249c58b": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x06fdde03": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x7bf7ac95": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x6352211e": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x42842e0e": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xa22cb465": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x95d89b41": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x4f6ccce7": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x2f745c59": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xc87b56dd": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x8462151c": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x18160ddd": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0xa9059cbb": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x23b872dd": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+        "0x8da5cb5b": "0xfca776c4c828f9b34bb770d9f7acaeb763be853f",
+        "0xf2fde38b": "0xfca776c4c828f9b34bb770d9f7acaeb763be853f",
+        "0x0b0eebe5": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x4dfe8504": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xe2132d91": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x76f93655": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xefd8f16b": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x09c8f06d": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x6105bb5b": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x40a2e7de": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xc8e77c09": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xc35abae3": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xa6c806b8": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x64460acb": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x21b77150": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x60921002": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x21f6f9f7": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x831c3de9": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xce6211ba": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x106152c4": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xc1112fb0": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xa534ffad": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x74c4fa82": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x0620c1e0": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xa68d9a8d": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x88db2b4c": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xfb6e1b3c": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x114e5724": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x0fc010cd": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x5069fc55": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xa7accd3f": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xefa3b664": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0xbb4c020f": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x28c192ad": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x2d1c2f54": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x53b7297a": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+        "0x5ad78612": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+        "0x197c271f": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+        "0xcb3a328a": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+        "0xbfb5c9df": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+        "0x4918bfac": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+        "0x218c9239": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+        "0xd4526ea9": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+        "0x0f8c8710": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x369f155f": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0xb86cad4a": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x5aecdc17": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x9d4f3320": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x2e7bfe5f": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x9953e388": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x854167d2": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+        "0x73af16fc": "0x3dd3b8387c944cd839277b011f738ed9e8150136",
+        "0x806a17ed": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0xb6aa224c": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0x97c5c384": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0xe7ac8aed": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0x9b33d4dc": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0x5f429393": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0xa6645e4a": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+        "0x611191c9": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+        "0xdc057167": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+        "0x99fff80f": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+        "0xf987ae07": "0x69b87aa1d358ef59be93de7df6fe3923c7aa9cc4",
+        "0x77d66118": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+        "0x0f25b087": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+        "0xc98d9dc1": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+        "0x145ba117": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+        "0xa146c4f7": "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec",
+        "0x503c7dbf": "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec",
+        "0x408e7979": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x1773a19e": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x6eff819d": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xd47ce2c5": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xfb55e7d4": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x32f9af59": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xbe6eec4b": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x30d1a28e": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x690ecd3e": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xccec6ef8": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x06a35dcc": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x44f27e7a": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x73f7b1e8": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x0a8b0129": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x5496aff9": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x7536510d": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xaf5f8c1e": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xe5bafee9": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xeafbf784": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x86832b8e": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x0ea1cb05": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x128ba7fa": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xb9b07ed9": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xf096d055": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0xb290861f": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x6c2176c9": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x15632c43": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x79f501c5": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+        "0x95f78a05": "0xa28c72f53c480e8f9ba35c205da97a4e540756a8",
+        "0xaf525deb": "0xa28c72f53c480e8f9ba35c205da97a4e540756a8",
+        "0x92642803": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xbbe8e481": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xe7b24590": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x0e338333": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x32af071f": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x99866de9": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x65b74f99": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x314abd82": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xfed1762f": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xa3525063": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xb547b10c": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x27e3e296": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x607e7c89": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xdf728901": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x73a67382": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0x5cb072f0": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+        "0xb3115616": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x6b9ef3ea": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x70c50677": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0xb6247639": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x88ed2545": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x8ed4faa0": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x0926e1ce": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x2c47a873": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x019ff7cb": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x85b209cb": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0xf8532887": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0xd3a8ee6f": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0x0311f643": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+        "0xee6801d9": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x7d9fe730": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x94a296c3": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xf45f63bd": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x76a4dc5f": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xb58dce15": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xe5de060d": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x73445b2f": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x92b18ee7": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xb06760fe": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x837d46a9": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xe32636aa": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x7e707cb4": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x79025f63": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xe5a2855a": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xded35dcc": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x53c9c59c": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xadf9a9db": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0x9573d774": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+        "0xccb1a57a": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0xbba3059a": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0xa16061d2": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0x2b44653f": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0x7b5bf214": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0x54998b51": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0xded96b36": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0x65c8bba0": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0x61f71517": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+        "0xa33e235a": "0x7a918f287de7dbf19085a9ef9c79d50883920c77",
+        "0x9e88f17b": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x06d1a55e": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x925bd687": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x20f30c34": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x1fce97d7": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0xcaa6fa24": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0xec120b75": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0xd25443e4": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x5fe8c25c": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0xdfeb4df5": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x87e11fb3": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x73c5435f": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+        "0x521d0059": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c"
+      },
+      "implementation": "0x3f1f8f0c4be4bceb45e6597afe0de861b8c3278c"
+    },
+    "0x546d239032b24eceee0cb05c92fc39090846adc7": {
+      "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a",
+      "routes": {},
+      "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7"
+    },
+    "0xe78ee52349d7b031e2a6633e07c037c3147db116": {
+      "runtimeHash": "0xf116701729b30ef8869586b530a5c16059720b042a2a602993aa7f8b18512812",
+      "routes": {},
+      "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb"
+    },
+    "0xf15d93c3617525054af05338cc6ccf18886bd03a": {
+      "runtimeHash": "0xde10352425be983a1f1ac2eb6db65315ea1ae52a5f1b8b0ecffa1286b25f96e3",
+      "routes": {},
+      "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d"
+    },
+    "0x8d0538fae8b3630c487b720d7767ae46aa58cda7": {
+      "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+      "routes": {},
+      "implementation": "0x8d0538fae8b3630c487b720d7767ae46aa58cda7"
+    },
+    "0xa2ef17bb7eea1143196678337069dfa24d37d2ac": {
+      "runtimeHash": "0x82742dcc13916fa8d355ae2e48a177490982a9a58df52baae350c149c84827c1",
+      "routes": {},
+      "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795"
+    },
+    "0x327df1e6de05895d2ab08513aadd9313fe505d86": {
+      "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865",
+      "routes": {},
+      "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86"
+    },
+    "0x6131b5fae19ea4f9d964eac0408e4408b66337b5": {
+      "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3",
+      "routes": {},
+      "implementation": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5"
+    }
+  },
+  "implementations": {
+    "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf": {
+      "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826",
+      "functions": [
+        {
+          "signature": "attack(uint256,uint256)",
+          "selector": "0xe1fa7638",
+          "outputs": []
+        },
+        {
+          "signature": "canKill(address)",
+          "selector": "0x96379a9b",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "getAllStrainInfo()",
+          "selector": "0xd12b4e6d",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,uint256,string,bool,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "getKillCooldownRemaining(address)",
+          "selector": "0xfa94ada0",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPlantName(uint256)",
+          "selector": "0x78770724",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "getStatus(uint256)",
+          "selector": "0x5c622a0e",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "isApprovedFn(uint256,address)",
+          "selector": "0xf929b585",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "isPlantAlive(uint256)",
+          "selector": "0xb559bbb4",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "kill(uint256,uint256)",
+          "selector": "0xe2c352ed",
+          "outputs": []
+        },
+        {
+          "signature": "level(uint256)",
+          "selector": "0x05c58df2",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "onAttack(uint256,uint256)",
+          "selector": "0xf251b76a",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "bool"
+          ]
+        },
+        {
+          "signature": "pass(uint256,uint256)",
+          "selector": "0x0573ea94",
+          "outputs": []
+        },
+        {
+          "signature": "pendingEth(uint256)",
+          "selector": "0xccc73973",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "redeem(uint256)",
+          "selector": "0xdb006a75",
+          "outputs": []
+        },
+        {
+          "signature": "setPlantName(uint256,string)",
+          "selector": "0x114da366",
+          "outputs": []
+        },
+        {
+          "signature": "statusToString(uint8)",
+          "selector": "0x6d7b7fc9",
+          "outputs": [
+            "string"
+          ]
+        }
+      ]
+    },
+    "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3": {
+      "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2",
+      "functions": [
+        {
+          "signature": "DEFAULT_ADMIN_ROLE()",
+          "selector": "0xa217fddf",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "_getPlantsByOwner(address)",
+          "selector": "0x54a475ba",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ]
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": []
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "burn(uint256)",
+          "selector": "0x42966c68",
+          "outputs": []
+        },
+        {
+          "signature": "getApproved(uint256)",
+          "selector": "0x081812fc",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getPlantInfo(uint256)",
+          "selector": "0x2a5d5138",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])"
+          ]
+        },
+        {
+          "signature": "getPlantInfoExtended(uint256)",
+          "selector": "0x572a9d6a",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])"
+          ]
+        },
+        {
+          "signature": "getPlantScore(uint256)",
+          "selector": "0x03226d49",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPlantStatusRange(uint256,uint256)",
+          "selector": "0x83a59548",
+          "outputs": [
+            "(uint256,string,uint256,bool,bool,bool)[]"
+          ]
+        },
+        {
+          "signature": "getPlantTimeUntilStarving(uint256)",
+          "selector": "0x213b093a",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPlantsByOwner(address)",
+          "selector": "0x1123d4de",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ]
+        },
+        {
+          "signature": "getPlantsByOwnerExtended(address)",
+          "selector": "0xd1c1438e",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ]
+        },
+        {
+          "signature": "getPlantsInfo(uint256[])",
+          "selector": "0xba9a58e0",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ]
+        },
+        {
+          "signature": "getPlantsInfoExtended(uint256[])",
+          "selector": "0x59cfe1f5",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ]
+        },
+        {
+          "signature": "getRoleAdmin(bytes32)",
+          "selector": "0x248a9ca3",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "getRoleMember(bytes32,uint256)",
+          "selector": "0x9010d07c",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getRoleMemberCount(bytes32)",
+          "selector": "0xca15c873",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getStrainPaymentInfo(uint256)",
+          "selector": "0xac8db04a",
+          "outputs": [
+            "address",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "grantRole(bytes32,address)",
+          "selector": "0x2f2ff15d",
+          "outputs": []
+        },
+        {
+          "signature": "hasRole(bytes32,address)",
+          "selector": "0x91d14854",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "hasRoleWithSwitch(bytes32,address)",
+          "selector": "0xa32fa5b3",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "initializeNFTLogic()",
+          "selector": "0x837aa729",
+          "outputs": []
+        },
+        {
+          "signature": "isApprovedForAll(address,address)",
+          "selector": "0xe985e9c5",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "mint(uint256)",
+          "selector": "0xa0712d68",
+          "outputs": []
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "ownerOf(uint256)",
+          "selector": "0x6352211e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "removeTokenIdFromOwner(uint32,address)",
+          "selector": "0x5f0c851d",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "renounceRole(bytes32,address)",
+          "selector": "0x36568abe",
+          "outputs": []
+        },
+        {
+          "signature": "revokeRole(bytes32,address)",
+          "selector": "0xd547741f",
+          "outputs": []
+        },
+        {
+          "signature": "safeTransferFrom(address,address,uint256)",
+          "selector": "0x42842e0e",
+          "outputs": []
+        },
+        {
+          "signature": "safeTransferFrom(address,address,uint256,bytes)",
+          "selector": "0xb88d4fde",
+          "outputs": []
+        },
+        {
+          "signature": "setAltToken(address)",
+          "selector": "0xab705ef7",
+          "outputs": []
+        },
+        {
+          "signature": "setApprovalForAll(address,bool)",
+          "selector": "0xa22cb465",
+          "outputs": []
+        },
+        {
+          "signature": "setStrainAltToken(uint256,bool,uint256)",
+          "selector": "0xf1173b04",
+          "outputs": []
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "tokenBurnAndRedistribute(address,uint256)",
+          "selector": "0x4e9dfa77",
+          "outputs": []
+        },
+        {
+          "signature": "tokenURI(uint256)",
+          "selector": "0xc87b56dd",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": []
+        }
+      ]
+    },
+    "0xb0d799fc56c4c3d555a54bc776841050a3acb086": {
+      "runtimeHash": "0x206770423b6513764138abeedf65dad8120d2623e7035daf3ce6b4d9dc80644e",
+      "functions": [
+        {
+          "signature": "reinitializer_8_ShopLogic()",
+          "selector": "0x99c6f8ea",
+          "outputs": []
+        },
+        {
+          "signature": "shopBuyItem(uint256,uint256)",
+          "selector": "0x15bc285e",
+          "outputs": []
+        },
+        {
+          "signature": "shopDoesItemExist(uint256)",
+          "selector": "0x20038ee7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "shopGetAllItems()",
+          "selector": "0xebc603d9",
+          "outputs": [
+            "(uint256,string,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "shopGetPurchasedItems(uint256)",
+          "selector": "0x206905bd",
+          "outputs": [
+            "(uint256,string,uint256,bool)[]"
+          ]
+        },
+        {
+          "signature": "shopIsEffectOngoing(uint256,uint256)",
+          "selector": "0xa9b228d9",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "shopModifyItem(uint256,string,uint256,uint256,uint256,uint256)",
+          "selector": "0xec840144",
+          "outputs": []
+        }
+      ]
+    },
+    "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6": {
+      "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765",
+      "functions": [
+        {
+          "signature": "Revive(uint256)",
+          "selector": "0x7a6494de",
+          "outputs": []
+        },
+        {
+          "signature": "buyAccessory(uint256,uint256)",
+          "selector": "0x715488b0",
+          "outputs": []
+        },
+        {
+          "signature": "createItem(string,uint256,uint256,uint256)",
+          "selector": "0x79c5cb1c",
+          "outputs": []
+        },
+        {
+          "signature": "createItems((uint256,string,uint256,uint256,uint256)[])",
+          "selector": "0xa53c1f87",
+          "outputs": []
+        },
+        {
+          "signature": "editGardenItems((uint256,string,uint256,uint256,uint256)[])",
+          "selector": "0xeba475b5",
+          "outputs": []
+        },
+        {
+          "signature": "editItem(uint256,uint256,uint256,string,uint256)",
+          "selector": "0x99cc726d",
+          "outputs": []
+        },
+        {
+          "signature": "getAllGardenItem()",
+          "selector": "0xac6ca58b",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "getGardenItem(uint256)",
+          "selector": "0x4864d053",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "getRevivePrice()",
+          "selector": "0xb34c2f52",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "initializeGardenLogic()",
+          "selector": "0x143b35f0",
+          "outputs": []
+        },
+        {
+          "signature": "itemExists(uint256)",
+          "selector": "0x843bd641",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "setRevivePrice(uint256)",
+          "selector": "0x2901a4e3",
+          "outputs": []
+        }
+      ]
+    },
+    "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453": {
+      "runtimeHash": "0x39e29c5b7f17c3ea0bf5d14e3cc59d90c99a89be82c0612aeabef66e589ef044",
+      "functions": [
+        {
+          "signature": "airdropExtendLifetime(uint256[],uint256)",
+          "selector": "0x8dbac9e2",
+          "outputs": []
+        },
+        {
+          "signature": "airdropGetAliveAndDeadTokenIds()",
+          "selector": "0x47e4d123",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "airdropGetAliveTokenIds()",
+          "selector": "0x16081c4f",
+          "outputs": [
+            "uint256[]"
+          ]
+        }
+      ]
+    },
+    "0xdac475d196882d825d188dd870bde546451f24aa": {
+      "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2",
+      "functions": [
+        {
+          "signature": "boxGameGetCoolDownTimePerNFT(uint256)",
+          "selector": "0x660db682",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "boxGameGetCoolDownTimeWithStar(uint256)",
+          "selector": "0x5d8eca00",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "boxGameInitialize()",
+          "selector": "0x96ac0b9f",
+          "outputs": []
+        },
+        {
+          "signature": "boxGameInitialize2()",
+          "selector": "0x51927290",
+          "outputs": []
+        },
+        {
+          "signature": "boxGamePlay(uint256,uint256)",
+          "selector": "0x52f3e0c4",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "boxGamePlayWithStar(uint256,uint256)",
+          "selector": "0xab64d0ee",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "boxGameSetGlobalCoolDownTime(uint256)",
+          "selector": "0x3733c0eb",
+          "outputs": []
+        },
+        {
+          "signature": "boxGameSetPointRewards(uint256[5])",
+          "selector": "0xa3a6b7d8",
+          "outputs": []
+        },
+        {
+          "signature": "boxGameSetTimeRewards(uint256[5])",
+          "selector": "0x5a2c2ddd",
+          "outputs": []
+        }
+      ]
+    },
+    "0xf7e86a862b395313ef685f6a11e2287d5b898f81": {
+      "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee",
+      "functions": null
+    },
+    "0xe2238e607823243f4b9aa91cff016cebed2e855e": {
+      "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06",
+      "functions": [
+        {
+          "signature": "fenceV2EffectUntil(uint256)",
+          "selector": "0x090555ac",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "fenceV2GetConfig()",
+          "selector": "0x934b2cae",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "fenceV2GetPurchaseStats(uint256)",
+          "selector": "0xf6a721ef",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "bool"
+          ]
+        },
+        {
+          "signature": "fenceV2HasFenceV1(uint256)",
+          "selector": "0xbb98b45a",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "fenceV2Initialize(uint256)",
+          "selector": "0x2b3be3c0",
+          "outputs": []
+        },
+        {
+          "signature": "fenceV2IsEffectOngoing(uint256)",
+          "selector": "0xe6d7a33b",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "fenceV2Purchase(uint256,uint256)",
+          "selector": "0x3b9a0c58",
+          "outputs": []
+        },
+        {
+          "signature": "fenceV2Quote(uint256)",
+          "selector": "0x4a444730",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "fenceV2SetPricePerDay(uint256)",
+          "selector": "0x584ab818",
+          "outputs": []
+        }
+      ]
+    },
+    "0x0ad9216c66445cc0918ca0d973d9077e487c474c": {
+      "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4",
+      "functions": [
+        {
+          "signature": "accessControlBatchSetWhitelistAddresses(address[],bool)",
+          "selector": "0x0b0eebe5",
+          "outputs": []
+        },
+        {
+          "signature": "accessControlGetPaused()",
+          "selector": "0x4dfe8504",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "accessControlGetWhitelistAddress(address)",
+          "selector": "0xe2132d91",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "accessControlGetWhitelistOnly()",
+          "selector": "0x76f93655",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "accessControlSetPaused(bool)",
+          "selector": "0xefd8f16b",
+          "outputs": []
+        },
+        {
+          "signature": "accessControlSetWhitelistAddress(address,bool)",
+          "selector": "0x09c8f06d",
+          "outputs": []
+        },
+        {
+          "signature": "accessControlSetWhitelistOnly(bool)",
+          "selector": "0x6105bb5b",
+          "outputs": []
+        },
+        {
+          "signature": "accessControlStatus(address)",
+          "selector": "0x40a2e7de",
+          "outputs": [
+            "bool",
+            "bool",
+            "bool"
+          ]
+        },
+        {
+          "signature": "getSeedReceiveAddress()",
+          "selector": "0xbb4c020f",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getSpeedUpPaymentConfig()",
+          "selector": "0x28c192ad",
+          "outputs": [
+            "address",
+            "address"
+          ]
+        },
+        {
+          "signature": "mintControl(bool)",
+          "selector": "0xc8e77c09",
+          "outputs": []
+        },
+        {
+          "signature": "mintControlSetPrice(uint256)",
+          "selector": "0xc35abae3",
+          "outputs": []
+        },
+        {
+          "signature": "questGetAllRewardRanges()",
+          "selector": "0xc1112fb0",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "questGetDifficultyConfig(uint8)",
+          "selector": "0x21f6f9f7",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetLeafRewardRange()",
+          "selector": "0xa534ffad",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetPlantLifetimeRewardRange()",
+          "selector": "0x74c4fa82",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetPlantPointsRewardRange()",
+          "selector": "0x0620c1e0",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetSeedRewardRange()",
+          "selector": "0xa68d9a8d",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetXpRewardRange()",
+          "selector": "0x88db2b4c",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questInitializeRewardRanges()",
+          "selector": "0xfb6e1b3c",
+          "outputs": []
+        },
+        {
+          "signature": "questSetDifficultyConfig(uint8,uint256,uint256,uint256)",
+          "selector": "0x831c3de9",
+          "outputs": []
+        },
+        {
+          "signature": "questSetLeafRewardRange(uint256,uint256)",
+          "selector": "0x114e5724",
+          "outputs": []
+        },
+        {
+          "signature": "questSetPlantLifetimeRewardRange(uint256,uint256)",
+          "selector": "0x0fc010cd",
+          "outputs": []
+        },
+        {
+          "signature": "questSetPlantPointsRewardRange(uint256,uint256)",
+          "selector": "0x5069fc55",
+          "outputs": []
+        },
+        {
+          "signature": "questSetSeedRewardRange(uint256,uint256)",
+          "selector": "0xa7accd3f",
+          "outputs": []
+        },
+        {
+          "signature": "questSetXpRewardRange(uint256,uint256)",
+          "selector": "0xefa3b664",
+          "outputs": []
+        },
+        {
+          "signature": "setSeedReceiveAddress(address)",
+          "selector": "0x2d1c2f54",
+          "outputs": []
+        },
+        {
+          "signature": "setSpeedUpPaymentConfig(address,address)",
+          "selector": "0x53b7297a",
+          "outputs": []
+        },
+        {
+          "signature": "villageAddLevel(uint8,uint256,uint256,uint256,uint256,uint256)",
+          "selector": "0xa6c806b8",
+          "outputs": []
+        },
+        {
+          "signature": "villageForceSetLevel(uint256,uint8,uint8)",
+          "selector": "0x60921002",
+          "outputs": []
+        },
+        {
+          "signature": "villageGetAllConfigs()",
+          "selector": "0xce6211ba",
+          "outputs": [
+            "(uint8,bool,bool,bool,uint8,(uint8,uint256,uint256,uint256,uint256,uint256)[])[]"
+          ]
+        },
+        {
+          "signature": "villageGetLevelConfig(uint8,uint8)",
+          "selector": "0x64460acb",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "villageSetAllConfigs((uint8,bool,bool,bool,uint8,(uint8,uint256,uint256,uint256,uint256,uint256)[])[])",
+          "selector": "0x106152c4",
+          "outputs": []
+        },
+        {
+          "signature": "villageSetLevelConfig(uint8,uint8,uint256,uint256,uint256,uint256,uint256)",
+          "selector": "0x21b77150",
+          "outputs": []
+        }
+      ]
+    },
+    "0x91a805f2ad9325504199f49bc33023b04c9cfeda": {
+      "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765",
+      "functions": [
+        {
+          "signature": "airdrop(address[])",
+          "selector": "0x729ad39e",
+          "outputs": []
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": []
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "exists(uint256)",
+          "selector": "0x4f558e79",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "getApproved(uint256)",
+          "selector": "0x081812fc",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "initNFTFacet()",
+          "selector": "0x9df164d3",
+          "outputs": []
+        },
+        {
+          "signature": "isApprovedForAll(address,address)",
+          "selector": "0xe985e9c5",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "maxSupply()",
+          "selector": "0xd5abeb01",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "mint()",
+          "selector": "0x1249c58b",
+          "outputs": []
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "nftNextTokenId()",
+          "selector": "0x7bf7ac95",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "ownerOf(uint256)",
+          "selector": "0x6352211e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "safeTransferFrom(address,address,uint256)",
+          "selector": "0x42842e0e",
+          "outputs": []
+        },
+        {
+          "signature": "setApprovalForAll(address,bool)",
+          "selector": "0xa22cb465",
+          "outputs": []
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "tokenByIndex(uint256)",
+          "selector": "0x4f6ccce7",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "tokenOfOwnerByIndex(address,uint256)",
+          "selector": "0x2f745c59",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "tokenURI(uint256)",
+          "selector": "0xc87b56dd",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "tokensOfOwner(address)",
+          "selector": "0x8462151c",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": []
+        }
+      ]
+    },
+    "0x2b883f7fac21f8d8e3a35ff05209415584eaf1cc": {
+      "runtimeHash": "0x6ab3a9b104d64d0f12ab0457ef933fc3be1d724456ed5431d2daa011f3d5e432",
+      "functions": null
+    },
+    "0x3c464d2208d9932853f5128597cc96ff49629fde": {
+      "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188",
+      "functions": null
+    },
+    "0x3dd3b8387c944cd839277b011f738ed9e8150136": {
+      "runtimeHash": "0x8823687ed63d17a0335ba492008dd76df43ef9b5fcad423f30e00d8eb601a761",
+      "functions": [
+        {
+          "signature": "getLeaderboard(uint256,uint256)",
+          "selector": "0x73af16fc",
+          "outputs": [
+            "(uint256,uint256,string)[]"
+          ]
+        }
+      ]
+    },
+    "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b": {
+      "runtimeHash": "0xb45812f804b075d18f7ecb19eb5a6268007a10d58e98633a184c0de6eb837c6b",
+      "functions": [
+        {
+          "signature": "initializeMarketplace()",
+          "selector": "0x5ad78612",
+          "outputs": []
+        },
+        {
+          "signature": "townStorageUpdate()",
+          "selector": "0x197c271f",
+          "outputs": []
+        },
+        {
+          "signature": "villageStorageUpdate()",
+          "selector": "0xcb3a328a",
+          "outputs": []
+        }
+      ]
+    },
+    "0x8ee33bccf2c1b31c01d3148145141abd75b43287": {
+      "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772",
+      "functions": [
+        {
+          "signature": "landGetBoundaries()",
+          "selector": "0x0f8c8710",
+          "outputs": [
+            "int256",
+            "int256",
+            "int256",
+            "int256"
+          ]
+        },
+        {
+          "signature": "landGetById(uint256)",
+          "selector": "0x369f155f",
+          "outputs": [
+            "(uint256,string,uint256,address,string,int256,int256,uint256,uint256,uint256,uint8)"
+          ]
+        },
+        {
+          "signature": "landGetByOwner(address)",
+          "selector": "0xb86cad4a",
+          "outputs": [
+            "(uint256,string,uint256,address,string,int256,int256,uint256,uint256,uint256,uint8)[]"
+          ]
+        },
+        {
+          "signature": "landGetCoordinates(uint256)",
+          "selector": "0x5aecdc17",
+          "outputs": [
+            "int256",
+            "int256",
+            "bool"
+          ]
+        },
+        {
+          "signature": "landGetMintPrice()",
+          "selector": "0x9d4f3320",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "landGetTokenIdByCoordinates(int256,int256)",
+          "selector": "0x2e7bfe5f",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "landOverviewByOwner(address)",
+          "selector": "0x9953e388",
+          "outputs": [
+            "(uint256,int256,int256,string)[]"
+          ]
+        },
+        {
+          "signature": "landSetName(uint256,string)",
+          "selector": "0x854167d2",
+          "outputs": []
+        }
+      ]
+    },
+    "0xf7fee03a641b51460fed06f988b1f8263031c55a": {
+      "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c",
+      "functions": [
+        {
+          "signature": "marketPlaceCancelOrder(uint256,uint256)",
+          "selector": "0x806a17ed",
+          "outputs": []
+        },
+        {
+          "signature": "marketPlaceCreateOrder(uint256,uint8,uint256,uint256)",
+          "selector": "0xb6aa224c",
+          "outputs": []
+        },
+        {
+          "signature": "marketPlaceGetActiveOrders()",
+          "selector": "0x97c5c384",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ]
+        },
+        {
+          "signature": "marketPlaceGetInactiveOrders()",
+          "selector": "0xe7ac8aed",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ]
+        },
+        {
+          "signature": "marketPlaceGetUserOrders(address)",
+          "selector": "0x9b33d4dc",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ]
+        },
+        {
+          "signature": "marketPlaceIsActive()",
+          "selector": "0x5f429393",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "marketPlaceTakeOrder(uint256,uint256)",
+          "selector": "0xa6645e4a",
+          "outputs": []
+        }
+      ]
+    },
+    "0xfca776c4c828f9b34bb770d9f7acaeb763be853f": {
+      "runtimeHash": "0x1d8fee7859a25760a302712e7a6b32e7f3fe4c9eb01bc067ed082dc1bbe085bd",
+      "functions": null
+    },
+    "0x572a40a2a2baa6c0f348ccf578406de7d80ad993": {
+      "runtimeHash": "0x58da1bbdd511a573733e0e240a40f41189699b35f04e943cb42ce6a2a995ae2e",
+      "functions": [
+        {
+          "signature": "questCommit(uint256,uint256)",
+          "selector": "0x611191c9",
+          "outputs": []
+        },
+        {
+          "signature": "questFinalize(uint256,uint256)",
+          "selector": "0xf987ae07",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetByLandId(uint256)",
+          "selector": "0xdc057167",
+          "outputs": [
+            "(uint8,uint256,uint256,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "questStart(uint256,uint8,uint256)",
+          "selector": "0x99fff80f",
+          "outputs": []
+        }
+      ]
+    },
+    "0x69b87aa1d358ef59be93de7df6fe3923c7aa9cc4": {
+      "runtimeHash": "0x5fa09351979c24b12e9fa7bb716704331eb7a64470ccf7a4c0811a5ea883a256",
+      "functions": [
+        {
+          "signature": "questCommit(uint256,uint256)",
+          "selector": "0x611191c9",
+          "outputs": []
+        },
+        {
+          "signature": "questFinalize(uint256,uint256)",
+          "selector": "0xf987ae07",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "questGetByLandId(uint256)",
+          "selector": "0xdc057167",
+          "outputs": [
+            "(uint8,uint256,uint256,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "questStart(uint256,uint8,uint256)",
+          "selector": "0x99fff80f",
+          "outputs": []
+        }
+      ]
+    },
+    "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1": {
+      "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939",
+      "functions": [
+        {
+          "signature": "townBuildMarketPlace(uint256)",
+          "selector": "0xbfb5c9df",
+          "outputs": []
+        },
+        {
+          "signature": "townGetBuildingsByLandId(uint256)",
+          "selector": "0x4918bfac",
+          "outputs": [
+            "(uint8,uint8,uint8,uint256,uint256,bool,uint256,uint256,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "townSpeedUpWithSeed(uint256,uint8)",
+          "selector": "0x218c9239",
+          "outputs": []
+        },
+        {
+          "signature": "townUpgradeWithLeaf(uint256,uint8)",
+          "selector": "0xd4526ea9",
+          "outputs": []
+        }
+      ]
+    },
+    "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809": {
+      "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3",
+      "functions": [
+        {
+          "signature": "villageClaimProduction(uint256,uint8)",
+          "selector": "0x77d66118",
+          "outputs": []
+        },
+        {
+          "signature": "villageGetVillageBuildingsByLandId(uint256)",
+          "selector": "0x0f25b087",
+          "outputs": [
+            "(uint8,uint8,uint8,uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256)[]"
+          ]
+        },
+        {
+          "signature": "villageSpeedUpWithSeed(uint256,uint8)",
+          "selector": "0xc98d9dc1",
+          "outputs": []
+        },
+        {
+          "signature": "villageUpgradeWithLeaf(uint256,uint8)",
+          "selector": "0x145ba117",
+          "outputs": []
+        }
+      ]
+    },
+    "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec": {
+      "runtimeHash": "0xd0590fdac9dde9cd27ebb24d098dc0d01aa8191acdb73b6999497e9d8528266f",
+      "functions": [
+        {
+          "signature": "wareHouseAssignLifeTime(uint256,uint256,uint256)",
+          "selector": "0xa146c4f7",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "wareHouseAssignPlantPoints(uint256,uint256,uint256)",
+          "selector": "0x503c7dbf",
+          "outputs": [
+            "uint256"
+          ]
+        }
+      ]
+    },
+    "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de": {
+      "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+      "functions": [
+        {
+          "signature": "casinoBuild(uint256)",
+          "selector": "0x408e7979",
+          "outputs": []
+        },
+        {
+          "signature": "casinoGetActiveBet(uint256)",
+          "selector": "0x1773a19e",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "bool"
+          ]
+        },
+        {
+          "signature": "casinoGetActiveBetV2(uint256)",
+          "selector": "0x0ea1cb05",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "bool",
+            "address"
+          ]
+        },
+        {
+          "signature": "casinoGetBetDetails(uint256,uint256)",
+          "selector": "0x5496aff9",
+          "outputs": [
+            "uint8",
+            "uint8[]",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetBuildingConfig()",
+          "selector": "0x6eff819d",
+          "outputs": [
+            "address",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetConfig()",
+          "selector": "0xd47ce2c5",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "address",
+            "address",
+            "bool",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetMaxBets()",
+          "selector": "0x7536510d",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetPayoutMultiplier(uint8)",
+          "selector": "0xfb55e7d4",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetStats(uint256)",
+          "selector": "0x32f9af59",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetStatsByToken(uint256,address)",
+          "selector": "0x128ba7fa",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoGetSupportedTokens()",
+          "selector": "0xb9b07ed9",
+          "outputs": [
+            "address[]"
+          ]
+        },
+        {
+          "signature": "casinoGetTokenConfig(address)",
+          "selector": "0xf096d055",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoHasBuilding(uint256)",
+          "selector": "0xbe6eec4b",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "casinoInitializeMultiBet()",
+          "selector": "0xaf5f8c1e",
+          "outputs": []
+        },
+        {
+          "signature": "casinoInitializeMultiTokenSupport()",
+          "selector": "0xb290861f",
+          "outputs": []
+        },
+        {
+          "signature": "casinoIsBuilt(uint256)",
+          "selector": "0x30d1a28e",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "casinoPlaceBets(uint256,uint8[],uint8[][],uint256[])",
+          "selector": "0xe5bafee9",
+          "outputs": []
+        },
+        {
+          "signature": "casinoPlaceBetsWithToken(uint256,address,uint8[],uint8[][],uint256[])",
+          "selector": "0x6c2176c9",
+          "outputs": []
+        },
+        {
+          "signature": "casinoRemoveToken(address)",
+          "selector": "0x15632c43",
+          "outputs": []
+        },
+        {
+          "signature": "casinoReveal(uint256)",
+          "selector": "0x690ecd3e",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "casinoSetBettingToken(address)",
+          "selector": "0xccec6ef8",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetBuildingCost(address,uint256)",
+          "selector": "0x06a35dcc",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetConfig(uint256,uint256,address,address,bool,uint256)",
+          "selector": "0xeafbf784",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetEnabled(bool)",
+          "selector": "0x44f27e7a",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetLimits(uint256,uint256)",
+          "selector": "0x73f7b1e8",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetMaxBets(uint256)",
+          "selector": "0x86832b8e",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetRewardPool(address)",
+          "selector": "0x0a8b0129",
+          "outputs": []
+        },
+        {
+          "signature": "casinoSetTokenConfig(address,uint256,uint256,address,bool,uint256)",
+          "selector": "0x79f501c5",
+          "outputs": []
+        }
+      ]
+    },
+    "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2": {
+      "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+      "functions": [
+        {
+          "signature": "blackjackActionWithRandom(uint256,uint8,uint8,bytes32,uint256,bytes)",
+          "selector": "0x92642803",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackBet(uint256,uint256)",
+          "selector": "0xbbe8e481",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackDeal(uint256,uint256)",
+          "selector": "0xe7b24590",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackDealWithRandom(uint256,uint256,bytes32,uint256,bytes)",
+          "selector": "0x0e338333",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackDealWithRandomForToken(uint256,uint256,address,bytes32,uint256,bytes)",
+          "selector": "0x607e7c89",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackInitialize()",
+          "selector": "0x32af071f",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackInitializeMultiTokenSupport()",
+          "selector": "0xdf728901",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackRemoveToken(address)",
+          "selector": "0x73a67382",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackRequestAction(uint256,uint8,uint8)",
+          "selector": "0x99866de9",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackRevealAction(uint256)",
+          "selector": "0x65b74f99",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetBettingToken(address)",
+          "selector": "0x314abd82",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetEnabled(bool)",
+          "selector": "0xfed1762f",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetLimits(uint256,uint256)",
+          "selector": "0xa3525063",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetRandomnessSigner(address)",
+          "selector": "0xb547b10c",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetRewardPool(address)",
+          "selector": "0x27e3e296",
+          "outputs": []
+        },
+        {
+          "signature": "blackjackSetTokenConfig(address,uint256,uint256,address,bool)",
+          "selector": "0x5cb072f0",
+          "outputs": []
+        }
+      ]
+    },
+    "0x510feaa858b39643c56e60057f3b8619a845ff8b": {
+      "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+      "functions": [
+        {
+          "signature": "blackjackGetActions(uint256,uint8)",
+          "selector": "0xb3115616",
+          "outputs": [
+            "bool",
+            "bool",
+            "bool",
+            "bool",
+            "bool",
+            "bool"
+          ]
+        },
+        {
+          "signature": "blackjackGetConfig()",
+          "selector": "0x6b9ef3ea",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "address",
+            "address",
+            "bool",
+            "uint8"
+          ]
+        },
+        {
+          "signature": "blackjackGetDealerHand(uint256)",
+          "selector": "0x70c50677",
+          "outputs": [
+            "uint8[]",
+            "uint8"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameBasic(uint256)",
+          "selector": "0xb6247639",
+          "outputs": [
+            "bool",
+            "address",
+            "uint8",
+            "uint256",
+            "uint8",
+            "bool",
+            "uint8",
+            "bool",
+            "uint256",
+            "uint8"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameHands(uint256)",
+          "selector": "0x88ed2545",
+          "outputs": [
+            "uint8[]",
+            "uint8",
+            "uint8[]",
+            "uint8",
+            "bool",
+            "bool"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameSnapshot(uint256)",
+          "selector": "0x85b209cb",
+          "outputs": [
+            "(bool,address,uint8,uint256,uint8,bool,uint8,uint8[],uint8,uint8[],uint8,uint8[],uint8,bool,bool,bool,bool,bool)"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameToken(uint256)",
+          "selector": "0xf8532887",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "blackjackGetNonce(uint256)",
+          "selector": "0x8ed4faa0",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "blackjackGetRandomnessSigner()",
+          "selector": "0x0926e1ce",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "blackjackGetStats(uint256)",
+          "selector": "0x2c47a873",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "blackjackGetStatsByToken(uint256,address)",
+          "selector": "0xd3a8ee6f",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "blackjackGetTokenConfig(address)",
+          "selector": "0x0311f643",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "uint8"
+          ]
+        },
+        {
+          "signature": "blackjackIsAvailable(uint256)",
+          "selector": "0x019ff7cb",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint8"
+          ]
+        }
+      ]
+    },
+    "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c": {
+      "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+      "functions": [
+        {
+          "signature": "baccaratGetActiveGame(uint256)",
+          "selector": "0x9e88f17b",
+          "outputs": [
+            "bool",
+            "address",
+            "uint8",
+            "uint256",
+            "uint256",
+            "bool",
+            "bool",
+            "address"
+          ]
+        },
+        {
+          "signature": "baccaratGetConfig()",
+          "selector": "0x06d1a55e",
+          "outputs": [
+            "bool",
+            "uint16",
+            "uint8"
+          ]
+        },
+        {
+          "signature": "baccaratGetStats(uint256)",
+          "selector": "0x925bd687",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "baccaratGetStatsByToken(uint256,address)",
+          "selector": "0x20f30c34",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "baccaratGetTokenConfig(address)",
+          "selector": "0x1fce97d7",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool"
+          ]
+        },
+        {
+          "signature": "baccaratInitialize()",
+          "selector": "0xcaa6fa24",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratPlaceBet(uint256,uint8,uint256)",
+          "selector": "0xec120b75",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratPlaceBetWithToken(uint256,address,uint8,uint256)",
+          "selector": "0xd25443e4",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratRemoveToken(address)",
+          "selector": "0x5fe8c25c",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratReveal(uint256)",
+          "selector": "0xdfeb4df5",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "baccaratSetEnabled(bool)",
+          "selector": "0x87e11fb3",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratSetRules(uint16,uint8)",
+          "selector": "0x73c5435f",
+          "outputs": []
+        },
+        {
+          "signature": "baccaratSetTokenConfig(address,uint256,uint256,address,bool)",
+          "selector": "0x521d0059",
+          "outputs": []
+        }
+      ]
+    },
+    "0x593707b6febd46818d2696e6a1698fd8dfc7415b": {
+      "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+      "functions": [
+        {
+          "signature": "barracksGetConfig()",
+          "selector": "0xccb1a57a",
+          "outputs": [
+            "(bool,bool,address,uint256,address,address,uint256,address,uint256,uint256,uint256,uint16,uint16,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetConfigV2()",
+          "selector": "0x54998b51",
+          "outputs": [
+            "(bool,bool,address,uint256,address,uint256,uint256,uint16,uint16,uint256,uint256,(address,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256),(address,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))"
+          ]
+        },
+        {
+          "signature": "barracksGetEligibleAttackableLandIds(uint256)",
+          "selector": "0x7b5bf214",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "barracksGetLandState(uint256)",
+          "selector": "0xbba3059a",
+          "outputs": [
+            "(bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetLandStateV2(uint256)",
+          "selector": "0xded96b36",
+          "outputs": [
+            "(bool,uint256,uint256,uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetLastIncomingReport(uint256)",
+          "selector": "0xa16061d2",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetLastIncomingReportV2(uint256)",
+          "selector": "0x65c8bba0",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetLastOutgoingReport(uint256)",
+          "selector": "0x2b44653f",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksGetLastOutgoingReportV2(uint256)",
+          "selector": "0x61f71517",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        }
+      ]
+    },
+    "0x31dced5f23e47dc659536a32b2f0efde10172340": {
+      "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+      "functions": [
+        {
+          "signature": "barracksAdminAddTroops(uint256,uint256)",
+          "selector": "0xee6801d9",
+          "outputs": []
+        },
+        {
+          "signature": "barracksAdminAddTroopsToAllBuiltV2(uint8,uint256)",
+          "selector": "0x7e707cb4",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "barracksAdminAddTroopsV2(uint256,uint8,uint256)",
+          "selector": "0x79025f63",
+          "outputs": []
+        },
+        {
+          "signature": "barracksAttack(uint256,uint256,uint256)",
+          "selector": "0x7d9fe730",
+          "outputs": []
+        },
+        {
+          "signature": "barracksAttackV2(uint256,uint256,uint256,uint256)",
+          "selector": "0xe5a2855a",
+          "outputs": []
+        },
+        {
+          "signature": "barracksBuild(uint256)",
+          "selector": "0x94a296c3",
+          "outputs": []
+        },
+        {
+          "signature": "barracksClaimTroops(uint256)",
+          "selector": "0xf45f63bd",
+          "outputs": []
+        },
+        {
+          "signature": "barracksForceFinishTraining(uint256)",
+          "selector": "0x76a4dc5f",
+          "outputs": []
+        },
+        {
+          "signature": "barracksForceFinishTrainingV2(uint256)",
+          "selector": "0xded35dcc",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "barracksInitialize()",
+          "selector": "0xb58dce15",
+          "outputs": []
+        },
+        {
+          "signature": "barracksPreviewRaid(uint256,uint256,uint256)",
+          "selector": "0xe5de060d",
+          "outputs": [
+            "(uint8,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksPreviewRaidV2(uint256,uint256,uint256,uint256)",
+          "selector": "0x53c9c59c",
+          "outputs": [
+            "(uint8,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ]
+        },
+        {
+          "signature": "barracksSetBuildConfig(address,uint256,address)",
+          "selector": "0x73445b2f",
+          "outputs": []
+        },
+        {
+          "signature": "barracksSetCombatConfig(uint256,uint256,uint16,uint16,uint256,uint256,uint256,uint256,uint256,uint256)",
+          "selector": "0x92b18ee7",
+          "outputs": []
+        },
+        {
+          "signature": "barracksSetEnabled(bool)",
+          "selector": "0xb06760fe",
+          "outputs": []
+        },
+        {
+          "signature": "barracksSetTrainingConfig(address,uint256,address,uint256,uint256)",
+          "selector": "0x837d46a9",
+          "outputs": []
+        },
+        {
+          "signature": "barracksSetTroopConfigV2(uint8,address,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256)",
+          "selector": "0xadf9a9db",
+          "outputs": []
+        },
+        {
+          "signature": "barracksTrainTroops(uint256,uint256)",
+          "selector": "0xe32636aa",
+          "outputs": []
+        },
+        {
+          "signature": "barracksTrainTroopsV2(uint256,uint8,uint256)",
+          "selector": "0x9573d774",
+          "outputs": []
+        }
+      ]
+    },
+    "0x546d239032b24eceee0cb05c92fc39090846adc7": {
+      "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a",
+      "functions": [
+        {
+          "signature": "_isExcludedMaxTransactionAmount(address)",
+          "selector": "0x10d5de53",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "acknowledgement()",
+          "selector": "0xfc819750",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "automatedMarketMakerPairs(address)",
+          "selector": "0xb62496f5",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "buyLiquidityFee()",
+          "selector": "0xf11a24d3",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "buyRevShareFee()",
+          "selector": "0x156c2f35",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "buyTeamFee()",
+          "selector": "0x9c2e4ac6",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "buyTotalFees()",
+          "selector": "0xd85ba063",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "decreaseAllowance(address,uint256)",
+          "selector": "0xa457c2d7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "excludeFromFees(address,bool)",
+          "selector": "0xc0246668",
+          "outputs": []
+        },
+        {
+          "signature": "excludeFromMaxTransaction(address,bool)",
+          "selector": "0x7571336a",
+          "outputs": []
+        },
+        {
+          "signature": "increaseAllowance(address,uint256)",
+          "selector": "0x39509351",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "isExcludedFromFees(address)",
+          "selector": "0x4fbee193",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "limitsInEffect()",
+          "selector": "0x4a62bb65",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "maxTransactionAmount()",
+          "selector": "0xc8c8ebe4",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "maxWallet()",
+          "selector": "0xf8b45b05",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "owner()",
+          "selector": "0x8da5cb5b",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "removeLimits()",
+          "selector": "0x751039fc",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "renounceOwnership()",
+          "selector": "0x715018a6",
+          "outputs": []
+        },
+        {
+          "signature": "revShareWallet()",
+          "selector": "0x782c4e99",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "risks()",
+          "selector": "0xf9d7ff89",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "sellLiquidityFee()",
+          "selector": "0xf6374342",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "sellRevShareFee()",
+          "selector": "0x19eab042",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "sellTeamFee()",
+          "selector": "0xd729715f",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "sellTotalFees()",
+          "selector": "0x6a486a8e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "setAutomatedMarketMakerPair(address,bool)",
+          "selector": "0x9a7a23d6",
+          "outputs": []
+        },
+        {
+          "signature": "swapEnabled()",
+          "selector": "0x6ddd1713",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "swapTokensAtAmount()",
+          "selector": "0xe2f45605",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "teamWallet()",
+          "selector": "0x59927044",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "tokensForLiquidity()",
+          "selector": "0x1a8145bb",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "tokensForRevShare()",
+          "selector": "0x24b9f3c1",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "tokensForTeam()",
+          "selector": "0xfde83a34",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "transferOwnership(address)",
+          "selector": "0xf2fde38b",
+          "outputs": []
+        },
+        {
+          "signature": "uniswapV2Pair()",
+          "selector": "0x49bd5a5e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "uniswapV2Router()",
+          "selector": "0x1694505e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "updateBuyFees(uint256,uint256,uint256)",
+          "selector": "0x8095d564",
+          "outputs": []
+        },
+        {
+          "signature": "updateMaxTxnAmount(uint256)",
+          "selector": "0x203e727e",
+          "outputs": []
+        },
+        {
+          "signature": "updateMaxWalletAmount(uint256)",
+          "selector": "0xc18bc195",
+          "outputs": []
+        },
+        {
+          "signature": "updateRevShareWallet(address)",
+          "selector": "0xadee28ff",
+          "outputs": []
+        },
+        {
+          "signature": "updateSellFees(uint256,uint256,uint256)",
+          "selector": "0xc17b5b8c",
+          "outputs": []
+        },
+        {
+          "signature": "updateSwapEnabled(bool)",
+          "selector": "0x924de9b7",
+          "outputs": []
+        },
+        {
+          "signature": "updateSwapTokensAtAmount(uint256)",
+          "selector": "0xd257b34f",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "updateTeamWallet(address)",
+          "selector": "0x7cb332bb",
+          "outputs": []
+        },
+        {
+          "signature": "withdrawStuckEth(address)",
+          "selector": "0x7ca8448a",
+          "outputs": []
+        },
+        {
+          "signature": "withdrawStuckToken(address,address)",
+          "selector": "0xbc205ad3",
+          "outputs": []
+        }
+      ]
+    },
+    "0x21bdba30afc2b8205e8a173626346868077572fb": {
+      "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4",
+      "functions": [
+        {
+          "signature": "CLOCK_MODE()",
+          "selector": "0x4bf5d7e9",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "DEFAULT_ADMIN_ROLE()",
+          "selector": "0xa217fddf",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "DOMAIN_SEPARATOR()",
+          "selector": "0x3644e515",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "burn(uint256)",
+          "selector": "0x42966c68",
+          "outputs": []
+        },
+        {
+          "signature": "burnFrom(address,uint256)",
+          "selector": "0x79cc6790",
+          "outputs": []
+        },
+        {
+          "signature": "checkpoints(address,uint32)",
+          "selector": "0xf1127ed8",
+          "outputs": [
+            "(uint32,uint224)"
+          ]
+        },
+        {
+          "signature": "clock()",
+          "selector": "0x91ddadf4",
+          "outputs": [
+            "uint48"
+          ]
+        },
+        {
+          "signature": "contractType()",
+          "selector": "0xcb2ef6f7",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "contractVersion()",
+          "selector": "0xa0a8e460",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "decreaseAllowance(address,uint256)",
+          "selector": "0xa457c2d7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "delegate(address)",
+          "selector": "0x5c19a95c",
+          "outputs": []
+        },
+        {
+          "signature": "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)",
+          "selector": "0xc3cda520",
+          "outputs": []
+        },
+        {
+          "signature": "delegates(address)",
+          "selector": "0x587cde1e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "eip712Domain()",
+          "selector": "0x84b0196e",
+          "outputs": [
+            "bytes1",
+            "string",
+            "string",
+            "uint256",
+            "address",
+            "bytes32",
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "getPastTotalSupply(uint256)",
+          "selector": "0x8e539e8c",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPastVotes(address,uint256)",
+          "selector": "0x3a46b1a8",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPlatformFeeInfo()",
+          "selector": "0xd45573f6",
+          "outputs": [
+            "address",
+            "uint16"
+          ]
+        },
+        {
+          "signature": "getRoleAdmin(bytes32)",
+          "selector": "0x248a9ca3",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "getRoleMember(bytes32,uint256)",
+          "selector": "0x9010d07c",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getRoleMemberCount(bytes32)",
+          "selector": "0xca15c873",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getVotes(address)",
+          "selector": "0x9ab24eb0",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "grantRole(bytes32,address)",
+          "selector": "0x2f2ff15d",
+          "outputs": []
+        },
+        {
+          "signature": "hasRole(bytes32,address)",
+          "selector": "0x91d14854",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "increaseAllowance(address,uint256)",
+          "selector": "0x39509351",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "initialize(address,string,string,string,address[],address,address,uint256)",
+          "selector": "0xdfad80a6",
+          "outputs": []
+        },
+        {
+          "signature": "isTrustedForwarder(address)",
+          "selector": "0x572b6c05",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "mintTo(address,uint256)",
+          "selector": "0x449a52f8",
+          "outputs": []
+        },
+        {
+          "signature": "mintWithSignature((address,address,uint256,uint256,address,uint128,uint128,bytes32),bytes)",
+          "selector": "0x8f0fefbb",
+          "outputs": []
+        },
+        {
+          "signature": "multicall(bytes[])",
+          "selector": "0xac9650d8",
+          "outputs": [
+            "bytes[]"
+          ]
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "nonces(address)",
+          "selector": "0x7ecebe00",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "numCheckpoints(address)",
+          "selector": "0x6fcfff45",
+          "outputs": [
+            "uint32"
+          ]
+        },
+        {
+          "signature": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+          "selector": "0xd505accf",
+          "outputs": []
+        },
+        {
+          "signature": "primarySaleRecipient()",
+          "selector": "0x079fe40e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "renounceRole(bytes32,address)",
+          "selector": "0x36568abe",
+          "outputs": []
+        },
+        {
+          "signature": "revokeRole(bytes32,address)",
+          "selector": "0xd547741f",
+          "outputs": []
+        },
+        {
+          "signature": "setContractURI(string)",
+          "selector": "0x938e3d7b",
+          "outputs": []
+        },
+        {
+          "signature": "setPlatformFeeInfo(address,uint256)",
+          "selector": "0x1e7ac488",
+          "outputs": []
+        },
+        {
+          "signature": "setPrimarySaleRecipient(address)",
+          "selector": "0x6f4f2837",
+          "outputs": []
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "verify((address,address,uint256,uint256,address,uint128,uint128,bytes32),bytes)",
+          "selector": "0xc1b606e2",
+          "outputs": [
+            "bool",
+            "address"
+          ]
+        }
+      ]
+    },
+    "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d": {
+      "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82",
+      "functions": [
+        {
+          "signature": "DEFAULT_ADMIN_ROLE()",
+          "selector": "0xa217fddf",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "claimRewards()",
+          "selector": "0x372500ab",
+          "outputs": []
+        },
+        {
+          "signature": "contractType()",
+          "selector": "0xcb2ef6f7",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "contractVersion()",
+          "selector": "0xa0a8e460",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "depositRewardTokens(uint256)",
+          "selector": "0x16c621e0",
+          "outputs": []
+        },
+        {
+          "signature": "getRewardRatio()",
+          "selector": "0x97e1b4bc",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getRewardTokenBalance()",
+          "selector": "0x93ce5343",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getRoleAdmin(bytes32)",
+          "selector": "0x248a9ca3",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "getRoleMember(bytes32,uint256)",
+          "selector": "0x9010d07c",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getRoleMemberCount(bytes32)",
+          "selector": "0xca15c873",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getStakeInfo(address)",
+          "selector": "0xc3453153",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getTimeUnit()",
+          "selector": "0xd68124c7",
+          "outputs": [
+            "uint80"
+          ]
+        },
+        {
+          "signature": "grantRole(bytes32,address)",
+          "selector": "0x2f2ff15d",
+          "outputs": []
+        },
+        {
+          "signature": "hasRole(bytes32,address)",
+          "selector": "0x91d14854",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "hasRoleWithSwitch(bytes32,address)",
+          "selector": "0xa32fa5b3",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "initialize(address,string,address[],address,address,uint80,uint256,uint256)",
+          "selector": "0xdf654376",
+          "outputs": []
+        },
+        {
+          "signature": "isTrustedForwarder(address)",
+          "selector": "0x572b6c05",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "multicall(bytes[])",
+          "selector": "0xac9650d8",
+          "outputs": [
+            "bytes[]"
+          ]
+        },
+        {
+          "signature": "renounceRole(bytes32,address)",
+          "selector": "0x36568abe",
+          "outputs": []
+        },
+        {
+          "signature": "revokeRole(bytes32,address)",
+          "selector": "0xd547741f",
+          "outputs": []
+        },
+        {
+          "signature": "rewardToken()",
+          "selector": "0xf7c618c1",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "rewardTokenDecimals()",
+          "selector": "0x9bdcecd1",
+          "outputs": [
+            "uint16"
+          ]
+        },
+        {
+          "signature": "setContractURI(string)",
+          "selector": "0x938e3d7b",
+          "outputs": []
+        },
+        {
+          "signature": "setRewardRatio(uint256,uint256)",
+          "selector": "0x001b7934",
+          "outputs": []
+        },
+        {
+          "signature": "setTimeUnit(uint80)",
+          "selector": "0xb218f069",
+          "outputs": []
+        },
+        {
+          "signature": "stake(uint256)",
+          "selector": "0xa694fc3a",
+          "outputs": []
+        },
+        {
+          "signature": "stakers(address)",
+          "selector": "0x9168ae72",
+          "outputs": [
+            "uint128",
+            "uint64",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "stakersArray(uint256)",
+          "selector": "0x5357e916",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "stakingToken()",
+          "selector": "0x72f702f3",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "stakingTokenBalance()",
+          "selector": "0x8caaa271",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "stakingTokenDecimals()",
+          "selector": "0xb9f7a7b5",
+          "outputs": [
+            "uint16"
+          ]
+        },
+        {
+          "signature": "withdraw(uint256)",
+          "selector": "0x2e1a7d4d",
+          "outputs": []
+        },
+        {
+          "signature": "withdrawRewardTokens(uint256)",
+          "selector": "0xcb43b2dd",
+          "outputs": []
+        }
+      ]
+    },
+    "0x8d0538fae8b3630c487b720d7767ae46aa58cda7": {
+      "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+      "functions": null
+    },
+    "0x327df1e6de05895d2ab08513aadd9313fe505d86": {
+      "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865",
+      "functions": [
+        {
+          "signature": "WETH()",
+          "selector": "0xad5c4648",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xe8e33700",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xf305d719",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "factory()",
+          "selector": "0xc45a0155",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "getAmountIn(uint256,uint256,uint256)",
+          "selector": "0x85f8c259",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getAmountOut(uint256,uint256,uint256)",
+          "selector": "0x054d50d4",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getAmountsIn(uint256,address[])",
+          "selector": "0x1f00ca74",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "getAmountsOut(uint256,address[])",
+          "selector": "0xd06ca61f",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "quote(uint256,uint256,uint256)",
+          "selector": "0xad615dec",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xbaa2abde",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0x02751cec",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xaf2979eb",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0xded9382a",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0x5b0d5984",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0x2195995c",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "swapETHForExactTokens(uint256,address[],address,uint256)",
+          "selector": "0xfb3bdb41",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "swapExactETHForTokens(uint256,address[],address,uint256)",
+          "selector": "0x7ff36ab5",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+          "selector": "0xb6f9de95",
+          "outputs": []
+        },
+        {
+          "signature": "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+          "selector": "0x18cbafe5",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x791ac947",
+          "outputs": []
+        },
+        {
+          "signature": "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x38ed1739",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x5c11d795",
+          "outputs": []
+        },
+        {
+          "signature": "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+          "selector": "0x4a25d94a",
+          "outputs": [
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x8803dbee",
+          "outputs": [
+            "uint256[]"
+          ]
+        }
+      ]
+    },
+    "0x6131b5fae19ea4f9d964eac0408e4408b66337b5": {
+      "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3",
+      "functions": [
+        {
+          "signature": "WETH()",
+          "selector": "0xad5c4648",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "isWhitelist(address)",
+          "selector": "0xc683630d",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "owner()",
+          "selector": "0x8da5cb5b",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "renounceOwnership()",
+          "selector": "0x715018a6",
+          "outputs": []
+        },
+        {
+          "signature": "rescueFunds(address,uint256)",
+          "selector": "0x78e3214f",
+          "outputs": []
+        },
+        {
+          "signature": "swap((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))",
+          "selector": "0xe21fd0e9",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "swapGeneric((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))",
+          "selector": "0x59e50fed",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "swapSimpleMode(address,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes,bytes)",
+          "selector": "0x8af033fb",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transferOwnership(address)",
+          "selector": "0xf2fde38b",
+          "outputs": []
+        },
+        {
+          "signature": "updateWhitelist(address[],bool[])",
+          "selector": "0x33320de3",
+          "outputs": []
+        }
+      ]
+    },
+    "0x36853f9f48faee51bd3db15db21eb4b9038bb795": {
+      "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954",
+      "functions": [
+        {
+          "signature": "DOMAIN_SEPARATOR()",
+          "selector": "0x3644e515",
+          "outputs": [
+            "bytes32"
+          ]
+        },
+        {
+          "signature": "addOwner(address)",
+          "selector": "0x7065cb48",
+          "outputs": []
+        },
+        {
+          "signature": "addOwners(address[])",
+          "selector": "0x6c46a2c5",
+          "outputs": []
+        },
+        {
+          "signature": "airlock()",
+          "selector": "0xf78a8a3e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "burn(uint256)",
+          "selector": "0x42966c68",
+          "outputs": []
+        },
+        {
+          "signature": "claimVesting()",
+          "selector": "0xfedda89c",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "coinType()",
+          "selector": "0x1fe93ea8",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "contractVersion()",
+          "selector": "0xa0a8e460",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "currency()",
+          "selector": "0xe5a6b10f",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ]
+        },
+        {
+          "signature": "dopplerFeeRecipient()",
+          "selector": "0x346a21dc",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "eip712Domain()",
+          "selector": "0x84b0196e",
+          "outputs": [
+            "bytes1",
+            "string",
+            "string",
+            "uint256",
+            "address",
+            "bytes32",
+            "uint256[]"
+          ]
+        },
+        {
+          "signature": "getClaimableAmount()",
+          "selector": "0xc354bd6e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "getPayoutSwapPath(address)",
+          "selector": "0xf3ffe14b",
+          "outputs": [
+            "((address,uint24,int24,address,bytes)[],address)"
+          ]
+        },
+        {
+          "signature": "getPoolConfiguration()",
+          "selector": "0xb80945e9",
+          "outputs": [
+            "(uint8,uint16,uint24,int24,uint16[],int24[],int24[],uint256[])"
+          ]
+        },
+        {
+          "signature": "getPoolKey()",
+          "selector": "0x683e76e0",
+          "outputs": [
+            "(address,address,uint24,int24,address)"
+          ]
+        },
+        {
+          "signature": "hooks()",
+          "selector": "0xcd7033c4",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "initialize(address,address[],string,string,string,address,address,(address,address,uint24,int24,address),uint160,(uint8,uint16,uint24,int24,uint16[],int24[],int24[],uint256[]))",
+          "selector": "0xdd0371d5",
+          "outputs": []
+        },
+        {
+          "signature": "isOwner(address)",
+          "selector": "0x2f54bf6e",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "migrateLiquidity(address,bytes)",
+          "selector": "0x7a3b5a23",
+          "outputs": [
+            "(address,address,uint24,int24,address)"
+          ]
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "nonces(address)",
+          "selector": "0x7ecebe00",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "owners()",
+          "selector": "0xaffe39c1",
+          "outputs": [
+            "address[]"
+          ]
+        },
+        {
+          "signature": "payoutRecipient()",
+          "selector": "0x3fb80b15",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+          "selector": "0xd505accf",
+          "outputs": []
+        },
+        {
+          "signature": "platformReferrer()",
+          "selector": "0x51845bf6",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "poolManager()",
+          "selector": "0xdc4c90d3",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "protocolRewardRecipient()",
+          "selector": "0xf53eab8e",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "protocolRewards()",
+          "selector": "0x29df6479",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "signature": "removeOwner(address)",
+          "selector": "0x173825d9",
+          "outputs": []
+        },
+        {
+          "signature": "removeOwners(address[])",
+          "selector": "0xa9a5e3af",
+          "outputs": []
+        },
+        {
+          "signature": "revokeOwnership()",
+          "selector": "0x2b968958",
+          "outputs": []
+        },
+        {
+          "signature": "setContractURI(string)",
+          "selector": "0x938e3d7b",
+          "outputs": []
+        },
+        {
+          "signature": "setNameAndSymbol(string,string)",
+          "selector": "0x5a446215",
+          "outputs": []
+        },
+        {
+          "signature": "setPayoutRecipient(address)",
+          "selector": "0x46bb5954",
+          "outputs": []
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "tokenURI()",
+          "selector": "0x3c130d90",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "signature": "totalClaimed()",
+          "selector": "0xd54ad2a1",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "totalSupplyForPositions()",
+          "selector": "0x3e280d53",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ]
+        },
+        {
+          "signature": "vestingEndTime()",
+          "selector": "0x86fab45e",
+          "outputs": [
+            "uint256"
+          ]
+        },
+        {
+          "signature": "vestingStartTime()",
+          "selector": "0xa8660a78",
+          "outputs": [
+            "uint256"
+          ]
+        }
+      ]
+    }
+  }
+}

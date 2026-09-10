@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         staked: stakingData.stake.staked.toString(),
         rewards: stakingData.stake.rewards.toString()
       } : null,
+      allowance: stakingData.allowance?.toString() ?? null,
       approved: stakingData.approved,
       rewardRatio: stakingData.rewardRatio ? {
         numerator: stakingData.rewardRatio.numerator.toString(),

@@ -57,6 +57,7 @@ const operationResponse = z.object({
   deleted: z.union([count, z.object({ walletClaims: count, verifiedClaims: count })]).optional(),
   totalRecipients: count.optional(), validCount: count.optional(), invalidCount: count.optional(),
   added: count.optional(), updated: count.optional(),
+  updatedCount: count.optional(), createdCount: count.optional(), protectedCount: count.optional(), conflictCount: count.optional(),
   errors: z.array(z.string()).optional(), validationErrors: z.array(z.string()).optional(),
 });
 export const parseAdminOperation = parser(operationResponse);

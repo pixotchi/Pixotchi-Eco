@@ -22,10 +22,10 @@ import {
   waitForCanonicalBaseReceipt,
 } from '../lib/base-rpc';
 import { validateBaseRpcLogFilter } from '../app/api/rpc/route';
+import { BASE_RPC_NOT_FORWARDED_MARKER } from '../lib/base-rpc-errors';
 import {
   BASE_RPC_MAX_BATCH_SIZE,
   BASE_RPC_MAX_BODY_BYTES,
-  BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES,
 } from '../lib/base-rpc-policy';
 import {
   createLandTransferCall,
@@ -66,6 +66,7 @@ import {
   type PendingEvmStorage,
 } from '../lib/pending-evm-transaction';
 
+async function main() {
 const projectFile = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -504,15 +505,8 @@ assert.match(
 );
 assert.equal(BASE_RPC_MAX_BATCH_SIZE, 20);
 
-// The body cap is the same defect one layer down: the browser batcher's own
-// worst case (20 requests x hex-encoded multicall calldata) has to fit, or a
-// busy screen produces a request the proxy rejects wholesale with HTTP 413.
-const worstCaseClientBody =
-  BASE_RPC_MAX_BATCH_SIZE * (BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES * 2 + 2);
-assert.ok(
-  BASE_RPC_MAX_BODY_BYTES >= worstCaseClientBody,
-  `proxy body cap ${BASE_RPC_MAX_BODY_BYTES} must cover the client worst case ${worstCaseClientBody}`,
-);
+// The actual serialized client envelope is exercised in rpc-batching-smoke.ts.
+assert.equal(BASE_RPC_MAX_BODY_BYTES, 338_944);
 assert.match(
   rpcProxySource,
   /const MAX_BODY_BYTES = BASE_RPC_MAX_BODY_BYTES;/,
@@ -520,9 +514,10 @@ assert.match(
 );
 assert.match(
   baseRpcSource,
-  /const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;/,
+  /const MULTICALL_BATCH_SIZE = IS_BROWSER/,
   'multicall sizing must come from the shared envelope the body cap is derived from',
 );
+assert.match(baseRpcSource, /BASE_RPC_BROWSER_MULTICALL_INNER_BYTES/);
   assert.match(rpcRouteSource, /const ALLOWED_READ_METHODS = new Set\(\[/);
   assert.doesNotMatch(
     rpcRouteSource.match(/const ALLOWED_READ_METHODS = new Set\(\[[\s\S]*?\]\);/)?.[0] ?? '',
@@ -552,7 +547,8 @@ assert.match(
 assert.match(rpcRouteSource, /validationErrors\.some\(Boolean\)/);
 assert.match(rpcRouteSource, /isLoopbackHostname\(request\.nextUrl\.hostname\)/);
 assert.match(rpcRouteSource, /NEXT_PUBLIC_LOCAL_TEST_WALLET_PRIVATE_KEY/);
-assert.match(rpcRouteSource, /safeRpcMessage\(safe\.code\)/);
+assert.match(rpcRouteSource, /const safe = toBaseRpcWireError\(error\)/);
+assert.match(rpcRouteSource, /rpcError\(id, safe\.code, safe\.message, safe\.data\)/);
   assert.doesNotMatch(rpcRouteSource, /error instanceof Error \? error\.message/);
   assert.equal(
     validateBaseRpcLogFilter([{ fromBlock: '0x1', toBlock: '0x2711' }]),
@@ -806,7 +802,7 @@ assert.match(transactionKit, /isDefinitiveUnsupportedEvmBatchError/);
 assert.doesNotMatch(transactionKit, /firstReceiptLogs/);
 assert.match(
   transactionKit,
-  /reportedSuccess && reportedHashes\.length === 0[\s\S]*reportedHashes\.map[\s\S]*waitForCanonicalReceipt/,
+  /reportedSuccess && reportedHashes\.length === 0[\s\S]*getPendingEvmReceiptTargets\(pendingRecord, reportedHashes\)\.map[\s\S]*waitForCanonicalReceipt/,
 );
 assert.match(transactionKit, /statusName: "confirmedSyncing"/);
 assert.match(transactionKit, /await completeConfirmedTransaction/);
@@ -1103,9 +1099,9 @@ const staleRecord = createPendingEvmRecord({
 });
 writePendingEvmRecord(pendingStorage, staleRecord);
 assert.equal(getPendingEvmPhase(staleRecord), 'stale');
-assert.equal(acknowledgePendingEvmRecord(pendingStorage, staleRecord), true);
+assert.equal(await acknowledgePendingEvmRecord(pendingStorage, staleRecord), true);
 assert.equal(readPendingEvmRecord(pendingStorage, staleIdentity), null);
-assert.equal(acknowledgePendingEvmRecord(pendingStorage, newerRecord), false);
+assert.equal(await acknowledgePendingEvmRecord(pendingStorage, newerRecord), false);
 
 // Exercised inside runAsyncPendingTransactionSmoke below: the lease check needs
 // an async scope, and this file's transform has no top-level await.
@@ -1188,9 +1184,10 @@ Details: Batch size is limited to 20 [${PENDING_EVM_PROXY_NOT_FORWARDED_MARKER}]
   assert.equal(isDefinitivePendingEvmPreSubmissionError(upstreamTimeout), false);
 }
 
+assert.equal(BASE_RPC_NOT_FORWARDED_MARKER, PENDING_EVM_PROXY_NOT_FORWARDED_MARKER);
 assert.match(
   rpcProxySource,
-  new RegExp(`const NOT_FORWARDED_MARKER = '${PENDING_EVM_PROXY_NOT_FORWARDED_MARKER}';`),
+  /const NOT_FORWARDED_MARKER = BASE_RPC_NOT_FORWARDED_MARKER;/,
   'the proxy marker must stay in sync with the client-side classifier',
 );
 assert.doesNotMatch(
@@ -1282,7 +1279,7 @@ for (const [suffix, submittedAt] of [
   // duplicate wallet submission.
   assert.equal(storedTimeRecord?.attemptId, invalidTimeRecord.attemptId);
   assert.equal(getPendingEvmPhase(invalidTimeRecord), 'stale');
-  assert.equal(acknowledgePendingEvmRecord(pendingStorage, invalidTimeRecord), true);
+  assert.equal(await acknowledgePendingEvmRecord(pendingStorage, invalidTimeRecord), true);
 }
 
 const throwingStorage: PendingEvmStorage = {
@@ -2449,17 +2446,20 @@ async function runAsyncPendingTransactionSmoke() {
     writePendingEvmRecord(ackStorage, agedReservation);
     await withPendingEvmSubmissionLease(ackStorage, pendingIdentity, async () => {
       assert.equal(
-        acknowledgePendingEvmRecord(ackStorage, agedReservation),
+        await acknowledgePendingEvmRecord(ackStorage, agedReservation),
         false,
         'a live submission lease must block the ambiguous acknowledgement',
       );
     });
-    assert.equal(acknowledgePendingEvmRecord(ackStorage, agedReservation), true);
+    assert.equal(await acknowledgePendingEvmRecord(ackStorage, agedReservation), true);
     assert.equal(readPendingEvmRecord(ackStorage, ambiguousIdentity), null);
   }
 }
 
-void runAsyncPendingTransactionSmoke()
+await runAsyncPendingTransactionSmoke();
+}
+
+void main()
   .then(() => console.log('production-fixes smoke passed'))
   .catch((error) => {
     console.error(error);

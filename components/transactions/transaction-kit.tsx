@@ -20,7 +20,8 @@ import { handleExternalAnchorClick, openExternalUrl } from "@/lib/open-external"
 import { base } from "viem/chains";
 import { useAccount, useChainId, useWalletClient } from "wagmi";
 import { useShowCallsStatus } from "wagmi/experimental";
-import { waitForBaseReceipt } from "@/lib/base-rpc";
+import { getBaseReceiptClient, waitForBaseReceipt } from "@/lib/base-rpc";
+import { getPendingEvmReceiptTargets, throwIfTransactionSuperseded, verifyPendingEvmReceiptBinding } from '@/lib/transaction-proof-verification';
 import {
   reconcileOwnerResources,
   type OwnerResourceInvalidationRequest,
@@ -100,6 +101,7 @@ export type TransactionPhase =
   | "confirming"
   | "confirmed-syncing"
   | "succeeded"
+  | "superseded"
   | "reverted"
   | "unresolved";
 
@@ -113,6 +115,7 @@ export function getTransactionPhase(status: LifecycleStatus): TransactionPhase {
   }
   if (status.statusName === "confirmedSyncing") return "confirmed-syncing";
   if (status.statusName === "success") return "succeeded";
+  if (status.statusName === "superseded") return "superseded";
   if (
     status.statusName === "reverted"
     || status.statusName === "cancelled"
@@ -160,7 +163,7 @@ type TransactionOwnerScope = { key: string | null; generation: number };
 
 type TransactionContextValue = {
   canSubmit: boolean;
-  acknowledgeStale: () => void;
+  acknowledgeStale: () => Promise<void>;
   chainId: number | null;
   dismissToast: () => void;
   pauseToastTimer: () => void;
@@ -248,6 +251,7 @@ const TERMINAL_STATUSES = new Set<StatusName>([
   "error",
   "failed",
   "reverted",
+  "superseded",
   "cancelled",
   "canceled",
   "rejected",
@@ -473,6 +477,7 @@ export function Transaction({
   const [status, setStatus] = useState<LifecycleStatus>(IDLE_STATUS);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [isRecoveryChecking, setIsRecoveryChecking] = useState(true);
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const [isToastVisible, setIsToastVisible] = useState(false);
@@ -495,6 +500,8 @@ export function Transaction({
   const confirmedSyncOwnerRef = useRef<TransactionOwnerScope | null>(null);
   const lastTelemetryKeyRef = useRef<string | null>(null);
   const preparingRef = useRef(false);
+  const acknowledgingOwnerRef = useRef<TransactionOwnerScope | null>(null);
+  const lastAcknowledgementTelemetryRef = useRef<string | null>(null);
   const lastSubmittedDraftRef = useRef<string | null>(null);
   const canSubmitRef = useRef(canSubmit);
   const beforeSubmitRef = useRef(onBeforeSubmit);
@@ -621,9 +628,21 @@ export function Transaction({
   const clearPersistedPendingRecord = useCallback(() => {
     const activeRecord = activePendingRecordRef.current;
     if (!activeRecord) return true;
+    const storage = getBrowserPendingEvmStorage();
+    // A retried proof write may have promoted the padded fallback while this
+    // monitor still holds its reservation. Delete only the proof we monitored.
+    const promoted = activeRecord.proof.kind === 'reservation'
+      ? listPendingEvmRecords(storage, activeRecord).find((record) => (
+          record.attemptId === activeRecord.attemptId
+          && record.callsDigest === activeRecord.callsDigest
+          && (record.proof.kind === 'hash'
+            ? record.proof.hash === transactionHashRef.current
+            : record.proof.kind === 'calls' && record.proof.id === transactionIdRef.current)
+        ))
+      : undefined;
     const removed = removePendingEvmRecord(
-      getBrowserPendingEvmStorage(),
-      activeRecord,
+      storage,
+      promoted ?? activeRecord,
     );
     if (removed) activePendingRecordRef.current = null;
     return removed;
@@ -1104,7 +1123,7 @@ export function Transaction({
       const canBatch =
         typeof walletClient.sendCalls === "function"
         && typeof walletClient.waitForCallsStatus === "function";
-      const requiresAtomicBundle = normalizedCalls.length > 1;
+      const requiresAtomicBundle = !recoveryRecord && normalizedCalls.length > 1;
       if (!recoveryRecord && requiresAtomicBundle && canBatch) {
         // Capability discovery is optional in EIP-5792. An unsupported response
         // is useful preflight evidence; an absent method, missing field, or a
@@ -1260,20 +1279,32 @@ export function Transaction({
         return guarded.value.value;
       };
 
-      const waitForCanonicalReceipt = async (hash: Hex, pendingRecord: PendingEvmRecord) => {
+      const waitForCanonicalReceipt = async (
+        hash: Hex,
+        pendingRecord: PendingEvmRecord,
+        walletTransactionHashes?: readonly Hex[],
+      ) => {
         let currentHash = hash;
         let currentPendingRecord = pendingRecord;
-        let replacementCancelled = false;
         const requestCanonicalReceipt = () => waitForBaseReceipt(currentHash, {
           onReplaced: ({ reason, transaction }) => {
             const replacementHash = transaction.hash;
+            const previousHash = currentHash;
             currentHash = replacementHash;
-            replacementCancelled = replacementCancelled || reason === "cancelled";
             if (isExecutionOwnerCurrent()) {
               transactionHashRef.current = replacementHash;
               if (mountedRef.current) setTransactionHash(replacementHash);
             }
 
+            const observedReplacement = {
+              disposition: reason === 'replaced' ? 'superseded' as const : reason,
+              previousHash,
+              transactionHash: replacementHash,
+              ...((currentPendingRecord.initialTransactionHash
+                || (currentPendingRecord.proof.kind === 'calls' && !currentPendingRecord.proof.hash)
+                || currentPendingRecord.replacement?.verified)
+                ? { verified: true as const } : {}),
+            };
             const replacementRecord = replacePendingEvmProof(
               getBrowserPendingEvmStorage(),
               currentPendingRecord,
@@ -1284,13 +1315,36 @@ export function Transaction({
                   kind: "calls",
                 }
                 : { hash: replacementHash, kind: "hash" },
+              observedReplacement,
             );
             if (replacementRecord) {
               currentPendingRecord = replacementRecord;
               if (isExecutionOwnerCurrent()) activePendingRecordRef.current = replacementRecord;
               coordinatedPendingRecord = replacementRecord;
+            } else {
+              // A storage failure must not erase the outcome observed by this
+              // live monitor. The durable helper retains/retries known proof.
+              const previousDisposition = currentPendingRecord.replacement?.disposition;
+              currentPendingRecord = {
+                ...currentPendingRecord,
+                replacement: previousDisposition === 'superseded' || previousDisposition === 'cancelled'
+                  ? currentPendingRecord.replacement
+                  : observedReplacement,
+              };
             }
           },
+        }).then(async (confirmed) => {
+          throwIfMonitoringAborted(monitoringSignal);
+          throwIfTransactionSuperseded(currentPendingRecord);
+          if (confirmed.status === 'success') {
+            await verifyPendingEvmReceiptBinding({
+              record: currentPendingRecord,
+              transactionHash: confirmed.transactionHash,
+              getTransaction: (transactionHash) => getBaseReceiptClient().getTransaction({ hash: transactionHash }),
+              walletTransactionHashes,
+            });
+          }
+          return confirmed;
         });
         let pendingReceipt = requestCanonicalReceipt();
         let initialReceiptRejected = false;
@@ -1306,7 +1360,6 @@ export function Transaction({
             ),
             currentPendingRecord,
           ), monitoringSignal);
-          if (replacementCancelled) throw new Error("Transaction cancelled by wallet replacement.");
           return confirmed;
         } catch (error) {
           if (!isUnresolvedWaitError(error)) throw error;
@@ -1329,7 +1382,6 @@ export function Transaction({
               withPendingEvmHardDeadline(pendingReceipt, currentPendingRecord),
               monitoringSignal,
             );
-            if (replacementCancelled) throw new Error("Transaction cancelled by wallet replacement.");
             return confirmed;
           } catch (error) {
             if (!isUnresolvedWaitError(error)) throw error;
@@ -1444,6 +1496,7 @@ export function Transaction({
               transactionReceipts: completedReceipts,
             }, executionOwnerScope, fallbackRecovery ? recoveryRecord : undefined);
           },
+          { allowQueuedProofFlush: true },
         );
         if (!monitorLease.acquired) {
           emitUnresolvedStatus(new Error("Transaction confirmation is being checked in another tab."));
@@ -1574,22 +1627,13 @@ export function Transaction({
           // the first receipt stand in for the entire bundle.
           if (reportedHashes.length > 0) {
             const canonicalReceipts = await Promise.all(
-              reportedHashes.map(async (hash) => normalizeTransactionReceipt(
-                await waitForCanonicalReceipt(hash, pendingRecord),
+              getPendingEvmReceiptTargets(pendingRecord, reportedHashes).map(async (hash) => normalizeTransactionReceipt(
+                await waitForCanonicalReceipt(hash, pendingRecord, reportedHashes),
               )),
             );
-            const canonicalHashes = new Set(
-              canonicalReceipts
-                .map((receipt) => extractTransactionHash(receipt))
-                .filter((hash): hash is Hex => Boolean(hash)),
-            );
-            receipts = [
-              ...canonicalReceipts,
-              ...receipts.filter((receipt) => {
-                const hash = extractTransactionHash(receipt);
-                return !hash || !canonicalHashes.has(hash as Hex);
-              }),
-            ];
+            // A repricing can change a wallet-reported hash. Retaining that
+            // obsolete wallet receipt would mix provisional data into proof.
+            receipts = canonicalReceipts;
             nextTransactionHash = extractTransactionHash(canonicalReceipts[0]) as Hex | undefined;
           } else if (reportedSuccess) {
             if (!nextTransactionHash) {
@@ -1648,6 +1692,7 @@ export function Transaction({
             fallbackRecovery ? recoveryRecord : undefined,
           );
             },
+            { allowQueuedProofFlush: true },
           );
           if (!monitorLease.acquired) {
             emitUnresolvedStatus(new Error("Transaction confirmation is being checked in another tab."));
@@ -1825,6 +1870,8 @@ export function Transaction({
       preparingRef.current = false;
       setIsExecuting(false);
       setIsPreparing(false);
+      acknowledgingOwnerRef.current = null;
+      setIsAcknowledging(false);
     }
     if (blockerStaleTimerRef.current) {
       clearTimeout(blockerStaleTimerRef.current);
@@ -2054,35 +2101,47 @@ export function Transaction({
     });
   }, [emitStatus, runConfirmedReconciliation]);
 
-  const acknowledgeStale = useCallback(() => {
-    if (status.statusName !== "transactionStale") return;
+  const acknowledgeStale = useCallback(async () => {
+    if (status.statusName !== "transactionStale" || acknowledgingOwnerRef.current) return;
     const pendingRecord = activePendingRecordRef.current;
-    if (
-      !pendingRecord
-      || !acknowledgePendingEvmRecord(
-        getBrowserPendingEvmStorage(),
-        pendingRecord,
-      )
-    ) {
-      return;
+    if (!pendingRecord) return;
+    const owner = ownerScopeRef.current;
+    const registry = { accountAddress: pendingRecord.accountAddress, chainId: pendingRecord.chainId };
+    acknowledgingOwnerRef.current = owner;
+    setIsAcknowledging(true);
+    try {
+      const acknowledged = await acknowledgePendingEvmRecord(getBrowserPendingEvmStorage(), pendingRecord);
+      const result = acknowledged ? 'acknowledged' : 'conflict';
+      const telemetryKey = `${pendingRecord.attemptId}:${result}`;
+      if (lastAcknowledgementTelemetryRef.current !== telemetryKey) {
+        lastAcknowledgementTelemetryRef.current = telemetryKey;
+        try {
+          track('game_transaction_acknowledgement', { correlationId: pendingRecord.attemptId, result });
+        } catch {
+          // Telemetry cannot change a durable acknowledgement outcome.
+        }
+      }
+      requestPendingEvmCoordinatorReconcile(registry);
+      if (!acknowledged || !mountedRef.current || ownerScopeRef.current !== owner
+        || activePendingRecordRef.current?.attemptId !== pendingRecord.attemptId) return;
+      releasePendingEvmCoordinatorAttempt(registry, pendingRecord, transactionControllerId);
+      activePendingRecordRef.current = null;
+      activeCallsRef.current = null;
+      executingRef.current = false;
+      clearTransactionArtifacts();
+      setIsExecuting(false);
+      setIsToastVisible(false);
+      updateStatus(IDLE_STATUS);
+    } catch {
+      requestPendingEvmCoordinatorReconcile(registry);
+    } finally {
+      if (acknowledgingOwnerRef.current === owner) {
+        acknowledgingOwnerRef.current = null;
+        if (mountedRef.current && ownerScopeRef.current === owner) setIsAcknowledging(false);
+      }
     }
-    if (recoveryRegistryIdentity) {
-      releasePendingEvmCoordinatorAttempt(
-        recoveryRegistryIdentity,
-        pendingRecord,
-        transactionControllerId,
-      );
-    }
-    activePendingRecordRef.current = null;
-    activeCallsRef.current = null;
-    executingRef.current = false;
-    clearTransactionArtifacts();
-    setIsExecuting(false);
-    setIsToastVisible(false);
-    updateStatus(IDLE_STATUS);
   }, [
     clearTransactionArtifacts,
-    recoveryRegistryIdentity,
     status.statusName,
     transactionControllerId,
     updateStatus,
@@ -2117,7 +2176,7 @@ export function Transaction({
       || (extractTransactionHash(status.statusData.transactionReceipts[0]) as Hex | undefined);
     return getExplorerHref(hash, explorerChain.blockExplorers?.default.url);
   }, [explorerChain.blockExplorers?.default.url, status, transactionHash]);
-  const effectiveIsExecuting = isExecuting || isPreparing || isRecoveryChecking;
+  const effectiveIsExecuting = isExecuting || isPreparing || isRecoveryChecking || isAcknowledging;
 
   const contextValue = useMemo<TransactionContextValue>(
     () => ({
@@ -2424,6 +2483,7 @@ function TransactionStatusAction({
 }: TransactionStatusActionProps) {
   const {
     acknowledgeStale,
+    isExecuting,
     explorerHref,
     receipt,
     status,
@@ -2480,7 +2540,7 @@ function TransactionStatusAction({
   return (
     <div className={cn(TEXT_LABEL2, "flex min-w-[70px] max-w-full flex-wrap justify-end gap-2", className)}>
       {actionElement}
-      {isStale && <TransactionRecoveryOptions onContinue={acknowledgeStale} />}
+      {isStale && <TransactionRecoveryOptions onContinue={() => { void acknowledgeStale(); }} disabled={isExecuting} />}
     </div>
   );
 }
@@ -2686,7 +2746,7 @@ export function TransactionToastAction({
   return (
     <div className={cn("-ml-2.5 mt-2 flex min-w-0 flex-wrap items-center justify-start gap-x-1 gap-y-0.5", className)}>
       {actionElement}
-      {isStale && <TransactionRecoveryOptions onContinue={acknowledgeStale} />}
+      {isStale && <TransactionRecoveryOptions onContinue={() => { void acknowledgeStale(); }} disabled={isExecuting} />}
     </div>
   );
 }

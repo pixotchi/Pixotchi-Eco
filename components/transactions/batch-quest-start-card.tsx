@@ -8,6 +8,7 @@ import { ResourceState } from "@/components/ui/resource-state";
 import { useBatchReconciliation } from "@/hooks/useBatchReconciliation";
 import { useQuestRewardsAvailability } from "@/hooks/useQuestRewardsAvailability";
 import { useQuestConfiguration } from '@/hooks/useQuestConfiguration';
+import { requireFarmerHouseStartsReady } from '@/lib/farmer-house-start-readiness';
 import { QuestDifficultySummary } from '@/components/building-details/quest-difficulty-summary';
 import { formatUpgradeDuration } from '@/lib/utils';
 import { useBalances } from "@/lib/balance-context";
@@ -202,6 +203,8 @@ export default function BatchQuestStartCard({
     [address, landIdsHash],
   );
   const feeSubmissionIdentityRef = useRef<string | null>(null);
+  const currentBatchRunScopeRef = useRef(batchRunScope);
+  currentBatchRunScopeRef.current = batchRunScope;
 
   // Re-read on every land-set change so a different wallet or holdings starts a
   // fresh, unpaid run.
@@ -629,6 +632,10 @@ export default function BatchQuestStartCard({
                   coordinator.assertReady(currentBatchSlots);
                   if (!questConfiguration.isReady || !questConfiguration.data) throw new Error('Check the quest terms before starting.');
                   await rewards.requireReady(questConfiguration.data);
+                  // Pause the complete reviewed batch. Do not skip slots or
+                  // close its paid run while a Farmer House is constructing.
+                  await requireFarmerHouseStartsReady(currentBatchSlots.map(slot => slot.landId),
+                    () => currentBatchRunScopeRef.current === batchRunScope);
                   coordinator.assertReady(currentBatchSlots);
                   const submitted = { slots: currentBatchSlots, difficulty, shouldBurn, scope: batchRunScope };
                   submittedBatchRef.current = submitted;

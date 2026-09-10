@@ -1,0 +1,3360 @@
+{
+  "v": 1,
+  "chainId": 8453,
+  "reviewedAtBlock": "51136574",
+  "contracts": [
+    {
+      "id": "plant",
+      "address": "0xeb4e16c804ae9275a655abbc20cd0658a91f9235",
+      "kind": "plant",
+      "runtimeHash": "0x44b7b6e63ea0fe8ca81532a66a6604d63c7b205965c70a3a3c6ac5028a4587b8",
+      "sources": [
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "PIXOTCHI_NFT_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "BOX_GAME_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "SPIN_GAME_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "KILL_COOLDOWN_ABI"
+        },
+        {
+          "file": "public/abi/fence-v2-abi.ts",
+          "exportName": "fenceV2Abi"
+        },
+        {
+          "file": "components/transactions/attack-transaction.tsx",
+          "exportName": "PIXOTCHI_NFT_ABI"
+        },
+        {
+          "file": "components/transactions/kill-transaction.tsx",
+          "exportName": "PIXOTCHI_NFT_ABI"
+        },
+        {
+          "file": "components/transactions/revive-transaction.tsx",
+          "exportName": "PIXOTCHI_NFT_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "ERC721_MIN_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "ERC721_OPERATOR_APPROVAL_ABI"
+        },
+        {
+          "file": "viem:erc721Abi",
+          "exportName": "isApprovedForAll"
+        },
+        {
+          "file": "viem:erc721Abi",
+          "exportName": "totalSupply"
+        },
+        {
+          "file": "viem:erc721Abi",
+          "exportName": "ownerOf"
+        }
+      ],
+      "functions": [
+        {
+          "signature": "airdropGetAliveAndDeadTokenIds()",
+          "selector": "0x47e4d123",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453",
+          "runtimeHash": "0x39e29c5b7f17c3ea0bf5d14e3cc59d90c99a89be82c0612aeabef66e589ef044"
+        },
+        {
+          "signature": "attack(uint256,uint256)",
+          "selector": "0xe1fa7638",
+          "outputs": [],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "boxGameGetCoolDownTimePerNFT(uint256)",
+          "selector": "0x660db682",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xdac475d196882d825d188dd870bde546451f24aa",
+          "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2"
+        },
+        {
+          "signature": "boxGameGetCoolDownTimeWithStar(uint256)",
+          "selector": "0x5d8eca00",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xdac475d196882d825d188dd870bde546451f24aa",
+          "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2"
+        },
+        {
+          "signature": "boxGamePlay(uint256,uint256)",
+          "selector": "0x52f3e0c4",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xdac475d196882d825d188dd870bde546451f24aa",
+          "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2"
+        },
+        {
+          "signature": "boxGamePlayWithStar(uint256,uint256)",
+          "selector": "0xab64d0ee",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xdac475d196882d825d188dd870bde546451f24aa",
+          "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2"
+        },
+        {
+          "signature": "buyAccessory(uint256,uint256)",
+          "selector": "0x715488b0",
+          "outputs": [],
+          "implementation": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+          "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765"
+        },
+        {
+          "signature": "canKill(address)",
+          "selector": "0x96379a9b",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "fenceV2EffectUntil(uint256)",
+          "selector": "0x090555ac",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2GetConfig()",
+          "selector": "0x934b2cae",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2GetPurchaseStats(uint256)",
+          "selector": "0xf6a721ef",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "bool"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2HasFenceV1(uint256)",
+          "selector": "0xbb98b45a",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2IsEffectOngoing(uint256)",
+          "selector": "0xe6d7a33b",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2Purchase(uint256,uint256)",
+          "selector": "0x3b9a0c58",
+          "outputs": [],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2Quote(uint256)",
+          "selector": "0x4a444730",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "fenceV2SetPricePerDay(uint256)",
+          "selector": "0x584ab818",
+          "outputs": [],
+          "implementation": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+          "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06"
+        },
+        {
+          "signature": "getAllGardenItem()",
+          "selector": "0xac6ca58b",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256)[]"
+          ],
+          "implementation": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+          "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765"
+        },
+        {
+          "signature": "getAllStrainInfo()",
+          "selector": "0xd12b4e6d",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,uint256,string,bool,uint256,uint256)[]"
+          ],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "getCoolDownTime()",
+          "selector": "0x3417ae16",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "getKillCooldownRemaining(address)",
+          "selector": "0xfa94ada0",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "getPlantsByOwnerExtended(address)",
+          "selector": "0xd1c1438e",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "getPlantsInfoExtended(uint256[])",
+          "selector": "0x59cfe1f5",
+          "outputs": [
+            "(uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[])[]"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "getRevivePrice()",
+          "selector": "0xb34c2f52",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+          "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765"
+        },
+        {
+          "signature": "getReward(uint256)",
+          "selector": "0x1c4b774b",
+          "outputs": [
+            "int256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "getStarCost()",
+          "selector": "0x5e7303d4",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "getStrainPaymentInfo(uint256)",
+          "selector": "0xac8db04a",
+          "outputs": [
+            "address",
+            "uint256"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "isApprovedForAll(address,address)",
+          "selector": "0xe985e9c5",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "kill(uint256,uint256)",
+          "selector": "0xe2c352ed",
+          "outputs": [],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "mint(uint256)",
+          "selector": "0xa0712d68",
+          "outputs": [],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "ownerOf(uint256)",
+          "selector": "0x6352211e",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "redeem(uint256)",
+          "selector": "0xdb006a75",
+          "outputs": [],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "Revive(uint256)",
+          "selector": "0x7a6494de",
+          "outputs": [],
+          "implementation": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+          "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765"
+        },
+        {
+          "signature": "setApprovalForAll(address,bool)",
+          "selector": "0xa22cb465",
+          "outputs": [],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "setPlantName(uint256,string)",
+          "selector": "0x114da366",
+          "outputs": [],
+          "implementation": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+          "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826"
+        },
+        {
+          "signature": "shopBuyItem(uint256,uint256)",
+          "selector": "0x15bc285e",
+          "outputs": [],
+          "implementation": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+          "runtimeHash": "0x206770423b6513764138abeedf65dad8120d2623e7035daf3ce6b4d9dc80644e"
+        },
+        {
+          "signature": "shopGetAllItems()",
+          "selector": "0xebc603d9",
+          "outputs": [
+            "(uint256,string,uint256,uint256)[]"
+          ],
+          "implementation": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+          "runtimeHash": "0x206770423b6513764138abeedf65dad8120d2623e7035daf3ce6b4d9dc80644e"
+        },
+        {
+          "signature": "spinGameV2Commit(uint256,bytes32)",
+          "selector": "0xb5bfe757",
+          "outputs": [],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "spinGameV2GetCoolDownTimePerNFT(uint256)",
+          "selector": "0x8983c37a",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "spinGameV2Play(uint256,bytes32)",
+          "selector": "0xbf498f89",
+          "outputs": [
+            "int256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+          "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee"
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [],
+          "implementation": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+          "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2"
+        }
+      ]
+    },
+    {
+      "id": "land",
+      "address": "0x3f1f8f0c4be4bceb45e6597afe0de861b8c3278c",
+      "addressEnv": "NEXT_PUBLIC_LAND_CONTRACT_ADDRESS_MAINNET",
+      "kind": "diamond",
+      "runtimeHash": "0x3cf78e6cc7df74f26f11c372233dc5d99844ec0a70d2fff8b3d6cad02a29d5cf",
+      "sources": [
+        {
+          "file": "public/abi/pixotchi-v3-abi.ts",
+          "exportName": "landAbi"
+        },
+        {
+          "file": "public/abi/casino-abi.ts",
+          "exportName": "casinoAbi",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "file": "public/abi/blackjack-abi.ts",
+          "exportName": "blackjackAbi",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "file": "public/abi/baccarat-abi.ts",
+          "exportName": "baccaratAbi",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "barracksAbi",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "file": "lib/quest-configuration.ts",
+          "exportName": "questConfigurationAbi"
+        }
+      ],
+      "functions": [
+        {
+          "signature": "accessControlBatchSetWhitelistAddresses(address[],bool)",
+          "selector": "0x0b0eebe5",
+          "outputs": [],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlGetPaused()",
+          "selector": "0x4dfe8504",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlGetWhitelistAddress(address)",
+          "selector": "0xe2132d91",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlGetWhitelistOnly()",
+          "selector": "0x76f93655",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlSetPaused(bool)",
+          "selector": "0xefd8f16b",
+          "outputs": [],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlSetWhitelistAddress(address,bool)",
+          "selector": "0x09c8f06d",
+          "outputs": [],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlSetWhitelistOnly(bool)",
+          "selector": "0x6105bb5b",
+          "outputs": [],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "accessControlStatus(address)",
+          "selector": "0x40a2e7de",
+          "outputs": [
+            "bool",
+            "bool",
+            "bool"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "airdrop(address[])",
+          "selector": "0x729ad39e",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "baccaratGetActiveGame(uint256)",
+          "selector": "0x9e88f17b",
+          "outputs": [
+            "bool",
+            "address",
+            "uint8",
+            "uint256",
+            "uint256",
+            "bool",
+            "bool",
+            "address"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratGetConfig()",
+          "selector": "0x06d1a55e",
+          "outputs": [
+            "bool",
+            "uint16",
+            "uint8"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratGetStats(uint256)",
+          "selector": "0x925bd687",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratGetStatsByToken(uint256,address)",
+          "selector": "0x20f30c34",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratGetTokenConfig(address)",
+          "selector": "0x1fce97d7",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratPlaceBet(uint256,uint8,uint256)",
+          "selector": "0xec120b75",
+          "outputs": [],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratPlaceBetWithToken(uint256,address,uint8,uint256)",
+          "selector": "0xd25443e4",
+          "outputs": [],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "baccaratReveal(uint256)",
+          "selector": "0xdfeb4df5",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ],
+          "implementation": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+          "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "barracksAdminAddTroopsToAllBuiltV2(uint8,uint256)",
+          "selector": "0x7e707cb4",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksAdminAddTroopsV2(uint256,uint8,uint256)",
+          "selector": "0x79025f63",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksAttack(uint256,uint256,uint256)",
+          "selector": "0x7d9fe730",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksAttackV2(uint256,uint256,uint256,uint256)",
+          "selector": "0xe5a2855a",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksBuild(uint256)",
+          "selector": "0x94a296c3",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksClaimTroops(uint256)",
+          "selector": "0xf45f63bd",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksForceFinishTrainingV2(uint256)",
+          "selector": "0xded35dcc",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetConfig()",
+          "selector": "0xccb1a57a",
+          "outputs": [
+            "(bool,bool,address,uint256,address,address,uint256,address,uint256,uint256,uint256,uint16,uint16,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetConfigV2()",
+          "selector": "0x54998b51",
+          "outputs": [
+            "(bool,bool,address,uint256,address,uint256,uint256,uint16,uint16,uint256,uint256,(address,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256),(address,uint256,address,uint256,uint256,uint256,uint256,uint256,uint256))"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetEligibleAttackableLandIds(uint256)",
+          "selector": "0x7b5bf214",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLandState(uint256)",
+          "selector": "0xbba3059a",
+          "outputs": [
+            "(bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLandStateV2(uint256)",
+          "selector": "0xded96b36",
+          "outputs": [
+            "(bool,uint256,uint256,uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLastIncomingReport(uint256)",
+          "selector": "0xa16061d2",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLastIncomingReportV2(uint256)",
+          "selector": "0x65c8bba0",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLastOutgoingReport(uint256)",
+          "selector": "0x2b44653f",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksGetLastOutgoingReportV2(uint256)",
+          "selector": "0x61f71517",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+          "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksPreviewRaid(uint256,uint256,uint256)",
+          "selector": "0xe5de060d",
+          "outputs": [
+            "(uint8,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksPreviewRaidV2(uint256,uint256,uint256,uint256)",
+          "selector": "0x53c9c59c",
+          "outputs": [
+            "(uint8,bool,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksTrainTroops(uint256,uint256)",
+          "selector": "0xe32636aa",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "barracksTrainTroopsV2(uint256,uint8,uint256)",
+          "selector": "0x9573d774",
+          "outputs": [],
+          "implementation": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+          "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+          "features": [
+            "NEXT_PUBLIC_BARRACKS_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackActionWithRandom(uint256,uint8,uint8,bytes32,uint256,bytes)",
+          "selector": "0x92642803",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackBet(uint256,uint256)",
+          "selector": "0xbbe8e481",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackDeal(uint256,uint256)",
+          "selector": "0xe7b24590",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackDealWithRandom(uint256,uint256,bytes32,uint256,bytes)",
+          "selector": "0x0e338333",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackDealWithRandomForToken(uint256,uint256,address,bytes32,uint256,bytes)",
+          "selector": "0x607e7c89",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetActions(uint256,uint8)",
+          "selector": "0xb3115616",
+          "outputs": [
+            "bool",
+            "bool",
+            "bool",
+            "bool",
+            "bool",
+            "bool"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetConfig()",
+          "selector": "0x6b9ef3ea",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "address",
+            "address",
+            "bool",
+            "uint8"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetDealerHand(uint256)",
+          "selector": "0x70c50677",
+          "outputs": [
+            "uint8[]",
+            "uint8"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameBasic(uint256)",
+          "selector": "0xb6247639",
+          "outputs": [
+            "bool",
+            "address",
+            "uint8",
+            "uint256",
+            "uint8",
+            "bool",
+            "uint8",
+            "bool",
+            "uint256",
+            "uint8"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameHands(uint256)",
+          "selector": "0x88ed2545",
+          "outputs": [
+            "uint8[]",
+            "uint8",
+            "uint8[]",
+            "uint8",
+            "bool",
+            "bool"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameSnapshot(uint256)",
+          "selector": "0x85b209cb",
+          "outputs": [
+            "(bool,address,uint8,uint256,uint8,bool,uint8,uint8[],uint8,uint8[],uint8,uint8[],uint8,bool,bool,bool,bool,bool)"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetGameToken(uint256)",
+          "selector": "0xf8532887",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetNonce(uint256)",
+          "selector": "0x8ed4faa0",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetRandomnessSigner()",
+          "selector": "0x0926e1ce",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetStats(uint256)",
+          "selector": "0x2c47a873",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetStatsByToken(uint256,address)",
+          "selector": "0xd3a8ee6f",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackGetTokenConfig(address)",
+          "selector": "0x0311f643",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "uint8"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackInitializeMultiTokenSupport()",
+          "selector": "0xdf728901",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackIsAvailable(uint256)",
+          "selector": "0x019ff7cb",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint8"
+          ],
+          "implementation": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+          "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackRemoveToken(address)",
+          "selector": "0x73a67382",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackRequestAction(uint256,uint8,uint8)",
+          "selector": "0x99866de9",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackRevealAction(uint256)",
+          "selector": "0x65b74f99",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "blackjackSetTokenConfig(address,uint256,uint256,address,bool)",
+          "selector": "0x5cb072f0",
+          "outputs": [],
+          "implementation": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+          "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED",
+            "NEXT_PUBLIC_BLACKJACK_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoBuild(uint256)",
+          "selector": "0x408e7979",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetActiveBet(uint256)",
+          "selector": "0x1773a19e",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "bool"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetActiveBetV2(uint256)",
+          "selector": "0x0ea1cb05",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "bool",
+            "address"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetBetDetails(uint256,uint256)",
+          "selector": "0x5496aff9",
+          "outputs": [
+            "uint8",
+            "uint8[]",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetBuildingConfig()",
+          "selector": "0x6eff819d",
+          "outputs": [
+            "address",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetConfig()",
+          "selector": "0xd47ce2c5",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "address",
+            "address",
+            "bool",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetMaxBets()",
+          "selector": "0x7536510d",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetPayoutMultiplier(uint8)",
+          "selector": "0xfb55e7d4",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetStats(uint256)",
+          "selector": "0x32f9af59",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetStatsByToken(uint256,address)",
+          "selector": "0x128ba7fa",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetSupportedTokens()",
+          "selector": "0xb9b07ed9",
+          "outputs": [
+            "address[]"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoGetTokenConfig(address)",
+          "selector": "0xf096d055",
+          "outputs": [
+            "bool",
+            "uint256",
+            "uint256",
+            "address",
+            "bool",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoHasBuilding(uint256)",
+          "selector": "0xbe6eec4b",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoInitializeMultiBet()",
+          "selector": "0xaf5f8c1e",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoInitializeMultiTokenSupport()",
+          "selector": "0xb290861f",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoIsBuilt(uint256)",
+          "selector": "0x30d1a28e",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoPlaceBets(uint256,uint8[],uint8[][],uint256[])",
+          "selector": "0xe5bafee9",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoPlaceBetsWithToken(uint256,address,uint8[],uint8[][],uint256[])",
+          "selector": "0x6c2176c9",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoRemoveToken(address)",
+          "selector": "0x15632c43",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoReveal(uint256)",
+          "selector": "0x690ecd3e",
+          "outputs": [
+            "uint8",
+            "uint256"
+          ],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetBettingToken(address)",
+          "selector": "0xccec6ef8",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetBuildingCost(address,uint256)",
+          "selector": "0x06a35dcc",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetConfig(uint256,uint256,address,address,bool,uint256)",
+          "selector": "0xeafbf784",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetEnabled(bool)",
+          "selector": "0x44f27e7a",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetLimits(uint256,uint256)",
+          "selector": "0x73f7b1e8",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetMaxBets(uint256)",
+          "selector": "0x86832b8e",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetRewardPool(address)",
+          "selector": "0x0a8b0129",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "casinoSetTokenConfig(address,uint256,uint256,address,bool,uint256)",
+          "selector": "0x79f501c5",
+          "outputs": [],
+          "implementation": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+          "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+          "features": [
+            "NEXT_PUBLIC_CASINO_ENABLED"
+          ]
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "diamondCut((address,uint8,bytes4[])[],address,bytes)",
+          "selector": "0x1f931c1c",
+          "outputs": [],
+          "implementation": "0x2b883f7fac21f8d8e3a35ff05209415584eaf1cc",
+          "runtimeHash": "0x6ab3a9b104d64d0f12ab0457ef933fc3be1d724456ed5431d2daa011f3d5e432"
+        },
+        {
+          "signature": "exists(uint256)",
+          "selector": "0x4f558e79",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "facetAddress(bytes4)",
+          "selector": "0xcdffacc6",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+          "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188"
+        },
+        {
+          "signature": "facetAddresses()",
+          "selector": "0x52ef6b2c",
+          "outputs": [
+            "address[]"
+          ],
+          "implementation": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+          "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188"
+        },
+        {
+          "signature": "facetFunctionSelectors(address)",
+          "selector": "0xadfca15e",
+          "outputs": [
+            "bytes4[]"
+          ],
+          "implementation": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+          "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188"
+        },
+        {
+          "signature": "facets()",
+          "selector": "0x7a0ed627",
+          "outputs": [
+            "(address,bytes4[])[]"
+          ],
+          "implementation": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+          "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188"
+        },
+        {
+          "signature": "getApproved(uint256)",
+          "selector": "0x081812fc",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "getLeaderboard(uint256,uint256)",
+          "selector": "0x73af16fc",
+          "outputs": [
+            "(uint256,uint256,string)[]"
+          ],
+          "implementation": "0x3dd3b8387c944cd839277b011f738ed9e8150136",
+          "runtimeHash": "0x8823687ed63d17a0335ba492008dd76df43ef9b5fcad423f30e00d8eb601a761"
+        },
+        {
+          "signature": "initializeMarketplace()",
+          "selector": "0x5ad78612",
+          "outputs": [],
+          "implementation": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+          "runtimeHash": "0xb45812f804b075d18f7ecb19eb5a6268007a10d58e98633a184c0de6eb837c6b"
+        },
+        {
+          "signature": "initNFTFacet()",
+          "selector": "0x9df164d3",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "isApprovedForAll(address,address)",
+          "selector": "0xe985e9c5",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "landGetBoundaries()",
+          "selector": "0x0f8c8710",
+          "outputs": [
+            "int256",
+            "int256",
+            "int256",
+            "int256"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landGetById(uint256)",
+          "selector": "0x369f155f",
+          "outputs": [
+            "(uint256,string,uint256,address,string,int256,int256,uint256,uint256,uint256,uint8)"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landGetByOwner(address)",
+          "selector": "0xb86cad4a",
+          "outputs": [
+            "(uint256,string,uint256,address,string,int256,int256,uint256,uint256,uint256,uint8)[]"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landGetCoordinates(uint256)",
+          "selector": "0x5aecdc17",
+          "outputs": [
+            "int256",
+            "int256",
+            "bool"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landGetMintPrice()",
+          "selector": "0x9d4f3320",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landGetTokenIdByCoordinates(int256,int256)",
+          "selector": "0x2e7bfe5f",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landOverviewByOwner(address)",
+          "selector": "0x9953e388",
+          "outputs": [
+            "(uint256,int256,int256,string)[]"
+          ],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "landSetName(uint256,string)",
+          "selector": "0x854167d2",
+          "outputs": [],
+          "implementation": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+          "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772"
+        },
+        {
+          "signature": "marketPlaceCancelOrder(uint256,uint256)",
+          "selector": "0x806a17ed",
+          "outputs": [],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceCreateOrder(uint256,uint8,uint256,uint256)",
+          "selector": "0xb6aa224c",
+          "outputs": [],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceGetActiveOrders()",
+          "selector": "0x97c5c384",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceGetInactiveOrders()",
+          "selector": "0xe7ac8aed",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceGetUserOrders(address)",
+          "selector": "0x9b33d4dc",
+          "outputs": [
+            "(uint256,address,uint8,uint256,bool,uint256)[]"
+          ],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceIsActive()",
+          "selector": "0x5f429393",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "marketPlaceTakeOrder(uint256,uint256)",
+          "selector": "0xa6645e4a",
+          "outputs": [],
+          "implementation": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+          "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c"
+        },
+        {
+          "signature": "maxSupply()",
+          "selector": "0xd5abeb01",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "mint()",
+          "selector": "0x1249c58b",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "mintControl(bool)",
+          "selector": "0xc8e77c09",
+          "outputs": [],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "nftNextTokenId()",
+          "selector": "0x7bf7ac95",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "owner()",
+          "selector": "0x8da5cb5b",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0xfca776c4c828f9b34bb770d9f7acaeb763be853f",
+          "runtimeHash": "0x1d8fee7859a25760a302712e7a6b32e7f3fe4c9eb01bc067ed082dc1bbe085bd"
+        },
+        {
+          "signature": "ownerOf(uint256)",
+          "selector": "0x6352211e",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "questCommit(uint256,uint256)",
+          "selector": "0x611191c9",
+          "outputs": [],
+          "implementation": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+          "runtimeHash": "0x58da1bbdd511a573733e0e240a40f41189699b35f04e943cb42ce6a2a995ae2e"
+        },
+        {
+          "signature": "questFinalize(uint256,uint256)",
+          "selector": "0xf987ae07",
+          "outputs": [
+            "bool",
+            "uint8",
+            "uint256"
+          ],
+          "implementation": "0x69b87aa1d358ef59be93de7df6fe3923c7aa9cc4",
+          "runtimeHash": "0x5fa09351979c24b12e9fa7bb716704331eb7a64470ccf7a4c0811a5ea883a256"
+        },
+        {
+          "signature": "questGetAllRewardRanges()",
+          "selector": "0xc1112fb0",
+          "outputs": [
+            "(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "questGetByLandId(uint256)",
+          "selector": "0xdc057167",
+          "outputs": [
+            "(uint8,uint256,uint256,uint256,uint256)[]"
+          ],
+          "implementation": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+          "runtimeHash": "0x58da1bbdd511a573733e0e240a40f41189699b35f04e943cb42ce6a2a995ae2e"
+        },
+        {
+          "signature": "questGetDifficultyConfig(uint8)",
+          "selector": "0x21f6f9f7",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+          "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4"
+        },
+        {
+          "signature": "questStart(uint256,uint8,uint256)",
+          "selector": "0x99fff80f",
+          "outputs": [],
+          "implementation": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+          "runtimeHash": "0x58da1bbdd511a573733e0e240a40f41189699b35f04e943cb42ce6a2a995ae2e"
+        },
+        {
+          "signature": "safeTransferFrom(address,address,uint256)",
+          "selector": "0x42842e0e",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "setApprovalForAll(address,bool)",
+          "selector": "0xa22cb465",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "tokenOfOwnerByIndex(address,uint256)",
+          "selector": "0x2f745c59",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "tokensOfOwner(address)",
+          "selector": "0x8462151c",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "tokenURI(uint256)",
+          "selector": "0xc87b56dd",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "townBuildMarketPlace(uint256)",
+          "selector": "0xbfb5c9df",
+          "outputs": [],
+          "implementation": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+          "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939"
+        },
+        {
+          "signature": "townGetBuildingsByLandId(uint256)",
+          "selector": "0x4918bfac",
+          "outputs": [
+            "(uint8,uint8,uint8,uint256,uint256,bool,uint256,uint256,uint256,uint256)[]"
+          ],
+          "implementation": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+          "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939"
+        },
+        {
+          "signature": "townSpeedUpWithSeed(uint256,uint8)",
+          "selector": "0x218c9239",
+          "outputs": [],
+          "implementation": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+          "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939"
+        },
+        {
+          "signature": "townStorageUpdate()",
+          "selector": "0x197c271f",
+          "outputs": [],
+          "implementation": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+          "runtimeHash": "0xb45812f804b075d18f7ecb19eb5a6268007a10d58e98633a184c0de6eb837c6b"
+        },
+        {
+          "signature": "townUpgradeWithLeaf(uint256,uint8)",
+          "selector": "0xd4526ea9",
+          "outputs": [],
+          "implementation": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+          "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939"
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [],
+          "implementation": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+          "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+        },
+        {
+          "signature": "transferOwnership(address)",
+          "selector": "0xf2fde38b",
+          "outputs": [],
+          "implementation": "0xfca776c4c828f9b34bb770d9f7acaeb763be853f",
+          "runtimeHash": "0x1d8fee7859a25760a302712e7a6b32e7f3fe4c9eb01bc067ed082dc1bbe085bd"
+        },
+        {
+          "signature": "villageClaimProduction(uint256,uint8)",
+          "selector": "0x77d66118",
+          "outputs": [],
+          "implementation": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+          "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3"
+        },
+        {
+          "signature": "villageGetVillageBuildingsByLandId(uint256)",
+          "selector": "0x0f25b087",
+          "outputs": [
+            "(uint8,uint8,uint8,uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256,uint256,uint256,uint256)[]"
+          ],
+          "implementation": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+          "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3"
+        },
+        {
+          "signature": "villageSpeedUpWithSeed(uint256,uint8)",
+          "selector": "0xc98d9dc1",
+          "outputs": [],
+          "implementation": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+          "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3"
+        },
+        {
+          "signature": "villageStorageUpdate()",
+          "selector": "0xcb3a328a",
+          "outputs": [],
+          "implementation": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+          "runtimeHash": "0xb45812f804b075d18f7ecb19eb5a6268007a10d58e98633a184c0de6eb837c6b"
+        },
+        {
+          "signature": "villageUpgradeWithLeaf(uint256,uint8)",
+          "selector": "0x145ba117",
+          "outputs": [],
+          "implementation": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+          "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3"
+        },
+        {
+          "signature": "wareHouseAssignLifeTime(uint256,uint256,uint256)",
+          "selector": "0xa146c4f7",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec",
+          "runtimeHash": "0xd0590fdac9dde9cd27ebb24d098dc0d01aa8191acdb73b6999497e9d8528266f"
+        },
+        {
+          "signature": "wareHouseAssignPlantPoints(uint256,uint256,uint256)",
+          "selector": "0x503c7dbf",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec",
+          "runtimeHash": "0xd0590fdac9dde9cd27ebb24d098dc0d01aa8191acdb73b6999497e9d8528266f"
+        }
+      ]
+    },
+    {
+      "id": "seed",
+      "address": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+      "kind": "direct",
+      "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a",
+      "sources": [
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "PIXOTCHI_TOKEN_ABI"
+        },
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "ERC20_APPROVE_ABI"
+        },
+        {
+          "file": "viem:erc20Abi"
+        }
+      ],
+      "functions": [
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+          "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a"
+        }
+      ]
+    },
+    {
+      "id": "leaf",
+      "address": "0xe78ee52349d7b031e2a6633e07c037c3147db116",
+      "addressEnv": "NEXT_PUBLIC_LEAF_TOKEN_ADDRESS_MAINNET",
+      "kind": "proxy",
+      "runtimeHash": "0xf116701729b30ef8869586b530a5c16059720b042a2a602993aa7f8b18512812",
+      "sources": [
+        {
+          "file": "public/abi/leaf-abi.ts",
+          "exportName": "leafAbi"
+        }
+      ],
+      "functions": [
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "burn(uint256)",
+          "selector": "0x42966c68",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "burnFrom(address,uint256)",
+          "selector": "0x79cc6790",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "checkpoints(address,uint32)",
+          "selector": "0xf1127ed8",
+          "outputs": [
+            "(uint32,uint224)"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "CLOCK_MODE()",
+          "selector": "0x4bf5d7e9",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "clock()",
+          "selector": "0x91ddadf4",
+          "outputs": [
+            "uint48"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "contractType()",
+          "selector": "0xcb2ef6f7",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "contractVersion()",
+          "selector": "0xa0a8e460",
+          "outputs": [
+            "uint8"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "decreaseAllowance(address,uint256)",
+          "selector": "0xa457c2d7",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "DEFAULT_ADMIN_ROLE()",
+          "selector": "0xa217fddf",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "delegate(address)",
+          "selector": "0x5c19a95c",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "delegateBySig(address,uint256,uint256,uint8,bytes32,bytes32)",
+          "selector": "0xc3cda520",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "delegates(address)",
+          "selector": "0x587cde1e",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "DOMAIN_SEPARATOR()",
+          "selector": "0x3644e515",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "eip712Domain()",
+          "selector": "0x84b0196e",
+          "outputs": [
+            "bytes1",
+            "string",
+            "string",
+            "uint256",
+            "address",
+            "bytes32",
+            "uint256[]"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getPastTotalSupply(uint256)",
+          "selector": "0x8e539e8c",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getPastVotes(address,uint256)",
+          "selector": "0x3a46b1a8",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getPlatformFeeInfo()",
+          "selector": "0xd45573f6",
+          "outputs": [
+            "address",
+            "uint16"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getRoleAdmin(bytes32)",
+          "selector": "0x248a9ca3",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getRoleMember(bytes32,uint256)",
+          "selector": "0x9010d07c",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getRoleMemberCount(bytes32)",
+          "selector": "0xca15c873",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "getVotes(address)",
+          "selector": "0x9ab24eb0",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "grantRole(bytes32,address)",
+          "selector": "0x2f2ff15d",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "hasRole(bytes32,address)",
+          "selector": "0x91d14854",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "increaseAllowance(address,uint256)",
+          "selector": "0x39509351",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "initialize(address,string,string,string,address[],address,address,uint256)",
+          "selector": "0xdfad80a6",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "isTrustedForwarder(address)",
+          "selector": "0x572b6c05",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "mintTo(address,uint256)",
+          "selector": "0x449a52f8",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "mintWithSignature((address,address,uint256,uint256,address,uint128,uint128,bytes32),bytes)",
+          "selector": "0x8f0fefbb",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "multicall(bytes[])",
+          "selector": "0xac9650d8",
+          "outputs": [
+            "bytes[]"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "nonces(address)",
+          "selector": "0x7ecebe00",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "numCheckpoints(address)",
+          "selector": "0x6fcfff45",
+          "outputs": [
+            "uint32"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+          "selector": "0xd505accf",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "primarySaleRecipient()",
+          "selector": "0x079fe40e",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "renounceRole(bytes32,address)",
+          "selector": "0x36568abe",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "revokeRole(bytes32,address)",
+          "selector": "0xd547741f",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "setContractURI(string)",
+          "selector": "0x938e3d7b",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "setPlatformFeeInfo(address,uint256)",
+          "selector": "0x1e7ac488",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "setPrimarySaleRecipient(address)",
+          "selector": "0x6f4f2837",
+          "outputs": [],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "supportsInterface(bytes4)",
+          "selector": "0x01ffc9a7",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        },
+        {
+          "signature": "verify((address,address,uint256,uint256,address,uint128,uint128,bytes32),bytes)",
+          "selector": "0xc1b606e2",
+          "outputs": [
+            "bool",
+            "address"
+          ],
+          "implementation": "0x21bdba30afc2b8205e8a173626346868077572fb",
+          "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4"
+        }
+      ]
+    },
+    {
+      "id": "staking",
+      "address": "0xf15d93c3617525054af05338cc6ccf18886bd03a",
+      "addressEnv": "NEXT_PUBLIC_STAKE_CONTRACT_ADDRESS",
+      "kind": "proxy",
+      "runtimeHash": "0xde10352425be983a1f1ac2eb6db65315ea1ae52a5f1b8b0ecffa1286b25f96e3",
+      "sources": [
+        {
+          "file": "public/abi/staking-abi.ts",
+          "exportName": "stakingAbi"
+        },
+        {
+          "file": "public/abi/stakeabi.json"
+        }
+      ],
+      "functions": [
+        {
+          "signature": "claimRewards()",
+          "selector": "0x372500ab",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "contractType()",
+          "selector": "0xcb2ef6f7",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "contractURI()",
+          "selector": "0xe8a3d485",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "contractVersion()",
+          "selector": "0xa0a8e460",
+          "outputs": [
+            "uint8"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "DEFAULT_ADMIN_ROLE()",
+          "selector": "0xa217fddf",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "depositRewardTokens(uint256)",
+          "selector": "0x16c621e0",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getRewardRatio()",
+          "selector": "0x97e1b4bc",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getRewardTokenBalance()",
+          "selector": "0x93ce5343",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getRoleAdmin(bytes32)",
+          "selector": "0x248a9ca3",
+          "outputs": [
+            "bytes32"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getRoleMember(bytes32,uint256)",
+          "selector": "0x9010d07c",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getRoleMemberCount(bytes32)",
+          "selector": "0xca15c873",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getStakeInfo(address)",
+          "selector": "0xc3453153",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "getTimeUnit()",
+          "selector": "0xd68124c7",
+          "outputs": [
+            "uint80"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "grantRole(bytes32,address)",
+          "selector": "0x2f2ff15d",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "hasRole(bytes32,address)",
+          "selector": "0x91d14854",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "hasRoleWithSwitch(bytes32,address)",
+          "selector": "0xa32fa5b3",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "initialize(address,string,address[],address,address,uint80,uint256,uint256)",
+          "selector": "0xdf654376",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "isTrustedForwarder(address)",
+          "selector": "0x572b6c05",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "multicall(bytes[])",
+          "selector": "0xac9650d8",
+          "outputs": [
+            "bytes[]"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "renounceRole(bytes32,address)",
+          "selector": "0x36568abe",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "revokeRole(bytes32,address)",
+          "selector": "0xd547741f",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "rewardToken()",
+          "selector": "0xf7c618c1",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "rewardTokenDecimals()",
+          "selector": "0x9bdcecd1",
+          "outputs": [
+            "uint16"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "setContractURI(string)",
+          "selector": "0x938e3d7b",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "setRewardRatio(uint256,uint256)",
+          "selector": "0x001b7934",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "setTimeUnit(uint80)",
+          "selector": "0xb218f069",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stake(uint256)",
+          "selector": "0xa694fc3a",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stakers(address)",
+          "selector": "0x9168ae72",
+          "outputs": [
+            "uint128",
+            "uint64",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stakersArray(uint256)",
+          "selector": "0x5357e916",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stakingToken()",
+          "selector": "0x72f702f3",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stakingTokenBalance()",
+          "selector": "0x8caaa271",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "stakingTokenDecimals()",
+          "selector": "0xb9f7a7b5",
+          "outputs": [
+            "uint16"
+          ],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "withdraw(uint256)",
+          "selector": "0x2e1a7d4d",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        },
+        {
+          "signature": "withdrawRewardTokens(uint256)",
+          "selector": "0xcb43b2dd",
+          "outputs": [],
+          "implementation": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+          "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82"
+        }
+      ]
+    },
+    {
+      "id": "batch-transfer",
+      "address": "0x8d0538fae8b3630c487b720d7767ae46aa58cda7",
+      "addressEnv": "NEXT_PUBLIC_BATCH_ROUTER_ADDRESS",
+      "kind": "direct",
+      "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+      "sources": [
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "BATCH_ROUTER_ABI",
+          "features": [
+            "BATCH_ROUTER_CONFIGURED"
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "signature": "batchTransfer721(address,address,uint256[])",
+          "selector": "0x811b4fc8",
+          "outputs": [],
+          "implementation": "0x8d0538fae8b3630c487b720d7767ae46aa58cda7",
+          "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+          "features": [
+            "BATCH_ROUTER_CONFIGURED"
+          ]
+        },
+        {
+          "signature": "batchTransfer721Multi(address[],address,uint256[][])",
+          "selector": "0x284d2f9b",
+          "outputs": [],
+          "implementation": "0x8d0538fae8b3630c487b720d7767ae46aa58cda7",
+          "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+          "features": [
+            "BATCH_ROUTER_CONFIGURED"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "creator-token",
+      "address": "0xa2ef17bb7eea1143196678337069dfa24d37d2ac",
+      "sources": [
+        {
+          "file": "lib/contracts.ts",
+          "exportName": "PIXOTCHI_TOKEN_ABI"
+        },
+        {
+          "file": "viem:erc20Abi"
+        }
+      ],
+      "kind": "proxy",
+      "runtimeHash": "0x82742dcc13916fa8d355ae2e48a177490982a9a58df52baae350c149c84827c1",
+      "functions": [
+        {
+          "signature": "allowance(address,address)",
+          "selector": "0xdd62ed3e",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "approve(address,uint256)",
+          "selector": "0x095ea7b3",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "balanceOf(address)",
+          "selector": "0x70a08231",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "decimals()",
+          "selector": "0x313ce567",
+          "outputs": [
+            "uint8"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "name()",
+          "selector": "0x06fdde03",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "symbol()",
+          "selector": "0x95d89b41",
+          "outputs": [
+            "string"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "totalSupply()",
+          "selector": "0x18160ddd",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "transfer(address,uint256)",
+          "selector": "0xa9059cbb",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        },
+        {
+          "signature": "transferFrom(address,address,uint256)",
+          "selector": "0x23b872dd",
+          "outputs": [
+            "bool"
+          ],
+          "implementation": "0x36853f9f48faee51bd3db15db21eb4b9038bb795",
+          "runtimeHash": "0xbcbf5f6a0829219354bee1a1094b1eda6a34f0294e364aacd530b516ddf90954"
+        }
+      ]
+    },
+    {
+      "id": "baseswap",
+      "address": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+      "sources": [
+        {
+          "file": "lib/swap/base-swap-abi.ts",
+          "exportName": "BASESWAP_ROUTER_SWAP_ABI"
+        },
+        {
+          "file": "public/abi/Uniswap.json"
+        }
+      ],
+      "kind": "direct",
+      "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865",
+      "functions": [
+        {
+          "signature": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xe8e33700",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xf305d719",
+          "outputs": [
+            "uint256",
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "factory()",
+          "selector": "0xc45a0155",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "getAmountIn(uint256,uint256,uint256)",
+          "selector": "0x85f8c259",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "getAmountOut(uint256,uint256,uint256)",
+          "selector": "0x054d50d4",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "getAmountsIn(uint256,address[])",
+          "selector": "0x1f00ca74",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "getAmountsOut(uint256,address[])",
+          "selector": "0xd06ca61f",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "quote(uint256,uint256,uint256)",
+          "selector": "0xad615dec",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xbaa2abde",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0x02751cec",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
+          "selector": "0xaf2979eb",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0xded9382a",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0x5b0d5984",
+          "outputs": [
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+          "selector": "0x2195995c",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapETHForExactTokens(uint256,address[],address,uint256)",
+          "selector": "0xfb3bdb41",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactETHForTokens(uint256,address[],address,uint256)",
+          "selector": "0x7ff36ab5",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+          "selector": "0xb6f9de95",
+          "outputs": [],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+          "selector": "0x18cbafe5",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x791ac947",
+          "outputs": [],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x38ed1739",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x5c11d795",
+          "outputs": [],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+          "selector": "0x4a25d94a",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+          "selector": "0x8803dbee",
+          "outputs": [
+            "uint256[]"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        },
+        {
+          "signature": "WETH()",
+          "selector": "0xad5c4648",
+          "outputs": [
+            "address"
+          ],
+          "implementation": "0x327df1e6de05895d2ab08513aadd9313fe505d86",
+          "runtimeHash": "0xe40722a3273ff8b5a009a237b5007924a23846a5ed422c7df3461b655e8bd865"
+        }
+      ]
+    },
+    {
+      "id": "kyber",
+      "address": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5",
+      "sources": [
+        {
+          "file": "lib/swap/calldata.ts",
+          "exportName": "KYBER_SWAP_ABI"
+        }
+      ],
+      "kind": "direct",
+      "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3",
+      "functions": [
+        {
+          "signature": "swap((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))",
+          "selector": "0xe21fd0e9",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5",
+          "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3"
+        },
+        {
+          "signature": "swapGeneric((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))",
+          "selector": "0x59e50fed",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5",
+          "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3"
+        },
+        {
+          "signature": "swapSimpleMode(address,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes,bytes)",
+          "selector": "0x8af033fb",
+          "outputs": [
+            "uint256",
+            "uint256"
+          ],
+          "implementation": "0x6131b5fae19ea4f9d964eac0408e4408b66337b5",
+          "runtimeHash": "0x99590941aab8e1eaf2ceb825abf64b6956e82ce41e8966d7e320846905db85e3"
+        }
+      ]
+    }
+  ]
+}

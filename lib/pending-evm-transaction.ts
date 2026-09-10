@@ -1,4 +1,5 @@
 import { keccak256, stringToHex, type Hex } from "viem";
+import { getBaseRpcFailure } from "@/lib/base-rpc-errors";
 import { isPendingEvmEffects, normalizePendingEffects, type PendingEvmEffects } from "@/lib/pending-evm-effects";
 
 export type PendingEvmExecutionMethod = "batch" | "direct";
@@ -32,6 +33,13 @@ export type PendingEvmProof =
   | { hash?: Hex; id: string; kind: "calls" }
   | { kind: "reservation" };
 
+export type PendingEvmReplacement = {
+  disposition: "repriced" | "superseded" | "cancelled";
+  previousHash: Hex;
+  transactionHash: Hex;
+  verified?: true;
+};
+
 export type PendingEvmRecord = {
   accountAddress: string;
   attemptId: string;
@@ -40,8 +48,11 @@ export type PendingEvmRecord = {
   connectorId?: string;
   effects?: PendingEvmEffects;
   intentDigest: Hex;
+  initialTransactionHash?: Hex;
   method: PendingEvmExecutionMethod;
   proof: PendingEvmProof;
+  proofCaptured?: true;
+  replacement?: PendingEvmReplacement;
   reservationPadding?: string;
   submittedAt: number;
   version: 2;
@@ -97,6 +108,21 @@ const pendingMemoryRecords = new Map<string, string>();
 const pendingMemoryOnlyKeys = new Set<string>();
 const activeSubmissionLeases = new Map<string, number>();
 const activeMonitorLeases = new Map<string, number>();
+type PendingProofMonitorOwner = {
+  isLeaseCurrent: () => boolean;
+  record: PendingEvmRecord;
+  storage: PendingEvmStorage | null;
+};
+const activeMonitorProofOwners = new Map<string, PendingProofMonitorOwner>();
+type PendingProofPersistence = {
+  allowedReservationValues: Set<string>;
+  record: PendingEvmRecord;
+  storage: PendingEvmStorage | null;
+};
+const pendingProofPersistence = new Map<string, PendingProofPersistence>();
+let proofPersistenceRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let proofPersistenceRetryDelayMs = 1_000;
+let retryingProofPersistence = false;
 
 export class PendingEvmStaleError extends Error {
   constructor() {
@@ -120,12 +146,12 @@ export class PendingEvmStorageUnavailableError extends Error {
  * transport/time-out/provider errors deliberately remain ambiguous and locked.
  */
 export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolean {
+  const rpcFailure = getBaseRpcFailure(error);
+  // Only our structured local provenance proves that no request was sent.
+  // Formatted wallet errors can also include arbitrary contract revert text.
+  if (rpcFailure?.forwarded === false) return true;
   const hasDefinitiveMessage = (message: string) => (
-    // Our own RPC proxy stamps the rejections it makes before forwarding
-    // anything upstream. Those provably never reached a node, so they are
-    // pre-submission facts rather than broadcast ambiguity.
-    message.includes(PENDING_EVM_PROXY_NOT_FORWARDED_MARKER.toLowerCase())
-    || /user\s+(?:rejected|denied|cancell?ed)|request\s+(?:rejected|cancell?ed)\s+by\s+(?:the\s+)?user|user\s+rejected\s+the\s+request/.test(message)
+    /user\s+(?:rejected|denied|cancell?ed)|request\s+(?:rejected|cancell?ed)\s+by\s+(?:the\s+)?user|user\s+rejected\s+the\s+request/.test(message)
     || message.includes("insufficient funds")
     || message.includes("chain mismatch")
     || message.includes("unsupported chain")
@@ -164,17 +190,22 @@ export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolea
     current = typed.cause;
   }
 
-  // A proxy rejection is proof, not a hint, so it outranks the ambiguity
-  // heuristic below (a rate-limit refusal reads as "network-ish" but was never
-  // forwarded).
-  if (nodes.some(({ message }) => (
+  const hasTypedRevert = nodes.some(({ code, name }) => (
+    code === 3 || code === "3"
+    || name.includes("contractfunctionreverted")
+    || name.includes("executionreverted")
+  ));
+  // Older proxy versions supplied only this marker. Keep that compatibility
+  // unless a versioned failure or decoded revert contradicts its provenance:
+  // Error(string) may contain the same text after Viem discards the envelope.
+  if (!rpcFailure && !hasTypedRevert && nodes.some(({ message }) => (
     message.includes(PENDING_EVM_PROXY_NOT_FORWARDED_MARKER.toLowerCase())
   ))) return true;
 
   // Explicit transport/broadcast ambiguity always wins over a nested or
   // message-level rejection label. Some providers report "request rejected"
   // only after forwarding the request and losing the response.
-  if (nodes.some(({ message, name }) => (
+  if (rpcFailure?.retryable || nodes.some(({ message, name }) => (
     /timed?\s*out|timeout|network|fetch failed|connection|disconnected|response (?:was )?lost|broadcast[^.]*unknown|unknown[^.]*broadcast|rate limit|\b429\b|service unavailable|temporarily unavailable|gateway/.test(message)
     || name.includes("timeout")
     || name.includes("httprequest")
@@ -187,6 +218,7 @@ export function isDefinitivePendingEvmPreSubmissionError(error: unknown): boolea
       || code === 4100
       || code === "4100"
       || code === 3
+      || code === "3"
       || code === -32602
       || code === 5700
       || code === "5700"
@@ -300,6 +332,29 @@ export function isDefinitiveUnsupportedEvmBatchError(error: unknown): boolean {
 
 function isHex32(value: unknown): value is Hex {
   return typeof value === "string" && /^0x[0-9a-f]{64}$/i.test(value);
+}
+
+function isPendingEvmReplacement(value: unknown): value is PendingEvmReplacement {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const replacement = value as Record<string, unknown>;
+  return (replacement.disposition === "repriced"
+    || replacement.disposition === "superseded"
+    || replacement.disposition === "cancelled")
+    && isHex32(replacement.previousHash)
+    && isHex32(replacement.transactionHash)
+    && (replacement.verified === undefined || replacement.verified === true);
+}
+
+function mergePendingEvmReplacement(
+  existing: PendingEvmReplacement | undefined,
+  incoming: PendingEvmReplacement,
+): PendingEvmReplacement {
+  return {
+    ...incoming,
+    ...(existing?.verified ? { verified: true as const } : {}),
+    disposition: existing && existing.disposition !== "repriced"
+      ? existing.disposition : incoming.disposition,
+  };
 }
 
 function normalizeAddress(address: string) {
@@ -730,6 +785,7 @@ export function createPendingEvmRecord({
     ...(connectorId ? { connectorId } : {}),
     effects: normalizePendingEffects(effects),
     intentDigest: getPendingEvmIntentDigest(identity.intentKey),
+    ...(method === "direct" && proof.kind === "hash" ? { initialTransactionHash: proof.hash } : {}),
     method,
     proof,
     submittedAt,
@@ -750,22 +806,22 @@ export function createPendingEvmRecord({
  * calls id keeps the full submission lock. See PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS.
  */
 export function getPendingEvmAckLockMs(
-  record: Pick<PendingEvmRecord, "proof">,
+  record: Pick<PendingEvmRecord, "proof" | "proofCaptured">,
 ): number {
-  return record.proof?.kind === "reservation"
+  return record.proof?.kind === "reservation" && record.proofCaptured !== true
     ? PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS
     : PENDING_EVM_HARD_LOCK_MS;
 }
 
 /** When this record becomes acknowledgeable, ignoring any live submission lease. */
 export function getPendingEvmAckUnlockAt(
-  record: Pick<PendingEvmRecord, "proof" | "submittedAt">,
+  record: Pick<PendingEvmRecord, "proof" | "proofCaptured" | "submittedAt">,
 ): number {
   return record.submittedAt + getPendingEvmAckLockMs(record);
 }
 
 export function getPendingEvmPhase(
-  record: Pick<PendingEvmRecord, "proof" | "submittedAt">,
+  record: Pick<PendingEvmRecord, "proof" | "proofCaptured" | "submittedAt">,
   now = Date.now(),
 ): PendingEvmPhase {
   const ageMs = now - record.submittedAt;
@@ -894,6 +950,7 @@ function deleteRecordKey(
   }
   pendingMemoryRecords.delete(key);
   pendingMemoryOnlyKeys.delete(key);
+  if (operation === "acknowledge" || operation === "remove") pendingProofPersistence.delete(key);
   dispatchPendingEvmChange({ attemptId, key, operation });
   return true;
 }
@@ -933,7 +990,15 @@ function parseStoredRecord(
     // Invalid optional refresh metadata must never discard a valid submission
     // proof or unlock a possibly submitted transaction. Undefined requests the
     // existing conservative owner-resource refresh after confirmation.
-    return { ...record, effects: isPendingEvmEffects(record.effects) ? record.effects : undefined };
+    return {
+      ...record,
+      effects: isPendingEvmEffects(record.effects) ? record.effects : undefined,
+      // Optional provenance cannot turn a valid submitted proof into garbage
+      // that gets pruned. Missing/invalid provenance remains unverifiable.
+      initialTransactionHash: isHex32(record.initialTransactionHash) ? record.initialTransactionHash : undefined,
+      replacement: isPendingEvmReplacement(record.replacement) ? record.replacement : undefined,
+      ...(record.proofCaptured === undefined ? {} : { proofCaptured: true as const }),
+    };
   } catch {
     if (readState) readState.authoritative = false;
     deleteRecordKey(storage, key, "prune", undefined, rawRecord);
@@ -964,6 +1029,7 @@ export function readPendingEvmRecord(
 }
 
 function collectPendingEvmKeys(storage: PendingEvmStorage | null, prefix: string) {
+  schedulePendingProofPersistenceRetry();
   const keys = new Set<string>();
   for (const key of pendingMemoryRecords.keys()) {
     if (key.startsWith(prefix)) keys.add(key);
@@ -1083,6 +1149,116 @@ export function writePendingEvmRecord(
   return persisted;
 }
 
+function schedulePendingProofPersistenceRetry() {
+  if (typeof window === "undefined" || proofPersistenceRetryTimer || pendingProofPersistence.size === 0) return;
+  proofPersistenceRetryTimer = setTimeout(async () => {
+    proofPersistenceRetryTimer = null;
+    for (const storage of new Set([...pendingProofPersistence.values()].map((entry) => entry.storage))) {
+      await retryPendingEvmProofPersistence(storage ?? getBrowserPendingEvmStorage());
+    }
+    proofPersistenceRetryDelayMs = Math.min(proofPersistenceRetryDelayMs * 2, 30_000);
+    schedulePendingProofPersistenceRetry();
+  }, proofPersistenceRetryDelayMs);
+}
+
+function persistQueuedPendingEvmProof(
+  storage: PendingEvmStorage,
+  key: string,
+  entry: PendingProofPersistence,
+  isOwnerCurrent: () => boolean,
+): number {
+  if (!isOwnerCurrent() || pendingProofPersistence.get(key) !== entry) return 0;
+  let serializedRecord = JSON.stringify(entry.record);
+  if (serializedRecord.length > PENDING_EVM_MAX_RECORD_SIZE) return 0;
+  const currentRaw = storage.getItem(key);
+  if (currentRaw === null) {
+    // An authoritative deletion must never resurrect from this queue.
+    pendingProofPersistence.delete(key);
+    return 0;
+  }
+  if (currentRaw !== serializedRecord && !entry.allowedReservationValues.has(currentRaw)) {
+    const newer = parseStoredRecord(storage, key, entry.record, undefined, currentRaw);
+    const knownFailure = entry.record.replacement;
+    if (!newer || newer.attemptId !== entry.record.attemptId
+      || newer.intentDigest !== entry.record.intentDigest || newer.callsDigest !== entry.record.callsDigest
+      || newer.proof.kind === "reservation" || !newer.proof.hash
+      || !knownFailure || knownFailure.disposition === "repriced") {
+      // Keep a newer hash intact. Only a known cancellation or
+      // supersession needs to be carried into its newer revision.
+      pendingProofPersistence.delete(key);
+      return 0;
+    }
+    entry.record = {
+      ...newer,
+      replacement: mergePendingEvmReplacement(newer.replacement, {
+        ...knownFailure,
+        transactionHash: newer.proof.hash,
+      }),
+    };
+    entry.allowedReservationValues = new Set([currentRaw]);
+    serializedRecord = JSON.stringify(entry.record);
+    if (serializedRecord.length > PENDING_EVM_MAX_RECORD_SIZE) return 0;
+  }
+  // A live receipt owner can perform this synchronous write itself. It must
+  // retain ownership and the exact raw blocker throughout the mutation, just
+  // like a retry that acquired its own short submission and monitor leases.
+  if (!isOwnerCurrent() || pendingProofPersistence.get(key) !== entry
+    || storage.getItem(key) !== currentRaw || !isOwnerCurrent()) return 0;
+  if (currentRaw !== serializedRecord) storage.setItem(key, serializedRecord);
+  if (storage.getItem(key) !== serializedRecord) return 0;
+  pendingMemoryRecords.set(key, serializedRecord);
+  pendingMemoryOnlyKeys.delete(key);
+  pendingProofPersistence.delete(key);
+  dispatchPendingEvmChange({ attemptId: entry.record.attemptId, key, operation: "write" });
+  return 1;
+}
+
+/** Retry captured proofs separately from the durable reservation memory mirror. */
+export async function retryPendingEvmProofPersistence(storage: PendingEvmStorage | null): Promise<number> {
+  if (!storage || retryingProofPersistence) return 0;
+  let persistedCount = 0;
+  retryingProofPersistence = true;
+  try {
+    for (const [key, entry] of pendingProofPersistence) {
+      if (entry.storage !== storage && entry.storage !== null) continue;
+      entry.storage = storage;
+      try {
+        const monitorKey = getMonitorLeaseKey(entry.record);
+        const liveOwner = activeMonitorProofOwners.get(monitorKey);
+        if (liveOwner?.storage === storage
+          && liveOwner.record.intentDigest === entry.record.intentDigest
+          && liveOwner.record.callsDigest === entry.record.callsDigest
+          && liveOwner.isLeaseCurrent()) {
+          persistedCount += persistQueuedPendingEvmProof(storage, key, entry, () => (
+            activeMonitorProofOwners.get(monitorKey) === liveOwner && liveOwner.isLeaseCurrent()
+          ));
+          continue;
+        }
+        await withPendingEvmSubmissionLease(storage, entry.record, async (isSubmissionCurrent) => {
+          await withPendingEvmMonitorLease(storage, entry.record, async (isMonitorCurrent) => {
+            persistedCount += persistQueuedPendingEvmProof(storage, key, entry, () => (
+              isSubmissionCurrent() && isMonitorCurrent()
+            ));
+          });
+        });
+      } catch {
+        // Complete storage loss cannot be repaired synchronously. Keep the
+        // proof for a later retry without replacing the durable blocker mirror.
+      }
+    }
+  } finally {
+    retryingProofPersistence = false;
+  }
+  if (pendingProofPersistence.size === 0) {
+    if (proofPersistenceRetryTimer) clearTimeout(proofPersistenceRetryTimer);
+    proofPersistenceRetryTimer = null;
+    proofPersistenceRetryDelayMs = 1_000;
+  } else {
+    schedulePendingProofPersistenceRetry();
+  }
+  return persistedCount;
+}
+
 export function finalizePendingEvmRecord(
   storage: PendingEvmStorage | null,
   reservation: PendingEvmRecord,
@@ -1103,18 +1279,33 @@ export function finalizePendingEvmRecord(
   const proofCapturedAt = Date.now();
   const refreshedReservation: PendingEvmRecord = {
     ...reservation,
+    proofCaptured: true,
     submittedAt: proofCapturedAt,
   };
   const refreshedReservationRaw = JSON.stringify(refreshedReservation);
   const record: PendingEvmRecord = {
     ...reservation,
+    ...(reservation.method === "direct" && proof.kind === "hash"
+      ? { initialTransactionHash: reservation.initialTransactionHash ?? proof.hash }
+      : {}),
     proof,
     submittedAt: proofCapturedAt,
   };
   delete record.reservationPadding;
+  delete record.proofCaptured;
   const serializedRecord = JSON.stringify(record);
-  if (!storage || serializedRecord.length > PENDING_EVM_MAX_RECORD_SIZE) {
+  const retainProof = () => {
+    pendingProofPersistence.set(key, {
+      allowedReservationValues: new Set([expectedReservationRaw, refreshedReservationRaw]),
+      record,
+      storage,
+    });
+    schedulePendingProofPersistenceRetry();
+    dispatchPendingEvmChange({ attemptId: record.attemptId, key, operation: "write" });
     return { blocker: refreshedReservation, persisted: false as const, record };
+  };
+  if (!storage || serializedRecord.length > PENDING_EVM_MAX_RECORD_SIZE) {
+    return retainProof();
   }
   try {
     // Refresh the ambiguity window before replacing proof. If the subsequent
@@ -1123,7 +1314,7 @@ export function finalizePendingEvmRecord(
     // wallet returned its hash/id.
     storage.setItem(key, refreshedReservationRaw);
     if (storage.getItem(key) !== refreshedReservationRaw) {
-      return { blocker: refreshedReservation, persisted: false as const, record };
+      return retainProof();
     }
     pendingMemoryRecords.set(key, refreshedReservationRaw);
     // Overwriting the padded reservation consumes no additional quota. If the
@@ -1131,52 +1322,87 @@ export function finalizePendingEvmRecord(
     // blind resend even though this live controller can monitor the proof.
     storage.setItem(key, serializedRecord);
     if (storage.getItem(key) !== serializedRecord) {
-      return { blocker: refreshedReservation, persisted: false as const, record };
+      return retainProof();
     }
   } catch {
-    return { blocker: refreshedReservation, persisted: false as const, record };
+    return retainProof();
   }
   pendingMemoryRecords.set(key, serializedRecord);
   pendingMemoryOnlyKeys.delete(key);
+  pendingProofPersistence.delete(key);
   dispatchPendingEvmChange({ attemptId: record.attemptId, key, operation: "write" });
   return { blocker: record, persisted: true as const, record };
 }
 
-/** Compare-and-swap a submitted proof when a wallet replaces its transaction. */
+/** Merge a wallet replacement into the latest revision of the same attempt. */
 export function replacePendingEvmProof(
   storage: PendingEvmStorage | null,
   current: PendingEvmRecord,
   proof: Exclude<PendingEvmProof, { kind: "reservation" }>,
+  replacementMetadata?: PendingEvmReplacement,
 ): PendingEvmRecord | null {
   if (
     current.proof.kind === "reservation"
     || (current.method === "direct" && proof.kind !== "hash")
     || (current.method === "batch" && proof.kind !== "calls")
+    || (replacementMetadata !== undefined && !isPendingEvmReplacement(replacementMetadata))
+    || (replacementMetadata !== undefined
+      && replacementMetadata.transactionHash.toLowerCase() !== proof.hash?.toLowerCase())
   ) return null;
 
-  const key = getPendingEvmRecordStorageKey(current);
+  let key = getPendingEvmRecordStorageKey(current);
+  if (!readStoredValue(storage, key)) key = getPendingEvmStorageKey(current);
   const currentRaw = readStoredValue(storage, key);
   if (!currentRaw) return null;
-  const stored = parseStoredRecord(storage, key, current, undefined, currentRaw);
-  if (!stored || JSON.stringify(stored) !== JSON.stringify(current)) return null;
+  const queued = pendingProofPersistence.get(key);
+  const durable = parseStoredRecord(storage, key, current, undefined, currentRaw);
+  const stored = queued?.allowedReservationValues.has(currentRaw) ? queued.record : durable;
+  if (!stored || stored.attemptId !== current.attemptId
+    || stored.intentDigest !== current.intentDigest || stored.callsDigest !== current.callsDigest
+    || stored.method !== current.method || stored.proof.kind === "reservation"
+    || (stored.proof.kind === "calls" && (proof.kind !== "calls" || stored.proof.id !== proof.id))) return null;
   if (readStoredValue(storage, key) !== currentRaw) return null;
 
-  const replacement: PendingEvmRecord = { ...current, proof };
+  const queuedReplacement = queued?.record.replacement;
+  const previousReplacement = stored.replacement && stored.replacement.disposition !== "repriced"
+    ? stored.replacement
+    : queuedReplacement && queuedReplacement.disposition !== "repriced"
+      ? queuedReplacement : stored.replacement;
+  // A later repricing callback cannot rehabilitate an already observed failure.
+  const nextReplacement = replacementMetadata
+    ? mergePendingEvmReplacement(previousReplacement, replacementMetadata) : previousReplacement;
+  const replacement: PendingEvmRecord = {
+    ...stored,
+    proof,
+    ...(nextReplacement ? { replacement: nextReplacement } : {}),
+  };
   const replacementRaw = JSON.stringify(replacement);
   if (replacementRaw.length > PENDING_EVM_MAX_RECORD_SIZE) return null;
+
+  const retainReplacement = () => {
+    pendingProofPersistence.set(key, {
+      allowedReservationValues: new Set([currentRaw, ...(queued?.allowedReservationValues ?? [])]),
+      record: replacement,
+      storage,
+    });
+    schedulePendingProofPersistenceRetry();
+    dispatchPendingEvmChange({ attemptId: replacement.attemptId, key, operation: "write" });
+    return replacement;
+  };
 
   if (storage) {
     try {
       storage.setItem(key, replacementRaw);
-      if (storage.getItem(key) !== replacementRaw) return null;
+      if (storage.getItem(key) !== replacementRaw) return retainReplacement();
       pendingMemoryOnlyKeys.delete(key);
     } catch {
-      return null;
+      return retainReplacement();
     }
   } else {
-    pendingMemoryOnlyKeys.add(key);
+    return retainReplacement();
   }
 
+  pendingProofPersistence.delete(key);
   pendingMemoryRecords.set(key, replacementRaw);
   dispatchPendingEvmChange({ attemptId: replacement.attemptId, key, operation: "write" });
   return replacement;
@@ -1219,26 +1445,58 @@ function compareAndDeletePendingEvmRecord(
 }
 
 export function removePendingEvmRecord(storage: PendingEvmStorage | null, record: PendingEvmRecord) {
+  if (storage) {
+    for (const key of [getPendingEvmRecordStorageKey(record), getPendingEvmStorageKey(record)]) {
+      const queued = pendingProofPersistence.get(key);
+      if (!queued || JSON.stringify(queued.record) !== JSON.stringify(record)) continue;
+      try {
+        const currentRaw = storage.getItem(key);
+        if (currentRaw !== null && queued.allowedReservationValues.has(currentRaw)) {
+          // The terminal observer owns this exact captured/replacement proof,
+          // although its durable write failed. Remove only its known blocker.
+          return deleteRecordKey(storage, key, "remove", record.attemptId, currentRaw);
+        }
+      } catch {
+        return false;
+      }
+    }
+  }
   return compareAndDeletePendingEvmRecord(storage, record, "remove");
 }
 
-export function acknowledgePendingEvmRecord(
+export async function acknowledgePendingEvmRecord(
   storage: PendingEvmStorage | null,
   record: PendingEvmRecord,
-  now = Date.now(),
+  now?: number,
 ) {
-  if (getPendingEvmPhase(record, now) !== "stale") return false;
-  // A live submission lease means a wallet interaction is still running for this
-  // account — in this tab or another one. The player cannot have finished
-  // checking a prompt that is still open, so the shortened ambiguous window must
-  // never unlock underneath it.
-  const leaseExpiresAt = getPendingEvmSubmissionLeaseExpiresAt(
-    storage,
-    { accountAddress: record.accountAddress, chainId: record.chainId },
-    now,
-  );
-  if (leaseExpiresAt !== null && leaseExpiresAt > now) return false;
-  return compareAndDeletePendingEvmRecord(storage, record, "acknowledge");
+  if (!storage) return false;
+  const submission = await withPendingEvmSubmissionLease(storage, record, async (isSubmissionCurrent) => {
+    const monitor = await withPendingEvmMonitorLease(storage, record, async (isMonitorCurrent) => {
+      // The leases above fence wallet finalization and receipt replacement.
+      // Their own claims must not be mistaken for an unrelated active send.
+      if (!isSubmissionCurrent() || !isMonitorCurrent()) return false;
+      const checkedAt = now ?? Date.now();
+      for (const key of [getPendingEvmRecordStorageKey(record), getPendingEvmStorageKey(record)]) {
+        const queued = pendingProofPersistence.get(key);
+        if (queued && getPendingEvmPhase(queued.record, checkedAt) !== "stale") return false;
+        let rawRecord: string | null;
+        try {
+          rawRecord = storage.getItem(key);
+        } catch {
+          return false;
+        }
+        if (rawRecord === null) continue;
+        const current = parseStoredRecord(storage, key, record, undefined, rawRecord);
+        if (!current || JSON.stringify(current) !== JSON.stringify(record)
+          || getPendingEvmPhase(current, checkedAt) !== "stale") return false;
+        if (!isSubmissionCurrent() || !isMonitorCurrent()) return false;
+        return deleteRecordKey(storage, key, "acknowledge", record.attemptId, rawRecord);
+      }
+      return false;
+    });
+    return monitor.acquired && monitor.value;
+  });
+  return submission.acquired && submission.value;
 }
 
 export function subscribePendingEvmChanges(listener: (change: PendingEvmChange) => void) {
@@ -1446,7 +1704,7 @@ async function runWithFallbackLease<T>({
 export async function withPendingEvmSubmissionLease<T>(
   storage: PendingEvmStorage | null,
   registry: PendingEvmRegistryIdentity,
-  callback: () => Promise<T>,
+  callback: (isLeaseCurrent: () => boolean) => Promise<T>,
 ): Promise<PendingEvmLeaseResult<T>> {
   const lockName = getSubmissionLeaseKey(registry);
   if (typeof navigator !== "undefined" && navigator.locks?.request) {
@@ -1499,11 +1757,21 @@ export async function withPendingEvmMonitorLease<T>(
   storage: PendingEvmStorage | null,
   record: PendingEvmRecord,
   callback: (isLeaseCurrent: () => boolean) => Promise<T>,
+  options: { allowQueuedProofFlush?: true } = {},
 ): Promise<PendingEvmLeaseResult<T>> {
   const key = getMonitorLeaseKey(record);
   const run = () => runWithFallbackLease({
     activeLeases: activeMonitorLeases,
-    callback,
+    callback: async (isLeaseCurrent) => {
+      const owner = options.allowQueuedProofFlush && record.proof.kind !== "reservation"
+        ? { isLeaseCurrent, record, storage } : null;
+      if (owner) activeMonitorProofOwners.set(key, owner);
+      try {
+        return await callback(isLeaseCurrent);
+      } finally {
+        if (owner && activeMonitorProofOwners.get(key) === owner) activeMonitorProofOwners.delete(key);
+      }
+    },
     heartbeatMs: PENDING_EVM_MONITOR_HEARTBEAT_MS,
     key,
     leaseMs: PENDING_EVM_MONITOR_LEASE_MS,

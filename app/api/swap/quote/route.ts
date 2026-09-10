@@ -5,6 +5,9 @@ import { getSwapQuoteForUserPair } from '@/lib/swap/engine';
 import {
   isUserSwapTokenId,
   SWAP_QUOTE_TTL_MS,
+  BASE_CHAIN_ID,
+  getKyberTokenAddress,
+  MARKET_SLIPPAGE_BPS,
 } from '@/lib/swap/constants';
 import { signQuoteToken } from '@/lib/swap/quote-token';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
@@ -85,17 +88,26 @@ export async function POST(request: NextRequest) {
       quote.strategy === 'blocked'
         ? undefined
         : signQuoteToken({
+            chainId: BASE_CHAIN_ID,
+            strategy: 'single_kyber',
             sender: payload.originAddress?.toLowerCase() ?? null,
+            recipient: payload.originAddress?.toLowerCase() ?? null,
             sellToken: payload.sellToken,
             buyToken: payload.buyToken,
             amountIn: amountIn.toString(),
-            steps: quote.steps.map((step) => ({
-              key: step.key,
-              kind: step.kind,
-              sellToken: step.sellToken,
-              buyToken: step.buyToken,
-              amountIn: step.amountIn,
-            })),
+            expectedOut: quote.expectedOut,
+            minOut: quote.minOut,
+            taxBps: quote.taxBps,
+            marketSlippageBps: MARKET_SLIPPAGE_BPS,
+            steps: [{
+              key: 'step1', kind: 'kyber',
+              sellToken: payload.sellToken, buyToken: payload.buyToken,
+              sellAddress: getKyberTokenAddress(payload.sellToken),
+              buyAddress: getKyberTokenAddress(payload.buyToken),
+              amountIn: amountIn.toString(), expectedOut: quote.expectedOut, minOut: quote.minOut,
+              taxBps: quote.taxBps, marketSlippageBps: MARKET_SLIPPAGE_BPS,
+            }],
+            issuedAt,
             expiresAt,
           });
 

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { SwapBuildInvalidError, SwapReviewRequiredError } from './errors';
+import { incrementSwapSafetyCounter } from './metrics';
 import {
   SwapBlockedError,
   SwapTimeoutError,
@@ -14,6 +16,14 @@ export function swapErrorResponse(
   fallbackMessage: string,
   logPrefix: string,
 ): NextResponse {
+  if (error instanceof SwapReviewRequiredError) {
+    incrementSwapSafetyCounter('reviewRequired');
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+  }
+  if (error instanceof SwapBuildInvalidError) {
+    incrementSwapSafetyCounter('buildRejected');
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 502 });
+  }
   if (error instanceof z.ZodError) {
     return NextResponse.json(
       { error: error.issues[0]?.message || fallbackMessage },

@@ -1,27 +1,24 @@
 import {
-  encodeFunctionData,
   getAddress,
   type Address,
   type Hex,
 } from 'viem';
-import { getBaseReadClient } from '@/lib/base-rpc';
-import { BASESWAP_ROUTER_SWAP_ABI } from './base-swap-abi';
 import {
   BASE_CHAIN_ID,
-  BASESWAP_ROUTER_ADDRESS,
   BASIS_POINTS,
   MARKET_SLIPPAGE_BPS,
   SEED_TAX_BPS,
   SWAP_DEADLINE_WINDOW_SECONDS,
   SWAP_TOKEN_MAP,
-  WETH_ADDRESS,
   getKyberTokenAddress,
   getTokenAddress,
   isAllowedSwapRouter,
   isNativeSwapToken,
-  isSeedSwapToken,
 } from './constants';
 import { isAllowedUserSwapPair } from './rules';
+import { validateSwapExecution } from './calldata';
+import { SwapBuildInvalidError, SwapReviewRequiredError } from './errors';
+import { getProtectedBuildSlippageBps, requiredSwapMinimum } from './policy';
 import type {
   SwapBuildStepResponse,
   SwapQuoteResponse,
@@ -82,6 +79,7 @@ type BuildStepParams = {
   sellToken: SwapTokenId;
   buyToken: SwapTokenId;
   amountIn: bigint;
+  reviewedMinOut: bigint;
   sender: Address;
   recipient: Address;
 };
@@ -114,6 +112,7 @@ export async function getSwapQuoteForUserPair({
       amountIn,
       originAddress,
     });
+    if (BigInt(step.minOut) <= BigInt(0)) throw new SwapBlockedError('This amount is too small for a protected swap.');
 
     return {
       strategy,
@@ -141,6 +140,7 @@ export async function buildSwapStep({
   sellToken,
   buyToken,
   amountIn,
+  reviewedMinOut,
   sender,
   recipient,
 }: BuildStepParams): Promise<SwapBuildStepResponse> {
@@ -151,21 +151,14 @@ export async function buildSwapStep({
   const normalizedSender = getAddress(sender);
   const normalizedRecipient = getAddress(recipient);
 
-  if (kind === 'kyber') {
-    return buildKyberStep({
+  if (kind !== 'kyber') throw new SwapBlockedError('Only a single Kyber swap is supported.');
+  return buildKyberStep({
       sellToken,
       buyToken,
       amountIn,
+      reviewedMinOut,
       sender: normalizedSender,
       recipient: normalizedRecipient,
-    });
-  }
-
-  return buildBaseSwapSeedStep({
-    sellToken,
-    buyToken,
-    amountIn,
-    recipient: normalizedRecipient,
   });
 }
 
@@ -232,12 +225,14 @@ async function buildKyberStep({
   sellToken,
   buyToken,
   amountIn,
+  reviewedMinOut,
   sender,
   recipient,
 }: {
   sellToken: SwapTokenId;
   buyToken: SwapTokenId;
   amountIn: bigint;
+  reviewedMinOut: bigint;
   sender: Address;
   recipient: Address;
 }): Promise<SwapBuildStepResponse> {
@@ -256,60 +251,77 @@ async function buildKyberStep({
     );
   }
 
-  const build = await fetchKyberBuild({
-    sellToken,
-    buyToken,
-    routeSummary: route.routeSummary,
-    sender,
-    recipient,
-  });
+  const freshStep = await createKyberQuoteStep({ key: 'step1', sellToken, buyToken, amountIn, route, originAddress: sender });
+  let minimum = requiredSwapMinimum(reviewedMinOut, BigInt(freshStep.minOut));
+  if (BigInt(freshStep.expectedOut) < minimum) throw new SwapReviewRequiredError();
+  let tolerance = getProtectedBuildSlippageBps(BigInt(route.routeSummary.amountOut), minimum);
 
-  if (!build.data?.data || !build.data.routerAddress) {
-    throw new Error('Kyber build response did not include executable transaction data.');
-  }
+  // A provider build can round amountOut differently from its route preview.
+  // Permit one stricter rebuild; no attempt may weaken the reviewed floor.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const build = await fetchKyberBuild({ routeSummary: route.routeSummary, sender, recipient, slippageTolerance: tolerance });
 
-  if (!isAllowedSwapRouter(build.data.routerAddress)) {
-    throw new SwapBlockedError(
-      'Swap router returned by the aggregator is not on the approved list.',
-    );
-  }
+    if (!build.data?.data || !build.data.routerAddress) {
+      throw new SwapBuildInvalidError();
+    }
 
-  const builtRouter = getAddress(build.data.routerAddress);
+    if (!isAllowedSwapRouter(build.data.routerAddress)) {
+      throw new SwapBlockedError(
+        'Swap router returned by the aggregator is not on the approved list.',
+      );
+    }
 
-  const quotedStep = await createKyberQuoteStep({
-    key: 'step1',
-    sellToken,
-    buyToken,
-    amountIn,
-    route: {
-      routeSummary: {
-        ...route.routeSummary,
-        amountOut: build.data.amountOut || route.routeSummary.amountOut,
-      },
-      routerAddress: builtRouter,
-    },
-    originAddress: sender,
-  });
+    const builtRouter = getAddress(build.data.routerAddress);
 
-  return {
-    step: {
-      ...quotedStep,
-      approvalTarget: isNativeSwapToken(sellToken) ? undefined : builtRouter,
-    },
-    approval: isNativeSwapToken(sellToken)
-      ? null
-      : {
-          token: getTokenAddress(sellToken as Exclude<SwapTokenId, 'ETH'>),
-          spender: builtRouter,
-          requiredAmount: amountIn.toString(),
+    const quotedStep = await createKyberQuoteStep({
+      key: 'step1',
+      sellToken,
+      buyToken,
+      amountIn,
+      route: {
+        routeSummary: {
+          ...route.routeSummary,
+          amountOut: build.data.amountOut || route.routeSummary.amountOut,
         },
-    transaction: {
-      to: builtRouter,
-      data: build.data.data,
-      value: build.data.transactionValue || '0',
-      chainId: BASE_CHAIN_ID,
-    },
-  };
+        routerAddress: builtRouter,
+      },
+      originAddress: sender,
+    });
+
+    minimum = requiredSwapMinimum(minimum, BigInt(quotedStep.minOut));
+    if (BigInt(quotedStep.expectedOut) < minimum) throw new SwapReviewRequiredError();
+    const response: SwapBuildStepResponse = {
+      step: {
+        ...quotedStep,
+        minOut: minimum.toString(),
+        approvalTarget: isNativeSwapToken(sellToken) ? undefined : builtRouter,
+      },
+      approval: isNativeSwapToken(sellToken)
+        ? null
+        : {
+            token: getTokenAddress(sellToken as Exclude<SwapTokenId, 'ETH'>),
+            spender: builtRouter,
+            requiredAmount: amountIn.toString(),
+          },
+      transaction: {
+        to: builtRouter,
+        data: build.data.data,
+        value: build.data.transactionValue || '0',
+        chainId: BASE_CHAIN_ID,
+      },
+    };
+    try {
+      const enforced = validateSwapExecution(response, { sender, recipient, sellToken, buyToken,
+        amountIn: amountIn.toString(), minOut: minimum.toString() });
+      response.step.minOut = enforced.toString();
+      return response;
+    } catch (error) {
+      if (!(error instanceof SwapReviewRequiredError) || attempt > 0 || tolerance === 0) throw error;
+      tolerance = Math.max(0, Math.min(tolerance - 1,
+        getProtectedBuildSlippageBps(BigInt(build.data.amountOut || route.routeSummary.amountOut), minimum)));
+    }
+  }
+  throw new SwapReviewRequiredError();
 }
 
 async function createKyberQuoteStep({
@@ -391,9 +403,7 @@ async function getKyberDisplayQuote({
       taxBps: SEED_TAX_BPS,
       warnings: [
         'SEED applies a 5% transfer tax on output.',
-        `Pixotchi builds the router transaction with ${formatBasisPoints(
-          getKyberBuildSlippageBps(sellToken, buyToken),
-        )} total tolerance so the swap stays 1 transaction.`,
+        'The transaction enforces at least the minimum SEED shown after tax.',
       ],
       grossOut,
     };
@@ -423,9 +433,7 @@ async function getKyberDisplayQuote({
       taxBps: SEED_TAX_BPS,
       warnings: [
         'Only 95% of submitted SEED reaches the first pool after tax.',
-        `Pixotchi builds the router transaction with ${formatBasisPoints(
-          getKyberBuildSlippageBps(sellToken, buyToken),
-        )} total tolerance so the swap stays 1 transaction.`,
+        'The transaction enforces at least the minimum output shown after tax.',
       ],
       effectiveIn,
     };
@@ -437,184 +445,6 @@ async function getKyberDisplayQuote({
     minOut: applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS),
     taxBps: 0,
     warnings: [],
-  };
-}
-
-async function quoteBaseSwapSeedStep({
-  key,
-  sellToken,
-  buyToken,
-  amountIn,
-}: {
-  key: 'step1' | 'step2';
-  sellToken: SwapTokenId;
-  buyToken: SwapTokenId;
-  amountIn: bigint;
-}): Promise<SwapQuoteStep> {
-  assertBaseSwapSeedStep(sellToken, buyToken);
-
-  const readClient = getBaseReadClient();
-
-  if (buyToken === 'SEED') {
-    const amountsOut = (await readClient.readContract({
-      address: BASESWAP_ROUTER_ADDRESS,
-      abi: BASESWAP_ROUTER_SWAP_ABI,
-      functionName: 'getAmountsOut',
-      args: [amountIn, [WETH_ADDRESS, getTokenAddress('SEED')]],
-    })) as bigint[];
-    const grossOut = amountsOut[1] ?? BigInt(0);
-
-    if (grossOut <= BigInt(0)) {
-      throw new SwapBlockedError('No direct BaseSwap liquidity is available for the SEED leg.');
-    }
-
-    const expectedOut = applyDiscountBps(grossOut, SEED_TAX_BPS);
-    const minOut = applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS);
-
-    return {
-      key,
-      kind: 'baseswap_seed',
-      sellToken,
-      buyToken,
-      amountIn: amountIn.toString(),
-      expectedOut: expectedOut.toString(),
-      minOut: minOut.toString(),
-      taxBps: SEED_TAX_BPS,
-      marketSlippageBps: MARKET_SLIPPAGE_BPS,
-      routeLabel: 'BaseSwap direct WETH/SEED',
-      routeSources: ['BaseSwap'],
-      warnings: ['SEED applies a 5% transfer tax on output.'],
-      approvalTarget: isNativeSwapToken(sellToken)
-        ? undefined
-        : BASESWAP_ROUTER_ADDRESS,
-      grossOut: grossOut.toString(),
-    };
-  }
-
-  const effectiveIn = applyDiscountBps(amountIn, SEED_TAX_BPS);
-  const amountsOut = (await readClient.readContract({
-    address: BASESWAP_ROUTER_ADDRESS,
-    abi: BASESWAP_ROUTER_SWAP_ABI,
-    functionName: 'getAmountsOut',
-    args: [effectiveIn, [getTokenAddress('SEED'), WETH_ADDRESS]],
-  })) as bigint[];
-  const expectedOut = amountsOut[1] ?? BigInt(0);
-
-  if (expectedOut <= BigInt(0)) {
-    throw new SwapBlockedError('No direct BaseSwap liquidity is available for the SEED leg.');
-  }
-
-  const minOut = applyDiscountBps(expectedOut, MARKET_SLIPPAGE_BPS);
-
-  return {
-    key,
-    kind: 'baseswap_seed',
-    sellToken,
-    buyToken,
-    amountIn: amountIn.toString(),
-    expectedOut: expectedOut.toString(),
-    minOut: minOut.toString(),
-    taxBps: SEED_TAX_BPS,
-    marketSlippageBps: MARKET_SLIPPAGE_BPS,
-    routeLabel: 'BaseSwap direct WETH/SEED',
-    routeSources: ['BaseSwap'],
-    warnings: ['Only 95% of the submitted SEED reaches the pool after tax.'],
-    approvalTarget: BASESWAP_ROUTER_ADDRESS,
-    effectiveIn: effectiveIn.toString(),
-  };
-}
-
-async function buildBaseSwapSeedStep({
-  sellToken,
-  buyToken,
-  amountIn,
-  recipient,
-}: {
-  sellToken: SwapTokenId;
-  buyToken: SwapTokenId;
-  amountIn: bigint;
-  recipient: Address;
-}): Promise<SwapBuildStepResponse> {
-  const step = await quoteBaseSwapSeedStep({
-    key: 'step1',
-    sellToken,
-    buyToken,
-    amountIn,
-  });
-  const deadline = BigInt(
-    Math.floor(Date.now() / 1000) + SWAP_DEADLINE_WINDOW_SECONDS,
-  );
-  let data: Hex;
-  let value = '0';
-
-  if (sellToken === 'ETH' && buyToken === 'SEED') {
-    data = encodeFunctionData({
-      abi: BASESWAP_ROUTER_SWAP_ABI,
-      functionName: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
-      args: [
-        BigInt(step.minOut),
-        [WETH_ADDRESS, getTokenAddress('SEED')],
-        recipient,
-        deadline,
-      ],
-    });
-    value = amountIn.toString();
-  } else if (sellToken === 'SEED' && buyToken === 'ETH') {
-    data = encodeFunctionData({
-      abi: BASESWAP_ROUTER_SWAP_ABI,
-      functionName: 'swapExactTokensForETHSupportingFeeOnTransferTokens',
-      args: [
-        amountIn,
-        BigInt(step.minOut),
-        [getTokenAddress('SEED'), WETH_ADDRESS],
-        recipient,
-        deadline,
-      ],
-    });
-  } else if (sellToken === 'WETH' && buyToken === 'SEED') {
-    data = encodeFunctionData({
-      abi: BASESWAP_ROUTER_SWAP_ABI,
-      functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
-      args: [
-        amountIn,
-        BigInt(step.minOut),
-        [WETH_ADDRESS, getTokenAddress('SEED')],
-        recipient,
-        deadline,
-      ],
-    });
-  } else if (sellToken === 'SEED' && buyToken === 'WETH') {
-    data = encodeFunctionData({
-      abi: BASESWAP_ROUTER_SWAP_ABI,
-      functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
-      args: [
-        amountIn,
-        BigInt(step.minOut),
-        [getTokenAddress('SEED'), WETH_ADDRESS],
-        recipient,
-        deadline,
-      ],
-    });
-  } else {
-    throw new SwapBlockedError('Unsupported BaseSwap SEED leg.');
-  }
-
-  return {
-    step,
-    approval:
-      isNativeSwapToken(sellToken) || sellToken === 'ETH'
-        ? null
-        : {
-            token: getTokenAddress(sellToken as Exclude<SwapTokenId, 'ETH'>),
-            spender: BASESWAP_ROUTER_ADDRESS,
-            requiredAmount: amountIn.toString(),
-          },
-    transaction: {
-      to: BASESWAP_ROUTER_ADDRESS,
-      data,
-      value,
-      chainId: BASE_CHAIN_ID,
-    },
   };
 }
 
@@ -665,17 +495,15 @@ async function fetchKyberRoute({
 }
 
 async function fetchKyberBuild({
-  sellToken,
-  buyToken,
   routeSummary,
   sender,
   recipient,
+  slippageTolerance,
 }: {
-  sellToken: SwapTokenId;
-  buyToken: SwapTokenId;
   routeSummary: KyberRouteSummary;
   sender: Address;
   recipient: Address;
+  slippageTolerance: number;
 }): Promise<KyberBuildResponse> {
   return fetchWithTimeout<KyberBuildResponse>(`${KYBER_BASE_URL}/route/build`, {
     method: 'POST',
@@ -690,7 +518,8 @@ async function fetchKyberBuild({
       sender,
       recipient,
       origin: sender,
-      slippageTolerance: getKyberBuildSlippageBps(sellToken, buyToken),
+      slippageTolerance,
+      deadline: Math.floor(Date.now() / 1000) + SWAP_DEADLINE_WINDOW_SECONDS,
       enableGasEstimation: false,
       source: 'pixotchi-app',
     }),
@@ -750,41 +579,12 @@ function assertKyberStep(sellToken: SwapTokenId, buyToken: SwapTokenId) {
   }
 }
 
-function assertBaseSwapSeedStep(sellToken: SwapTokenId, buyToken: SwapTokenId) {
-  const isValidPair =
-    (sellToken === 'ETH' && buyToken === 'SEED') ||
-    (sellToken === 'SEED' && buyToken === 'ETH') ||
-    (sellToken === 'WETH' && buyToken === 'SEED') ||
-    (sellToken === 'SEED' && buyToken === 'WETH');
-
-  if (!isValidPair) {
-    throw new SwapBlockedError('Only direct WETH/SEED BaseSwap legs are supported.');
-  }
-}
-
 function applyDiscountBps(amount: bigint, bps: number): bigint {
   if (amount <= BigInt(0)) {
     return BigInt(0);
   }
 
   return (amount * BigInt(BASIS_POINTS - bps)) / BigInt(BASIS_POINTS);
-}
-
-function getKyberBuildSlippageBps(
-  sellToken: SwapTokenId,
-  buyToken: SwapTokenId,
-): number {
-  // Fixed 0.75% market slippage (MARKET_SLIPPAGE_BPS). SEED pairs also
-  // carry the 5% transfer tax, so the router tolerance is stacked.
-  if (isSeedSwapToken(sellToken) || isSeedSwapToken(buyToken)) {
-    return SEED_TAX_BPS + MARKET_SLIPPAGE_BPS;
-  }
-
-  return MARKET_SLIPPAGE_BPS;
-}
-
-function formatBasisPoints(bps: number): string {
-  return `${(bps / 100).toFixed(2)}%`;
 }
 
 function getKyberRouteSources(routeSummary: KyberRouteSummary): string[] {

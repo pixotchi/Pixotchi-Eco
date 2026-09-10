@@ -1,4 +1,6 @@
 import { WalletStatusUnavailableError } from "@/lib/wallet-batch-status";
+import { getBaseRpcFailure } from '@/lib/base-rpc-errors';
+import { TransactionCancelledError, TransactionSupersededError, TransactionVerificationUnavailableError } from '@/lib/transaction-proof-verification';
 
 export type TransactionStatusName =
   | "idle"
@@ -12,6 +14,7 @@ export type TransactionStatusName =
   | "error"
   | "failed"
   | "reverted"
+  | "superseded"
   | "cancelled"
   | "canceled"
   | "rejected"
@@ -42,6 +45,8 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function getErrorStatusName(error: unknown): TransactionStatusName {
+  if (error instanceof TransactionSupersededError) return 'superseded';
+  if (error instanceof TransactionCancelledError) return 'cancelled';
   const message = getErrorMessage(error).toLowerCase();
   const code = getNestedErrorCode(error);
 
@@ -118,6 +123,9 @@ export function getAtomicCapabilityStatus(
 }
 
 export function isUnresolvedWaitError(error: unknown) {
+  const rpcFailure = getBaseRpcFailure(error);
+  if (rpcFailure) return rpcFailure.retryable;
+  if (error instanceof TransactionVerificationUnavailableError) return true;
   if (error instanceof WalletStatusUnavailableError) return true;
   const message = getErrorMessage(error).toLowerCase();
   return message.includes("timed out")
@@ -135,6 +143,7 @@ export function isUnresolvedWaitError(error: unknown) {
 }
 
 export function isDefinitivePostSubmissionError(error: unknown) {
+  if (error instanceof TransactionSupersededError || error instanceof TransactionCancelledError) return true;
   const message = getErrorMessage(error).toLowerCase();
   return message.includes("transaction reverted")
     || message.includes("execution reverted")

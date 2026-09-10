@@ -15,7 +15,9 @@ import {
   buildClaimRewardsCall,
   buildStakeCall,
   buildUnstakeCall,
+  getStakeAllowance,
 } from "@/lib/contracts";
+import { getStakingAllowanceReadiness, parseStakingAllowance, requireStakingAllowance } from '@/lib/staking-allowance';
 import GameTransaction from "@/components/transactions/game-transaction";
 import Image from "next/image";
 import { formatTokenAmount } from "@/lib/utils";
@@ -39,6 +41,8 @@ type BalanceApiResponse = {
 type StakingApiResponse = {
   success: boolean;
   stake: { staked: string; rewards: string } | null;
+  allowance: string | null;
+  /** Compatibility with older clients only; never used for spending decisions. */
   approved: boolean;
   rewardRatio?: { numerator: string; denominator: string } | null;
   timeUnit?: string | null;
@@ -90,7 +94,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
   const { address } = useAccount();
   const [seedBalance, setSeedBalance] = useState<bigint>(BigInt(0));
   const [stakeInfo, setStakeInfo] = useState<{ staked: bigint; rewards: bigint } | null>(null);
-  const [approved, setApproved] = useState<boolean>(false);
+  const [stakeAllowance, setStakeAllowance] = useState<bigint | null>(null);
   const [amount, setAmount] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [mode, setMode] = useState<"stake" | "unstake">("stake");
@@ -119,7 +123,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
 
   const refresh = useCallback(async (options: { force?: boolean } = {}) => {
     const requestAddress = address?.toLowerCase();
-    if (!requestAddress || !openRef.current) return;
+    if (!requestAddress || requestAddress !== currentAddressRef.current || !openRef.current) return;
 
     const activeRequest = refreshRequestRef.current;
     if (activeRequest) {
@@ -188,7 +192,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
         throw new Error(`Staking API error: ${stakingResponse.error}`);
       }
 
-      if (!stakingResponse.stake || typeof stakingResponse.approved !== 'boolean') {
+      if (!stakingResponse.stake) {
         throw new Error('Staking snapshot is incomplete');
       }
       if ([balanceResponse.balance, stakingResponse.stake.staked, stakingResponse.stake.rewards]
@@ -234,7 +238,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       // previous wallet can no longer paint into the current wallet's dialog.
       setSeedBalance(nextSeedBalance);
       setStakeInfo(nextStakeInfo);
-      setApproved(stakingResponse.approved);
+      setStakeAllowance(parseStakingAllowance(stakingResponse.allowance));
       setRewardRatio(nextRewardRatio);
       setRewardTimeUnit(nextRewardTimeUnit);
       setTotalStaked(nextTotalStaked);
@@ -278,7 +282,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       lastRefreshTime.current = 0;
       setSeedBalance(BigInt(0));
       setStakeInfo(null);
-      setApproved(false);
+      setStakeAllowance(null);
       setRewardRatio(null);
       setRewardTimeUnit(null);
       setTotalStaked(null);
@@ -391,16 +395,35 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
     : readState === 'error' ? 'Unavailable' : 'Loading…';
   const safeParseUnits = parseAmountInput;
   const parsed = safeParseUnits(sanitizedAmount);
+  const stakeInputIdentity = `${address?.toLowerCase() ?? ''}:${mode}:${sanitizedAmount}`;
+  const currentStakeInputRef = useRef(stakeInputIdentity);
+  currentStakeInputRef.current = stakeInputIdentity;
   const amountValidPositive = parsed !== null && parsed > BigInt(0);
   const stakedBal = stakeInfo?.staked ?? BigInt(0);
   const exceedsStake = dataReady && mode === 'stake' && amountValidPositive && parsed! > seedBalance;
   const exceedsUnstake = dataReady && mode === 'unstake' && amountValidPositive && parsed! > stakedBal;
-  const disableStakeBtn = !dataReady || mode !== 'stake' || !approved || !amountValidPositive || !!exceedsStake;
+  const allowanceReadiness = getStakingAllowanceReadiness(stakeAllowance, parsed);
+  const needsStakeApproval = allowanceReadiness === 'needs_approval';
+  const disableStakeBtn = !dataReady || mode !== 'stake' || allowanceReadiness !== 'ready' || !amountValidPositive || !!exceedsStake;
   const disableUnstakeBtn = !dataReady || mode !== 'unstake' || !amountValidPositive || !!exceedsUnstake;
   const disableClaimRewardsBtn = !dataReady || !stakeInfo || stakeInfo.rewards <= BigInt(0);
   const helperText = sanitizedAmount !== "" && !amountValidPositive
     ? "Enter a valid amount (max 18 decimals)"
     : (exceedsStake ? "Amount exceeds wallet balance" : (exceedsUnstake ? "Amount exceeds staked balance" : ""));
+
+  const validateStake = async () => {
+    if (!dataReady || mode !== 'stake' || parsed === null || parsed <= BigInt(0) || !address || exceedsStake) {
+      throw new Error('Refresh staking data and enter an amount within your balance.');
+    }
+    const generation = refreshGenerationRef.current;
+    await requireStakingAllowance({
+      amount: parsed,
+      read: () => getStakeAllowance(address),
+      isCurrent: () => openRef.current && currentStakeInputRef.current === stakeInputIdentity
+        && refreshGenerationRef.current === generation,
+      onRead: setStakeAllowance,
+    });
+  };
 
   const rewardRateInfo = useMemo(() => {
     const zero = BigInt(0);
@@ -575,6 +598,17 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
             </Alert>
           )}
 
+          {mode === 'stake' && dataReady && stakeAllowance === null && (
+            <Alert variant="warning">
+              <AlertDescription className="space-y-2">
+                <p>SEED allowance is unavailable. Retry before approving or staking.</p>
+                <Button variant="outline" size="touchCompact" onClick={handleManualRefresh} disabled={loading || manualRefreshing}>
+                  Retry staking allowance
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <AmountField id="staking-amount" label={mode === 'stake' ? 'Amount to stake' : 'Amount to unstake'} unit="SEED"
             value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0" onMax={() => setMaxAmount(mode)}
             maxDisabled={!dataReady || (mode === 'stake' ? seedBalance : (stakeInfo?.staked ?? BigInt(0))) <= BigInt(0)}
@@ -586,9 +620,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
       <DialogFooter className="block">
         <div className="w-full space-y-2">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
-            <div className={!approved && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
+            <div className={needsStakeApproval && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
           {mode === 'stake' ? (
-            !approved ? (
+            needsStakeApproval ? (
                 <div className="flex flex-1 flex-col">
                   <GameTransaction
                     effects={{ domains: ["balances", "rewards"] }}
@@ -598,10 +632,9 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                     buttonText="Approve SEED for Staking"
                     pendingText="Approving SEED…"
                     buttonClassName={footerTransactionButtonClassName}
-                    disabled={!dataReady}
-                   onSuccess={() => {
-                      setApproved(true);
-                      void refresh({ force: true });
+                    disabled={!dataReady || !amountValidPositive || !!exceedsStake}
+                   onSuccess={async () => {
+                      await refresh({ force: true });
                    }}
                  />
               </div>
@@ -615,6 +648,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
                    buttonText="Stake"
                    pendingText="Staking…"
                    disabled={disableStakeBtn}
+                   onButtonClick={validateStake}
                    buttonClassName={footerTransactionButtonClassName}
                    onSuccess={(tx: UntypedValue) => {
                       setAmount("");
@@ -651,7 +685,7 @@ export default function StakingDialog({ open, onOpenChange }: StakingDialogProps
           )}
             </div>
 
-          <div className={!approved && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
+          <div className={needsStakeApproval && mode === "stake" ? "col-span-full flex min-w-0 flex-col" : "flex min-w-0 flex-col"}>
             <GameTransaction
               effects={{ domains: ["balances", "rewards"] }}
               trackStreak={false}

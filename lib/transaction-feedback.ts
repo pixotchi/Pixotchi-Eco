@@ -87,6 +87,8 @@ export function getTransactionFeedback({
         : { title: 'Transaction confirmed', description: 'Updating your game…', tone: 'progress', icon: 'loading' };
     case 'success':
       return { title: 'Action complete', description: 'You’re all set.', tone: 'success', icon: 'check' };
+    case 'superseded':
+      return { title: 'Action replaced in wallet', description: 'This action did not run. Review your wallet activity before trying again.', tone: 'neutral', icon: 'info' };
     case 'cancelled':
     case 'canceled':
     case 'rejected':

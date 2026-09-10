@@ -87,8 +87,8 @@ function BuildingDetailsPanel({
   // isCasino is defined above via useEffect
 
   const renderBuildingContent = () => {
-    // Globally gate building functions while upgrading, regardless of level/type
-    if (selectedBuilding.isUpgrading) {
+    // Existing quests remain claimable onchain throughout a Farmer House upgrade.
+    if (selectedBuilding.isUpgrading && !(buildingType === 'town' && selectedBuilding.id === 7)) {
       return (
         <div className="text-center py-8 text-muted-foreground text-sm">
           Building is upgrading. Functions are temporarily unavailable until the upgrade completes.
@@ -150,6 +150,7 @@ function BuildingDetailsPanel({
             <FarmerHousePanel
               landId={landId}
               farmerHouseLevel={selectedBuilding.level}
+              isUpgrading={selectedBuilding.isUpgrading}
               onQuestUpdate={onUpgradeSuccess}
             />
           );

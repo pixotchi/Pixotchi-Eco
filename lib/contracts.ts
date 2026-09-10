@@ -756,20 +756,6 @@ export const KILL_COOLDOWN_ABI = [
     stateMutability: "view",
     type: "function",
   },
-  {
-    inputs: [],
-    name: "getKillCooldownSeconds",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "isKillCooldownEnabled",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
 ] as const;
 
 export type PixotchiReadClient = ReturnType<typeof getBaseReadClient>;
@@ -1187,6 +1173,8 @@ export const getStakeComposite = async (
   readClient: PixotchiReadClient = getReadClient(),
 ): Promise<{
   stake: { staked: bigint; rewards: bigint } | null;
+  allowance: bigint | null;
+  /** Compatibility only. Spending eligibility must compare the exact allowance. */
   approved: boolean;
   rewardRatio: { numerator: bigint; denominator: bigint } | null;
   timeUnit: bigint | null;
@@ -1242,14 +1230,15 @@ export const getStakeComposite = async (
 
     // These values determine approval and spending eligibility. A failed
     // multicall entry must never be presented as a successful zero snapshot.
-    if (stakeRes?.status === 'failure' || allowanceRes?.status === 'failure'
+    if (stakeRes?.status === 'failure'
       || !stake || typeof stake.staked !== 'bigint' || typeof stake.rewards !== 'bigint'
-      || stake.staked < BigInt(0) || stake.rewards < BigInt(0)
-      || typeof allowanceRes?.result !== 'bigint' || allowanceRes.result < BigInt(0)) {
-      throw new Error('Required staking balances or approval could not be read');
+      || stake.staked < BigInt(0) || stake.rewards < BigInt(0)) {
+      throw new Error('Required staking balances could not be read');
     }
-    const allowance = allowanceRes.result as bigint;
-    const approved = allowance > BigInt(0);
+    const allowance = allowanceRes?.status === 'success'
+      && typeof allowanceRes.result === 'bigint' && allowanceRes.result >= BigInt(0)
+      ? allowanceRes.result as bigint : null;
+    const approved = allowance !== null && allowance > BigInt(0);
 
     let rewardRatio: { numerator: bigint; denominator: bigint } | null = null;
     const rr = rewardRatioRes?.result as UntypedValue;
@@ -1286,7 +1275,7 @@ export const getStakeComposite = async (
       }
     }
 
-    return { stake, approved, rewardRatio, timeUnit, totalStaked };
+    return { stake, allowance, approved, rewardRatio, timeUnit, totalStaked };
   } catch (e) {
     console.warn('getStakeComposite failed:', e);
     throw e;
@@ -2422,13 +2411,29 @@ export const getPlantsInfoExtended = async (
   tokenIds: number[],
   readClient: PixotchiReadClient = getReadClient(),
 ): Promise<Plant[]> => {
+  if (tokenIds.length === 0) return [];
   return retryWithBackoff(async () => {
-    const plants = await readClient.readContract({
-      address: PIXOTCHI_NFT_ADDRESS,
-      abi: PIXOTCHI_NFT_ABI,
-      functionName: 'getPlantsInfoExtended',
-      args: [tokenIds.map(id => BigInt(id))],
-    }) as UntypedValue[];
+    // Split this app-owned dynamic argument before ABI encoding. The transport
+    // cannot split one aggregate3 or contract call without changing its meaning.
+    const chunkSize = 128;
+    const chunks = Array.from({ length: Math.ceil(tokenIds.length / chunkSize) }, (_, index) =>
+      tokenIds.slice(index * chunkSize, (index + 1) * chunkSize).map(id => BigInt(id)));
+    const blockNumber = chunks.length > 1 ? await readClient.getBlockNumber() : undefined;
+    const results: UntypedValue[][] = new Array(chunks.length);
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, async () => {
+      while (cursor < chunks.length) {
+        const index = cursor++;
+        results[index] = await readClient.readContract({
+          address: PIXOTCHI_NFT_ADDRESS,
+          abi: PIXOTCHI_NFT_ABI,
+          functionName: 'getPlantsInfoExtended',
+          args: [chunks[index]],
+          ...(blockNumber !== undefined ? { blockNumber } : {}),
+        }) as UntypedValue[];
+      }
+    }));
+    const plants = results.flat();
 
     // Fence V2 writes to the same extensions storage, so derive it from extensions
     // No need for separate RPC call to fenceV2GetPurchaseStats
@@ -3590,7 +3595,7 @@ export const blackjackFetchRandomness = async (
   authHeaders: Record<string, string> = {},
 ): Promise<{
   randomSeed: string;
-  nonce: number;
+  nonce: string | number;
   signature: string;
   expiresAt: number;
   signerAddress: string;
@@ -3662,7 +3667,7 @@ export const buildBlackjackDealWithRandomCall = (
   landId: bigint,
   amount: bigint,
   randomSeed: string,
-  nonce: number,
+  nonce: string | number,
   signature: string
 ) => ({
   address: LAND_CONTRACT_ADDRESS,
@@ -3676,7 +3681,7 @@ export const buildBlackjackDealWithRandomForTokenCall = (
   amount: bigint,
   token: string,
   randomSeed: string,
-  nonce: number,
+  nonce: string | number,
   signature: string
 ) => ({
   address: LAND_CONTRACT_ADDRESS,
@@ -3700,7 +3705,7 @@ export const buildBlackjackActionWithRandomCall = (
   handIndex: number,
   action: BlackjackAction,
   randomSeed: string,
-  nonce: number,
+  nonce: string | number,
   signature: string
 ) => ({
   address: LAND_CONTRACT_ADDRESS,

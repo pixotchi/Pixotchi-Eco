@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createSwapBuildFixture } from './swap-security-fixtures';
 import { encodeAbiParameters, encodeEventTopics as encodeTopics, parseAbiItem, type Hex } from 'viem';
 import { normalizeBarracksConfigV2, normalizeBarracksLandStateV2, normalizeBarracksRaidReportV2, normalizeBarracksRaidPreviewV2 } from '../lib/barracks-state';
 import { parseStakeRanking, parseRocksRanking } from '../lib/ranking-response';
@@ -52,11 +53,11 @@ async function main() {
   const request = { sellToken: 'ETH' as const, buyToken: 'SEED' as const, amountIn: BigInt(1) };
   assert.deepEqual(parseSwapQuote(quote, request), quote);
   for (const bad of [{ ...quote, amountIn: '2' }, { ...quote, expectedOut: false }, { ...quote, steps: [] }, { ...quote, minOut: '201' }, { ...quote, expiresAt: 999 }, { ...quote, sellToken: 'WETH' }]) assert.throws(() => parseSwapQuote(bad, request));
-  const built = { step: quote.steps[0], approval: null, transaction: { to: address, data: '0x1234', value: '1', chainId: 8453 } };
-  assert.equal(parseSwapBuildStep(built, quote.steps[0], '1').transaction.value, '1');
-  assert.equal(parseSwapBuildStep(built, { ...quote.steps[0], key: 'step2' }, '1').step.key, 'step2', 'A standalone build response retains the requested second-leg identity');
-  assert.throws(() => parseSwapBuildStep({ ...built, transaction: { ...built.transaction, chainId: 1 } }, quote.steps[0], '1'));
-  assert.throws(() => parseSwapBuildStep(built, quote.steps[0], '2'));
+  const built = createSwapBuildFixture(quote.steps[0], address);
+  assert.equal(parseSwapBuildStep(built, quote.steps[0], '1', address).transaction.value, '1');
+  assert.throws(() => parseSwapBuildStep(built, { ...quote.steps[0], key: 'step2' }, '1', address), 'Dormant second legs cannot execute');
+  assert.throws(() => parseSwapBuildStep({ ...built, transaction: { ...built.transaction, chainId: 1 } }, quote.steps[0], '1', address));
+  assert.throws(() => parseSwapBuildStep(built, quote.steps[0], '2', address));
 
   const message = { id: 'confirmed-1', address, message: 'hello', displayName: 'Player', timestamp: 1000 };
   assert.deepEqual(parsePublicChatHistory({ messages: [message] }), [message]);

@@ -12,9 +12,13 @@ import {
 } from 'viem';
 import { base, mainnet } from 'viem/chains';
 import { getRpcConfig } from './env-config';
+import { BaseRpcError, classifyBaseRpcError, recordBaseRpcFailureClassification } from './base-rpc-errors';
+import { createBoundedBaseRpcFetch } from './base-rpc-fetch';
+export { BaseRpcError } from './base-rpc-errors';
 import {
   BASE_RPC_MAX_BATCH_SIZE,
   BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES,
+  BASE_RPC_BROWSER_MULTICALL_INNER_BYTES,
   type BaseRpcEndpointDescriptor,
   type BaseRpcExecutionWave,
   type BaseRpcPolicy,
@@ -106,9 +110,11 @@ const TOTAL_SUPPLY_SELECTOR = '0x18160ddd' as const;
 const UPSTREAM_HTTP_BATCH_SIZE = 40;
 const HTTP_BATCH_SIZE = IS_BROWSER ? BASE_RPC_MAX_BATCH_SIZE : UPSTREAM_HTTP_BATCH_SIZE;
 const HTTP_BATCH_WAIT_MS = 16;
-// Shared with the proxy's body-size cap so the two cannot drift (see
-// BASE_RPC_MAX_BODY_BYTES).
-const MULTICALL_BATCH_SIZE = BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;
+// Actual encoded body limits are enforced by the browser fetch adapter.
+const MULTICALL_BATCH_SIZE = IS_BROWSER
+  ? BASE_RPC_BROWSER_MULTICALL_INNER_BYTES
+  : BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES;
+const boundedBrowserFetch = IS_BROWSER ? createBoundedBaseRpcFetch() : undefined;
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
 const CANONICAL_RECEIPT_TIMEOUT_MS = 180_000;
@@ -380,6 +386,7 @@ const getRequestClient = (
   if (existing) return existing;
 
   const client = http(url, {
+    ...(boundedBrowserFetch ? { fetchFn: boundedBrowserFetch } : {}),
     batch: {
       batchSize: HTTP_BATCH_SIZE,
       wait: HTTP_BATCH_WAIT_MS,
@@ -410,163 +417,30 @@ const updateLatency = (
   );
 };
 
-const errorMatches = (
-  error: UntypedValue,
-  predicate: (details: { code: string; message: string; name: string }) => boolean,
-) => collectRpcErrors(error).some((candidate) => {
-  const typed = candidate as { code?: unknown; message?: unknown; name?: unknown };
-  return predicate({
-    code: typed?.code === undefined ? '' : String(typed.code).toLowerCase(),
-    message: typeof typed?.message === 'string' ? typed.message.toLowerCase() : String(candidate).toLowerCase(),
-    name: typeof typed?.name === 'string' ? typed.name.toLowerCase() : '',
-  });
-});
+const isRateLimitError = (error?: unknown) =>
+  Boolean(error) && classifyBaseRpcError(error).category === 'rate_limited';
 
-const isRateLimitError = (error?: UntypedValue) => {
+export const isBaseRpcConnectivityError = (error?: unknown) => {
   if (!error) return false;
-  return errorMatches(error, ({ code, message }) => (
-    code === '429'
-    || message.includes('429')
-    || message.includes('rate limit')
-    || message.includes('over rate limit')
-  ));
+  const category = classifyBaseRpcError(error).category;
+  return category === 'timeout' || category === 'network';
 };
 
-export const isBaseRpcConnectivityError = (error?: UntypedValue) => {
+const isServerSideRpcError = (error?: unknown) => {
   if (!error) return false;
-  return errorMatches(error, ({ code, message, name }) => (
-    name.includes('timeout')
-    || name.includes('abort')
-    || name.includes('network')
-    || code === 'etimedout'
-    || code === 'econnreset'
-    || code === 'econnrefused'
-    || code === 'ehostunreach'
-    || code === 'enetunreach'
-    || code.includes('connect_timeout')
-    || message.includes('timeout')
-    || message.includes('timed out')
-    || message.includes('fetch')
-    || message.includes('network')
-    || message.includes('connection')
-    || message.includes('socket')
-    || message.includes('aborted')
-  ));
+  const category = classifyBaseRpcError(error).category;
+  return category === 'upstream_unavailable' || category === 'malformed_response';
 };
 
-const isServerSideRpcError = (error?: UntypedValue) => {
-  if (!error) return false;
-  return errorMatches(error, ({ code, message }) => (
-    code === '500'
-    || code === '502'
-    || code === '503'
-    || code === '504'
-    || message.includes('500')
-    || message.includes('502')
-    || message.includes('503')
-    || message.includes('504')
-    || message.includes('bad gateway')
-    || message.includes('service unavailable')
-    || message.includes('gateway timeout')
-    || message.includes('internal server error')
-  ));
-};
+/** A provider-specific method/range restriction may succeed elsewhere. */
+export const isDeterministicBaseRpcError = (error: unknown): boolean =>
+  !classifyBaseRpcError(error).failover;
 
-const isExpectedApplicationError = (error?: Error) => {
-  if (!error) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('execution reverted') ||
-    message.includes('reverted') ||
-    message.includes('contract function') ||
-    message.includes('user rejected') ||
-    message.includes('insufficient funds') ||
-    message.includes('intrinsic gas too low') ||
-    message.includes('nonce too low') ||
-    message.includes('replacement transaction underpriced') ||
-    message.includes('transaction underpriced') ||
-    message.includes('already known') ||
-    message.includes('invalid params') ||
-    message.includes('invalid argument') ||
-    message.includes('invalid address') ||
-    message.includes('abi') ||
-    message.includes('decode')
-  );
-};
+const getSafeRpcFailureLabel = (error?: unknown): string =>
+  error ? classifyBaseRpcError(error).category : 'unknown';
 
-function collectRpcErrors(error: UntypedValue, depth = 0, visited = new Set<unknown>()): UntypedValue[] {
-  if (!error || depth > 8 || visited.has(error)) return [];
-  visited.add(error);
-  if (error instanceof AggregateError) {
-    return [error, ...error.errors.flatMap((nested) => collectRpcErrors(nested, depth + 1, visited))];
-  }
-  if (typeof error !== 'object') return [error];
-  const cause = (error as { cause?: UntypedValue }).cause;
-  return [error, ...collectRpcErrors(cause, depth + 1, visited)];
-}
-
-/** Errors whose outcome cannot improve by asking another RPC for the same call. */
-export const isDeterministicBaseRpcError = (error: UntypedValue): boolean => {
-  const candidates = collectRpcErrors(error);
-  // Some providers report subscription/range restrictions as -32600/-32602.
-  // The same valid log filter can succeed elsewhere in the configured pool.
-  if (candidates.some((candidate) => {
-    const message = String(candidate?.details ?? candidate?.message ?? '').toLowerCase();
-    return message.includes('eth_getlogs') && (
-      message.includes('free tier') || message.includes('upgrade to') || message.includes('limited to')
-    );
-  })) return false;
-  return candidates.some((candidate) => {
-    const typed = candidate as { code?: unknown; message?: unknown; name?: unknown };
-    const code = typeof typed?.code === 'string' ? Number(typed.code) : typed?.code;
-    const name = typeof typed?.name === 'string' ? typed.name.toLowerCase() : '';
-    const message = typeof typed?.message === 'string' ? typed.message.toLowerCase() : '';
-    return (
-      code === 3
-      || code === -32700
-      || code === -32600
-      || code === -32601
-      || code === -32602
-      || code === 4001
-      || code === 4100
-      || code === 4200
-      || (typeof code === 'number' && code >= 5700 && code <= 5760)
-      || name.includes('contractfunctionreverted')
-      || name.includes('invalidparams')
-      || name.includes('userrejected')
-      || isExpectedApplicationError(new Error(message))
-    );
-  });
-};
-
-const getSafeRpcFailureLabel = (error?: Error): string => {
-  if (!error) return 'unknown';
-  if (isDeterministicBaseRpcError(error)) return 'deterministic';
-  if (isRateLimitError(error)) return 'rate_limited';
-  if (isBaseRpcConnectivityError(error)) return 'connectivity';
-  if (isServerSideRpcError(error)) return 'server_error';
-  return 'rpc_error';
-};
-
-export const shouldAffectBaseRpcProviderHealth = (
-  method: string,
-  error?: UntypedValue,
-) => {
-  if (!error) return true;
-  if (
-    isRateLimitError(error) ||
-    isBaseRpcConnectivityError(error) ||
-    isServerSideRpcError(error)
-  ) {
-    return true;
-  }
-
-  if (isDeterministicBaseRpcError(error)) {
-    return false;
-  }
-
-  return true;
-};
+export const shouldAffectBaseRpcProviderHealth = (_method: string, error?: unknown) =>
+  !error || classifyBaseRpcError(error).affectsProviderHealth;
 
 const recordPolicyResult = (
   policy: BaseRpcPolicy,
@@ -609,6 +483,7 @@ const recordPolicyResult = (
     return;
   }
 
+  recordBaseRpcFailureClassification(error);
   if (!affectsHealth) {
     return;
   }
@@ -754,7 +629,9 @@ const probeEndpoint = async (url: string) => {
     });
   } catch (error) {
     recordPolicyResult('probe', url, {
-      error: error as Error,
+      error: new BaseRpcError('probe', classifyBaseRpcError(error, { trustEnvelope: IS_BROWSER }), {
+        endpointsTried: [getEndpointAlias(url)],
+      }),
       latencyMs: Date.now() - started,
       status: 'error',
     });
@@ -809,14 +686,18 @@ const invokeEndpoint = async (
     });
     return result;
   } catch (error) {
-    const typedError = error as Error;
+    // Server endpoints are untrusted providers. Only browser requests receive
+    // the app proxy's versioned provenance and retry metadata.
+    const typedError = new BaseRpcError(policy, classifyBaseRpcError(error, { trustEnvelope: IS_BROWSER }), {
+      endpointsTried: [getEndpointAlias(url)],
+    });
     recordPolicyResult(policy, url, {
       affectsHealth: shouldAffectBaseRpcProviderHealth(method, typedError),
       error: typedError,
       latencyMs: Date.now() - started,
       status: 'error',
     });
-    throw error;
+    throw typedError;
   }
 };
 
@@ -1039,7 +920,11 @@ const createBaseTransport = (
             )) as never;
           } catch (error) {
             if (error instanceof BaseRpcError) throw error;
-            throw new BaseRpcError(policy, error);
+            throw new BaseRpcError(policy, error, {
+              endpointsTried: error instanceof BaseRpcInvocationError
+                ? error.attemptedUrls.map(getEndpointAlias)
+                : listBaseRpcEndpoints().map(getEndpointAlias),
+            });
           }
         },
         retryCount: 0,
@@ -1091,47 +976,8 @@ let browserBaseReceiptClient: ReturnType<typeof createBaseClient> | null = null;
 let browserBaseLogClient: ReturnType<typeof createBaseClient> | null = null;
 let browserEthereumEnsClient: ReturnType<typeof createEthereumEnsClient> | null = null;
 
-const getRetryableFlag = (error: UntypedValue): boolean => {
-  if (isDeterministicBaseRpcError(error)) return false;
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-
-  return (
-    message.includes('timeout') ||
-    message.includes('timed out') ||
-    message.includes('fetch') ||
-    message.includes('network') ||
-    message.includes('connection') ||
-    message.includes('429') ||
-    message.includes('rate')
-  );
-};
-
-export class BaseRpcError extends Error {
-  code: 'BASE_RPC_UNAVAILABLE';
-  operation: string;
-  retryable: boolean;
-  endpointsTried: string[];
-
-  constructor(operation: string, error: UntypedValue) {
-    const invocationError =
-      error instanceof BaseRpcInvocationError ? error : null;
-    const rootError = invocationError?.lastError ?? error;
-    super(`Base RPC ${operation} request failed`);
-    this.name = 'BaseRpcError';
-    this.code = 'BASE_RPC_UNAVAILABLE';
-    this.operation = operation;
-    this.retryable = getRetryableFlag(rootError);
-    this.endpointsTried =
-      invocationError?.attemptedUrls.length
-        ? invocationError.attemptedUrls.map(getEndpointAlias)
-        : listBaseRpcEndpoints().map(getEndpointAlias);
-
-    // Do not attach the upstream error as `cause`: Viem errors can embed the
-    // complete provider URL (including credentials). The stable operation,
-    // retryability flag, and endpoint aliases above are the public contract.
-  }
-}
+const getRetryableFlag = (error: unknown): boolean =>
+  classifyBaseRpcError(error).retryable;
 
 const buildPolicyStatus = (
   policy: BaseRpcPolicy,

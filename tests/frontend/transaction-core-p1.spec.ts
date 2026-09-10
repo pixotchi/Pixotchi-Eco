@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('http://transaction-core.test/**', route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/staking/balance') return route.fulfill({ json: { success: true, balance: '10000000000000000000' } });
-    if (url.pathname === '/api/staking/info') return route.fulfill({ json: { success: true, approved: true, stake: { staked: '5000000000000000000', rewards: '100' } } });
+    if (url.pathname === '/api/staking/info') return route.fulfill({ json: { success: true, allowance: '10000000000000000000', approved: true, stake: { staked: '5000000000000000000', rewards: '100' } } });
     return route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' });
   });
   await page.goto('http://transaction-core.test/');
@@ -93,6 +93,109 @@ test('TX-02 supported atomic submission completes with canonical receipt proof',
   await expect(page.getByLabel('Status', { exact: true })).toHaveText('success');
   await expect(page.getByLabel('Executing', { exact: true })).toHaveText('false');
   await expect(page.getByLabel('Wallet calls', { exact: true })).toHaveText('1');
+});
+
+for (const direct of [false, true]) {
+  for (const [replacement, expectedStatus] of [['repriced', 'success'], ['replaced', 'superseded'], ['cancelled', 'cancelled']]) {
+    test(`TX-08 ${direct ? 'direct' : 'batch'} ${replacement} preserves the original action outcome`, async ({ page }) => {
+      await page.getByLabel('Reject wallet', { exact: true }).uncheck();
+      if (direct) await page.getByLabel('Direct transaction', { exact: true }).check();
+      await page.getByLabel('Replacement', { exact: true }).selectOption(replacement);
+      await page.getByRole('button', { name: 'Submit', exact: true }).click();
+      await expect(page.getByLabel('Status', { exact: true })).toHaveText(expectedStatus);
+      await expect(page.getByLabel('Confirmation calls', { exact: true })).toHaveText(expectedStatus === 'success' ? '1' : '0');
+      await expect(page.getByLabel('Superseded events', { exact: true })).toHaveText(expectedStatus === 'superseded' ? '1' : '0');
+      await expect(page.getByLabel('Wallet calls', { exact: true })).toHaveText('1');
+      await expect(page.getByLabel('Executing', { exact: true })).toHaveText('false');
+    });
+  }
+}
+
+for (const direct of [false, true]) for (const [replacement, expectedStatus] of [['repriced', 'success'], ['replaced', 'superseded'], ['cancelled', 'cancelled']]) {
+  test(`TX-08 reload retains ${direct ? 'direct' : 'batch'} ${replacement} disposition`, async ({ page }) => {
+    await page.getByLabel('Reject wallet', { exact: true }).uncheck();
+    if (direct) await page.getByLabel('Direct transaction', { exact: true }).check();
+    await page.getByLabel('Replacement', { exact: true }).selectOption(replacement);
+    await page.getByLabel('Delay next receipt', { exact: true }).check();
+    await page.getByRole('button', { name: 'Submit', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Object.entries(localStorage)
+      .filter(([key]) => key.startsWith('pixotchi:pending-evm:v2:record:'))
+      .map(([, value]) => JSON.parse(value).replacement?.disposition)))
+      .toEqual([replacement === 'repriced' ? 'repriced' : expectedStatus]);
+    await page.reload();
+    // A closed document's durable monitor lease expires after twenty seconds.
+    await page.clock.install();
+    await page.clock.fastForward(25_000);
+    await page.addScriptTag({ content: bundle });
+    // The new fixture renders two unrelated draft calls. The durable method
+    // still owns direct status recovery and must never submit that fresh draft.
+    await expect(page.getByLabel('Status', { exact: true })).toHaveText(expectedStatus);
+    await expect(page.getByLabel('Confirmation calls', { exact: true })).toHaveText(expectedStatus === 'success' ? '1' : '0');
+    await expect(page.getByLabel('Wallet calls', { exact: true })).toHaveText('0');
+  });
+}
+
+test('TX-09 stale acknowledgement releases only the reviewed attempt', async ({ page }) => {
+  await page.getByRole('button', { name: 'Seed stale reservation', exact: true }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('transactionStale');
+  await page.getByText('More options', { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('idle');
+  await expect(page.getByRole('button', { name: 'Submit', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Wallet calls', { exact: true })).toHaveText('0');
+  await expect(page.getByLabel('Acknowledgement events', { exact: true })).toHaveText('1');
+});
+
+for (const direct of [false, true]) test(`TX-09 captured ${direct ? 'direct' : 'batch'} proof becomes durable while its receipt monitor is waiting`, async ({ page }) => {
+  await page.getByLabel('Reject wallet', { exact: true }).uncheck();
+  if (direct) await page.getByLabel('Direct transaction', { exact: true }).check();
+  await page.getByLabel('Delay next receipt', { exact: true }).check();
+  await page.evaluate(() => {
+    const write = Storage.prototype.setItem;
+    (window as typeof window & { restoreProofWrites: () => void }).restoreProofWrites = () => {
+      Storage.prototype.setItem = write;
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('pixotchi:pending-evm:v2:record:') && JSON.parse(value).proof.kind !== 'reservation') {
+        throw new DOMException('Temporary proof write failure', 'QuotaExceededError');
+      }
+      return write.call(this, key, value);
+    };
+  });
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const proofs = () => page.evaluate(() => Object.entries(localStorage)
+    .filter(([key]) => key.startsWith('pixotchi:pending-evm:v2:record:'))
+    .map(([, value]) => { const record = JSON.parse(value); return { kind: record.proof.kind, proofCaptured: record.proofCaptured === true }; }));
+  await expect.poll(proofs).toEqual([{ kind: 'reservation', proofCaptured: true }]);
+  await page.evaluate(() => (window as typeof window & { restoreProofWrites: () => void }).restoreProofWrites());
+  await expect.poll(proofs).toEqual([{ kind: direct ? 'hash' : 'calls', proofCaptured: false }]);
+  await expect(page.getByLabel('Executing', { exact: true })).toHaveText('true');
+  await expect(page.getByLabel('Confirmation calls', { exact: true })).toHaveText('0');
+  await page.getByRole('button', { name: 'Resolve receipt', exact: true }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('success');
+  await expect(page.getByLabel('Confirmation calls', { exact: true })).toHaveText('1');
+  await expect.poll(proofs).toEqual([]);
+});
+
+test('TX-09 an awaited acknowledgement cannot clear the newly connected wallet', async ({ page }) => {
+  await page.getByRole('button', { name: 'Seed stale reservation', exact: true }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('transactionStale');
+  await page.getByText('More options', { exact: true }).click();
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1_000));
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Direct acknowledgement entry', exact: true }).click();
+  await page.getByRole('button', { name: 'Direct acknowledgement entry', exact: true }).click();
+  await page.getByRole('button', { name: 'Switch wallet', exact: true }).click();
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('idle');
+  await page.clock.fastForward(1_000);
+  await expect(page.getByRole('button', { name: 'Submit', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  await page.clock.fastForward(1_000);
+  await expect(page.getByLabel('Status', { exact: true })).toHaveText('transactionRejected');
+  await expect(page.getByLabel('Wallet calls', { exact: true })).toHaveText('1');
+  await expect(page.getByLabel('Acknowledgement events', { exact: true })).toHaveText('1');
 });
 
 test('TX-03 invalid current readiness blocks both toast and direct retry', async ({ page }) => {

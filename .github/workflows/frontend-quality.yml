@@ -60,6 +60,35 @@ jobs:
             output/frontend-tests
           retention-days: 14
 
+  transaction-remediation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run remediation:smoke
+      - run: npm run remediation:redis:smoke
+      - run: npm run contracts:check
+      - run: npx playwright install --with-deps chromium --only-shell
+      - run: npm run gameplay-guards:smoke
+      - run: npm run airdrop-recovery:browser
+      - run: npx playwright test tests/frontend/transaction-core-p1.spec.ts --project=390-light --project=1024-light
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: transaction-remediation-results
+          path: |
+            output/frontend-test-report
+            output/frontend-tests
+          retention-days: 14
+
   visual-baselines:
     runs-on: windows-latest
     timeout-minutes: 15

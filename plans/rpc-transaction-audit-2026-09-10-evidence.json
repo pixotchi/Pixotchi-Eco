@@ -1,0 +1,2198 @@
+{
+  "auditDate": "2026-09-10",
+  "repositoryCommit": "6a2506b",
+  "chainId": 8453,
+  "scopeNote": "Read-only audit. Local configuration is not proof of the production website environment. No transaction was broadcast.",
+  "snapshot": {
+    "observedAt": "2026-09-10T17:48:16.711Z",
+    "blockNumber": "51136574",
+    "blockHash": "0x6b47a81d5869a625408827a08aad981ab279270bc45200f325a16fe7e3d10c44",
+    "timestamp": "1789062495",
+    "plantExtensions": [
+      {
+        "metadata": {
+          "name": "ConfigLogic",
+          "metadataURI": "ipfs://QmbSVWdyMmcfqG6qrWQ45TkxYBPJg91ayFEGikcfmjup3q",
+          "implementation": "0x529c06F4a8268245E0c611B305ae5aA080356FA6"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x7d57498c",
+            "functionSignature": "initializeConfigLogic()"
+          },
+          {
+            "functionSelector": "0x338abd03",
+            "functionSignature": "setChangePlantNamePrice(uint256)"
+          },
+          {
+            "functionSelector": "0xb303c03a",
+            "functionSignature": "setConfig(bool,uint256)"
+          },
+          {
+            "functionSelector": "0x7e50dd30",
+            "functionSignature": "setKillIsActive(bool)"
+          },
+          {
+            "functionSelector": "0x325cb44b",
+            "functionSignature": "setPRECISION(uint256)"
+          },
+          {
+            "functionSelector": "0x56d3163d",
+            "functionSignature": "setRenderer(address)"
+          },
+          {
+            "functionSelector": "0x1bddb706",
+            "functionSignature": "setRevShareWallet(address)"
+          },
+          {
+            "functionSelector": "0x88b00837",
+            "functionSignature": "setStrain(uint256,uint256,uint256,string,string,bool,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xcdff1d05",
+            "functionSignature": "setTOD(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x144fa6d7",
+            "functionSignature": "setToken(address)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "GameLogic",
+          "metadataURI": "ipfs://QmbRgyjRRJh963NiaYbNhayZDmgy5syBo7n1paDXbgh5Zk",
+          "implementation": "0x0d45AED9Cb7BCb6d34FaA35cdB20C1fC1e6B7ecf"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x78770724",
+            "functionSignature": "getPlantName(uint256)"
+          },
+          {
+            "functionSelector": "0xe1fa7638",
+            "functionSignature": "attack(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x96379a9b",
+            "functionSignature": "canKill(address)"
+          },
+          {
+            "functionSelector": "0xd12b4e6d",
+            "functionSignature": "getAllStrainInfo()"
+          },
+          {
+            "functionSelector": "0xfa94ada0",
+            "functionSignature": "getKillCooldownRemaining(address)"
+          },
+          {
+            "functionSelector": "0x5c622a0e",
+            "functionSignature": "getStatus(uint256)"
+          },
+          {
+            "functionSelector": "0xf929b585",
+            "functionSignature": "isApprovedFn(uint256,address)"
+          },
+          {
+            "functionSelector": "0xb559bbb4",
+            "functionSignature": "isPlantAlive(uint256)"
+          },
+          {
+            "functionSelector": "0xe2c352ed",
+            "functionSignature": "kill(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x05c58df2",
+            "functionSignature": "level(uint256)"
+          },
+          {
+            "functionSelector": "0xf251b76a",
+            "functionSignature": "onAttack(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x0573ea94",
+            "functionSignature": "pass(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xccc73973",
+            "functionSignature": "pendingEth(uint256)"
+          },
+          {
+            "functionSelector": "0xdb006a75",
+            "functionSignature": "redeem(uint256)"
+          },
+          {
+            "functionSelector": "0x114da366",
+            "functionSignature": "setPlantName(uint256,string)"
+          },
+          {
+            "functionSelector": "0x6d7b7fc9",
+            "functionSignature": "statusToString(uint8)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "GardenLogic",
+          "metadataURI": "ipfs://QmZW56yCGHxEamHYAFiZ6hMKcfL7VPs441Kjgm9aWrtdCS",
+          "implementation": "0xf7B68c0fb0eF7ab22ACD647F2BbEc0e1913a02e6"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x7a6494de",
+            "functionSignature": "Revive(uint256)"
+          },
+          {
+            "functionSelector": "0x715488b0",
+            "functionSignature": "buyAccessory(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x79c5cb1c",
+            "functionSignature": "createItem(string,uint256,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xa53c1f87",
+            "functionSignature": "createItems((uint256,string,uint256,uint256,uint256)[])"
+          },
+          {
+            "functionSelector": "0xeba475b5",
+            "functionSignature": "editGardenItems((uint256,string,uint256,uint256,uint256)[])"
+          },
+          {
+            "functionSelector": "0x99cc726d",
+            "functionSignature": "editItem(uint256,uint256,uint256,string,uint256)"
+          },
+          {
+            "functionSelector": "0xac6ca58b",
+            "functionSignature": "getAllGardenItem()"
+          },
+          {
+            "functionSelector": "0x4864d053",
+            "functionSignature": "getGardenItem(uint256)"
+          },
+          {
+            "functionSelector": "0xb34c2f52",
+            "functionSignature": "getRevivePrice()"
+          },
+          {
+            "functionSelector": "0x143b35f0",
+            "functionSignature": "initializeGardenLogic()"
+          },
+          {
+            "functionSelector": "0x843bd641",
+            "functionSignature": "itemExists(uint256)"
+          },
+          {
+            "functionSelector": "0x2901a4e3",
+            "functionSignature": "setRevivePrice(uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "NFTLogic",
+          "metadataURI": "ipfs://QmY8YxGom2UMZAf9Ry2UTunzX8bZeWERHV1YkApkL7QCBM",
+          "implementation": "0x80BA8113125C0b5C115D3a74cf269c1D1190BcD3"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xa217fddf",
+            "functionSignature": "DEFAULT_ADMIN_ROLE()"
+          },
+          {
+            "functionSelector": "0x54a475ba",
+            "functionSignature": "_getPlantsByOwner(address)"
+          },
+          {
+            "functionSelector": "0x095ea7b3",
+            "functionSignature": "approve(address,uint256)"
+          },
+          {
+            "functionSelector": "0x70a08231",
+            "functionSignature": "balanceOf(address)"
+          },
+          {
+            "functionSelector": "0x42966c68",
+            "functionSignature": "burn(uint256)"
+          },
+          {
+            "functionSelector": "0x081812fc",
+            "functionSignature": "getApproved(uint256)"
+          },
+          {
+            "functionSelector": "0x2a5d5138",
+            "functionSignature": "getPlantInfo(uint256)"
+          },
+          {
+            "functionSelector": "0x572a9d6a",
+            "functionSignature": "getPlantInfoExtended(uint256)"
+          },
+          {
+            "functionSelector": "0x03226d49",
+            "functionSignature": "getPlantScore(uint256)"
+          },
+          {
+            "functionSelector": "0x83a59548",
+            "functionSignature": "getPlantStatusRange(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x213b093a",
+            "functionSignature": "getPlantTimeUntilStarving(uint256)"
+          },
+          {
+            "functionSelector": "0x1123d4de",
+            "functionSignature": "getPlantsByOwner(address)"
+          },
+          {
+            "functionSelector": "0xd1c1438e",
+            "functionSignature": "getPlantsByOwnerExtended(address)"
+          },
+          {
+            "functionSelector": "0xba9a58e0",
+            "functionSignature": "getPlantsInfo(uint256[])"
+          },
+          {
+            "functionSelector": "0x59cfe1f5",
+            "functionSignature": "getPlantsInfoExtended(uint256[])"
+          },
+          {
+            "functionSelector": "0x248a9ca3",
+            "functionSignature": "getRoleAdmin(bytes32)"
+          },
+          {
+            "functionSelector": "0x9010d07c",
+            "functionSignature": "getRoleMember(bytes32,uint256)"
+          },
+          {
+            "functionSelector": "0xca15c873",
+            "functionSignature": "getRoleMemberCount(bytes32)"
+          },
+          {
+            "functionSelector": "0xac8db04a",
+            "functionSignature": "getStrainPaymentInfo(uint256)"
+          },
+          {
+            "functionSelector": "0x2f2ff15d",
+            "functionSignature": "grantRole(bytes32,address)"
+          },
+          {
+            "functionSelector": "0x91d14854",
+            "functionSignature": "hasRole(bytes32,address)"
+          },
+          {
+            "functionSelector": "0xa32fa5b3",
+            "functionSignature": "hasRoleWithSwitch(bytes32,address)"
+          },
+          {
+            "functionSelector": "0x837aa729",
+            "functionSignature": "initializeNFTLogic()"
+          },
+          {
+            "functionSelector": "0xe985e9c5",
+            "functionSignature": "isApprovedForAll(address,address)"
+          },
+          {
+            "functionSelector": "0xa0712d68",
+            "functionSignature": "mint(uint256)"
+          },
+          {
+            "functionSelector": "0x06fdde03",
+            "functionSignature": "name()"
+          },
+          {
+            "functionSelector": "0x6352211e",
+            "functionSignature": "ownerOf(uint256)"
+          },
+          {
+            "functionSelector": "0x5f0c851d",
+            "functionSignature": "removeTokenIdFromOwner(uint32,address)"
+          },
+          {
+            "functionSelector": "0x36568abe",
+            "functionSignature": "renounceRole(bytes32,address)"
+          },
+          {
+            "functionSelector": "0xd547741f",
+            "functionSignature": "revokeRole(bytes32,address)"
+          },
+          {
+            "functionSelector": "0x42842e0e",
+            "functionSignature": "safeTransferFrom(address,address,uint256)"
+          },
+          {
+            "functionSelector": "0xb88d4fde",
+            "functionSignature": "safeTransferFrom(address,address,uint256,bytes)"
+          },
+          {
+            "functionSelector": "0xab705ef7",
+            "functionSignature": "setAltToken(address)"
+          },
+          {
+            "functionSelector": "0xa22cb465",
+            "functionSignature": "setApprovalForAll(address,bool)"
+          },
+          {
+            "functionSelector": "0xf1173b04",
+            "functionSignature": "setStrainAltToken(uint256,bool,uint256)"
+          },
+          {
+            "functionSelector": "0x01ffc9a7",
+            "functionSignature": "supportsInterface(bytes4)"
+          },
+          {
+            "functionSelector": "0x95d89b41",
+            "functionSignature": "symbol()"
+          },
+          {
+            "functionSelector": "0x4e9dfa77",
+            "functionSignature": "tokenBurnAndRedistribute(address,uint256)"
+          },
+          {
+            "functionSelector": "0xc87b56dd",
+            "functionSignature": "tokenURI(uint256)"
+          },
+          {
+            "functionSelector": "0x18160ddd",
+            "functionSignature": "totalSupply()"
+          },
+          {
+            "functionSelector": "0x23b872dd",
+            "functionSignature": "transferFrom(address,address,uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "Renderer",
+          "metadataURI": "ipfs://QmTX5bj7yMudtcTm6Yrx9rBJUjkJrExmfXnGR3Zcn7XNXW",
+          "implementation": "0x71dF7F436b1957b53781348337E02875F5dF260d"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x6ec445a1",
+            "functionSignature": "calculateImageLevel(uint256)"
+          },
+          {
+            "functionSelector": "0x517f28f9",
+            "functionSignature": "getImageUri(uint256,string)"
+          },
+          {
+            "functionSelector": "0x59fffcc2",
+            "functionSignature": "prepareTokenURI((uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint8,string,uint256,address,uint256,((uint256,string,uint256,bool)[])[]),string)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "ReinitializerUtil",
+          "metadataURI": "ipfs://QmarPXjDtCVnLR75WV2emD7Xv8qEbHXgoDUfpotwocPFqS",
+          "implementation": "0x82a9aF882bFD2990239c32baC59f5A51a19Cfd4C"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xa2280d67",
+            "functionSignature": "getReinitializerCursor()"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "BoxGame",
+          "metadataURI": "ipfs://QmeJjx52aSVH5jpmYNQNcJXdWMC3Vceeh14ohGwao6K19d",
+          "implementation": "0xDAc475D196882D825d188dD870BDe546451f24AA"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x660db682",
+            "functionSignature": "boxGameGetCoolDownTimePerNFT(uint256)"
+          },
+          {
+            "functionSelector": "0x5d8eca00",
+            "functionSignature": "boxGameGetCoolDownTimeWithStar(uint256)"
+          },
+          {
+            "functionSelector": "0x96ac0b9f",
+            "functionSignature": "boxGameInitialize()"
+          },
+          {
+            "functionSelector": "0x51927290",
+            "functionSignature": "boxGameInitialize2()"
+          },
+          {
+            "functionSelector": "0x52f3e0c4",
+            "functionSignature": "boxGamePlay(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xab64d0ee",
+            "functionSignature": "boxGamePlayWithStar(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x3733c0eb",
+            "functionSignature": "boxGameSetGlobalCoolDownTime(uint256)"
+          },
+          {
+            "functionSelector": "0xa3a6b7d8",
+            "functionSignature": "boxGameSetPointRewards(uint256[5])"
+          },
+          {
+            "functionSelector": "0x5a2c2ddd",
+            "functionSignature": "boxGameSetTimeRewards(uint256[5])"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "SpinGame",
+          "metadataURI": "ipfs://QmbnZvpbufCqc1518Yd7QFcRSQrCu9Yv2mgKNZLaSPFmZk",
+          "implementation": "0x37B25D2F50A777A3817cAd4C31e856dBE73E435C"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xca22a598",
+            "functionSignature": "SpinGameInitialize()"
+          },
+          {
+            "functionSelector": "0xb0584a42",
+            "functionSignature": "spinGameGetCoolDownTimePerNFT(uint256)"
+          },
+          {
+            "functionSelector": "0xd3e9bcc7",
+            "functionSignature": "spinGameGetCoolDownTimeWithStar(uint256)"
+          },
+          {
+            "functionSelector": "0x1e3f0436",
+            "functionSignature": "spinGameInitialize2()"
+          },
+          {
+            "functionSelector": "0xf162093c",
+            "functionSignature": "spinGamePlay(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xc0ba8cc7",
+            "functionSignature": "spinGamePlayWithStar(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xfa354a5e",
+            "functionSignature": "spinGameSetCoolDownTime(uint256)"
+          },
+          {
+            "functionSelector": "0x38672dbf",
+            "functionSignature": "spinGameSetIsPercentage(bool[])"
+          },
+          {
+            "functionSelector": "0xfb44c631",
+            "functionSignature": "spinGameSetPointRewards(uint256[])"
+          },
+          {
+            "functionSelector": "0x969ebb78",
+            "functionSignature": "spinGameSetTimeRewards(int256[])"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "ShopLogic",
+          "metadataURI": "ipfs://QmYQf9HEVCPuTh1xFvQdSb8sTFT6Du73xnpW2SJKiTNq3v",
+          "implementation": "0xb0d799fc56c4C3D555A54bc776841050A3acB086"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x99c6f8ea",
+            "functionSignature": "reinitializer_8_ShopLogic()"
+          },
+          {
+            "functionSelector": "0x15bc285e",
+            "functionSignature": "shopBuyItem(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x20038ee7",
+            "functionSignature": "shopDoesItemExist(uint256)"
+          },
+          {
+            "functionSelector": "0xebc603d9",
+            "functionSignature": "shopGetAllItems()"
+          },
+          {
+            "functionSelector": "0x206905bd",
+            "functionSignature": "shopGetPurchasedItems(uint256)"
+          },
+          {
+            "functionSelector": "0xa9b228d9",
+            "functionSignature": "shopIsEffectOngoing(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xec840144",
+            "functionSignature": "shopModifyItem(uint256,string,uint256,uint256,uint256,uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "ERC721AExtension",
+          "metadataURI": "ipfs://QmWuff9b8R8BjkbALao1nQuG2C9urNDRmWwJTacoVyTr2n",
+          "implementation": "0x0a1dded52a6B79B9d6052727303243c76f5e921b"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xdb44fe07",
+            "functionSignature": "isBurned(uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "DebugLogic",
+          "metadataURI": "ipfs://QmdBBPnWhVLoLk34yJkxMZMGntkdfmQeZAcv3fnyR3Wd4s",
+          "implementation": "0x4c48B72524A5FC2E514E5b353A990931ac4cA0D7"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xca1e4d2c",
+            "functionSignature": "debugGetBurnedPlants(uint256)"
+          },
+          {
+            "functionSelector": "0x9ac8703b",
+            "functionSignature": "debugGetIdsByOwner(address)"
+          },
+          {
+            "functionSelector": "0x3358a21e",
+            "functionSignature": "debugGetIdsByOwnerLength(address)"
+          },
+          {
+            "functionSelector": "0x53f86cf1",
+            "functionSignature": "debugGetOwnerIndexById(uint32)"
+          },
+          {
+            "functionSelector": "0xc67de364",
+            "functionSignature": "debugGetPlantStars(uint256)"
+          },
+          {
+            "functionSelector": "0x4c62f050",
+            "functionSignature": "debugSetBurnedPlants(uint256,bool)"
+          },
+          {
+            "functionSelector": "0x46717d77",
+            "functionSignature": "debugSetIdsByOwner(address,uint32[])"
+          },
+          {
+            "functionSelector": "0x330385bf",
+            "functionSignature": "debugSetOwnerIndexById(uint32,uint32)"
+          },
+          {
+            "functionSelector": "0xc56e4c4d",
+            "functionSignature": "debugSetPlantStars(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x711159f2",
+            "functionSignature": "removeDuplicateTokenIds(address)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "AirdropLogic",
+          "metadataURI": "ipfs://QmTmqYEvWkQECDvF1PF94EPceaUSX6a6B33QgqWAUyPMto",
+          "implementation": "0x1AdB309f0d75E8f1A4a987Cc34c4f897F3d0f453"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x8dbac9e2",
+            "functionSignature": "airdropExtendLifetime(uint256[],uint256)"
+          },
+          {
+            "functionSelector": "0x47e4d123",
+            "functionSignature": "airdropGetAliveAndDeadTokenIds()"
+          },
+          {
+            "functionSelector": "0x16081c4f",
+            "functionSignature": "airdropGetAliveTokenIds()"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "LandToPlant",
+          "metadataURI": "ipfs://QmfVt4MpGGUgGGaBVfDLUcxfrpDGjn24ztn5jVnALzoQBQ",
+          "implementation": "0x89aEc497483f8D2dabE2b507067357135E2d284D"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x3895d938",
+            "functionSignature": "allowedCaller()"
+          },
+          {
+            "functionSelector": "0x11db8447",
+            "functionSignature": "landToPlantAssignLifeTime(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xac73d7ed",
+            "functionSignature": "landToPlantAssignPlantPoints(uint256,uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "SpinGameV2",
+          "metadataURI": "ipfs://bafkreie2riubcytequcmkambcvloaicgao7ywg4m2u6p45zl3xe3m7ker4",
+          "implementation": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x58d052c1",
+            "functionSignature": "SpinGameV2Initialize()"
+          },
+          {
+            "functionSelector": "0x3417ae16",
+            "functionSignature": "getCoolDownTime()"
+          },
+          {
+            "functionSelector": "0xe2912b10",
+            "functionSignature": "getLeafToken()"
+          },
+          {
+            "functionSelector": "0x1c4b774b",
+            "functionSignature": "getReward(uint256)"
+          },
+          {
+            "functionSelector": "0x5e7303d4",
+            "functionSignature": "getStarCost()"
+          },
+          {
+            "functionSelector": "0x6e16de11",
+            "functionSignature": "setCoolDownTime(uint256)"
+          },
+          {
+            "functionSelector": "0x2491c2b5",
+            "functionSignature": "setLeafToken(address)"
+          },
+          {
+            "functionSelector": "0x4c038dc4",
+            "functionSignature": "setReward(uint256,int256,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x6900719c",
+            "functionSignature": "setRewardLeaf(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x1e57d412",
+            "functionSignature": "setRewardPoints(uint256,int256)"
+          },
+          {
+            "functionSelector": "0x5e07cad1",
+            "functionSignature": "setRewardTime(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x6e9b2dc0",
+            "functionSignature": "setStarCost(uint256)"
+          },
+          {
+            "functionSelector": "0xb5bfe757",
+            "functionSignature": "spinGameV2Commit(uint256,bytes32)"
+          },
+          {
+            "functionSelector": "0xb5d1c14c",
+            "functionSignature": "spinGameV2Forfeit(uint256)"
+          },
+          {
+            "functionSelector": "0x8983c37a",
+            "functionSignature": "spinGameV2GetCoolDownTimePerNFT(uint256)"
+          },
+          {
+            "functionSelector": "0xbf498f89",
+            "functionSignature": "spinGameV2Play(uint256,bytes32)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "FenceV2",
+          "metadataURI": "",
+          "implementation": "0xe2238E607823243f4B9aa91cff016CEBed2E855E"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x090555ac",
+            "functionSignature": "fenceV2EffectUntil(uint256)"
+          },
+          {
+            "functionSelector": "0x934b2cae",
+            "functionSignature": "fenceV2GetConfig()"
+          },
+          {
+            "functionSelector": "0xf6a721ef",
+            "functionSignature": "fenceV2GetPurchaseStats(uint256)"
+          },
+          {
+            "functionSelector": "0xbb98b45a",
+            "functionSignature": "fenceV2HasFenceV1(uint256)"
+          },
+          {
+            "functionSelector": "0x2b3be3c0",
+            "functionSignature": "fenceV2Initialize(uint256)"
+          },
+          {
+            "functionSelector": "0xe6d7a33b",
+            "functionSignature": "fenceV2IsEffectOngoing(uint256)"
+          },
+          {
+            "functionSelector": "0x3b9a0c58",
+            "functionSignature": "fenceV2Purchase(uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x4a444730",
+            "functionSignature": "fenceV2Quote(uint256)"
+          },
+          {
+            "functionSelector": "0x584ab818",
+            "functionSignature": "fenceV2SetPricePerDay(uint256)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "SolanaAdapterExtension",
+          "metadataURI": "ipfs://Qma2orYQTyEd6r2k7CL8CKxLmjhfRVfLiNTiZJBApJ43LX",
+          "implementation": "0x83aAbf80e73246C9116D89aa3E49eA129762b8B2"
+        },
+        "functions": [
+          {
+            "functionSelector": "0x49ce35c9",
+            "functionSignature": "attackFor(address,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x5c3ebbb6",
+            "functionSignature": "buyGardenItemFor(address,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x0990cb33",
+            "functionSignature": "buyShopItemFor(address,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xe10f6046",
+            "functionSignature": "claimRewardsFor(address,uint256)"
+          },
+          {
+            "functionSelector": "0x14223ca6",
+            "functionSignature": "getChangePlantNamePrice()"
+          },
+          {
+            "functionSelector": "0x601c0abb",
+            "functionSignature": "getGardenItemPrice(uint256)"
+          },
+          {
+            "functionSelector": "0x0577e359",
+            "functionSignature": "getMintPriceByStrain(uint256)"
+          },
+          {
+            "functionSelector": "0x9843e203",
+            "functionSignature": "getShopItemPrice(uint256)"
+          },
+          {
+            "functionSelector": "0x3b9052dc",
+            "functionSignature": "getSolanaAdapter()"
+          },
+          {
+            "functionSelector": "0x543fe6ec",
+            "functionSignature": "getSolanaStats()"
+          },
+          {
+            "functionSelector": "0xf504f994",
+            "functionSignature": "initializeSolanaAdapter(address)"
+          },
+          {
+            "functionSelector": "0xda1919b3",
+            "functionSignature": "mintFor(address,uint256)"
+          },
+          {
+            "functionSelector": "0x63b746d3",
+            "functionSignature": "playBoxGameFor(address,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0xd770046d",
+            "functionSignature": "playSpinGameFor(address,uint256,uint256)"
+          },
+          {
+            "functionSelector": "0x74c135b3",
+            "functionSignature": "setPlantNameFor(address,uint256,string)"
+          },
+          {
+            "functionSelector": "0xca6d006f",
+            "functionSignature": "setSolanaAdapter(address)"
+          },
+          {
+            "functionSelector": "0xd359ac93",
+            "functionSignature": "setSolanaPaused(bool)"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "name": "StrainMaxSupplyLogic",
+          "metadataURI": "ipfs://QmcJJeLpB29Sr3Q8M2eE7Xcrfgm4udz4LtFtCn6ufccm4t",
+          "implementation": "0x87524C230cF8C32b4f4d89E278747555006420cf"
+        },
+        "functions": [
+          {
+            "functionSelector": "0xebb80780",
+            "functionSignature": "getStrainCounter()"
+          },
+          {
+            "functionSelector": "0x7fb11691",
+            "functionSignature": "getStrainInfo(uint256)"
+          },
+          {
+            "functionSelector": "0x61553f36",
+            "functionSignature": "getStrainMaxSupply(uint256)"
+          },
+          {
+            "functionSelector": "0x4eca2b81",
+            "functionSignature": "setStrainMaxSupply(uint256,uint256)"
+          }
+        ]
+      }
+    ],
+    "landFacets": [
+      {
+        "facetAddress": "0x2b883f7fAc21F8D8e3A35Ff05209415584eaF1Cc",
+        "functionSelectors": [
+          "0x1f931c1c"
+        ]
+      },
+      {
+        "facetAddress": "0x3c464d2208D9932853f5128597CC96ff49629Fde",
+        "functionSelectors": [
+          "0x7a0ed627",
+          "0xadfca15e",
+          "0x52ef6b2c",
+          "0xcdffacc6"
+        ]
+      },
+      {
+        "facetAddress": "0x91a805F2ad9325504199f49BC33023b04c9CFEDa",
+        "functionSelectors": [
+          "0x01ffc9a7",
+          "0x729ad39e",
+          "0x095ea7b3",
+          "0x70a08231",
+          "0xe8a3d485",
+          "0x4f558e79",
+          "0x081812fc",
+          "0x9df164d3",
+          "0xe985e9c5",
+          "0xd5abeb01",
+          "0x1249c58b",
+          "0x06fdde03",
+          "0x7bf7ac95",
+          "0x6352211e",
+          "0x42842e0e",
+          "0xa22cb465",
+          "0x95d89b41",
+          "0x4f6ccce7",
+          "0x2f745c59",
+          "0xc87b56dd",
+          "0x8462151c",
+          "0x18160ddd",
+          "0xa9059cbb",
+          "0x23b872dd"
+        ]
+      },
+      {
+        "facetAddress": "0xfCa776C4c828F9B34bB770D9f7aCAeb763BE853f",
+        "functionSelectors": [
+          "0x8da5cb5b",
+          "0xf2fde38b"
+        ]
+      },
+      {
+        "facetAddress": "0x0Ad9216c66445CC0918ca0D973d9077E487c474C",
+        "functionSelectors": [
+          "0x0b0eebe5",
+          "0x4dfe8504",
+          "0xe2132d91",
+          "0x76f93655",
+          "0xefd8f16b",
+          "0x09c8f06d",
+          "0x6105bb5b",
+          "0x40a2e7de",
+          "0xc8e77c09",
+          "0xc35abae3",
+          "0xa6c806b8",
+          "0x64460acb",
+          "0x21b77150",
+          "0x60921002",
+          "0x21f6f9f7",
+          "0x831c3de9",
+          "0xce6211ba",
+          "0x106152c4",
+          "0xc1112fb0",
+          "0xa534ffad",
+          "0x74c4fa82",
+          "0x0620c1e0",
+          "0xa68d9a8d",
+          "0x88db2b4c",
+          "0xfb6e1b3c",
+          "0x114e5724",
+          "0x0fc010cd",
+          "0x5069fc55",
+          "0xa7accd3f",
+          "0xefa3b664",
+          "0xbb4c020f",
+          "0x28c192ad",
+          "0x2d1c2f54",
+          "0x53b7297a"
+        ]
+      },
+      {
+        "facetAddress": "0x45b1c2533B4C4A5897DB3fC90C03d6A30a191E2b",
+        "functionSelectors": [
+          "0x5ad78612",
+          "0x197c271f",
+          "0xcb3a328a"
+        ]
+      },
+      {
+        "facetAddress": "0xEFbc6Bc302a3A8535b619f76CA0fbeA0453F29D1",
+        "functionSelectors": [
+          "0xbfb5c9df",
+          "0x4918bfac",
+          "0x218c9239",
+          "0xd4526ea9"
+        ]
+      },
+      {
+        "facetAddress": "0x8Ee33bCCf2C1B31C01d3148145141Abd75B43287",
+        "functionSelectors": [
+          "0x0f8c8710",
+          "0x369f155f",
+          "0xb86cad4a",
+          "0x5aecdc17",
+          "0x9d4f3320",
+          "0x2e7bfe5f",
+          "0x9953e388",
+          "0x854167d2"
+        ]
+      },
+      {
+        "facetAddress": "0x3Dd3b8387C944cD839277b011F738ED9e8150136",
+        "functionSelectors": [
+          "0x73af16fc"
+        ]
+      },
+      {
+        "facetAddress": "0xF7fee03A641B51460FEd06F988B1f8263031C55A",
+        "functionSelectors": [
+          "0x806a17ed",
+          "0xb6aa224c",
+          "0x97c5c384",
+          "0xe7ac8aed",
+          "0x9b33d4dc",
+          "0x5f429393",
+          "0xa6645e4a"
+        ]
+      },
+      {
+        "facetAddress": "0x572a40A2A2Baa6c0f348CCF578406DE7d80aD993",
+        "functionSelectors": [
+          "0x611191c9",
+          "0xdc057167",
+          "0x99fff80f"
+        ]
+      },
+      {
+        "facetAddress": "0x69B87aa1D358EF59Be93de7DF6Fe3923C7AA9Cc4",
+        "functionSelectors": [
+          "0xf987ae07"
+        ]
+      },
+      {
+        "facetAddress": "0xacb9D91D83e6eDfEb6CFFa3d94DE42C30a8e5809",
+        "functionSelectors": [
+          "0x77d66118",
+          "0x0f25b087",
+          "0xc98d9dc1",
+          "0x145ba117"
+        ]
+      },
+      {
+        "facetAddress": "0x695313975AD727dd2e9b6BBAe160F66C9A82A9Ec",
+        "functionSelectors": [
+          "0xa146c4f7",
+          "0x503c7dbf"
+        ]
+      },
+      {
+        "facetAddress": "0x1eD693cA42d9568B8a0b12E6da1543b752a1E5De",
+        "functionSelectors": [
+          "0x408e7979",
+          "0x1773a19e",
+          "0x6eff819d",
+          "0xd47ce2c5",
+          "0xfb55e7d4",
+          "0x32f9af59",
+          "0xbe6eec4b",
+          "0x30d1a28e",
+          "0x690ecd3e",
+          "0xccec6ef8",
+          "0x06a35dcc",
+          "0x44f27e7a",
+          "0x73f7b1e8",
+          "0x0a8b0129",
+          "0x5496aff9",
+          "0x7536510d",
+          "0xaf5f8c1e",
+          "0xe5bafee9",
+          "0xeafbf784",
+          "0x86832b8e",
+          "0x0ea1cb05",
+          "0x128ba7fa",
+          "0xb9b07ed9",
+          "0xf096d055",
+          "0xb290861f",
+          "0x6c2176c9",
+          "0x15632c43",
+          "0x79f501c5"
+        ]
+      },
+      {
+        "facetAddress": "0xA28C72f53c480E8F9BA35C205dA97A4e540756A8",
+        "functionSelectors": [
+          "0x95f78a05",
+          "0xaf525deb"
+        ]
+      },
+      {
+        "facetAddress": "0x435cd34c9B41E98B1781A47c0b90f5b008e08bf2",
+        "functionSelectors": [
+          "0x92642803",
+          "0xbbe8e481",
+          "0xe7b24590",
+          "0x0e338333",
+          "0x32af071f",
+          "0x99866de9",
+          "0x65b74f99",
+          "0x314abd82",
+          "0xfed1762f",
+          "0xa3525063",
+          "0xb547b10c",
+          "0x27e3e296",
+          "0x607e7c89",
+          "0xdf728901",
+          "0x73a67382",
+          "0x5cb072f0"
+        ]
+      },
+      {
+        "facetAddress": "0x510feAa858B39643C56E60057F3b8619A845fF8b",
+        "functionSelectors": [
+          "0xb3115616",
+          "0x6b9ef3ea",
+          "0x70c50677",
+          "0xb6247639",
+          "0x88ed2545",
+          "0x8ed4faa0",
+          "0x0926e1ce",
+          "0x2c47a873",
+          "0x019ff7cb",
+          "0x85b209cb",
+          "0xf8532887",
+          "0xd3a8ee6f",
+          "0x0311f643"
+        ]
+      },
+      {
+        "facetAddress": "0x31DcED5F23E47dc659536A32B2f0EfdE10172340",
+        "functionSelectors": [
+          "0xee6801d9",
+          "0x7d9fe730",
+          "0x94a296c3",
+          "0xf45f63bd",
+          "0x76a4dc5f",
+          "0xb58dce15",
+          "0xe5de060d",
+          "0x73445b2f",
+          "0x92b18ee7",
+          "0xb06760fe",
+          "0x837d46a9",
+          "0xe32636aa",
+          "0x7e707cb4",
+          "0x79025f63",
+          "0xe5a2855a",
+          "0xded35dcc",
+          "0x53c9c59c",
+          "0xadf9a9db",
+          "0x9573d774"
+        ]
+      },
+      {
+        "facetAddress": "0x593707b6fEbD46818d2696e6a1698fd8DFc7415B",
+        "functionSelectors": [
+          "0xccb1a57a",
+          "0xbba3059a",
+          "0xa16061d2",
+          "0x2b44653f",
+          "0x7b5bf214",
+          "0x54998b51",
+          "0xded96b36",
+          "0x65c8bba0",
+          "0x61f71517"
+        ]
+      },
+      {
+        "facetAddress": "0x7A918f287de7dbF19085a9eF9C79D50883920c77",
+        "functionSelectors": [
+          "0xa33e235a"
+        ]
+      },
+      {
+        "facetAddress": "0xdaf996eF01dC1a387187D85B23d9DfC8c9a7C97c",
+        "functionSelectors": [
+          "0x9e88f17b",
+          "0x06d1a55e",
+          "0x925bd687",
+          "0x20f30c34",
+          "0x1fce97d7",
+          "0xcaa6fa24",
+          "0xec120b75",
+          "0xd25443e4",
+          "0x5fe8c25c",
+          "0xdfeb4df5",
+          "0x87e11fb3",
+          "0x73c5435f",
+          "0x521d0059"
+        ]
+      }
+    ]
+  },
+  "runtimeInventory": [
+    {
+      "address": "0x0a1dded52a6b79b9d6052727303243c76f5e921b",
+      "name": "ERC721AExtension",
+      "hasCode": true,
+      "runtimeHash": "0xa13be0d5eb0154614fb828fbf1d10f9110429c48063408d61379f0c999434bb8",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x0a4e3a93612037084265fe49da164e73ef6fbd8c",
+      "name": "SolanaTwinAdapterV2",
+      "hasCode": true,
+      "runtimeHash": "0x95d031118c73b01d5c88a29be21f2a597768c5a1e68fbee109e49ae0625e879b",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x0ad9216c66445cc0918ca0d973d9077e487c474c",
+      "name": "AccessControlFacet",
+      "hasCode": true,
+      "runtimeHash": "0x2a826ce5fba2d7122e510f4e2623ab399ba8f4f5a498d4413bbfdf0c832fe5e4",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x0d45aed9cb7bcb6d34faa35cdb20c1fc1e6b7ecf",
+      "name": "GameLogic",
+      "hasCode": true,
+      "runtimeHash": "0x0ee1eb291231a54c84d99b4c8c78ff2b4781f31ec42713fe90780d06c3868826",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x0fd7345f5771f18d5b0b5faa3d02700ea0520f3d",
+      "name": "TokenStake",
+      "hasCode": true,
+      "runtimeHash": "0x437341f1097afe27678f474ffb4646e8535ac6bec85f485a2695ac4d191cfd82",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x1adb309f0d75e8f1a4a987cc34c4f897f3d0f453",
+      "name": "AirdropLogic",
+      "hasCode": true,
+      "runtimeHash": "0x39e29c5b7f17c3ea0bf5d14e3cc59d90c99a89be82c0612aeabef66e589ef044",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x1ed693ca42d9568b8a0b12e6da1543b752a1e5de",
+      "name": "RouletteFacet",
+      "hasCode": true,
+      "runtimeHash": "0x44e4645ee2300441d624d51804966b03665e1e6896cb147a27c30220e87b8738",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x21bdba30afc2b8205e8a173626346868077572fb",
+      "name": "TokenERC20",
+      "hasCode": true,
+      "runtimeHash": "0x28450e6ec57739cd052b3cae398fcccd600b395dbb812d1ba3354386106ab9a4",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x2b883f7fac21f8d8e3a35ff05209415584eaf1cc",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0x6ab3a9b104d64d0f12ab0457ef933fc3be1d724456ed5431d2daa011f3d5e432",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x31dced5f23e47dc659536a32b2f0efde10172340",
+      "name": "BarracksFacet",
+      "hasCode": true,
+      "runtimeHash": "0x012e7b2d6485388abe8629638391149d1a6f05f8ddc49d4050a217d73cbca319",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x37b25d2f50a777a3817cad4c31e856dbe73e435c",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0x81672b403bb6766aa67a0b8d5f74b457cc62d0bddf7106fe72e87ae961439fcf",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x3c464d2208d9932853f5128597cc96ff49629fde",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0xe1958897296599a404ba0a6f051e8c8d4a668bf08074ad7460b9d4394a38a188",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x3dd3b8387c944cd839277b011f738ed9e8150136",
+      "name": "LeaderboardFacet",
+      "hasCode": true,
+      "runtimeHash": "0x8823687ed63d17a0335ba492008dd76df43ef9b5fcad423f30e00d8eb601a761",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x3f1f8f0c4be4bceb45e6597afe0de861b8c3278c",
+      "name": "DiamondProxy",
+      "hasCode": true,
+      "runtimeHash": "0x3cf78e6cc7df74f26f11c372233dc5d99844ec0a70d2fff8b3d6cad02a29d5cf",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": [
+        {
+          "address_hash": "0x2b883f7fAc21F8D8e3A35Ff05209415584eaF1Cc",
+          "name": null
+        },
+        {
+          "address_hash": "0x3c464d2208D9932853f5128597CC96ff49629Fde",
+          "name": null
+        },
+        {
+          "address_hash": "0x91a805F2ad9325504199f49BC33023b04c9CFEDa",
+          "name": "NFTFacet"
+        },
+        {
+          "address_hash": "0xfCa776C4c828F9B34bB770D9f7aCAeb763BE853f",
+          "name": null
+        },
+        {
+          "address_hash": "0x0Ad9216c66445CC0918ca0D973d9077E487c474C",
+          "name": "AccessControlFacet"
+        },
+        {
+          "address_hash": "0x45b1c2533B4C4A5897DB3fC90C03d6A30a191E2b",
+          "name": "InitTesting2Facet"
+        },
+        {
+          "address_hash": "0xEFbc6Bc302a3A8535b619f76CA0fbeA0453F29D1",
+          "name": "TownFacet"
+        },
+        {
+          "address_hash": "0x8Ee33bCCf2C1B31C01d3148145141Abd75B43287",
+          "name": "LandFacet"
+        },
+        {
+          "address_hash": "0x3Dd3b8387C944cD839277b011F738ED9e8150136",
+          "name": "LeaderboardFacet"
+        },
+        {
+          "address_hash": "0xF7fee03A641B51460FEd06F988B1f8263031C55A",
+          "name": "MarketPlaceFacet"
+        },
+        {
+          "address_hash": "0x572a40A2A2Baa6c0f348CCF578406DE7d80aD993",
+          "name": "QuestFacet"
+        },
+        {
+          "address_hash": "0x69B87aa1D358EF59Be93de7DF6Fe3923C7AA9Cc4",
+          "name": "QuestFacet"
+        },
+        {
+          "address_hash": "0xacb9D91D83e6eDfEb6CFFa3d94DE42C30a8e5809",
+          "name": "VillageFacet"
+        },
+        {
+          "address_hash": "0x695313975AD727dd2e9b6BBAe160F66C9A82A9Ec",
+          "name": "WareHouseFacet"
+        },
+        {
+          "address_hash": "0x1eD693cA42d9568B8a0b12E6da1543b752a1E5De",
+          "name": "RouletteFacet"
+        },
+        {
+          "address_hash": "0xA28C72f53c480E8F9BA35C205dA97A4e540756A8",
+          "name": "RouletteFacet"
+        },
+        {
+          "address_hash": "0x435cd34c9B41E98B1781A47c0b90f5b008e08bf2",
+          "name": "BlackjackFacet"
+        },
+        {
+          "address_hash": "0x510feAa858B39643C56E60057F3b8619A845fF8b",
+          "name": "BlackjackViewFacet"
+        },
+        {
+          "address_hash": "0x31DcED5F23E47dc659536A32B2f0EfdE10172340",
+          "name": "BarracksFacet"
+        },
+        {
+          "address_hash": "0x593707b6fEbD46818d2696e6a1698fd8DFc7415B",
+          "name": "BarracksViewFacet"
+        },
+        {
+          "address_hash": "0x7A918f287de7dbF19085a9eF9C79D50883920c77",
+          "name": "QuestRewardsAdminFacet"
+        },
+        {
+          "address_hash": "0xdaf996eF01dC1a387187D85B23d9DfC8c9a7C97c",
+          "name": "BaccaratFacet"
+        }
+      ]
+    },
+    {
+      "address": "0x435cd34c9b41e98b1781a47c0b90f5b008e08bf2",
+      "name": "BlackjackFacet",
+      "hasCode": true,
+      "runtimeHash": "0x27e75bf62577d4e5c618bb5697c415a407b545412c9444734ae1519571a7b05b",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x45b1c2533b4c4a5897db3fc90c03d6a30a191e2b",
+      "name": "InitTesting2Facet",
+      "hasCode": true,
+      "runtimeHash": "0xb45812f804b075d18f7ecb19eb5a6268007a10d58e98633a184c0de6eb837c6b",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x4c48b72524a5fc2e514e5b353a990931ac4ca0d7",
+      "name": "DebugLogic",
+      "hasCode": true,
+      "runtimeHash": "0xae8db9eb8f33c880ce615f59a26b211bb352f2ad76549bb82738915dd23ff852",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x510feaa858b39643c56e60057f3b8619a845ff8b",
+      "name": "BlackjackViewFacet",
+      "hasCode": true,
+      "runtimeHash": "0x48e5fcf0ac989fa7c99ea3076dff6c3fe9fb7eba5dc2f0d949a5ba9cab506917",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x529c06f4a8268245e0c611b305ae5aa080356fa6",
+      "name": "ConfigLogic",
+      "hasCode": true,
+      "runtimeHash": "0x6696d1235dae57e5f55b6431f41566ae716907bbc236a14d3a839f557e346251",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x546d239032b24eceee0cb05c92fc39090846adc7",
+      "name": "PixotchiToken",
+      "hasCode": true,
+      "runtimeHash": "0xd0f01044712dabe9fd7e4d415cacc42f830db19737dec4fbf4dcec69b204352a",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x572a40a2a2baa6c0f348ccf578406de7d80ad993",
+      "name": "QuestFacet",
+      "hasCode": true,
+      "runtimeHash": "0x58da1bbdd511a573733e0e240a40f41189699b35f04e943cb42ce6a2a995ae2e",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x593707b6febd46818d2696e6a1698fd8dfc7415b",
+      "name": "BarracksViewFacet",
+      "hasCode": true,
+      "runtimeHash": "0xdf05424a0e131e62c1b35825cbcd5336bfaa7e548c6bfafa3452df49d4af2612",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x695313975ad727dd2e9b6bbae160f66c9a82a9ec",
+      "name": "WareHouseFacet",
+      "hasCode": true,
+      "runtimeHash": "0xd0590fdac9dde9cd27ebb24d098dc0d01aa8191acdb73b6999497e9d8528266f",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x69b87aa1d358ef59be93de7df6fe3923c7aa9cc4",
+      "name": "QuestFacet",
+      "hasCode": true,
+      "runtimeHash": "0x5fa09351979c24b12e9fa7bb716704331eb7a64470ccf7a4c0811a5ea883a256",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x71df7f436b1957b53781348337e02875f5df260d",
+      "name": "Renderer",
+      "hasCode": true,
+      "runtimeHash": "0xb303f35073e62515ac2411f6468eecb1032e053df5bbf526cd498b5a9fd7709e",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x7a918f287de7dbf19085a9ef9c79d50883920c77",
+      "name": "QuestRewardsAdminFacet",
+      "hasCode": true,
+      "runtimeHash": "0x1537927b3775b6310502fbfe9c3a740ed7031858c0fb315166e9ca161acbe0c6",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x80ba8113125c0b5c115d3a74cf269c1d1190bcd3",
+      "name": "NFTLogic",
+      "hasCode": true,
+      "runtimeHash": "0x078c918f6a3e36cdb0aaaf8efce7ab01f44463e1cf251ce9ac593cfae43312a2",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x82a9af882bfd2990239c32bac59f5a51a19cfd4c",
+      "name": "ReinitializerUtil",
+      "hasCode": true,
+      "runtimeHash": "0x53a30f669c76c7d353051a680cc8890eebeb13a623df3a39ccc080a47ce1e2c6",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x83aabf80e73246c9116d89aa3e49ea129762b8b2",
+      "name": "SolanaAdapterExtension",
+      "hasCode": true,
+      "runtimeHash": "0x2002bacdf98e765f7f71f30e47eea3f69422627a1a31ee085f1e8af22ff5e7a7",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x87524c230cf8c32b4f4d89e278747555006420cf",
+      "name": "StrainMaxSupplyLogic",
+      "hasCode": true,
+      "runtimeHash": "0x79fe7d5bb51ea0c73ad656c432baaf5b294485db7613e5bcb648ed3ac7cc4cc2",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x89aec497483f8d2dabe2b507067357135e2d284d",
+      "name": "LandToPlant",
+      "hasCode": true,
+      "runtimeHash": "0x0596284dcf2b6c77981891c17c826904586326394bde853a352ca78efe2ee700",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x8d0538fae8b3630c487b720d7767ae46aa58cda7",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0x039aec3919255ab3c040f6a403d23f1ee02a671627779a15de26a736ebc9355d",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x8ee33bccf2c1b31c01d3148145141abd75b43287",
+      "name": "LandFacet",
+      "hasCode": true,
+      "runtimeHash": "0xa897d30b57e87cfca300c6d84020fa899e2b071f108fd8395ee4d94d98e51772",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+      "name": "NFTFacet",
+      "hasCode": true,
+      "runtimeHash": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xa28c72f53c480e8f9ba35c205da97a4e540756a8",
+      "name": "RouletteFacet",
+      "hasCode": true,
+      "runtimeHash": "0xb5519940f08dd82d611ac46e8fc9ab333f5346b7ea68e1bc3124f839620e62ba",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xacb9d91d83e6edfeb6cffa3d94de42c30a8e5809",
+      "name": "VillageFacet",
+      "hasCode": true,
+      "runtimeHash": "0x998be1901940c4008add7b8bd2179367c068aa43f7309c453fe879e2d51a59a3",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xb0d799fc56c4c3d555a54bc776841050a3acb086",
+      "name": "ShopLogic",
+      "hasCode": true,
+      "runtimeHash": "0x206770423b6513764138abeedf65dad8120d2623e7035daf3ce6b4d9dc80644e",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xdac475d196882d825d188dd870bde546451f24aa",
+      "name": "BoxGame",
+      "hasCode": true,
+      "runtimeHash": "0x42b042cf88ca059f03dee4a841cffda95db920696c9ab37ff1140e075c19e7b2",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xdaf996ef01dc1a387187d85b23d9dfc8c9a7c97c",
+      "name": "BaccaratFacet",
+      "hasCode": true,
+      "runtimeHash": "0xad647c64cc94768b73ca7ca1494dc799214589fcbf8d847daac61577eba4b081",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xe2238e607823243f4b9aa91cff016cebed2e855e",
+      "name": "FenceV2",
+      "hasCode": true,
+      "runtimeHash": "0x7a9bce74e8476ba0a22f79c31c695a951ba3ed30eb12d9264d01186a52306a06",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xe78ee52349d7b031e2a6633e07c037c3147db116",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0xf116701729b30ef8869586b530a5c16059720b042a2a602993aa7f8b18512812",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": [
+        {
+          "address_hash": "0x21bDBa30AFc2B8205E8a173626346868077572FB",
+          "name": "TokenERC20"
+        }
+      ]
+    },
+    {
+      "address": "0xeb4e16c804ae9275a655abbc20cd0658a91f9235",
+      "name": "PixotchiRouter",
+      "hasCode": true,
+      "runtimeHash": "0x44b7b6e63ea0fe8ca81532a66a6604d63c7b205965c70a3a3c6ac5028a4587b8",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xefbc6bc302a3a8535b619f76ca0fbea0453f29d1",
+      "name": "TownFacet",
+      "hasCode": true,
+      "runtimeHash": "0x45216f5d65dde20f09e10bfa809c5da25e8add2cad1215b536822a19ad9b9939",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xf15d93c3617525054af05338cc6ccf18886bd03a",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0xde10352425be983a1f1ac2eb6db65315ea1ae52a5f1b8b0ecffa1286b25f96e3",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": [
+        {
+          "address_hash": "0x0Fd7345f5771f18D5B0B5Faa3D02700eA0520F3D",
+          "name": "TokenStake"
+        }
+      ]
+    },
+    {
+      "address": "0xf7b68c0fb0ef7ab22acd647f2bbec0e1913a02e6",
+      "name": "GardenLogic",
+      "hasCode": true,
+      "runtimeHash": "0x9dae4a35f4ca8d0ccb2eba455a917f41e9283ac9dfe264972ef8f735a8352765",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xf7e86a862b395313ef685f6a11e2287d5b898f81",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0x9ba07b210956cb19d6d5cb2686d95e789d8b13ea91b8f17640cd64044d10e1ee",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xf7fee03a641b51460fed06f988b1f8263031c55a",
+      "name": "MarketPlaceFacet",
+      "hasCode": true,
+      "runtimeHash": "0x5fe2aaf5347e3f0b9e427bfad0e886a8a3ebb8c40f45d4a78db37289e5438b3c",
+      "verified": true,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    },
+    {
+      "address": "0xfca776c4c828f9b34bb770d9f7acaeb763be853f",
+      "name": null,
+      "hasCode": true,
+      "runtimeHash": "0x1d8fee7859a25760a302712e7a6b32e7f3fe4c9eb01bc067ed082dc1bbe085bd",
+      "verified": false,
+      "sourceRuntimeMatches": true,
+      "implementation": []
+    }
+  ],
+  "abiComparison": [
+    {
+      "file": "public/abi/pixotchi-v3-abi.ts",
+      "exportName": "landAbi",
+      "count": 73,
+      "missing": [
+        {
+          "name": "questStorageUpdate",
+          "selector": "0x4853e3d2"
+        }
+      ],
+      "outputDiff": [],
+      "unverified": [
+        {
+          "name": "diamondCut",
+          "selector": "0x1f931c1c",
+          "address": "0x2b883f7fAc21F8D8e3A35Ff05209415584eaF1Cc"
+        },
+        {
+          "name": "facetAddress",
+          "selector": "0xcdffacc6",
+          "address": "0x3c464d2208D9932853f5128597CC96ff49629Fde"
+        },
+        {
+          "name": "facetAddresses",
+          "selector": "0x52ef6b2c",
+          "address": "0x3c464d2208D9932853f5128597CC96ff49629Fde"
+        },
+        {
+          "name": "facetFunctionSelectors",
+          "selector": "0xadfca15e",
+          "address": "0x3c464d2208D9932853f5128597CC96ff49629Fde"
+        },
+        {
+          "name": "facets",
+          "selector": "0x7a0ed627",
+          "address": "0x3c464d2208D9932853f5128597CC96ff49629Fde"
+        },
+        {
+          "name": "owner",
+          "selector": "0x8da5cb5b",
+          "address": "0xfCa776C4c828F9B34bB770D9f7aCAeb763BE853f"
+        },
+        {
+          "name": "transferOwnership",
+          "selector": "0xf2fde38b",
+          "address": "0xfCa776C4c828F9B34bB770D9f7aCAeb763BE853f"
+        }
+      ]
+    },
+    {
+      "file": "public/abi/casino-abi.ts",
+      "exportName": "casinoAbi",
+      "count": 28,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/blackjack-abi.ts",
+      "exportName": "blackjackAbi",
+      "count": 23,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/baccarat-abi.ts",
+      "exportName": "baccaratAbi",
+      "count": 8,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/fence-v2-abi.ts",
+      "exportName": "fenceV2Abi",
+      "count": 8,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/staking-abi.ts",
+      "exportName": "stakingAbi",
+      "count": 7,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/leaf-abi.ts",
+      "exportName": "leafAbi",
+      "count": 50,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "lib/contracts.ts",
+      "exportName": "BOX_GAME_ABI",
+      "count": 4,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "lib/contracts.ts",
+      "exportName": "KILL_COOLDOWN_ABI",
+      "count": 4,
+      "missing": [
+        {
+          "name": "getKillCooldownSeconds",
+          "selector": "0xa49f7872"
+        },
+        {
+          "name": "isKillCooldownEnabled",
+          "selector": "0xbc6d90f1"
+        }
+      ],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "lib/contracts.ts",
+      "exportName": "PIXOTCHI_NFT_ABI",
+      "count": 13,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "lib/contracts.ts",
+      "exportName": "SPIN_GAME_ABI",
+      "count": 6,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": [
+        {
+          "name": "getCoolDownTime",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        {
+          "name": "getStarCost",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        {
+          "name": "getReward",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        {
+          "name": "spinGameV2GetCoolDownTimePerNFT",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        {
+          "name": "spinGameV2Commit",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        },
+        {
+          "name": "spinGameV2Play",
+          "address": "0xF7E86A862B395313eF685F6A11E2287D5b898f81"
+        }
+      ]
+    },
+    {
+      "file": "lib/contracts.ts",
+      "exportName": "barracksAbi",
+      "count": 20,
+      "missing": [],
+      "outputDiff": [],
+      "unverified": []
+    },
+    {
+      "file": "public/abi/abi.json",
+      "note": "Legacy Land ABI (not Plant ABI)",
+      "count": 98,
+      "missing": []
+    }
+  ],
+  "seedConfig": {
+    "blockNumber": "51136574",
+    "values": {
+      "buyTotalFees": "5",
+      "sellTotalFees": "5",
+      "limitsInEffect": false,
+      "maxTransactionAmount": "20101000000000000000000",
+      "maxWallet": "20102000000000000000000",
+      "swapEnabled": true,
+      "uniswapV2Pair": "0xAA6a81A7df94DAb346e2d677225caD47220540C5"
+    }
+  },
+  "gameplayConfig": {
+    "block": "51136574",
+    "results": [
+      {
+        "fn": "questGetDifficultyConfig",
+        "args": [
+          0
+        ],
+        "result": [
+          "5400",
+          "21600",
+          "1"
+        ]
+      },
+      {
+        "fn": "questGetDifficultyConfig",
+        "args": [
+          1
+        ],
+        "result": [
+          "10800",
+          "32400",
+          "2"
+        ]
+      },
+      {
+        "fn": "questGetDifficultyConfig",
+        "args": [
+          2
+        ],
+        "result": [
+          "21600",
+          "43200",
+          "3"
+        ]
+      },
+      {
+        "fn": "questGetAllRewardRanges",
+        "result": {
+          "minSeedReward": "1000000000000000000",
+          "maxSeedReward": "4000000000000000000",
+          "minLeafReward": "5000000000000000000000",
+          "maxLeafReward": "16667000000000000000000",
+          "minPlantLifetimeReward": "3600",
+          "maxPlantLifetimeReward": "28800",
+          "minPlantPointsReward": "1000000000000",
+          "maxPlantPointsReward": "33000000000000",
+          "minXpReward": "1000000000000000000",
+          "maxXpReward": "5000000000000000000"
+        }
+      },
+      {
+        "fn": "townGetBuildingsByLandId",
+        "args": [
+          "1"
+        ],
+        "result": [
+          {
+            "id": 5,
+            "level": 0,
+            "maxLevel": 1,
+            "blockHeightUpgradeInitiated": "0",
+            "blockHeightUntilUpgradeDone": "0",
+            "isUpgrading": false,
+            "levelUpgradeCostLeaf": "400000000000000000000000",
+            "levelUpgradeCostSeedInstant": "230000000000000000000",
+            "levelUpgradeBlockInterval": "43200",
+            "levelUpgradeCostSeed": "200000000000000000000"
+          },
+          {
+            "id": 7,
+            "level": 0,
+            "maxLevel": 3,
+            "blockHeightUpgradeInitiated": "0",
+            "blockHeightUntilUpgradeDone": "0",
+            "isUpgrading": false,
+            "levelUpgradeCostLeaf": "550000000000000000000000",
+            "levelUpgradeCostSeedInstant": "250000000000000000000",
+            "levelUpgradeBlockInterval": "43200",
+            "levelUpgradeCostSeed": "0"
+          }
+        ]
+      },
+      {
+        "fn": "barracksGetConfigV2",
+        "result": {
+          "initialized": true,
+          "enabled": true,
+          "buildToken": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+          "buildCost": "250000000000000000000",
+          "buildReceiver": "0xFF269765711bC229b757a4EB2b7b961eA093da84",
+          "attackCooldown": "5400",
+          "defenseCooldown": "10800",
+          "lootPercentageBps": 1500,
+          "casualtyScaleBps": 300,
+          "successfulRaidXP": "15000000000000000000",
+          "successfulDefenseXP": "10000000000000000000",
+          "swordsman": {
+            "trainingToken": "0xA2EF17bb7Eea1143196678337069dFa24D37d2ac",
+            "trainingCost": "2000000000000000000000",
+            "trainingReceiver": "0x000000000000000000000000000000000000dEaD",
+            "trainingTimePerTroop": "360",
+            "troopAttackStrength": "13",
+            "troopDefenseStrength": "4",
+            "troopCarryPoints": "9000000000000",
+            "troopCarryLifetime": "600",
+            "maxTroopsPerLand": "99999"
+          },
+          "phalanx": {
+            "trainingToken": "0xA2EF17bb7Eea1143196678337069dFa24D37d2ac",
+            "trainingCost": "500000000000000000000",
+            "trainingReceiver": "0x000000000000000000000000000000000000dEaD",
+            "trainingTimePerTroop": "120",
+            "troopAttackStrength": "2",
+            "troopDefenseStrength": "23",
+            "troopCarryPoints": "1000000000000",
+            "troopCarryLifetime": "60",
+            "maxTroopsPerLand": "99999"
+          }
+        }
+      }
+    ]
+  },
+  "solanaRoute": {
+    "block": "51136668",
+    "pool": "0xb98Fb80d89d9cF33C3726843fcBF68E6a7D64c00",
+    "token0": "0x311935Cd80B76769bF2ecC9D8Ab7635b2139cf82",
+    "token1": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "reserves": [
+      "751611",
+      "77679",
+      "1788850895"
+    ],
+    "scenarios": [
+      {
+        "strain": 1,
+        "seedPrice": "10",
+        "wsolQuoted": "1.161293701",
+        "grossSeedOut": "9.828575606474637853",
+        "netSeedOut": "9.33714682615090596",
+        "aeroAmounts": [
+          "1161293701",
+          "77628",
+          "31391494708221"
+        ]
+      },
+      {
+        "strain": 2,
+        "seedPrice": "20",
+        "wsolQuoted": "2.322587404",
+        "grossSeedOut": "9.831750367367541147",
+        "netSeedOut": "9.340162848999164089",
+        "aeroAmounts": [
+          "2322587404",
+          "77653",
+          "31401634603736"
+        ]
+      },
+      {
+        "strain": 3,
+        "seedPrice": "40",
+        "wsolQuoted": "4.645174809",
+        "grossSeedOut": "9.833401243029962644",
+        "netSeedOut": "9.341731180878464511",
+        "aeroAmounts": [
+          "4645174809",
+          "77666",
+          "31406907349404"
+        ]
+      },
+      {
+        "strain": 4,
+        "seedPrice": "10",
+        "wsolQuoted": "1.161293701",
+        "grossSeedOut": "9.828575606474637853",
+        "netSeedOut": "9.33714682615090596",
+        "aeroAmounts": [
+          "1161293701",
+          "77628",
+          "31391494708221"
+        ]
+      },
+      {
+        "strain": 5,
+        "seedPrice": "500",
+        "wsolQuoted": "58.064685125",
+        "grossSeedOut": "9.834671147384715036",
+        "netSeedOut": "9.342937590015479284",
+        "aeroAmounts": [
+          "58064685125",
+          "77677",
+          "31410963307610"
+        ]
+      }
+    ]
+  },
+  "kyberMinimum": {
+    "router": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
+    "token": "0x546D239032b24eCEEE0cb05c92FC39090846adc7",
+    "inputWei": "1000000000000000",
+    "grossOutputWei": "313077599154413371391",
+    "displayedMinimumWei": "295193041302717507549",
+    "encodedMinimumWei": "295075637203034602536",
+    "differenceWei": "117404099682905013",
+    "function": "swap",
+    "readOnlyExecutionReportedSuccessful": true
+  },
+  "reproductions": {
+    "swapReview": {
+      "reviewedMinimum": "992500",
+      "builtMinimum": "496250",
+      "actualParserAccepted": true
+    },
+    "replacement": {
+      "repriced": "accepted",
+      "replaced": "accepted incorrectly",
+      "cancelled": "rejected"
+    },
+    "pendingAcknowledgement": {
+      "oldUiPhase": "stale",
+      "newDurablePhase": "hard",
+      "acknowledgementWithOldUiSnapshot": true,
+      "remainingRecord": null
+    },
+    "rpcRevert": {
+      "upstreamCode": 3,
+      "hasRevertDataInitially": true,
+      "proxyCode": -1,
+      "proxyHasRevertData": false
+    },
+    "receiptTimeout": {
+      "beforeWrappingUnresolved": true,
+      "afterWrappingUnresolved": false,
+      "wrappedRetryable": true,
+      "recoveryCoordinatorRetryMs": 250
+    },
+    "rpcBodyLimit": {
+      "numberOfCalls": 1000,
+      "innerCalldataBytes": 4000,
+      "viemBatchSizeBytes": 8192,
+      "actualJsonBytes": 384264,
+      "proxyLimitBytes": 338944,
+      "httpStatus": 413,
+      "currentScreenExceedingLimitEstablished": false
+    },
+    "rpcRanking": {
+      "slow": {
+        "latencyMs": 1000,
+        "successes": 8,
+        "samples": 8
+      },
+      "fast": {
+        "latencyMs": 100,
+        "successes": 7,
+        "samples": 8
+      },
+      "configuredSlowFirst": [
+        "slow",
+        "fast"
+      ],
+      "configuredFastFirst": [
+        "fast",
+        "slow"
+      ]
+    },
+    "airdrop": {
+      "pendingAgeHours": 48,
+      "retryAllowed": true,
+      "sameKey": true,
+      "originalTimestampLost": true
+    },
+    "blackjackAliases": {
+      "inputs": [
+        "1",
+        "01",
+        "001"
+      ],
+      "distinctLockKeys": 3,
+      "distinctNumericLandIds": 1,
+      "conditionalOnSignerFeatureFlags": true
+    },
+    "questCurrentBlock": {
+      "block": "51136574",
+      "fixture": "eth_call with synthetic state overrides; not an actual player transaction",
+      "difficulty": "HARD",
+      "pseudoRndBlockEqualsCurrent": true,
+      "result": [
+        "true",
+        "0",
+        "3000000000000000000"
+      ]
+    }
+  },
+  "questEqualitySimulation": {
+    "blockNumber": "51136574",
+    "contract": "0x3f1F8F0C4BE4bCeB45E6597AFe0dE861B8c3278c",
+    "facet": "0x69B87aa1D358EF59Be93de7DF6Fe3923C7AA9Cc4",
+    "selector": "0xf987ae07",
+    "method": "eth_call / viem simulateContract with synthetic stateOverride fixture, no writes",
+    "fixture": "Existing land 1 and its real owner; town farmer house level temporarily overridden to 3 within eth_call only; hard quest slot 0 with start/end in past, pseudoRndBlock equal to fixed block, cooldown 0",
+    "result": [
+      true,
+      0,
+      "3000000000000000000"
+    ],
+    "interpretation": "Finalization succeeds at current-block equality and returns deterministic 3 SEED for hard difficulty",
+    "traceRevalidation": "debug_traceCall unavailable; cooldown bug validated via verified active source plus live difficulty configuration, not execution trace"
+  }
+}

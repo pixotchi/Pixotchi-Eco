@@ -8,7 +8,10 @@ import { useLastSwapTransaction } from '@/hooks/useLastSwapTransaction';
 import { getEconomicReadState } from '@/lib/economic-read-state';
 import { requireUnchangedSwapReview } from '@/lib/swap/review';
 import { useSwapQuote } from '@/hooks/useSwapQuote';
-import { fetchSwapJson, parseSwapBuildStep } from '@/lib/swap/response';
+import { fetchSwapJson, parseSwapBuildStep, SwapRequestError } from '@/lib/swap/response';
+import { validateSwapExecution } from '@/lib/swap/calldata';
+import { SwapReviewRequiredError } from '@/lib/swap/errors';
+import { approveAndRebuildSwap } from '@/lib/swap/approval-flow';
 import { withMonitoringAbort as withMonitorAbort, throwIfMonitoringAborted as throwIfAborted, waitForMonitorDelay } from '@/lib/transaction-monitor';
 import { parseWalletBatchStatus, getBatchTransactionHashes } from '@/lib/wallet-batch-status';
 import { formatEditableAmount, parseInputAmount } from '@/lib/swap/amount';
@@ -62,7 +65,9 @@ import type {
 import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
-import { getBaseReadClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import { getBaseReadClient, getBaseReceiptClient, waitForBaseReceipt } from '@/lib/base-rpc';
+import { getPendingEvmReceiptTargets, throwIfTransactionSuperseded, verifyPendingEvmReceiptBinding } from '@/lib/transaction-proof-verification';
+import { isDefinitivePostSubmissionError } from '@/lib/transaction-lifecycle';
 import { requestBalanceRefresh } from '@/lib/app-events';
 import {
   getBuilderCapabilities,
@@ -84,6 +89,7 @@ import {
   getPendingEvmPhase,
   isDefinitivePendingEvmPreSubmissionError,
   removePendingEvmRecord,
+  replacePendingEvmProof,
   withPendingEvmHardDeadline,
   withPendingEvmMonitorLease,
   withPendingEvmSubmissionGuard,
@@ -318,11 +324,14 @@ async function fetchSwapStep(address: Address, step: SwapQuoteStep, amountIn: st
     signal,
     credentials: 'same-origin',
   });
-  return parseSwapBuildStep(response, step, amountIn);
+  return parseSwapBuildStep(response, step, amountIn, address);
 }
 
 export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVisible?: boolean }) {
   const { address, chainId, connector } = useAccount();
+  const walletScopeRef = useRef({ address, chainId });
+  walletScopeRef.current = { address, chainId };
+  const acknowledgeLockRef = useRef(false);
   const { lastTransaction, remember: rememberTransaction } = useLastSwapTransaction(address);
   const { data: walletClient } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
@@ -340,6 +349,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
   const [isRecoveryChecking, setIsRecoveryChecking] = useState(true);
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const [pendingFeedbackRecord, setPendingFeedbackRecord] = useState<PendingEvmRecord | null>(null);
+  const pendingFeedbackRecordRef = useRef(pendingFeedbackRecord);
+  pendingFeedbackRecordRef.current = pendingFeedbackRecord;
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepState[] | null>(null);
   const balanceRefreshTimerRef = useRef<number | null>(null);
   const completionResetTimerRef = useRef<number | null>(null);
@@ -815,19 +826,61 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       hash: Hex,
       stepIndex: number,
       signal?: AbortSignal,
+      onRecord?: (record: PendingEvmRecord) => void,
+      walletTransactionHashes?: readonly Hex[],
     ): Promise<TransactionReceipt> => {
       let retryAttempt = 0;
+      let currentHash = hash;
+      let currentRecord = record;
       while (true) {
         try {
-          return await withMonitorAbort(
-            withPendingEvmHardDeadline(waitForBaseReceipt(hash), record),
+          const receipt = await withMonitorAbort(
+            withPendingEvmHardDeadline(waitForBaseReceipt(currentHash, {
+              onReplaced: ({ reason, transaction }) => {
+                const previousHash = currentHash;
+                currentHash = transaction.hash;
+                if (!signal?.aborted && walletScopeRef.current.address?.toLowerCase() === record.accountAddress.toLowerCase()) {
+                  updateExecutionStep(stepIndex, { status: 'confirming', txHash: currentHash });
+                }
+                const replacement = {
+                  disposition: reason === 'replaced' ? 'superseded' as const : reason,
+                  previousHash, transactionHash: currentHash,
+                  ...((currentRecord.initialTransactionHash
+                    || (currentRecord.proof.kind === 'calls' && !currentRecord.proof.hash)
+                    || currentRecord.replacement?.verified) ? { verified: true as const } : {}),
+                };
+                const next = replacePendingEvmProof(getBrowserPendingEvmStorage(), currentRecord,
+                  currentRecord.proof.kind === 'calls'
+                    ? { kind: 'calls', id: currentRecord.proof.id, hash: currentHash }
+                    : { kind: 'hash', hash: currentHash }, replacement);
+                if (next) {
+                  currentRecord = next;
+                  onRecord?.(next);
+                } else {
+                  // Keep the observed disposition even if another record owner
+                  // won persistence; never credit a known changed-call receipt.
+                  currentRecord = { ...currentRecord, replacement:
+                    currentRecord.replacement?.disposition === 'superseded' || currentRecord.replacement?.disposition === 'cancelled'
+                      ? currentRecord.replacement : replacement };
+                }
+              },
+            }), currentRecord),
             signal,
           );
+          throwIfTransactionSuperseded(currentRecord);
+          if (receipt.status !== 'success') throw new SwapTransactionRevertedError();
+          if (receipt.status === 'success') {
+            await withMonitorAbort(withPendingEvmHardDeadline(verifyPendingEvmReceiptBinding({
+              record: currentRecord, transactionHash: receipt.transactionHash, walletTransactionHashes,
+              getTransaction: transactionHash => getBaseReceiptClient().getTransaction({ hash: transactionHash }),
+            }), currentRecord), signal);
+          }
+          return receipt;
         } catch (error) {
-          if (isAbortError(error) || error instanceof PendingEvmStaleError) throw error;
+          if (isAbortError(error) || error instanceof PendingEvmStaleError || isDefinitivePostSubmissionError(error)) throw error;
           updateExecutionStep(stepIndex, {
             status: 'confirming',
-            txHash: hash,
+            txHash: currentHash,
             message: retryAttempt === 0
               ? S.execution.transactionPending
               : 'Confirmation is taking a little longer. Still checking your transaction…',
@@ -845,6 +898,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       record: PendingEvmRecord,
       stepIndex: number,
       signal?: AbortSignal,
+      onRecord?: (record: PendingEvmRecord) => void,
     ): Promise<TransactionReceipt> => {
       if (record.proof.kind !== 'calls' || typeof walletClient?.waitForCallsStatus !== 'function') {
         throw new Error('Wallet batch confirmation is unavailable.');
@@ -886,14 +940,19 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
 
           // A batch may include several receipts. Verify each before crediting the swap.
           let receipt: TransactionReceipt | undefined;
-          for (const hash of hashes) receipt = await monitorCanonicalHash(record, hash, stepIndex, signal);
+          let currentRecord = record;
+          const receiptHashes = getPendingEvmReceiptTargets(record, hashes);
+          for (const hash of receiptHashes) receipt = await monitorCanonicalHash(currentRecord, hash, stepIndex, signal, next => {
+            currentRecord = next;
+            onRecord?.(next);
+          }, hashes);
           if (!receipt) throw new Error('Missing canonical swap receipt');
           return receipt;
         } catch (error) {
           if (
             isAbortError(error) ||
             error instanceof PendingEvmStaleError ||
-            error instanceof SwapTransactionRevertedError
+            error instanceof SwapTransactionRevertedError || isDefinitivePostSubmissionError(error)
           ) {
             throw error;
           }
@@ -927,6 +986,11 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         monitorRecord,
         async (isLeaseCurrent) => {
           let receipt: TransactionReceipt;
+          let currentTerminalRecord = terminalRecord;
+          const onReplacement = (next: PendingEvmRecord) => {
+            currentTerminalRecord = next;
+            if (activePendingRecordRef.current?.attemptId === next.attemptId) activePendingRecordRef.current = next;
+          };
           try {
             if (monitorRecord.method === 'direct') {
               if (monitorRecord.proof.kind !== 'hash') {
@@ -937,17 +1001,18 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
                 monitorRecord.proof.hash,
                 stepIndex,
                 signal,
+                onReplacement,
               );
             } else {
-              receipt = await monitorBatchSubmission(monitorRecord, stepIndex, signal);
+              receipt = await monitorBatchSubmission(monitorRecord, stepIndex, signal, onReplacement);
             }
           } catch (error) {
-            if (!(error instanceof SwapTransactionRevertedError)) throw error;
+            if (!(error instanceof SwapTransactionRevertedError) && !isDefinitivePostSubmissionError(error)) throw error;
             throwIfAborted(signal);
             if (!isLeaseCurrent()) {
               throw new DOMException('Transaction confirmation ownership changed.', 'AbortError');
             }
-            const ownsTerminal = removePendingEvmRecord(storage, terminalRecord);
+            const ownsTerminal = removePendingEvmRecord(storage, currentTerminalRecord);
             releasePendingEvmCoordinatorAttempt(
               registry,
               terminalRecord,
@@ -967,7 +1032,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
           if (!isLeaseCurrent()) {
             throw new DOMException('Transaction confirmation ownership changed.', 'AbortError');
           }
-          const ownsTerminal = removePendingEvmRecord(storage, terminalRecord);
+          const ownsTerminal = removePendingEvmRecord(storage, currentTerminalRecord);
           if (ownsTerminal && activePendingRecordRef.current?.attemptId === terminalRecord.attemptId) {
             activePendingRecordRef.current = null;
           }
@@ -979,6 +1044,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
           requestPendingEvmCoordinatorReconcile(registry);
           return { ownsTerminal, receipt };
         },
+        { allowQueuedProofFlush: true },
       );
 
       if (!lease.acquired) {
@@ -1037,6 +1103,9 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         method: 'direct',
         stage: 'approval',
         submit: async () => {
+          if (walletScopeRef.current.address?.toLowerCase() !== address.toLowerCase() || walletScopeRef.current.chainId !== BASE_CHAIN_ID) {
+            throw new DOMException('The swap wallet changed.', 'AbortError');
+          }
           // Exact-amount approval prevents unbounded risk if the spender is ever
           // compromised. The durable reservation is written before this wallet
           // call, and its hash replaces that reservation before monitoring.
@@ -1116,6 +1185,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       }
 
       const calls: SmartWalletBatchCall[] = [];
+      validateSwapExecution(builtStep, { sender: address, recipient: address, sellToken: builtStep.step.sellToken,
+        buyToken: builtStep.step.buyToken, amountIn: builtStep.step.amountIn, minOut: builtStep.step.minOut });
       if (approval) {
         const requiredAmount = BigInt(approval.requiredAmount);
         calls.push({
@@ -1150,6 +1221,11 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         method: 'batch',
         stage: 'swap',
         submit: async () => {
+          if (walletScopeRef.current.address?.toLowerCase() !== address.toLowerCase() || walletScopeRef.current.chainId !== BASE_CHAIN_ID) {
+            throw new DOMException('The swap wallet changed.', 'AbortError');
+          }
+          validateSwapExecution(builtStep, { sender: address, recipient: address, sellToken: builtStep.step.sellToken,
+            buyToken: builtStep.step.buyToken, amountIn: builtStep.step.amountIn, minOut: builtStep.step.minOut });
           const batch = await walletClient.sendCalls({
             account: walletClient.account,
             chain: base,
@@ -1208,7 +1284,6 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       quote: SwapQuoteResponse,
       step: SwapQuoteStep,
       stepIndex: number,
-      amountInOverride?: string,
     ): Promise<TransactionReceipt> => {
       if (!walletClient?.account) {
         throw new Error(S.errors.connectWallet);
@@ -1217,8 +1292,11 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         throw new Error('Quote token is missing. Please refresh and try again.');
       }
 
-      const amountIn = amountInOverride || step.amountIn;
-      const builtStep = await buildStep(step, amountIn, quote.quoteToken);
+      if (quote.strategy !== 'single_kyber' || quote.steps.length !== 1 || step.key !== 'step1' || step.kind !== 'kyber') {
+        throw new Error('Only a single Kyber swap can be executed.');
+      }
+      const amountIn = step.amountIn;
+      let builtStep = await buildStep(step, amountIn, quote.quoteToken);
       const canUseSmartWalletBatch =
         isSmartWallet &&
         typeof walletClient?.sendCalls === 'function' &&
@@ -1237,7 +1315,10 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       }
 
       if (builtStep.approval) {
-        await ensureApproval(builtStep.approval, stepIndex);
+        builtStep = await approveAndRebuildSwap({ reviewed: quote, built: builtStep,
+          approve: approval => ensureApproval(approval, stepIndex), refresh: refreshQuoteNow,
+          build: fresh => buildStep(fresh.steps[0], amountIn, fresh.quoteToken!),
+        });
       }
 
       updateExecutionStep(stepIndex, {
@@ -1256,6 +1337,12 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         method: 'direct',
         stage: 'swap',
         submit: async () => {
+          const sender = walletClient.account.address;
+          if (walletScopeRef.current.address?.toLowerCase() !== sender.toLowerCase() || walletScopeRef.current.chainId !== BASE_CHAIN_ID) {
+            throw new DOMException('The swap wallet changed.', 'AbortError');
+          }
+          validateSwapExecution(builtStep, { sender, recipient: sender, sellToken: step.sellToken,
+            buyToken: step.buyToken, amountIn, minOut: step.minOut });
           const hash = await walletClient.sendTransaction({
             to: builtStep.transaction.to,
             data: builtStep.transaction.data,
@@ -1291,8 +1378,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
 
       updateExecutionStep(stepIndex, {
         status: 'complete',
-        txHash: submitted.value,
-        message: submitted.value,
+        txHash: monitored.receipt.transactionHash,
+        message: monitored.receipt.transactionHash,
       });
 
       return monitored.receipt;
@@ -1300,6 +1387,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     [
       address,
       buildStep,
+      refreshQuoteNow,
       ensureApproval,
       executeSmartWalletSwapBatch,
       isSmartWallet,
@@ -1568,6 +1656,13 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         await finalizeSwapSuccess(receipt);
       } catch (error) {
         if (isAbortError(error)) return;
+        if (error instanceof SwapReviewRequiredError
+          || (error instanceof SwapRequestError && (error.status === 409 || error.status === 410))) {
+          await refreshQuoteNow();
+          toast.error('The quote changed or expired. Review the updated minimum received, then confirm again.');
+          setExecutionSteps(null);
+          return;
+        }
         const message = humanizeSwapError(error);
         const isUnresolved =
           error instanceof SwapSubmissionAmbiguousError ||
@@ -1692,26 +1787,23 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     [actionDisabled, currentQuote, executeQuote],
   );
 
-  const handleAcknowledgeStaleTransaction = useCallback(() => {
-    if (
-      !pendingFeedbackRecord ||
-      getPendingEvmPhase(pendingFeedbackRecord) !== 'stale' ||
-      !acknowledgePendingEvmRecord(
-        getBrowserPendingEvmStorage(),
-        pendingFeedbackRecord,
-      )
-    ) {
-      return;
+  const handleAcknowledgeStaleTransaction = useCallback(async () => {
+    const record = pendingFeedbackRecord;
+    if (acknowledgeLockRef.current || !record || getPendingEvmPhase(record) !== 'stale') return;
+    const scope = walletScopeRef.current;
+    if (scope.address?.toLowerCase() !== record.accountAddress.toLowerCase() || scope.chainId !== record.chainId) return;
+    acknowledgeLockRef.current = true;
+    try {
+      const acknowledged = await acknowledgePendingEvmRecord(getBrowserPendingEvmStorage(), record);
+      requestPendingEvmCoordinatorReconcile({ accountAddress: record.accountAddress, chainId: record.chainId });
+      if (!acknowledged || !mountedRef.current || walletScopeRef.current.address !== scope.address || walletScopeRef.current.chainId !== scope.chainId
+        || pendingFeedbackRecordRef.current?.attemptId !== record.attemptId) return;
+      if (activePendingRecordRef.current?.attemptId === record.attemptId) activePendingRecordRef.current = null;
+      setPendingFeedbackRecord(null);
+      setExecutionSteps(null);
+    } finally {
+      acknowledgeLockRef.current = false;
     }
-    requestPendingEvmCoordinatorReconcile({
-      accountAddress: pendingFeedbackRecord.accountAddress,
-      chainId: pendingFeedbackRecord.chainId,
-    });
-    if (activePendingRecordRef.current?.attemptId === pendingFeedbackRecord.attemptId) {
-      activePendingRecordRef.current = null;
-    }
-    setPendingFeedbackRecord(null);
-    setExecutionSteps(null);
   }, [pendingFeedbackRecord]);
 
   const isQuoteLoading = quoteState.status === 'loading';

@@ -1,5 +1,9 @@
 export const AIRDROP_PENDING_POLL_MAX_ATTEMPTS = 8;
 
+export function shouldPollAirdropStatus(status: { status?: string; recoveryState?: string; retryAllowed?: boolean } | null): boolean {
+  return status?.status === 'pending' && status.recoveryState !== 'manual_review' && status.retryAllowed !== true;
+}
+
 const AIRDROP_PENDING_POLL_BASE_MS = 5_000;
 const AIRDROP_PENDING_POLL_MAX_MS = 60_000;
 const AIRDROP_PENDING_POLL_JITTER_RATIO = 0.2;

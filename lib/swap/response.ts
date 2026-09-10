@@ -1,5 +1,8 @@
 import { readAddress, readRecord, readSafeUint, readUint } from '../contract-value';
 import { BASE_CHAIN_ID } from './constants';
+import { validateSwapExecution } from './calldata';
+import { SwapReviewRequiredError } from './errors';
+import type { Address } from 'viem';
 import type { SwapBuildStepResponse, SwapQuoteResponse, SwapQuoteStep, SwapTokenId, UserSwapTokenId } from './types';
 
 function token(value: unknown): SwapTokenId {
@@ -42,7 +45,7 @@ function parseStep(value: unknown): SwapQuoteStep {
 
 export function parseSwapQuote(value: unknown, request: { sellToken: UserSwapTokenId; buyToken: UserSwapTokenId; amountIn: bigint }): SwapQuoteResponse {
   const quote = readRecord(value);
-  if (quote.strategy !== 'blocked' && quote.strategy !== 'single_kyber' && quote.strategy !== 'single_baseswap_seed' && quote.strategy !== 'two_step_via_weth') throw new Error('Invalid swap strategy');
+  if (quote.strategy !== 'blocked' && quote.strategy !== 'single_kyber') throw new Error('Unsupported swap strategy');
   if (!Array.isArray(quote.steps)) throw new Error('Missing swap steps');
   const result: SwapQuoteResponse = { strategy: quote.strategy, sellToken: userToken(quote.sellToken), buyToken: userToken(quote.buyToken),
     amountIn: amount(quote.amountIn), expectedOut: amount(quote.expectedOut), minOut: amount(quote.minOut),
@@ -56,8 +59,12 @@ export function parseSwapQuote(value: unknown, request: { sellToken: UserSwapTok
     if (result.steps.length || !result.blockedReason) throw new Error('Invalid blocked swap');
     return result;
   }
-  const count = result.strategy === 'two_step_via_weth' ? 2 : 1;
-  if (result.steps.length !== count || result.steps[0].key !== 'step1' || (count === 2 && result.steps[1].key !== 'step2')) throw new Error('Incomplete swap route');
+  const step = result.steps[0];
+  if (result.steps.length !== 1 || step.key !== 'step1' || step.kind !== 'kyber'
+    || step.sellToken !== result.sellToken || step.buyToken !== result.buyToken || step.amountIn !== result.amountIn
+    || step.minOut !== result.minOut || step.expectedOut !== result.expectedOut
+    || step.taxBps !== result.taxBps || step.marketSlippageBps !== result.marketSlippageBps
+    || BigInt(result.minOut) <= BigInt(0)) throw new Error('Inconsistent swap route');
   if (!text(quote.quoteToken).trim()) throw new Error('Missing swap authorization');
   result.quoteToken = text(quote.quoteToken);
   result.issuedAt = readSafeUint(quote.issuedAt);
@@ -66,31 +73,36 @@ export function parseSwapQuote(value: unknown, request: { sellToken: UserSwapTok
   return result;
 }
 
-export function parseSwapBuildStep(value: unknown, requested: SwapQuoteStep, amountIn: string): SwapBuildStepResponse {
+export function parseSwapBuildStep(value: unknown, requested: SwapQuoteStep, amountIn: string, sender: Address): SwapBuildStepResponse {
   const payload = readRecord(value);
   const step = parseStep(payload.step);
-  // The build endpoint quotes one leg at a time and labels it step1, including the second leg.
-  // Match economic identity, then restore the presentation key of the requested route.
-  if (step.kind !== requested.kind || step.sellToken !== requested.sellToken || step.buyToken !== requested.buyToken || step.amountIn !== amountIn) throw new Error('Swap transaction does not match the requested step');
-  step.key = requested.key;
+  if (requested.key !== 'step1' || requested.kind !== 'kyber' || step.key !== 'step1'
+    || amountIn !== requested.amountIn || step.kind !== requested.kind || step.sellToken !== requested.sellToken
+    || step.buyToken !== requested.buyToken || step.amountIn !== amountIn
+    || step.taxBps !== requested.taxBps || step.marketSlippageBps !== requested.marketSlippageBps) throw new Error('Swap transaction does not match the requested step');
+  if (BigInt(step.minOut) < BigInt(requested.minOut)) throw new SwapReviewRequiredError();
   const transaction = readRecord(payload.transaction);
   if (transaction.chainId !== BASE_CHAIN_ID) throw new Error('Swap transaction is on the wrong network');
   const data = text(transaction.data);
   if (!/^0x(?:[\da-fA-F]{2})*$/.test(data)) throw new Error('Invalid swap transaction data');
   const approval = payload.approval === null ? null : readRecord(payload.approval);
-  return { step, transaction: { to: readAddress(transaction.to), data: data as `0x${string}`, value: amount(transaction.value), chainId: BASE_CHAIN_ID },
+  const result: SwapBuildStepResponse = { step, transaction: { to: readAddress(transaction.to), data: data as `0x${string}`, value: amount(transaction.value), chainId: BASE_CHAIN_ID },
     approval: approval ? { token: readAddress(approval.token), spender: readAddress(approval.spender), requiredAmount: amount(approval.requiredAmount) } : null };
+  validateSwapExecution(result, { sender, recipient: sender, sellToken: requested.sellToken,
+    buyToken: requested.buyToken, amountIn, minOut: requested.minOut });
+  return result;
 }
 
 export class SwapRequestError extends Error {
-  constructor(message: string, readonly status?: number) { super(message); this.name = 'SwapRequestError'; }
+  constructor(message: string, readonly status?: number, readonly code?: string) { super(message); this.name = 'SwapRequestError'; }
 }
 export async function fetchSwapJson(url: string, init: RequestInit): Promise<unknown> {
   const response = await fetch(url, init);
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const message = payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string' ? payload.error : `Request failed (${response.status})`;
-    throw new SwapRequestError(message, response.status);
+    const code = payload && typeof payload === 'object' && 'code' in payload && typeof payload.code === 'string' ? payload.code : undefined;
+    throw new SwapRequestError(message, response.status, code);
   }
   if (payload === null) throw new SwapRequestError('Invalid server response', response.status);
   return payload;

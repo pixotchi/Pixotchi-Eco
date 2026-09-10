@@ -1,4 +1,5 @@
 import type { SwapQuoteResponse } from './types';
+import { SwapReviewRequiredError } from './errors';
 
 /** The player's review includes financial terms, not transport tokens/timestamps. */
 export function getSwapReviewIdentity(quote: SwapQuoteResponse): string {
@@ -7,8 +8,12 @@ export function getSwapReviewIdentity(quote: SwapQuoteResponse): string {
 }
 
 export function requireUnchangedSwapReview(reviewed: SwapQuoteResponse, refreshed: SwapQuoteResponse): void {
-  if (getSwapReviewIdentity(reviewed) !== getSwapReviewIdentity(refreshed)) {
-    throw new Error('The quote changed. Review the updated amount and minimum received, then confirm again.');
+  if (reviewed.strategy !== 'single_kyber' || refreshed.strategy !== 'single_kyber'
+    || reviewed.sellToken !== refreshed.sellToken || reviewed.buyToken !== refreshed.buyToken
+    || reviewed.amountIn !== refreshed.amountIn || reviewed.taxBps !== refreshed.taxBps
+    || reviewed.marketSlippageBps !== refreshed.marketSlippageBps
+    || BigInt(refreshed.minOut) < BigInt(reviewed.minOut)) {
+    throw new SwapReviewRequiredError();
   }
 }
 

@@ -10,10 +10,16 @@ export const fixtureWallet = {
   rejectWallet: true,
   ambiguousWallet: false,
   deferWallet: false,
+  direct: false,
+  replacement: 'none' as 'none' | 'repriced' | 'replaced' | 'cancelled',
+  deferReceipt: false,
+  resolveReceipt: null as null | (() => void),
+  telemetry: [] as Array<{ name: string; properties: Record<string, unknown> }>,
   resolveWallet: null as null | (() => void),
   resolveCapabilities: null as null | (() => void),
 };
 const transactionHash = `0x${'a'.repeat(64)}` as const;
+const replacementHash = `0x${'c'.repeat(64)}` as const;
 export const receipt = { transactionHash, status: 'success', blockNumber: BigInt(123), logs: [] };
 const client = {
   account: { address: `0x${'1'.repeat(40)}` },
@@ -37,6 +43,12 @@ const client = {
     if (shouldReject) throw Object.assign(new Error('User rejected the request'), { code: 4001 });
     return { id: `0x${'b'.repeat(64)}` };
   },
+  async sendTransaction() {
+    fixtureWallet.walletCalls++;
+    fixtureWallet.notify();
+    if (fixtureWallet.rejectWallet) throw Object.assign(new Error('User rejected the request'), { code: 4001 });
+    return transactionHash;
+  },
   async waitForCallsStatus() {
     return { status: 'success', statusCode: 200, atomic: true, receipts: [receipt] };
   },
@@ -50,8 +62,28 @@ export const useAccount = () => ({ address: fixtureWallet.accountAddress, connec
 export const useChainId = () => base.id;
 export const useWalletClient = () => ({ data: getClient() });
 export const useShowCallsStatus = () => ({ showCallsStatus() {} });
-export const useSmartWallet = () => ({ isLoading: false, isSmartWallet: true, walletType: 'other-smart', refetch: async () => {} });
-export const waitForBaseReceipt = async () => receipt;
+export const useSmartWallet = () => ({ isLoading: false, isSmartWallet: !fixtureWallet.direct, walletType: fixtureWallet.direct ? 'eoa' : 'other-smart', refetch: async () => {} });
+export const waitForBaseReceipt = async (hash: `0x${string}` = transactionHash, options?: { onReplaced?: (value: unknown) => void }) => {
+  let resolvedHash = hash;
+  if (hash === transactionHash && fixtureWallet.replacement !== 'none') {
+    resolvedHash = replacementHash;
+    options?.onReplaced?.({
+      reason: fixtureWallet.replacement,
+      transaction: { hash: replacementHash },
+    });
+  }
+  if (fixtureWallet.deferReceipt) {
+    fixtureWallet.deferReceipt = false;
+    await new Promise<void>(resolve => { fixtureWallet.resolveReceipt = resolve; });
+  }
+  return { ...receipt, transactionHash: resolvedHash };
+};
+export const getBaseReceiptClient = () => ({
+  getTransaction: async ({ hash }: { hash: `0x${string}` }) => ({
+    hash, from: fixtureWallet.accountAddress, to: `0x${'2'.repeat(40)}`,
+    input: fixtureWallet.replacement === 'replaced' ? '0x03' : '0x01', value: BigInt(0), chainId: base.id,
+  }),
+});
 export class BaseRpcError extends Error {}
 export const getBaseReadClient = () => ({
   getBytecode: async () => '0x',
@@ -66,6 +98,9 @@ export const reconcileOwnerResources = async () => true;
 export const onOwnerResourceInvalidation = () => () => {};
 export const ownerInvalidationMatches = () => false;
 export const invalidateOwnerResources = () => null;
-export const track = () => {};
+export const track = (name: string, properties: Record<string, unknown> = {}) => {
+  fixtureWallet.telemetry.push({ name, properties });
+  fixtureWallet.notify();
+};
 export const handleExternalAnchorClick = () => {};
 export const openExternalUrl = async () => {};

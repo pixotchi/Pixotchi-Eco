@@ -11,6 +11,7 @@ import { StandardContainer } from '@/components/ui/pixel-container';
 import {
     AIRDROP_PENDING_POLL_MAX_ATTEMPTS,
     getAirdropPendingPollDelay,
+    shouldPollAirdropStatus,
 } from '@/lib/airdrop-claim-polling';
 import { invalidateOwnerResources } from '@/lib/owner-resource-invalidation';
 import { formatTokenDecimal } from '@/lib/token-display';
@@ -28,15 +29,19 @@ interface AirdropStatus {
     status?: 'eligible' | 'pending' | 'claimed' | 'failed';
     attemptId?: string | null;
     operationId?: string | null;
+    recoveryState?: 'ready' | 'processing' | 'retryable' | 'manual_review' | 'complete';
+    retryAllowed?: boolean;
 }
 
 function isAirdropStatus(value: unknown): value is AirdropStatus {
     if (!value || typeof value !== 'object') return false;
     const fields = value as Record<string, unknown>;
     return typeof fields.eligible === 'boolean' && typeof fields.claimed === 'boolean'
-        && ['seed', 'leaf', 'pixotchi'].every(key => typeof fields[key] === 'string' && /^\d+$/.test(fields[key]))
+        && ['seed', 'leaf', 'pixotchi'].every(key => typeof fields[key] === 'string' && /^\d+(?:\.\d{1,18})?$/.test(fields[key]))
         && ['eligible', 'pending', 'claimed', 'failed'].includes(String(fields.status))
-        && ['attemptId', 'operationId', 'txHash'].every(key => fields[key] == null || typeof fields[key] === 'string');
+        && ['attemptId', 'operationId', 'txHash'].every(key => fields[key] == null || typeof fields[key] === 'string')
+        && (fields.retryAllowed === undefined || typeof fields.retryAllowed === 'boolean')
+        && (fields.recoveryState === undefined || ['ready', 'processing', 'retryable', 'manual_review', 'complete'].includes(String(fields.recoveryState)));
 }
 
 export function AirdropClaimCard() {
@@ -121,11 +126,13 @@ function AirdropClaimContent() {
         return () => { cancelled = true; };
     }, [address, retryRevision]);
 
+    const shouldPollPendingClaim = shouldPollAirdropStatus(status);
+
     // A submitted user operation is reconciled by the server. Polling is
     // intentionally bounded: an ambiguous reservation cannot be resolved by
     // another GET, and a hidden tab should not keep asking CDP/RPC for status.
     useEffect(() => {
-        if (status?.status !== 'pending') {
+        if (!shouldPollPendingClaim) {
             setPendingPollAttempt(0);
             return;
         }
@@ -157,14 +164,15 @@ function AirdropClaimContent() {
             clearPoll();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [pendingPollAttempt, status?.status]);
+    }, [pendingPollAttempt, shouldPollPendingClaim]);
 
     const checkPendingClaimStatus = () => {
         setRetryRevision((revision) => revision + 1);
     };
 
     const handleClaim = async () => {
-        if (!address || !status?.eligible || status.claimed || status.status !== 'eligible'
+        if (!address || !status?.eligible || status.claimed || (status.status !== 'eligible' && status.retryAllowed !== true)
+            || status.recoveryState === 'manual_review'
             || claiming || loading || loadError || claimNeedsReconciliation) return;
         const operationOwner = address.toLowerCase();
         const operation = operationScope.capture();
@@ -250,8 +258,10 @@ function AirdropClaimContent() {
                         attemptId: data.attemptId ?? prev.attemptId,
                         operationId: data.operationId ?? prev.operationId,
                         status: 'pending',
+                        recoveryState: data.recoveryState,
+                        retryAllowed: data.retryAllowed === true,
                     } : null);
-                    toast('Claim submitted. Waiting for onchain confirmation.');
+                    toast(data.recoveryState === 'manual_review' ? 'Claim needs review. Use the claim reference when contacting support.' : data.retryAllowed ? 'Claim preparation can be retried safely.' : 'Claim submitted. Waiting for onchain confirmation.');
                 }
             } else {
                 reconcileClaimStatus();
@@ -305,6 +315,13 @@ function AirdropClaimContent() {
         return <ClaimRecoveryCard title="Checking your claim outcome"
             description="The claim response was interrupted or unsuccessful. Check its current status before trying again."
             address={address} reference={status?.operationId ?? status?.attemptId} txHash={status?.txHash}
+            updatedAt={lastCheckedAt} error={loadError} checking={loading} onCheckStatus={checkPendingClaimStatus} />;
+    }
+
+    if (status?.recoveryState === 'manual_review') {
+        return <ClaimRecoveryCard title="Claim needs review"
+            description="The previous payout could not be confirmed safely. Contact support with this claim reference. Automatic retries are paused."
+            address={address} reference={status.operationId ?? status.attemptId} txHash={status.txHash}
             updatedAt={lastCheckedAt} error={loadError} checking={loading} onCheckStatus={checkPendingClaimStatus} />;
     }
 
@@ -379,7 +396,7 @@ function AirdropClaimContent() {
     }
 
     const getButtonContent = () => {
-        if (status.status === 'pending') {
+        if (status.status === 'pending' && !status.retryAllowed) {
             return (
                 <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -406,7 +423,7 @@ function AirdropClaimContent() {
         return (
             <>
                 <Gift className="w-4 h-4 mr-2" />
-                Claim Airdrop
+                {status.retryAllowed && status.status !== 'eligible' ? 'Retry claim safely' : 'Claim Airdrop'}
             </>
         );
     };
@@ -434,7 +451,7 @@ function AirdropClaimContent() {
                                 {status.txHash && /^0x[0-9a-f]{64}$/i.test(status.txHash) && <a className="inline-flex min-h-11 items-center text-sm text-info-strong underline underline-offset-4" href={`https://basescan.org/tx/${status.txHash}`} target="_blank" rel="noopener noreferrer" onClick={event => handleExternalAnchorClick(event, `https://basescan.org/tx/${status.txHash}`)}>View transaction</a>}
                             </div>
                         </div>
-                    ) : status.status === 'failed' ? (
+                    ) : status.status === 'failed' && !status.retryAllowed ? (
                         <ClaimRecoveryCard title="Claim needs review"
                             description="Your payout has not been confirmed. Check its status or contact support before trying again."
                             address={address} reference={status.operationId ?? status.attemptId} txHash={status.txHash}
@@ -476,7 +493,7 @@ function AirdropClaimContent() {
                             </div>
                             <Button
                                 onClick={handleClaim}
-                                disabled={claiming || loading || Boolean(loadError) || status.status === 'pending'}
+                                disabled={claiming || loading || Boolean(loadError) || (status.status === 'pending' && !status.retryAllowed)}
                                 className={baseActionClassName}
                                 size="sm"
                             >

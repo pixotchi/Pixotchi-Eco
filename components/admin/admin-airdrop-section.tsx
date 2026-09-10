@@ -14,7 +14,7 @@ import { toast } from 'react-hot-toast';
 import { type AdminSectionProps, AdminReadError } from './admin-section-shared';
 
 export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionProps, 'adminKey' | 'isActive'>) {
-  const { data: airdropData, setData: setAirdropData, loading: readLoading, error: readError, reload } = useAdminRead({ adminKey, isActive, endpoint: '/api/airdrop/manage', parse: parseAdminAirdrop, label: 'Airdrop' });
+  const { data: airdropData, loading: readLoading, error: readError, reload } = useAdminRead({ adminKey, isActive, endpoint: '/api/airdrop/manage', parse: parseAdminAirdrop, label: 'Airdrop' });
   const [mutationLoading, setAirdropLoading] = useState(false);
   const airdropLoading = readLoading || mutationLoading;
   const [airdropCsv, setAirdropCsv] = useState('');
@@ -37,16 +37,17 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
           <Button
             variant="destructive"
             onClick={async () => {
-              if (!confirm('Are you sure you want to clear all airdrop data?')) return;
+              if (!confirm('Remove unclaimed allocations that have never been attempted? Claim history will be preserved.')) return;
               setAirdropLoading(true);
               try {
                 const res = await fetch('/api/airdrop/manage', {
                   method: 'DELETE',
                   headers: { 'Authorization': `Bearer ${adminKey}` }
                 });
-                if (res.ok) {
-                  toast.success('Airdrop data cleared');
-                  setAirdropData(null);
+                const data = parseAdminOperation(await res.json());
+                if (res.ok && data?.success) {
+                  toast.success(`Removed ${data.deletedCount ?? 0}; preserved ${data.protectedCount ?? 0} claim records; ${data.conflictCount ?? 0} concurrent changes skipped`);
+                  await reload();
                 } else {
                   toast.error('Failed to clear airdrop data');
                 }
@@ -59,7 +60,7 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
             disabled={airdropLoading}
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Clear All
+            Clear Unattempted
           </Button>
         )}
       </div>
@@ -74,6 +75,7 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
         </CardTitle>
         <CardDescription>
           CSV format: address,seed,leaf,pixotchi (amounts in tokens, not wei)
+          {' '}Replaces unattempted allocations. Existing claim history is preserved, including recipients omitted from the CSV.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -107,7 +109,7 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
                 const data = parseAdminOperation(await res.json());
                 if (!data) throw new Error('Response could not be read. Reload to check the result.');
                 if (res.ok && data.success && data.totalRecipients !== undefined) {
-                  toast.success(`Uploaded ${data.totalRecipients} recipients`);
+                  toast.success(`Saved ${(data.createdCount ?? 0) + (data.updatedCount ?? 0)} allocations; preserved ${data.protectedCount ?? 0} claim records; ${data.conflictCount ?? 0} concurrent changes skipped`);
                   setAirdropCsv('');
                   // Refresh data
                   await reload();

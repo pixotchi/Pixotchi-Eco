@@ -6,6 +6,7 @@ import { isSwapTokenId } from '@/lib/swap/constants';
 import { verifyQuoteToken } from '@/lib/swap/quote-token';
 import { enforceRateLimit, getRequestIp } from '@/lib/request-rate-limit';
 import { swapErrorResponse } from '@/lib/swap/api-errors';
+import { incrementSwapSafetyCounter } from '@/lib/swap/metrics';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -17,7 +18,7 @@ const BUILD_ADDRESS_WINDOW_SECONDS = 60;
 
 const requestSchema = z.object({
   quoteToken: z.string().min(16, 'quoteToken is required').max(2048, 'quoteToken is too long'),
-  kind: z.enum(['kyber', 'baseswap_seed']),
+  kind: z.literal('kyber'),
   sellToken: z.string().refine(isSwapTokenId, 'Unsupported sell token'),
   buyToken: z.string().refine(isSwapTokenId, 'Unsupported buy token'),
   amountIn: z.string().regex(/^\d+$/, 'amountIn must be a raw integer string'),
@@ -28,8 +29,8 @@ const requestSchema = z.object({
     .refine((value) => !value || isAddress(value), 'recipient must be a valid address'),
 });
 
-function reject(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+function reject(message: string, status = 400, code?: string) {
+  return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status });
 }
 
 export async function POST(request: NextRequest) {
@@ -66,9 +67,11 @@ export async function POST(request: NextRequest) {
 
     const verified = verifyQuoteToken(payload.quoteToken);
     if (!verified) {
+      incrementSwapSafetyCounter('quoteRejected');
       return reject(
         'Swap quote is invalid or expired. Please refresh and try again.',
         410,
+        'SWAP_QUOTE_EXPIRED',
       );
     }
 
@@ -78,6 +81,10 @@ export async function POST(request: NextRequest) {
         'Sender address does not match the address that requested this quote.',
         403,
       );
+    }
+
+    if (!verified.recipient || getAddress(payload.recipient || payload.sender).toLowerCase() !== verified.recipient) {
+      return reject('Recipient does not match the reviewed quote.', 403);
     }
 
     if (
@@ -107,8 +114,9 @@ export async function POST(request: NextRequest) {
       sellToken: payload.sellToken,
       buyToken: payload.buyToken,
       amountIn: BigInt(payload.amountIn),
+      reviewedMinOut: BigInt(verified.minOut),
       sender: payload.sender as `0x${string}`,
-      recipient: (payload.recipient || payload.sender) as `0x${string}`,
+      recipient: verified.recipient as `0x${string}`,
     });
 
     return NextResponse.json(response);

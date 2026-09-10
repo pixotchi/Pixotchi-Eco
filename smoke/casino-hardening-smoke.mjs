@@ -51,8 +51,8 @@ assert.match(
 );
 assert.match(
   blackjackRoute,
-  /redisCompareAndSetJSON\(lockKey, null, serialized\)/,
-  'Randomness locks must live for the full onchain nonce lifetime.',
+  /store\.guardedWrite\(lockKey, null, JSON\.stringify\(payload\)/,
+  'Randomness locks must use the inventory/quarantine-guarded persistent Redis CAS.',
 );
 assert.doesNotMatch(
   blackjackRoute,

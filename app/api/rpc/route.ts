@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBaseLogClient, getBaseReadClient, getBaseReceiptClient } from '@/lib/base-rpc';
 import { BASE_RPC_MAX_BATCH_SIZE, BASE_RPC_MAX_BODY_BYTES } from '@/lib/base-rpc-policy';
+import {
+  BASE_RPC_NOT_FORWARDED_MARKER,
+  createBaseRpcFailure,
+  toBaseRpcWireError,
+  type BaseRpcFailureCategory,
+  type BaseRpcWireData,
+} from '@/lib/base-rpc-errors';
 import { ChatAuthError, getChatSessionOrQuickAuthFromRequest } from '@/lib/chat-auth';
 import { CLIENT_ENV } from '@/lib/env-config';
 import { isLatestQuestRewardStorageRead } from '@/lib/quest-reward-storage';
@@ -299,7 +306,7 @@ async function getRpcAccessTier(request: NextRequest): Promise<RpcAccessTier> {
   return { kind: 'anonymous' };
 }
 
-function rpcError(id: JsonRpcId, code: number, message: string, data?: string) {
+function rpcError(id: JsonRpcId, code: number, message: string, data?: BaseRpcWireData) {
   return {
     error: { code, message, ...(data ? { data } : {}) },
     id: id ?? null,
@@ -318,13 +325,18 @@ function rpcError(id: JsonRpcId, code: number, message: string, data?: string) {
  * for a fact it never reached a node, so we say so and the client can release
  * that lock immediately instead of stranding the player.
  *
- * The marker travels in the message because a non-2xx response reaches viem as
- * an opaque HttpRequestError whose body is only ever surfaced as text.
+ * Keep the message marker for existing clients. Current clients also receive
+ * the explicit forwarded:false field through the shared error envelope.
  */
-const NOT_FORWARDED_MARKER = 'PIXOTCHI_PROXY_NOT_FORWARDED';
+const NOT_FORWARDED_MARKER = BASE_RPC_NOT_FORWARDED_MARKER;
 
-function notForwardedError(id: JsonRpcId, code: number, message: string) {
-  return rpcError(id, code, `${message} [${NOT_FORWARDED_MARKER}]`);
+function notForwardedError(id: JsonRpcId, code: number, message: string, category?: BaseRpcFailureCategory) {
+  const failure = createBaseRpcFailure(category ?? (
+    code === METHOD_NOT_FOUND ? 'unsupported_method'
+      : code === INTERNAL_ERROR ? 'upstream_unavailable' : 'invalid_request'
+  ), { code, forwarded: false });
+  const safe = toBaseRpcWireError(failure);
+  return rpcError(id, safe.code, `${message} [${NOT_FORWARDED_MARKER}]`, safe.data);
 }
 
 function rpcResult(id: JsonRpcId, result: unknown) {
@@ -441,44 +453,11 @@ function validateAnonymousTier(
       id,
       METHOD_NOT_FOUND,
       `Method ${method} requires an authenticated session`,
+      'authorization',
     );
   }
 
   return null;
-}
-
-function getSafeRpcError(error: unknown): { code: number; data?: string } {
-  const visited = new Set<unknown>();
-  let current: unknown = error;
-  let code: number | undefined;
-  let data: string | undefined;
-
-  for (let depth = 0; depth < 8 && current && !visited.has(current); depth += 1) {
-    visited.add(current);
-    if (typeof current !== 'object') break;
-    const candidate = current as { cause?: unknown; code?: unknown; data?: unknown };
-    if (code === undefined && typeof candidate.code === 'number') code = candidate.code;
-    if (
-      data === undefined
-      && typeof candidate.data === 'string'
-      && /^0x[0-9a-f]*$/i.test(candidate.data)
-      && candidate.data.length <= MAX_BODY_BYTES
-    ) {
-      data = candidate.data;
-    }
-    current = candidate.cause;
-  }
-
-  return { code: code ?? INTERNAL_ERROR, ...(data ? { data } : {}) };
-}
-
-function safeRpcMessage(code: number): string {
-  if (code === -32700) return 'Upstream RPC could not parse the request';
-  if (code === -32600) return 'Upstream RPC rejected the request';
-  if (code === -32601) return 'Upstream RPC method is unavailable';
-  if (code === -32602) return 'Upstream RPC rejected the parameters';
-  if (code === 3) return 'Contract execution reverted';
-  return 'Base RPC request failed';
 }
 
 async function handleSingle(payload: JsonRpcRequest) {
@@ -491,8 +470,8 @@ async function handleSingle(payload: JsonRpcRequest) {
     const result = await client.request({ method, params } as never);
     return rpcResult(id, result);
   } catch (error: unknown) {
-    const safe = getSafeRpcError(error);
-    return rpcError(id, safe.code, safeRpcMessage(safe.code), safe.data);
+    const safe = toBaseRpcWireError(error);
+    return rpcError(id, safe.code, safe.message, safe.data);
   }
 }
 
@@ -534,6 +513,29 @@ function hasAllowedOrigin(request: NextRequest): boolean {
   return false;
 }
 
+/** Limit bytes while reading, before allocating/parsing an unbounded body. */
+async function readBoundedBody(request: NextRequest): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return text + decoder.decode();
+      bytes += value.byteLength;
+      if (bytes > MAX_BODY_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function POST(request: NextRequest) {
   if (!hasAllowedOrigin(request)) {
     return NextResponse.json(notForwardedError(null, INVALID_REQUEST, 'Origin is not allowed'), {
@@ -542,10 +544,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const rawBody = await request.text();
-
-  if (rawBody.length > MAX_BODY_BYTES) {
-    return NextResponse.json(notForwardedError(null, INVALID_REQUEST, 'Request body is too large'), {
+  const rawBody = await readBoundedBody(request);
+  if (rawBody === null) {
+    return NextResponse.json(notForwardedError(null, INVALID_REQUEST, 'Request body is too large', 'request_too_large'), {
       headers: { 'Cache-Control': 'private, no-store' },
       status: 413,
     });
@@ -602,7 +603,7 @@ export async function POST(request: NextRequest) {
     const message = status === 503
       ? 'Authentication session storage is temporarily unavailable'
       : 'Authentication session is invalid';
-    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, message), {
+    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, message, status === 401 ? 'authorization' : 'upstream_unavailable'), {
       headers: { 'Cache-Control': 'private, no-store', ...(status === 503 ? { 'Retry-After': '30' } : {}) },
       status,
     });
@@ -634,7 +635,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (rateLimit.status === 'limited') {
-    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, 'Rate limit exceeded'), {
+    return NextResponse.json(notForwardedError(null, INTERNAL_ERROR, 'Rate limit exceeded', 'rate_limited'), {
       headers: { 'Cache-Control': 'private, no-store', 'Retry-After': '60' },
       status: 429,
     });

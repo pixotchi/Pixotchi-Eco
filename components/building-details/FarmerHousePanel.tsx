@@ -9,6 +9,7 @@ import { QuestDifficultySummary } from './quest-difficulty-summary';
 import { useQuestRewardsAvailability } from '@/hooks/useQuestRewardsAvailability';
 import { LAND_CONTRACT_ADDRESS, getReadClient } from '@/lib/contracts';
 import { requireQuestFinalizeReady } from '@/lib/quest-rewards-readiness';
+import { requireFarmerHouseStartsReady } from '@/lib/farmer-house-start-readiness';
 import { getQuestSlotState, getUnlockedQuestSlots, type QuestSlot, type QuestSlotState } from '@/lib/quest-slots';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
@@ -27,6 +28,7 @@ import { useAccount,useBlockNumber } from 'wagmi';
 interface FarmerHousePanelProps {
   landId: bigint;
   farmerHouseLevel: number;
+  isUpgrading?: boolean;
   onQuestUpdate: () => void;
 }
 
@@ -35,7 +37,7 @@ const QUEST_START_SURFACE_CLASS = 'pt-1';
 const QUEST_STATUS_PILL_CLASS = 'rounded-[var(--radius-control)] bg-muted px-2 py-1 text-xs text-muted-foreground';
 const QUEST_RECONCILE_DELAYS_MS = [500, 1_000, 1_500, 2_500, 4_000, 6_000] as const;
 
-export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpdate }: FarmerHousePanelProps) {
+export default function FarmerHousePanel({ landId, farmerHouseLevel, isUpgrading = false, onQuestUpdate }: FarmerHousePanelProps) {
   const questConfiguration = useQuestConfiguration();
   const { address } = useAccount();
   const { isTabVisible } = useTabVisibility();
@@ -43,6 +45,8 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   const scope = questResultScope(address, landId);
   const currentScopeRef = React.useRef(scope);
   currentScopeRef.current = scope;
+  const isUpgradingRef = React.useRef(isUpgrading);
+  isUpgradingRef.current = isUpgrading;
   const [recentResults, setRecentResults] = React.useState<{ scope: string; slots: Record<number, QuestFinalizeResult> }>({ scope, slots: {} });
   const [difficulty, setDifficulty] = React.useState<Record<number, number>>({});
   const currentLandIdRef = React.useRef(landId);
@@ -139,6 +143,11 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
   return (
     <div className="space-y-4">
       <h4 className="font-semibold text-sm">Quests</h4>
+      {isUpgrading && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Farmer House is upgrading. Existing quests can still be returned and opened. New quests unlock when construction finishes.
+        </p>
+      )}
       {loading ? (
         <ResourceState status="loading" title="Loading quests…" description="Checking your farmers and quest slots." className="min-h-32" />
       ) : error ? (
@@ -270,11 +279,14 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, onQuestUpda
                         buttonText="Start"
                         buttonClassName="h-11 min-h-11 px-3 text-sm w-full sm:w-auto shrink-0"
                         hideStatus
-                        disabled={questActionsBlocked || !questConfiguration.isReady}
+                        disabled={isUpgrading || questActionsBlocked || !questConfiguration.isReady}
                         onButtonClick={async () => {
+                          if (isUpgradingRef.current) throw new Error('Wait until the Farmer House upgrade finishes before starting a quest.');
                           if (!questConfiguration.isReady || !questConfiguration.data) throw new Error('Check the quest terms before starting.');
                           await requireRewardsReady(questConfiguration.data);
+                          await requireFarmerHouseStartsReady([landId], () => currentScopeRef.current === scope && !isUpgradingRef.current);
                           if (currentScopeRef.current !== scope) throw new Error('Your wallet or land changed. Review the quest again.');
+                          if (isUpgradingRef.current) throw new Error('Wait until the Farmer House upgrade finishes before starting a quest.');
                         }}
                         onSuccess={async (tx: UntypedValue) => {
                           await handleSuccess({ slotIndex: idx, awaitInProgress: true });

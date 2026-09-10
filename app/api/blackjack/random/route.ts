@@ -9,11 +9,14 @@ import {
 } from '@/lib/chat-auth';
 import { blackjackRandomnessLockMismatch,normalizeBlackjackLockBetAmount } from '@/lib/blackjack-randomness-lock.mjs';
 import { LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
-import { redis,redisCompareAndSetJSON,redisDel,redisGetJSONResult } from '@/lib/redis';
+import { redis, redisDel } from '@/lib/redis';
+import { blackjackActionLockKey, blackjackQuarantineKey, blackjackMessageHash, isBlackjackLock, parseCanonicalBlackjackLandId, verifyBlackjackLock, BlackjackLockServiceError, BLACKJACK_INVENTORY_KEY, type BlackjackLock } from '@/lib/blackjack-locks';
+import { createBlackjackRedisStore, requireBlackjackInventory } from '@/lib/blackjack-lock-store';
+import { incrementBlackjackLockCounter } from '@/lib/blackjack-lock-metrics';
 import { blackjackAbi } from '@/public/abi/blackjack-abi';
 import { landAbi } from '@/public/abi/pixotchi-v3-abi';
 import { NextRequest,NextResponse } from 'next/server';
-import { encodePacked,isAddress,keccak256,type Hex } from 'viem';
+import { isAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount,signMessage } from 'viem/accounts';
 
 /**
@@ -37,23 +40,12 @@ const RATE_LIMIT_MAX_REQUESTS = 30; // Max 30 requests per minute per address
 const RANDOMNESS_LIFETIME_SECONDS = 60;
 const ALLOW_MEMORY_RANDOMNESS_LOCKS = process.env.NODE_ENV !== 'production';
 
-interface CachedRandomness {
-    randomSeed: Hex;
-    signature: string;
-    timestamp: number;
-    signerAddress: string;
-    actionNum: number;
-    handIndex: number;
-    bettingToken: string;
-    playerAddress: string;
-    betAmountWei: string | null;
-}
-
-const ACTION_LOCK_KEY_PREFIX = 'blackjack:action-lock:';
+type CachedRandomness = BlackjackLock;
 const nonceRandomnessCache = new Map<string, CachedRandomness>();
 const PHASE_NONE = 0;
 const PHASE_PLAYER_TURN = 2;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const CANONICAL_SIGNER_ROLLOUT_ID = process.env.BLACKJACK_CANONICAL_SIGNER_ROLLOUT_ID || '';
 
 type BlackjackActionName = 'deal' | 'hit' | 'stand' | 'double' | 'split' | 'surrender';
 const BLACKJACK_ACTIONS = new Set<BlackjackActionName>(['deal', 'hit', 'stand', 'double', 'split', 'surrender']);
@@ -62,96 +54,53 @@ function isBlackjackActionName(value: UntypedValue): value is BlackjackActionNam
     return typeof value === 'string' && BLACKJACK_ACTIONS.has(value as BlackjackActionName);
 }
 
-function getActionLockKey(landId: string, nonce: bigint): string {
-    return `${ACTION_LOCK_KEY_PREFIX}${landId}:${nonce.toString()}`;
-}
-
-function isCachedRandomness(value: UntypedValue): value is CachedRandomness {
-    if (!value || typeof value !== 'object') return false;
-    const candidate = value as Partial<CachedRandomness>;
-    return (
-        typeof candidate.randomSeed === 'string' &&
-        candidate.randomSeed.startsWith('0x') &&
-        typeof candidate.signature === 'string' &&
-        typeof candidate.timestamp === 'number' &&
-        typeof candidate.signerAddress === 'string' &&
-        typeof candidate.actionNum === 'number' &&
-        typeof candidate.handIndex === 'number' &&
-        typeof candidate.bettingToken === 'string' &&
-        typeof candidate.playerAddress === 'string' &&
-        (
-            candidate.betAmountWei === undefined ||
-            candidate.betAmountWei === null ||
-            typeof candidate.betAmountWei === 'string'
-        )
-    );
-}
-
-async function readActionLock(lockKey: string): Promise<{ data: CachedRandomness | null; source: 'redis' | 'memory' | 'none' }> {
+async function readActionLock(landId: bigint, nonce: bigint, signer: Address): Promise<{ data: CachedRandomness | null; source: 'redis' | 'memory' | 'none'; inventoryRaw?: string }> {
+    const lockKey = blackjackActionLockKey(landId, nonce);
     if (redis) {
-        const redisResult = await redisGetJSONResult<CachedRandomness>(lockKey);
-        if (redisResult.status === 'unavailable') {
-            throw new Error('Blackjack randomness lock service unavailable');
-        }
-        if (redisResult.status === 'ok') {
-            if (!isCachedRandomness(redisResult.value)) {
-                throw new Error('Blackjack randomness lock is invalid');
-            }
-            return { data: redisResult.value, source: 'redis' };
-        }
-        return { data: null, source: 'none' };
+        const store = createBlackjackRedisStore();
+        const inventoryRaw = await requireBlackjackInventory(store, signer, CANONICAL_SIGNER_ROLLOUT_ID);
+        if (await store.read(blackjackQuarantineKey(landId, nonce)) !== null) throw new BlackjackLockServiceError('quarantined');
+        const raw = await store.read(lockKey);
+        if (raw === null) return { data: null, source: 'none', inventoryRaw };
+        let value: unknown;
+        try { value = JSON.parse(raw); } catch { throw new BlackjackLockServiceError('invalid'); }
+        if (!isBlackjackLock(value) || !await verifyBlackjackLock(landId, nonce, value, signer)) throw new BlackjackLockServiceError('invalid');
+        return { data: value, source: 'redis', inventoryRaw };
     }
-
-    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) {
-        throw new Error('Blackjack randomness lock service unavailable');
-    }
-    const memoryLock = nonceRandomnessCache.get(lockKey);
-    if (isCachedRandomness(memoryLock)) {
-        return { data: memoryLock, source: 'memory' };
-    }
-
-    return { data: null, source: 'none' };
+    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) throw new BlackjackLockServiceError('unavailable');
+    const data = nonceRandomnessCache.get(lockKey) ?? null;
+    return { data, source: data ? 'memory' : 'none' };
 }
 
-async function createActionLockIfAbsent(lockKey: string, payload: CachedRandomness): Promise<{ created: boolean; data: CachedRandomness; source: 'redis' | 'memory' }> {
+async function createActionLockIfAbsent(landId: bigint, nonce: bigint, payload: CachedRandomness, inventoryRaw?: string): Promise<{ created: boolean; data: CachedRandomness; source: 'redis' | 'memory' }> {
+    const lockKey = blackjackActionLockKey(landId, nonce);
     if (redis) {
-        const serialized = JSON.stringify(payload);
-        // Keep one decision for the entire onchain nonce lifetime. The lock is
-        // removed only after the nonce advances, because the deployed contract
-        // signature itself has no expiry.
-        const created = await redisCompareAndSetJSON(lockKey, null, serialized);
-        if (created) {
-            return { created: true, data: payload, source: 'redis' };
-        }
-
-        const existingResult = await redisGetJSONResult<CachedRandomness>(lockKey);
-        if (existingResult.status === 'ok' && isCachedRandomness(existingResult.value)) {
-            return { created: false, data: existingResult.value, source: 'redis' };
-        }
-        // CAS helpers intentionally return false on both contention and
-        // infrastructure failure. If no valid winner can be read, issuing a
-        // process-local signature could create a second seed on another node.
-        throw new Error('Blackjack randomness lock could not be confirmed');
+        if (!inventoryRaw) throw new BlackjackLockServiceError('inventory_required');
+        const store = createBlackjackRedisStore();
+        // One atomic persistent SET, guarded by the inventory and quarantine state.
+        // No expiry: the deployed signature is valid for the full nonce lifetime.
+        const created = await store.guardedWrite(lockKey, null, JSON.stringify(payload), [
+            [BLACKJACK_INVENTORY_KEY, inventoryRaw],
+            [blackjackQuarantineKey(landId, nonce), null],
+        ]);
+        if (created) return { created: true, data: payload, source: 'redis' };
+        const winner = await readActionLock(landId, nonce, payload.signerAddress as Address);
+        if (winner.data) return { created: false, data: winner.data, source: 'redis' };
+        throw new BlackjackLockServiceError('unavailable');
     }
-
-    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) {
-        throw new Error('Blackjack randomness lock service unavailable');
-    }
+    if (!ALLOW_MEMORY_RANDOMNESS_LOCKS) throw new BlackjackLockServiceError('unavailable');
     const existing = nonceRandomnessCache.get(lockKey);
-    if (isCachedRandomness(existing)) {
-        return { created: false, data: existing, source: 'memory' };
-    }
-
+    if (existing) return { created: false, data: existing, source: 'memory' };
     nonceRandomnessCache.set(lockKey, payload);
     return { created: true, data: payload, source: 'memory' };
 }
 
-async function cleanupConsumedLock(landId: string, currentNonce: bigint): Promise<void> {
-    if (currentNonce == BigInt(0)) return;
-    const consumedKey = getActionLockKey(landId, currentNonce - BigInt(1));
-
+async function cleanupConsumedLock(landId: bigint, confirmedNonce: bigint): Promise<void> {
+    if (confirmedNonce === BigInt(0)) return;
+    const consumedKey = blackjackActionLockKey(landId, confirmedNonce - BigInt(1));
     if (redis) {
         await redisDel(consumedKey);
+        await redisDel(blackjackQuarantineKey(landId, confirmedNonce - BigInt(1)));
     }
     nonceRandomnessCache.delete(consumedKey);
 }
@@ -172,25 +121,6 @@ function isLockMismatch(
         playerAddress,
         betAmountWei
     );
-}
-
-async function deleteActionLock(lockKey: string): Promise<void> {
-    if (redis) {
-        await redisDel(lockKey);
-    }
-    nonceRandomnessCache.delete(lockKey);
-}
-
-function actionNameFromNum(actionNum: number): BlackjackActionName | null {
-    switch (actionNum) {
-        case 255: return 'deal';
-        case 0: return 'hit';
-        case 1: return 'stand';
-        case 2: return 'double';
-        case 3: return 'split';
-        case 4: return 'surrender';
-        default: return null;
-    }
 }
 
 async function validateActionAgainstOnchainState(
@@ -418,8 +348,9 @@ export async function POST(request: NextRequest) {
         const { landId, action, playerAddress, handIndex, bettingToken, betAmountWei } = body as Record<string, UntypedValue>;
 
         // Validate inputs
-        if (typeof landId !== 'string' || !/^\d+$/.test(landId)) {
-            return NextResponse.json({ error: 'landId must be a decimal string' }, { status: 400 });
+        const landIdBigInt = parseCanonicalBlackjackLandId(landId);
+        if (landIdBigInt === null) {
+            return NextResponse.json({ error: 'landId must be a canonical uint256 decimal string' }, { status: 400 });
         }
         if (!isBlackjackActionName(action)) {
             return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -492,7 +423,7 @@ export async function POST(request: NextRequest) {
                 address: LAND_CONTRACT_ADDRESS as `0x${string}`,
                 abi: blackjackAbi,
                 functionName: 'blackjackGetNonce',
-                args: [BigInt(landId)],
+                args: [landIdBigInt],
             }) as bigint;
         } catch (err) {
             console.error('Failed to read nonce from contract:', err);
@@ -511,7 +442,7 @@ export async function POST(request: NextRequest) {
                     address: LAND_CONTRACT_ADDRESS as `0x${string}`,
                     abi: blackjackAbi,
                     functionName: 'blackjackGetGameToken',
-                    args: [BigInt(landId)],
+                    args: [landIdBigInt],
                 }) as string;
             } catch (err) {
                 console.error('Failed to read active blackjack token from contract:', err);
@@ -522,7 +453,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const landIdBigInt = BigInt(landId);
         const requestedActionValidation = await validateActionAgainstOnchainState(
             publicClient,
             landIdBigInt,
@@ -539,54 +469,27 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Best-effort cleanup: previous nonce lock is no longer usable after onchain increment.
-        await cleanupConsumedLock(landId, currentNonce);
-        const nonce = Number(currentNonce);
-        const lockKey = getActionLockKey(landId, currentNonce);
-
-        // ANTI-CHEAT: Check if randomness was already issued for this (landId, nonce)
-        const { data: cachedData, source: cachedSource } = await readActionLock(lockKey);
-        let effectiveCachedData = cachedData;
-        let effectiveCachedSource = cachedSource;
-
-        if (effectiveCachedData && isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
-            const lockedActionName = actionNameFromNum(effectiveCachedData.actionNum);
-            if (!lockedActionName) {
-                await deleteActionLock(lockKey);
-                effectiveCachedData = null;
-                effectiveCachedSource = 'none';
-            } else {
-                const lockedActionValidation = await validateActionAgainstOnchainState(
-                    publicClient,
-                    landIdBigInt,
-                    lockedActionName,
-                    effectiveCachedData.handIndex,
-                    effectiveCachedData.playerAddress,
-                    effectiveCachedData.bettingToken,
-                    effectiveCachedData.betAmountWei ?? null
-                );
-
-                if (!lockedActionValidation.allowed) {
-                    // Recovery path: stale/invalid lock cannot be executed onchain, clear it.
-                    await deleteActionLock(lockKey);
-                    effectiveCachedData = null;
-                    effectiveCachedSource = 'none';
-                } else {
-                    console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${effectiveCachedData.actionNum} requestedAction=${actionNum} cachedToken=${effectiveCachedData.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${effectiveCachedData.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
-                    return NextResponse.json(
-                        { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
-                        { status: 400 }
-                    );
-                }
-            }
-        }
+        // Cleanup requires a safe onchain nonce; an unconfirmed head must not erase a decision.
+        try {
+            const confirmedNonce = await publicClient.readContract({
+                address: LAND_CONTRACT_ADDRESS as Address,
+                abi: blackjackAbi,
+                functionName: 'blackjackGetNonce',
+                args: [landIdBigInt],
+                blockTag: 'safe',
+            });
+            await cleanupConsumedLock(landIdBigInt, confirmedNonce);
+        } catch { /* Cleanup can wait; issuing or retaining the current lock does not depend on it. */ }
+        const nonce = currentNonce.toString();
+        const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as Hex);
+        const { data: effectiveCachedData, source: effectiveCachedSource, inventoryRaw } = await readActionLock(landIdBigInt, currentNonce, account.address);
 
         if (effectiveCachedData) {
             // STRICT ACTION LOCKING: Check if user is trying to switch action
             if (isLockMismatch(effectiveCachedData, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
                 console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${effectiveCachedData.actionNum} requestedAction=${actionNum} cachedToken=${effectiveCachedData.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${effectiveCachedData.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
                 return NextResponse.json(
-                    { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
+                    { error: 'Action locked. Retry the same Blackjack action and bet amount. This decision remains locked until the onchain nonce advances.' },
                     { status: 400 }
                 );
             }
@@ -611,16 +514,12 @@ export async function POST(request: NextRequest) {
         const randomSeed = generateRandomSeed();
 
         // Current Solidity only verifies this legacy payload. The app/API lock also
-        // binds deal amount and API expiry until a future contract upgrade can do it onchain.
-        const messageHash = keccak256(
-            encodePacked(
-                ['uint256', 'uint256', 'bytes32', 'uint8', 'uint8', 'address'],
-                [BigInt(landId), currentNonce, randomSeed, actionNum, handIndexNum, effectiveBettingToken as `0x${string}`]
-            )
-        );
+        // binds deal amount. API freshness is not a contract signature expiry.
+        const messageHash = blackjackMessageHash(landIdBigInt, currentNonce, {
+            randomSeed, actionNum, handIndex: handIndexNum, bettingToken: effectiveBettingToken,
+        });
 
         // Sign the message with EIP-191 prefix
-        const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
         const signature = await signMessage({
             message: { raw: messageHash },
             privateKey: SIGNER_PRIVATE_KEY as `0x${string}`,
@@ -638,14 +537,14 @@ export async function POST(request: NextRequest) {
             playerAddress: normalizedPlayerAddress,
             betAmountWei: effectiveBetAmountWei
         };
-        const lockResult = await createActionLockIfAbsent(lockKey, proposedLock);
+        const lockResult = await createActionLockIfAbsent(landIdBigInt, currentNonce, proposedLock, inventoryRaw);
 
         if (!lockResult.created) {
             // Another request won the race. Enforce action lock against stored decision.
             if (isLockMismatch(lockResult.data, actionNum, handIndexNum, effectiveBettingToken, normalizedPlayerAddress, effectiveBetAmountWei)) {
                 console.warn(`[Blackjack Locked Action] landId=${landId} nonce=${nonce} cachedAction=${lockResult.data.actionNum} requestedAction=${actionNum} cachedToken=${lockResult.data.bettingToken} requestedToken=${effectiveBettingToken} cachedAmount=${lockResult.data.betAmountWei ?? 'none'} requestedAmount=${effectiveBetAmountWei ?? 'none'}`);
                 return NextResponse.json(
-                    { error: 'Action locked. Retry the same Blackjack action and bet amount, or wait briefly for the previous preparation to expire.' },
+                    { error: 'Action locked. Retry the same Blackjack action and bet amount. This decision remains locked until the onchain nonce advances.' },
                     { status: 400 }
                 );
             }
@@ -682,6 +581,12 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
+        if (error instanceof BlackjackLockServiceError) {
+            incrementBlackjackLockCounter(error.reason === 'quarantined' ? 'issuance_quarantined' : error.reason === 'invalid' ? 'invalid_record' : error.reason);
+            // Bounded labels only: no signatures, seeds, or raw provider errors.
+            console.warn('[Blackjack lock]', { category: error.reason });
+            return NextResponse.json({ error: error.message, recoveryState: error.reason }, { status: 503 });
+        }
         if (error instanceof ChatAuthError) {
             return createChatAuthErrorResponse(error);
         }
@@ -714,13 +619,20 @@ export async function GET() {
 
     try {
         const account = privateKeyToAccount(SIGNER_PRIVATE_KEY as `0x${string}`);
+        if (redis) {
+            await requireBlackjackInventory(createBlackjackRedisStore(), account.address, CANONICAL_SIGNER_ROLLOUT_ID);
+        }
         return NextResponse.json({
             status: 'available',
             signerAddress: account.address,
             cacheSize: nonceRandomnessCache.size, // In-memory fallback cache size
             lockStore: redis ? 'redis' : ALLOW_MEMORY_RANDOMNESS_LOCKS ? 'memory' : 'unavailable',
         });
-    } catch {
+    } catch (error) {
+        if (error instanceof BlackjackLockServiceError) {
+            incrementBlackjackLockCounter(error.reason === 'quarantined' ? 'issuance_quarantined' : error.reason === 'invalid' ? 'invalid_record' : error.reason);
+            return NextResponse.json({ status: 'unavailable', recoveryState: error.reason, message: error.message }, { status: 503 });
+        }
         return NextResponse.json({
             status: 'error',
             message: 'Invalid signer configuration',

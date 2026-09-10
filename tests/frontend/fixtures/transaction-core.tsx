@@ -5,7 +5,7 @@ import { TransferPlanReview } from '@/components/transactions/transfer-plan-revi
 import { fixtureWallet } from './transaction-core-wallet';
 import StakingDialog from '@/components/staking/staking-dialog';
 import TransferAssetsDialog from '@/components/transactions/transfer-assets-dialog';
-import { createPendingEvmCallsDigest, createPendingEvmRecord, getBrowserPendingEvmStorage, writePendingEvmRecord } from '@/lib/pending-evm-transaction';
+import { createPendingEvmCallsDigest, createPendingEvmRecord, getBrowserPendingEvmStorage, PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS, writePendingEvmRecord } from '@/lib/pending-evm-transaction';
 
 function Fixture() {
   const [ready, setReady] = useState(true);
@@ -16,6 +16,7 @@ function Fixture() {
   const [reconciliation, setReconciliation] = useState('immediate');
   const [pendingConfirmation, setPendingConfirmation] = useState<{ resolve: () => void; reject: (error: Error) => void } | null>(null);
   const [error, setError] = useState('');
+  const [confirmationCalls, setConfirmationCalls] = useState(0);
   const [, render] = useState(0);
   useEffect(() => {
     fixtureWallet.notify = () => render(n => n + 1);
@@ -27,7 +28,7 @@ function Fixture() {
   const [stakingOpen, setStakingOpen] = useState(false);
   const [transferMounted, setTransferMounted] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
-  const calls = [{ to: `0x${'2'.repeat(40)}` as const, data: draft as `0x${string}` }, { to: `0x${'3'.repeat(40)}` as const, data: '0x02' as const }];
+  const calls = [{ to: `0x${'2'.repeat(40)}` as const, data: draft as `0x${string}` }, ...(!fixtureWallet.direct ? [{ to: `0x${'3'.repeat(40)}` as const, data: '0x02' as const }] : [])];
   return <main>
     <button onClick={() => setStakingOpen(true)}>Open staking</button>
     <StakingDialog open={stakingOpen} onOpenChange={setStakingOpen} />
@@ -35,6 +36,12 @@ function Fixture() {
     {transferMounted && <TransferAssetsDialog open={transferOpen} onOpenChange={setTransferOpen} />}
     <label><input type="checkbox" checked={ready} onChange={event => setReady(event.target.checked)} />Ready</label>
     <label>Draft<input value={draft} onChange={event => setDraft(event.target.value)} /></label>
+    <label><input type="checkbox" checked={fixtureWallet.direct} onChange={event => { fixtureWallet.direct = event.target.checked; render(n => n + 1); }} />Direct transaction</label>
+    <label>Replacement<select aria-label="Replacement" value={fixtureWallet.replacement} onChange={event => { fixtureWallet.replacement = event.target.value as typeof fixtureWallet.replacement; render(n => n + 1); }}>
+      {['none', 'repriced', 'replaced', 'cancelled'].map(mode => <option key={mode}>{mode}</option>)}
+    </select></label>
+    <label><input type="checkbox" checked={fixtureWallet.deferReceipt} onChange={event => { fixtureWallet.deferReceipt = event.target.checked; render(n => n + 1); }} />Delay next receipt</label>
+    <button onClick={() => fixtureWallet.resolveReceipt?.()}>Resolve receipt</button>
     <label>Capabilities<select value={fixtureWallet.capability} onChange={event => { fixtureWallet.capability = event.target.value as typeof fixtureWallet.capability; render(n => n + 1); }}>
       {['supported', 'unsupported', 'missing', 'failure', 'deferred'].map(mode => <option key={mode}>{mode}</option>)}
     </select></label>
@@ -60,12 +67,23 @@ function Fixture() {
         callsDigest: createPendingEvmCallsDigest(calls), connectorId: 'transaction-core-fixture', method: 'batch', proof: { kind: 'reservation' },
       }));
     }}>Reserve wallet elsewhere</button>
+    <button onClick={() => {
+      writePendingEvmRecord(getBrowserPendingEvmStorage(), createPendingEvmRecord({
+        identity: { accountAddress: fixtureWallet.accountAddress, chainId: 8453, intentKey: 'qa:transaction-core' },
+        callsDigest: createPendingEvmCallsDigest(calls), connectorId: 'transaction-core-fixture', method: 'batch', proof: { kind: 'reservation' },
+        submittedAt: Date.now() - PENDING_EVM_AMBIGUOUS_ACK_LOCK_MS - 1_000,
+      }));
+    }}>Seed stale reservation</button>
     <button onClick={() => setMounted(value => !value)}>Toggle controller</button>
     <output aria-label="Wallet calls">{fixtureWallet.walletCalls}</output>
     <output aria-label="Preflight calls">{preflightCalls}</output>
+    <output aria-label="Confirmation calls">{confirmationCalls}</output>
+    <output aria-label="Acknowledgement events">{fixtureWallet.telemetry.filter(event => event.name === 'game_transaction_acknowledgement').length}</output>
+    <output aria-label="Superseded events">{fixtureWallet.telemetry.filter(event => event.name === 'game_transaction_lifecycle' && event.properties.phase === 'superseded').length}</output>
     <output aria-label="Error">{error}</output>
     {mounted && <Transaction calls={calls} effects="none" intentKey="qa:transaction-core" canSubmit={ready}
       onConfirmed={() => {
+        setConfirmationCalls(count => count + 1);
         if (reconciliation === 'failed') throw new Error('Refresh delayed');
         if (reconciliation === 'deferred') return new Promise<void>((resolve, reject) => setPendingConfirmation({ resolve, reject }));
       }}
@@ -82,6 +100,7 @@ function Fixture() {
         <button onClick={onSubmit} disabled={isDisabled}>Submit</button>
         <button onClick={() => context.submit('retry')}>Direct retry entry</button>
         <button onClick={() => context.submit('button')}>Direct submit entry</button>
+        <button onClick={() => { void context.acknowledgeStale(); }}>Direct acknowledgement entry</button>
         <output aria-label="Executing">{String(context.isExecuting)}</output>
         <output aria-label="Status">{context.status.statusName}</output>
       </>} />

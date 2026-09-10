@@ -10,30 +10,17 @@ export type BaseRpcPolicy = 'read' | 'receipt' | 'log' | 'probe';
  */
 export const BASE_RPC_MAX_BATCH_SIZE = 20;
 
-/**
- * Maximum calldata, in bytes, viem packs into one Multicall3 aggregate3 call.
- */
+/** Viem counts inner calldata only; aggregate3 ABI overhead is additional. */
 export const BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES = 8_192;
+export const BASE_RPC_BROWSER_MULTICALL_INNER_BYTES = 2_048;
+export const BASE_RPC_MAX_FETCH_CONCURRENCY = 4;
 
 /**
- * Largest body the proxy must accept, derived from what the browser batcher can
- * legitimately emit rather than picked independently.
- *
- * This is the same defect as the batch-count mismatch above, one layer down: a
- * flat 128KB cap sat below the client's own worst case of
- * `20 requests x 8192 bytes of hex-encoded calldata` (~330KB), so a busy screen
- * could produce a request the proxy rejected wholesale with HTTP 413 — every
- * read in it failing at once, with no per-call failover available.
- *
- * Deriving it keeps the guard meaningful (nothing larger than our own client can
- * produce is accepted) while making it impossible for the two to drift apart.
+ * Preserve the existing proxy budget. The browser fetch adapter measures the
+ * serialized UTF-8 body and packs independent JSON-RPC requests to this limit.
+ * Multicall's inner-byte budget cannot guarantee an encoded HTTP body size.
  */
-const JSON_RPC_REQUEST_OVERHEAD_BYTES = 512;
-
-export const BASE_RPC_MAX_BODY_BYTES =
-  BASE_RPC_MAX_BATCH_SIZE
-    * (BASE_RPC_MAX_MULTICALL_CALLDATA_BYTES * 2 + JSON_RPC_REQUEST_OVERHEAD_BYTES)
-  + 1_024;
+export const BASE_RPC_MAX_BODY_BYTES = 338_944;
 
 export type BaseRpcVendor =
   | 'alchemy'
@@ -127,7 +114,8 @@ export const rankBaseRpcEndpoints = (
   const latencies = descriptors.map((descriptor) =>
     computeAverageLatency(samplesByUrl.get(descriptor.url) ?? []),
   );
-  const fastestLatency = latencies.find(Number.isFinite) ?? 1;
+  const finiteLatencies = latencies.filter(Number.isFinite);
+  const fastestLatency = finiteLatencies.length > 0 ? Math.min(...finiteLatencies) : 1;
 
   return descriptors
     .map((descriptor, index) => {

@@ -1,5 +1,8 @@
 import { createErrorResponse,requireAdmin } from '@/lib/auth-utils';
 import { getBaseRpcStatusSnapshot } from '@/lib/base-rpc';
+import { getBaseRpcErrorMetrics } from '@/lib/base-rpc-errors';
+import { getSwapSafetyCounters } from '@/lib/swap/metrics';
+import { getBlackjackLockCounters } from '@/lib/blackjack-lock-metrics';
 import { NextRequest,NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -75,6 +78,12 @@ export async function GET(request: NextRequest) {
       endpoints,
       rankedUrls: snapshot.rankedUrls,
       timestamp: snapshot.generatedAt,
+      safetyCounters: {
+        scope: 'this-server-instance',
+        rpc: getBaseRpcErrorMetrics(),
+        swaps: getSwapSafetyCounters(),
+        blackjack: getBlackjackLockCounters(),
+      },
     });
   } catch {
     return NextResponse.json(createErrorResponse('Failed to check RPC status', 500).body, { status: 500 });

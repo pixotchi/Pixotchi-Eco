@@ -841,8 +841,8 @@ function cooldownDetails(lastTimestamp: string | number | undefined, cooldownSec
   };
 }
 
-async function readKillCooldownForWallet(address: `0x${string}`, readClient: PixotchiReadClient) {
-  const [canKillResult, remainingResult, cooldownSecondsResult] = await readClient.multicall({
+export async function readKillCooldownForWallet(address: `0x${string}`, readClient: PixotchiReadClient) {
+  const [canKillResult, remainingResult] = await readClient.multicall({
     allowFailure: true,
     contracts: [
       {
@@ -857,16 +857,13 @@ async function readKillCooldownForWallet(address: `0x${string}`, readClient: Pix
         functionName: 'getKillCooldownRemaining',
         args: [address],
       },
-      {
-        address: PIXOTCHI_NFT_ADDRESS,
-        abi: KILL_COOLDOWN_ABI,
-        functionName: 'getKillCooldownSeconds',
-      },
     ],
   });
   const canKill = canKillResult?.status === 'success' ? Boolean(canKillResult.result) : null;
   const remainingSeconds = remainingResult?.status === 'success' ? Number(remainingResult.result) : null;
-  const cooldownSeconds = cooldownSecondsResult?.status === 'success' ? Number(cooldownSecondsResult.result) : 60 * 60;
+  // The active GameLogic exposes availability and remaining time, but no getter
+  // for the configured duration. An unavailable configuration is not one hour.
+  const cooldownSeconds = null;
   const availableAt = remainingSeconds && remainingSeconds > 0
     ? Math.floor(Date.now() / 1000) + remainingSeconds
     : null;
@@ -6046,6 +6043,9 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
           return {
             address: target,
             approved: composite.approved,
+            allowance: composite.allowance?.toString() ?? null,
+            allowanceUnit: 'SEED wei',
+            allowanceNote: 'Compare allowance with the requested amount; approved is a legacy nonzero-allowance indicator.',
             claimableLeaf,
             claimableRewards: {
               amount: claimableLeaf,
