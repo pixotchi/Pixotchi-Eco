@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 import type { BlackjackTransactionResult } from "@/lib/blackjack-events";
 import { CasinoGameSurface } from './casino-game-surface';
@@ -1318,7 +1319,7 @@ export default function BlackjackDialog({
         : betAmountWei <= BigInt(0) ? 'Enter a valid bet amount.'
         : betAmountWei < uiMinBet ? `Minimum ${formattedMinBet} ${tokenSymbol}.`
         : betAmountWei > uiMaxBet ? `Maximum ${formattedMaxBet} ${tokenSymbol}.`
-        : balanceData && betAmountWei > currentBalanceWei ? `Your available ${tokenSymbol} balance is too low.` : undefined;
+        : balanceData && betAmountWei > currentBalanceWei ? getBalanceShortfallMessage(currentBalanceWei, betAmountWei, tokenSymbol, tokenDecimals) ?? undefined : undefined;
 
     const currentActionHandIndex = gameState.hasSplit ? gameState.currentHandIndex : 0;
     const currentActionCards =
@@ -1501,7 +1502,7 @@ export default function BlackjackDialog({
         const requiredAmount = formatTokenDisplay(requiredWei, tokenDecimals, tokenDecimals);
 
         if (latestBalanceWei < requiredWei) {
-            toast.error(`Insufficient balance to ${actionLabel}. Need ${requiredAmount} ${tokenSymbol}.`);
+            toast.error(getBalanceShortfallMessage(latestBalanceWei, requiredWei, tokenSymbol, tokenDecimals)!);
             return false;
         }
 

@@ -1,4 +1,6 @@
 "use client";
+import { animate as springAnimate } from 'motion';
+import { UI_SPRING } from '@/lib/motion';
 import * as React from "react";
 import { usePerformanceMode } from "@/components/ui/performance-mode";
 
@@ -8,15 +10,6 @@ type IndicatorGeometry = {
   top: number;
   width: number;
 };
-
-function parseMotionDuration(value: string, fallback: number) {
-  const amount = Number.parseFloat(value);
-  if (!Number.isFinite(amount)) return fallback;
-  if (value.trim().endsWith("ms")) return amount;
-  if (value.trim().endsWith("s")) return amount * 1000;
-  return fallback;
-}
-
 
 /** Shared geometry/motion only. Consumers own tab/radio semantics and selection. */
 export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, selectedIndex, itemCount, layoutKey, animate = true }: {
@@ -31,7 +24,7 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
   const { enabled: performanceModeEnabled } = usePerformanceMode();
   const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
   const targetIndicatorGeometryRef = React.useRef<IndicatorGeometry | null>(null);
-  const indicatorAnimationRef = React.useRef<Animation | null>(null);
+  const indicatorAnimationRef = React.useRef<{ stop: () => void } | null>(null);
   const suppressNextIndicatorMotionRef = React.useRef(false);
   const skipIndicatorMotion = !animate || performanceModeEnabled || prefersReducedMotion;
   React.useEffect(() => {
@@ -49,7 +42,7 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
   }, []);
 
   React.useEffect(() => () => {
-    indicatorAnimationRef.current?.cancel();
+    indicatorAnimationRef.current?.stop();
     indicatorAnimationRef.current = null;
   }, []);
 
@@ -58,7 +51,7 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
     const indicator = indicatorRef.current;
     const selectedItem = itemRefs.current[selectedIndex];
     if (!container || !indicator || !selectedItem) {
-      indicatorAnimationRef.current?.cancel();
+      indicatorAnimationRef.current?.stop();
       indicatorAnimationRef.current = null;
       targetIndicatorGeometryRef.current = null;
       if (indicator) indicator.style.opacity = "0";
@@ -85,8 +78,9 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
         // A newly attached ResizeObserver delivers its initial notification even
         // when geometry did not change. Do not cancel a pointer glide for it.
         if (skipIndicatorMotion && indicatorAnimationRef.current) {
-          indicatorAnimationRef.current.cancel();
+          indicatorAnimationRef.current.stop();
           indicatorAnimationRef.current = null;
+          indicator.style.transform = `translate3d(${nextGeometry.left}px, ${nextGeometry.top}px, 0) scale(1, 1)`;
         }
         return;
       }
@@ -104,7 +98,7 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
             width: indicatorRect.width,
           }
         : null;
-      indicatorAnimationRef.current?.cancel();
+      indicatorAnimationRef.current?.stop();
       indicatorAnimationRef.current = null;
 
       const finalTransform = `translate3d(${nextGeometry.left}px, ${nextGeometry.top}px, 0) scale(1, 1)`;
@@ -124,27 +118,28 @@ export function useSelectionIndicator({ containerRef, indicatorRef, itemRefs, se
       targetIndicatorGeometryRef.current = nextGeometry;
       if (!shouldAnimate) return;
 
-      const computedStyle = window.getComputedStyle(container);
-      const duration = parseMotionDuration(
-        computedStyle.getPropertyValue("--motion-standard"),
-        220
-      );
-      const easing = computedStyle.getPropertyValue("--ease-standard").trim() || "cubic-bezier(0.2, 0.8, 0.2, 1)";
-      const animation = indicator.animate(
-        [
-          {
-            transform: `translate3d(${previousVisualGeometry.left}px, ${previousVisualGeometry.top}px, 0) scale(${previousVisualGeometry.width / nextGeometry.width}, ${previousVisualGeometry.height / nextGeometry.height})`,
-          },
-          { transform: finalTransform },
-        ],
-        { duration, easing }
-      );
+      // Leading and trailing edges settle independently. Long horizontal moves
+      // stretch the capsule briefly; interruption starts from its rendered bounds.
+      let left = previousVisualGeometry.left;
+      let right = left + previousVisualGeometry.width;
+      let top = previousVisualGeometry.top;
+      const paint = () => {
+        indicator.style.transform = `translate3d(${left}px, ${top}px, 0) scale(${Math.max(1, right - left) / nextGeometry.width}, 1)`;
+      };
+      paint();
+      const rightward = nextGeometry.left > left;
+      const trailingSpring = { ...UI_SPRING, stiffness: 320, damping: 30 };
+      const leftMotion = springAnimate(left, nextGeometry.left, { ...(rightward ? trailingSpring : UI_SPRING), onUpdate: value => { left = value; paint(); } });
+      const rightMotion = springAnimate(right, nextGeometry.left + nextGeometry.width, { ...(rightward ? UI_SPRING : trailingSpring), onUpdate: value => { right = value; paint(); } });
+      const topMotion = springAnimate(top, nextGeometry.top, { ...UI_SPRING, onUpdate: value => { top = value; paint(); } });
+      const animation = { stop: () => { leftMotion.stop(); rightMotion.stop(); topMotion.stop(); } };
       indicatorAnimationRef.current = animation;
-      animation.onfinish = () => {
+      void Promise.all([leftMotion, rightMotion, topMotion]).then(() => {
         if (indicatorAnimationRef.current === animation) {
+          indicator.style.transform = finalTransform;
           indicatorAnimationRef.current = null;
         }
-      };
+      });
     };
 
     updateIndicator();

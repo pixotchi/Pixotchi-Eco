@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,6 @@ import Image from 'next/image';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { erc20Abi,parseUnits } from 'viem';
-import { TokenAmount } from '@/components/ui/token-amount';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { useAccount } from 'wagmi';
 import SmartWalletTransaction from './smart-wallet-transaction';
@@ -389,7 +389,7 @@ export default function BatchClaimCard({
               Insufficient PIXOTCHI Balance
             </div>
             <div className="text-[10px] font-mono text-muted-foreground">
-              Required: {BURN_AMOUNT_TOKENS} to burn | Balance: <TokenAmount amount={pixotchiBalance} unit="PIXOTCHI" />
+              {getBalanceShortfallMessage(pixotchiBalance, burnAmountWei, 'PIXOTCHI')}
             </div>
           </div>
         ) : (

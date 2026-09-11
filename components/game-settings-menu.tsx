@@ -12,6 +12,7 @@ import { openExternalUrl } from "@/lib/open-external";
 import { setDialogOpener } from "@/lib/dialog-focus";
 import { useEthMode } from "@/lib/eth-mode-context";
 import { useSmartWallet } from "@/lib/smart-wallet-context";
+import { useSensoryPreferences, setSensoryPreference } from '@/lib/sensory-feedback';
 import packageJson from "@/package.json";
 
 const FeedbackDialog = dynamic(() => import("@/components/feedback-dialog"));
@@ -38,6 +39,7 @@ const FarcasterBrandIcon = ({ className }: { className?: string }) => (
 );
 
 export function GameSettingsMenu({ onAbout }: { onAbout: () => void }) {
+  const sensory = useSensoryPreferences();
   const { start, enabled } = useSlideshow();
   const { isEthMode, toggleEthMode, isFeatureEnabled: ethModeFeatureEnabled } = useEthMode();
   const { isSmartWallet } = useSmartWallet();
@@ -79,6 +81,8 @@ export function GameSettingsMenu({ onAbout }: { onAbout: () => void }) {
           checked={performanceModeEnabled}
           onCheckedChange={() => setPerformanceModeEnabled(current => !current)}
         />
+        <MenuSwitchItem label="Touch feedback" description="Subtle haptics on supported devices" checked={sensory.haptics} onCheckedChange={() => setSensoryPreference('haptics', !sensory.haptics)} />
+        <MenuSwitchItem label="Interaction sounds" description="Quiet game and confirmation sounds" checked={sensory.sounds} onCheckedChange={() => setSensoryPreference('sounds', !sensory.sounds)} />
         <DropdownMenuSeparator className="my-2" />
         {enabled && (
           <DropdownMenuItem onSelect={() => { pendingDialogRef.current = () => start(); }} className={actionClassName}>

@@ -13,6 +13,7 @@ import {
 import { usePaymaster } from "@/lib/paymaster-context";
 import { getHighestTransactionReceiptBlock } from "@/lib/transaction-utils";
 import type { TransactionCall } from "@/lib/types";
+import { haptic } from "@/lib/sensory-feedback";
 
 import GlobalTransactionToast from "./global-transaction-toast";
 import {
@@ -88,6 +89,7 @@ export default function GameTransaction({
   const { address } = useAccount();
   const { isSponsored: paymasterEnabled } = usePaymaster();
   const successHandledRef = useRef(false);
+  const tactileProofRef = useRef<string | null>(null);
   const [outcome, setOutcome] = useState(successMessage ?? `${buttonText} completed`);
   const resolvedAtomicity = atomicity ?? (calls.length > 1 ? "required" : "single");
   const intent = useMemo<GameTransactionIntent>(() => ({
@@ -137,6 +139,11 @@ export default function GameTransaction({
       }
     }
     if (!confirmation.isCurrent()) return;
+    const tactileProof = proof.transactionHash ?? proof.callsId;
+    if (tactileProof && tactileProofRef.current !== tactileProof) {
+      tactileProofRef.current = tactileProof;
+      haptic('success');
+    }
     if (status.statusData.correlationId) {
       try {
         track("game_transaction_reconciliation", {

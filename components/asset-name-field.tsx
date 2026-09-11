@@ -21,7 +21,7 @@ export function AssetNameField({ asset, assetId, value, onChange, disabled, curr
       <span className="text-muted-foreground">{asset === 'plant' ? 'Plant' : 'Land'} #{assetId}</span>
     </div>
     <Input id={id} value={value} onChange={event => onChange(event.target.value)} disabled={disabled}
-      placeholder="For example, Sunny" autoComplete="off" className="w-full font-pixel"
+      placeholder="For example, Sunny" autoComplete="off" className="w-full font-semibold tracking-tight"
       aria-invalid={Boolean(error)} aria-describedby={`${id}-help ${id}-feedback`} />
     <p id={`${id}-help`} className="text-xs leading-relaxed text-muted-foreground">Up to {validation.maxBytes} basic letters or numbers. Accented letters and emoji use more space.</p>
     <p id={`${id}-feedback`} role={error ? 'alert' : 'status'} className={`text-sm ${error ? 'text-destructive' : 'text-muted-foreground'}`}>

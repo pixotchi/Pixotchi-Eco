@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,6 @@ import { AlertTriangle, Loader2, Lock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { erc20Abi, parseUnits } from "viem";
-import { TokenAmount } from '@/components/ui/token-amount';
 import { useAccount } from "wagmi";
 import SmartWalletTransaction from "./smart-wallet-transaction";
 import type { LifecycleStatus } from "./transaction-kit";
@@ -598,8 +598,7 @@ export default function BatchQuestStartCard({
                 Insufficient PIXOTCHI Balance
               </div>
               <div className="font-mono text-[10px] text-muted-foreground">
-                Required: {BURN_AMOUNT_TOKENS.toLocaleString()} to burn | Balance:{" "}
-                <TokenAmount amount={pixotchiBalance} unit="PIXOTCHI" />
+                {getBalanceShortfallMessage(pixotchiBalance, burnAmountWei, 'PIXOTCHI')}
               </div>
             </div>
           ) : (

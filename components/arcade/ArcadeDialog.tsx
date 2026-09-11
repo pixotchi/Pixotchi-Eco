@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { ResourceState } from "@/components/ui/resource-state";
 import { parseSpinMetadata, parseSpinCommit, type SpinMetadata, type SpinRewardPreview } from "@/lib/spin-metadata";
@@ -1548,7 +1549,7 @@ function ScopedArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
 
           {selectedGame === "box" && boxHasInsufficientStars && (
             <InlineBalanceNotice>
-              Not enough Stars. Balance: {starsAvailable} • Required: {boxStarCost}
+              {getBalanceShortfallMessage(BigInt(starsAvailable), BigInt(boxStarCost), 'Stars', 0)}
             </InlineBalanceNotice>
           )}
 
@@ -1556,7 +1557,7 @@ function ScopedArcadeDialog({ open, onOpenChange, plant }: ArcadeDialogProps) {
 
           {selectedGame === "spin" && spinHasInsufficientStars && (
             <InlineBalanceNotice>
-              Not enough Stars. Balance: {starsAvailable} • Required: {spinStarCost}
+              {getBalanceShortfallMessage(BigInt(starsAvailable), BigInt(spinStarCost), 'Stars', 0)}
             </InlineBalanceNotice>
           )}
         </DialogFooter>

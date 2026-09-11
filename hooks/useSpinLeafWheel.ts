@@ -1,5 +1,6 @@
 "use client";
 
+import { useMechanicalFeedback } from './useMechanicalFeedback';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 export const SPIN_LEAF_SEGMENTS = 6;
@@ -8,6 +9,7 @@ type WheelPhase = "idle" | "spinning" | "revealing" | "settling";
 
 /** Cosmetic wheel ownership. Receipt decoding and chain readiness stay in the round controller. */
 export function useSpinLeafWheel({ active, pending }: { active: boolean; pending: boolean }) {
+  useMechanicalFeedback(active && pending);
   const rotorRef = useRef<HTMLDivElement | null>(null);
   const [phase, setPhase] = useState<WheelPhase>("idle");
   const [rotation, setRotation] = useState(0);

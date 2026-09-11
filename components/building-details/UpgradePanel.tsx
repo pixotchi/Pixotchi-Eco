@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import React from 'react';
 import { useAccount } from 'wagmi';
@@ -227,13 +228,13 @@ export default function UpgradePanel({
           )}
           {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
             <InlineBalanceNotice>
-              Not enough LEAF. Balance: {formatTokenAmount(userLeafBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostLeaf)}
+              {getBalanceShortfallMessage(userLeafBalance, building.levelUpgradeCostLeaf, 'LEAF')}
               {' '}• Missing: {formatTokenAmount(building.levelUpgradeCostLeaf - userLeafBalance)} LEAF
             </InlineBalanceNotice>
           )}
           {hasInsufficientPixotchi && building.isUpgrading && (
             <InlineBalanceNotice>
-              Not enough PIXOTCHI. Balance: {formatTokenAmount(userPixotchiBalance)} • Required: {formatTokenAmount(building.levelUpgradeCostSeedInstant)}
+              {getBalanceShortfallMessage(userPixotchiBalance, building.levelUpgradeCostSeedInstant, 'PIXOTCHI')}
               {' '}• Missing: {formatTokenAmount(building.levelUpgradeCostSeedInstant - userPixotchiBalance)} PIXOTCHI
             </InlineBalanceNotice>
           )}

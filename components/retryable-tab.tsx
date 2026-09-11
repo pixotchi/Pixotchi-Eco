@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useState, type ComponentType } from 'react';
 import { Button } from '@/components/ui/button';
-import { BasePageLoader } from '@/components/ui/loading';
+import { ContentSkeleton } from '@/components/ui/content-skeleton';
 import { createRetryableResource } from '@/lib/retryable-resource';
 
 /** Client-only chunk loading with a local retry; retained tabs/drafts stay mounted. */
@@ -20,7 +20,7 @@ export function createRetryableTab(importModule: () => Promise<{ default: Compon
       return () => { current = false; };
     }, [attempt]);
     if (component) { const Component = component; return <Component />; }
-    if (!failed) return <BasePageLoader />;
+    if (!failed) return <ContentSkeleton label={`Loading ${name}`} kind={/activity|ranking|leaderboard/i.test(name) ? 'list' : /swap/i.test(name) ? 'swap' : 'cards'} />;
     return <div className="space-y-4 p-8 text-center" role="alert">
       <p className="text-sm font-medium">Could not load {name}.</p>
       <p className="text-sm text-muted-foreground">Check your connection and try again.</p>

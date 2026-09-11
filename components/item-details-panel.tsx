@@ -1,4 +1,6 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
+import { microSound } from '@/lib/sensory-feedback';
 
 import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
 import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
@@ -323,6 +325,7 @@ export default function ItemDetailsPanel({
     : itemPurchaseLabel;
 
   const handlePurchaseSuccess = (tx: UntypedValue) => {
+    if (itemType === 'garden') microSound('water');
     onPurchaseSuccess();
 
     try {
@@ -486,7 +489,7 @@ export default function ItemDetailsPanel({
 
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">For Plant:</span>
-            <span className="font-pixel">
+            <span className="font-semibold tracking-tight">
               {selectedPlant.name || `#${selectedPlant.id}`}
             </span>
           </div>
@@ -619,8 +622,7 @@ export default function ItemDetailsPanel({
 
           {hasInsufficientFunds && !isEthMode && (
             <InlineBalanceNotice>
-              <p>You need <TokenAmount amount={quoteSeedCost - userSeedBalance} unit="SEED" mode="cost" withIcon={false} /> more.</p>
-              <p className="mt-1">Available: <TokenAmount amount={userSeedBalance} unit="SEED" withIcon={false} />.</p>
+              {getBalanceShortfallMessage(userSeedBalance, quoteSeedCost, 'SEED')}
             </InlineBalanceNotice>
           )}
 

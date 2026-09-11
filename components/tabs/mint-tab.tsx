@@ -1,4 +1,5 @@
 'use client';
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import { usePrimaryName } from '@/components/hooks/usePrimaryName';
 import { MintShareModal } from '@/components/mint-share-modal';
@@ -726,9 +727,6 @@ export default function MintTab() {
       : false;
     const showEthPlantMint = plantUsesEth && selectedStrain;
     const paymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
-    const plantBalanceLabel = selectedStrain?.paymentPrice !== undefined
-      ? formatTokenAmount(paymentTokenBalance)
-      : formatTokenAmount(seedBalanceRaw);
     const plantRequiredLabel = selectedStrain?.paymentPrice !== undefined
       ? formatTokenAmount(selectedStrain.paymentPrice)
       : formatNumber(selectedStrain?.mintPrice || 0);
@@ -878,7 +876,7 @@ export default function MintTab() {
                     </>
                   ) : ethQuote && ethBalance < ethQuote.ethAmountWithBuffer && (
                     <InlineBalanceNotice>
-                      Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethQuote.ethAmountWithBuffer, 18, 18)}
+                      {getBalanceShortfallMessage(ethBalance, ethQuote.ethAmountWithBuffer, 'ETH')}
                     </InlineBalanceNotice>
                   )}
                 </div>
@@ -910,7 +908,7 @@ export default function MintTab() {
               {!plantUsesEth && selectedStrain && hasInsufficientPlantBalance && (
                 <div className="space-y-2">
                   <InlineBalanceNotice tone="neutral" className="text-sm">
-                    Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} • Required: {plantRequiredLabel}
+                    {getBalanceShortfallMessage(selectedStrain.paymentPrice !== undefined ? paymentTokenBalance : seedBalanceRaw, requiredPayment, paymentTokenSymbol)}
                   </InlineBalanceNotice>
                   {paymentTokenSymbol === 'SEED'
                     ? <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
@@ -1079,7 +1077,7 @@ export default function MintTab() {
                   </>
                 ) : landEthQuote && ethBalance < landEthQuote.ethAmountWithBuffer && (
                   <InlineBalanceNotice>
-                    Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(landEthQuote.ethAmountWithBuffer, 18, 18)}
+                    {getBalanceShortfallMessage(ethBalance, landEthQuote.ethAmountWithBuffer, 'ETH')}
                   </InlineBalanceNotice>
                 )}
               </div>
@@ -1095,7 +1093,7 @@ export default function MintTab() {
                 ) : hasInsufficientLandBalance ? (
                   <>
                     <InlineBalanceNotice tone="neutral" className="text-sm">
-                      Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} • Required: {formatTokenAmount(landMintPrice)}
+                      {getBalanceShortfallMessage(seedBalanceRaw, landMintPrice, 'SEED')}
                     </InlineBalanceNotice>
                     <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
                   </>

@@ -1,5 +1,7 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
+import { ContentSkeleton } from "@/components/ui/content-skeleton";
 import EditPlantName from "@/components/edit-plant-name";
 import { AssetTitle } from '@/components/asset-title';
 import { PlantClaimSummary } from '@/components/plant-claim-summary';
@@ -27,7 +29,6 @@ DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AssetCarouselButton } from "@/components/ui/asset-carousel-button";
 import { Input } from "@/components/ui/input";
-import { BaseExpandedLoadingPageLoader } from "@/components/ui/loading";
 import { StandardContainer } from "@/components/ui/pixel-container";
 import { InlineBalanceNotice } from "@/components/ui/premium";
 import { useReviveReadiness } from '@/hooks/useReviveReadiness';
@@ -76,7 +77,7 @@ const SolanaBridgeButton = dynamic(() => import("@/components/transactions/solan
 const ItemDetailsPanel = dynamic(() => import("@/components/item-details-panel"), {
   loading: () => (
     <div className="flex min-h-[16rem] items-center justify-center rounded-[var(--radius-panel)] border border-border/60 bg-card/80">
-      <BaseExpandedLoadingPageLoader text="Loading plant care…" />
+      <ContentSkeleton kind="care" label="Loading plant care" />
     </div>
   ),
   ssr: false,
@@ -470,7 +471,7 @@ export default function PlantsView() {
                       {selectedPlant ? (
                         <div className="flex min-w-0 items-center space-x-2">
                           <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                          <span className="truncate font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                          <span className="truncate font-semibold tracking-tight">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
                         </div>
                       ) : "Select a Plant"}
                       <ChevronDown className="h-4 w-4 shrink-0" />
@@ -481,7 +482,7 @@ export default function PlantsView() {
                       <DropdownMenuItem key={plant.id} onSelect={() => choosePlant(plant.id)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <PlantImage selectedPlant={plant} width={24} height={24} />
-                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Level {plant.level})</span>
+                          <span className="truncate"><span className="font-semibold tracking-tight">{plant.name || `Plant #${plant.id}`}</span> (Level {plant.level})</span>
                         </div>
                       </DropdownMenuItem>
                     ))}
@@ -838,7 +839,7 @@ export default function PlantsView() {
                           />
                         {seedBalance < revivePrice && reviveReads.ready && (
                           <InlineBalanceNotice>
-                            Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(revivePrice)}
+                            {getBalanceShortfallMessage(seedBalance, revivePrice, 'SEED')}
                           </InlineBalanceNotice>
                         )}
                       </>

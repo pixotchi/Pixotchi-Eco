@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from '@/lib/sensory-feedback';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Building2 } from 'lucide-react';
 import { CLIENT_ENV } from '@/lib/env-config';
@@ -28,7 +29,7 @@ export function BuildingTile({ label, subtitle, selected, onSelect, icon, status
   label: string; subtitle: string; selected: boolean; onSelect: () => void;
   icon: React.ReactNode; status?: React.ReactNode; ariaLabel: string;
 }) {
-  return <button type="button" onClick={onSelect} aria-label={ariaLabel} aria-pressed={selected}
+  return <button type="button" onClick={() => { haptic('light'); onSelect(); }} aria-label={ariaLabel} aria-pressed={selected}
     className={`building-button building-element relative flex min-h-28 min-w-0 w-full flex-col items-center gap-1 rounded-[var(--radius-control)] border px-1 py-2 text-center transition-[background-color,border-color,box-shadow,opacity,scale] duration-[var(--motion-quick)] ease-[var(--ease-standard)] active:scale-[0.985] focus-visible:active:scale-100 focus-visible:transition-none motion-reduce:active:scale-100 motion-reduce:active:opacity-90 [.motion-off_&]:active:scale-100 [.motion-off_&]:active:opacity-90 [.performance-mode_&]:active:scale-100 [.performance-mode_&]:active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background ${selected ? 'border-primary/45 bg-primary/10 bg-[image:var(--gradient-selection)] shadow-[var(--shadow-glow)]' : 'border-border/45 bg-card/75 surface-shadow hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))]'}`}>
     <span className="relative flex h-16 w-16 shrink-0 items-center justify-center">{icon}</span>
     <span className="flex w-full flex-col items-center gap-0.5">

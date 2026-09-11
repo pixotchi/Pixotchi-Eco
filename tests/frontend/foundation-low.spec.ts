@@ -106,33 +106,35 @@ test('normal pointer selection survives observer delivery and retargets while ke
   const group = page.getByRole('radiogroup', { name: 'Sample selection' });
   const pill = group.locator(':scope > span[aria-hidden=true]');
   await group.getByRole('radio', { name: 'One', exact: true }).click();
-  await group.evaluate(node => (node as HTMLElement).style.setProperty('--motion-standard', '2s'));
-  await group.getByRole('radio', { name: 'Two', exact: true }).click();
-  const afterObserver = await pill.evaluate(async node => {
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return node.getAnimations().map(animation => ({ state: animation.playState, duration: animation.effect?.getTiming().duration }));
-  });
-  expect(afterObserver).toEqual([{ state: 'running', duration: 2000 }]);
-
-  const retarget = await pill.evaluate(async node => {
-    const current = node.getAnimations()[0];
-    current.pause(); current.currentTime = 500;
+  const samples = await pill.evaluate(async node => {
     const container = node.parentElement!;
-    const previousLeft = node.getBoundingClientRect().left - container.getBoundingClientRect().left - container.clientLeft + container.scrollLeft;
-    container.querySelector<HTMLButtonElement>('[role=radio]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    const two = container.querySelectorAll<HTMLButtonElement>('[role=radio]')[1];
+    const start = node.getBoundingClientRect().left;
+    const target = two.getBoundingClientRect().left;
+    two.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    const next = node.getAnimations()[0];
-    const first = (next?.effect as KeyframeEffect | null)?.getKeyframes()[0];
-    return { state: next?.playState, delta: typeof first?.transform === 'string' ? Math.abs(new DOMMatrixReadOnly(first.transform).m41 - previousLeft) : null };
+    const middle = node.getBoundingClientRect().left;
+    const before = node.getBoundingClientRect();
+    container.querySelector<HTMLButtonElement>('[role=radio]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await new Promise<void>(resolve => queueMicrotask(resolve));
+    const after = node.getBoundingClientRect();
+    return { start, target, middle, jump: Math.abs(after.left - before.left) + Math.abs(after.width - before.width) };
   });
-  expect(retarget.state).toBe('running'); expect(retarget.delta).not.toBeNull(); expect(retarget.delta!).toBeLessThan(2);
-
+  expect(samples.middle).toBeGreaterThan(samples.start);
+  expect(samples.middle).toBeLessThan(samples.target);
+  expect(samples.jump).toBeLessThan(2);
+  const alignment = async (name: string) => {
+    const a = (await pill.boundingBox())!, b = (await group.getByRole('radio', { name, exact: true }).boundingBox())!;
+    return Math.abs(a.x - b.x) + Math.abs(a.width - b.width);
+  };
+  await expect.poll(() => alignment('One')).toBeLessThan(2);
   await group.getByRole('radio', { name: 'One', exact: true }).focus(); await page.keyboard.press('ArrowRight');
   await expect(group.getByRole('radio', { name: 'Two', exact: true })).toBeChecked();
-  await expect.poll(() => pill.evaluate(node => node.getAnimations().length)).toBe(0);
+  expect(await alignment('Two')).toBeLessThan(2);
   await group.getByRole('radio', { name: 'One', exact: true }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect.poll(() => pill.evaluate(node => node.getAnimations().length)).toBe(0);
+  await expect.poll(() => alignment('One')).toBeLessThan(2);
+
 });
 
 test('broken remote avatar renders the stable generated fallback', async ({ page }) => {

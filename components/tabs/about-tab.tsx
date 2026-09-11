@@ -15,7 +15,7 @@ export default function AboutTab() {
           </div>
           <div className="space-y-4">
             <p className="leading-relaxed text-foreground/85">
-              <span className="font-pixel text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base. Care for plants, develop lands, and compete on the global leaderboard. Plant points contribute to your share when ETH rewards are distributed; reward amounts vary.
+              <span className="font-semibold tracking-tight text-foreground">PIXOTCHI</span> is a tamagotchi-style onchain game on Base. Care for plants, develop lands, and compete on the global leaderboard. Plant points contribute to your share when ETH rewards are distributed; reward amounts vary.
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
               Build Village production buildings to accumulate points and lifetime, then collect and apply those resources to your plants through Warehouse. You can also buy Plant care items or unlock Town features such as quests and the LEAF marketplace.

@@ -1,4 +1,5 @@
 'use client';
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import { swapAmountFontSize } from "@/components/swap-amount-layout";
 import { SwapAmountCard, SWAP_EDITABLE_AMOUNT_CLASS, SWAP_OUTPUT_AMOUNT_CLASS } from '@/components/transactions/swap-amount-card';
@@ -496,6 +497,9 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
   );
+  const insufficientBalanceMessage = hasInsufficientBalance && parsedAmount
+    ? getBalanceShortfallMessage(sellBalanceRaw, parsedAmount, SWAP_TOKEN_MAP[sellToken].displaySymbol, SWAP_TOKEN_MAP[sellToken].decimals)
+    : null;
   const usesSmartWalletBatch =
     isSmartWallet &&
     typeof walletClient?.sendCalls === 'function' &&
@@ -580,7 +584,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     }
 
     if (hasInsufficientBalance) {
-      return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+      return insufficientBalanceMessage;
     }
 
     if (hasInsufficientGas) {
@@ -615,6 +619,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     }
     return '\u00A0';
   }, [
+    insufficientBalanceMessage,
     buyToken,
     chainId,
     currentQuote,
@@ -1826,7 +1831,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     if (!spendingReadsReady && (balanceReadError || !hasSpendingSnapshot)) return balanceReadError ? 'Balance unavailable. Retry the balance check.' : 'Checking spendable balances…';
     if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
-    if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
+    if (hasInsufficientBalance) return insufficientBalanceMessage;
     if (hasInsufficientGas) return null;
     if (isDeferredLagging || isQuoteLoading) return S.quote.loading;
     if (currentQuote?.strategy === 'blocked') return currentQuote.blockedReason || S.errors.blockedPairFallback;
@@ -1834,6 +1839,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     if (feeUnavailable) return feeQuery.isError ? 'Network fee unavailable. Retry the estimate.' : 'Checking the network fee...';
     return null;
   }, [
+    insufficientBalanceMessage,
     chainId,
     currentQuote,
     feeUnavailable,

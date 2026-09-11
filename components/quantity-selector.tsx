@@ -2,6 +2,7 @@
 
 import React, { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { haptic } from '@/lib/sensory-feedback';
 import { Minus, Plus } from 'lucide-react';
 
 interface QuantitySelectorProps {
@@ -40,6 +41,7 @@ export default function QuantitySelector({
     setMessage('');
     onValidityChange?.(true);
     if (quantity < max) {
+      haptic('light');
       onQuantityChange(quantity + 1);
     }
   };
@@ -49,6 +51,7 @@ export default function QuantitySelector({
     setMessage('');
     onValidityChange?.(true);
     if (quantity > min) {
+      haptic('light');
       onQuantityChange(quantity - 1);
     }
   };

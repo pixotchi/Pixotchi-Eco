@@ -1,4 +1,6 @@
 "use client";
+import { animate } from 'motion';
+import { consumeSurfaceOrigin, UI_SPRING, useQuietMotion } from '@/lib/motion';
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -141,6 +143,7 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     danger?: boolean;
+    morphFromTrigger?: boolean;
     /** Let header/footer scroll with the body if enlarged text or a short viewport leaves too little body space. */
     adaptiveScroll?: boolean;
     padding?: "default" | "compact" | "none";
@@ -162,6 +165,7 @@ const DialogContent = React.forwardRef<
   children,
   className,
   danger = false,
+  morphFromTrigger = false,
   adaptiveScroll = false,
   padding = "default",
   frameClassName,
@@ -197,6 +201,27 @@ const DialogContent = React.forwardRef<
   const feedbackHostRef = useDialogFeedbackHostRef(dialogOpen);
   const frameRef = React.useRef<HTMLDivElement | null>(null);
   const [surfaceNode, setSurfaceNode] = React.useState<HTMLDivElement | null>(null);
+  const quietMotion = useQuietMotion();
+  const wasOpen = React.useRef(false);
+  React.useLayoutEffect(() => {
+    if (!surfaceNode) return;
+    const opening = dialogOpen && !wasOpen.current;
+    wasOpen.current = dialogOpen;
+    const origin = opening && morphFromTrigger ? consumeSurfaceOrigin() : null;
+    if (quietMotion) { surfaceNode.style.transform = 'none'; return; }
+    const sheet = mobileMode === 'sheet' && window.matchMedia('(max-width: 639px)').matches;
+    let from = sheet ? 'translate3d(0, 48px, 0) scale(1, 1)' : 'translate3d(0, 8px, 0) scale(.96, .96)';
+    if (origin) {
+      const rect = surfaceNode.getBoundingClientRect();
+      // Keep the content legible while the surface traces back to its source tile.
+      const scale = Math.max(.7, Math.min(1, origin.width / rect.width));
+      const x = origin.left + origin.width / 2 - rect.left - rect.width / 2;
+      const y = origin.top + origin.height / 2 - rect.top - rect.height / 2;
+      from = `translate3d(${x}px, ${y}px, 0) scale(${scale}, ${scale})`;
+    }
+    const animation = animate(surfaceNode, { transform: opening ? [from, 'translate3d(0, 0, 0) scale(1, 1)'] : dialogOpen ? 'translate3d(0, 0, 0) scale(1, 1)' : from }, UI_SPRING);
+    return () => animation.stop();
+  }, [dialogOpen, surfaceNode, quietMotion, mobileMode, morphFromTrigger]);
   const scrollTogether = useAdaptiveDialogScroll(surfaceNode, adaptiveScroll);
   const escapeCleanup = React.useRef<(() => void) | null>(null);
   const escapeHandler = React.useRef<(event: KeyboardEvent) => void>(() => {});
@@ -293,7 +318,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div
-        ref={adaptiveScroll ? setSurfaceNode : undefined}
+        ref={setSurfaceNode}
         data-viewport-debug-dialog-surface=""
         data-dialog-layout={layout}
         data-dialog-scroll={scrollTogether ? 'content' : 'body'}
@@ -309,10 +334,6 @@ const DialogContent = React.forwardRef<
           // Keep motion on the visual card. A transform on Radix Content turns the
           // full-screen focus scope into the containing block for fixed feedback,
           // which makes transaction notices appear attached to this card.
-          "[animation-duration:var(--motion-modal)] [animation-timing-function:var(--ease-standard)] data-[state=open]:animate-in data-[state=closed]:animate-out",
-          mobileMode === "sheet"
-            ? "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
-            : "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           /* Cap against the KEYBOARD-INCLUSIVE visual viewport, not just dvh:
              dvh ignores the on-screen keyboard on iOS, so a 90dvh panel kept its
              full height while the keyboard halved the screen and the sticky

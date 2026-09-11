@@ -17,6 +17,8 @@ import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
 import { Tab } from "@/lib/types";
 import { History,Info,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useTabSwipe } from '@/hooks/useTabSwipe';
+import { haptic } from '@/lib/sensory-feedback';
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { Activity,memo,useCallback,useEffect,useMemo,useRef,useState,type ComponentType,type KeyboardEvent } from "react";
@@ -393,9 +395,11 @@ export default function App() {
   const [keyboardSelectedTab, setKeyboardSelectedTab] = useState<Tab | null>(null);
   const handleTabChange = useCallback((tab: Tab, source: TabChangeSource) => {
     setKeyboardSelectedTab(source === "keyboard" ? tab : null);
+    if (source !== 'keyboard' && tab !== activeTab) haptic('light');
     setActiveTab(tab);
-  }, [setActiveTab]);
+  }, [activeTab, setActiveTab]);
   const shouldAnimateTabChange = keyboardSelectedTab !== activeTab;
+  useTabSwipe({ container: contentScrollRef, tabs: PRIMARY_APP_TABS.map(tab => tab.id), selected: activeTab, onSelect: tab => handleTabChange(tab, 'pointer'), animateSelection: shouldAnimateTabChange });
   const [frameAdded, setFrameAdded] = useState(false);
   const [showWalletProfile, setShowWalletProfile] = useState(false);
   const [WalletProfileComponent, setWalletProfileComponent] = useState<ComponentType<WalletProfileProps> | null>(null);
@@ -757,7 +761,7 @@ export default function App() {
                 ref={contentScrollRef}
                 onScroll={onContentScroll}
                 data-viewport-shell="content"
-                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y"
+                className="flex-1 overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y"
                 style={{
                   paddingTop: "var(--app-content-gutter)",
                   paddingRight: "var(--app-content-gutter)",
@@ -810,7 +814,6 @@ export default function App() {
                               activeTab === tab.id
                                 ? cn(
                                     'block min-h-0',
-                                    shouldAnimateTabChange && 'animate-tab-content-in',
                                     usesContainedTabLayout && 'h-full'
                                   )
                                 : 'hidden'

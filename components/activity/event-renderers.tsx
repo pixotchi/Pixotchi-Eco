@@ -20,7 +20,7 @@ const YouBadge = () => (
   <span className="ml-1 text-xs font-semibold text-info-strong">(You)</span>
 );
 
-const activityAssetNameClass = "font-pixel text-[0.86em] leading-normal";
+const activityAssetNameClass = "font-semibold tracking-tight text-[0.86em] leading-normal";
 
 const PlantName = ({ name, id, isYou }: { name?: string, id: string, isYou: boolean }) => {
   const plantId = getActivityAssetId(id);

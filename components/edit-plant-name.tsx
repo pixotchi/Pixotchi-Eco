@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 
 import { useIsSolanaWallet, useTwinAddress } from '@/components/solana';
 import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
@@ -26,7 +27,6 @@ import { useEthModeSafe } from '@/lib/eth-mode-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { Plant, TransactionCall } from '@/lib/types';
 import { formatTokenAmount } from '@/lib/utils';
-import { formatTokenDisplay } from '@/lib/token-display';
 import Image from 'next/image';
 import { useEffect,useMemo,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -342,7 +342,7 @@ function EditPlantName({
           )}
           {usesEthPayment && ethBalanceKnown && !canAffordNameChange && ethQuote ? (
             <InlineBalanceNotice>
-              Not enough ETH. Balance: {formatTokenDisplay(ethBalance, 18, 18)} • Required: {formatTokenDisplay(ethQuote.ethAmountWithBuffer, 18, 18)}
+              {getBalanceShortfallMessage(ethBalance, ethQuote.ethAmountWithBuffer, 'ETH')}
             </InlineBalanceNotice>
           ) : usesEthPayment && ethBalanceUnavailable && ethQuote ? (
             <InlineBalanceNotice>
@@ -354,7 +354,7 @@ function EditPlantName({
             </InlineBalanceNotice>
           ) : !isSolana && !usesEthPayment && seedBalanceKnown && !canAffordNameChange ? (
 	            <InlineBalanceNotice>
-	              Not enough SEED. Balance: {formatTokenAmount(seedBalance)} • Required: {formatTokenAmount(nameChangeCostWei)}
+	              {getBalanceShortfallMessage(seedBalance, nameChangeCostWei, 'SEED')}
 	            </InlineBalanceNotice>
           ) : null}
         </DialogFooter>

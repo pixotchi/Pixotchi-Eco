@@ -1,4 +1,5 @@
 "use client";
+import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
 import { getAttackOutcome } from "@/lib/ranking-outcome";
 import { isTransactionActionPending } from "@/lib/transaction-lifecycle";
 import { parseTransactionHash, type TransactionReceiptLike } from "@/lib/transaction-utils";
@@ -1277,7 +1278,7 @@ export default function LeaderboardTab() {
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Target
                     </div>
-                    <div className="truncate font-pixel text-sm">
+                    <div className="truncate font-semibold tracking-tight text-sm">
                       {targetPlant.name || `Plant #${targetPlant.id}`}
                     </div>
                     <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
@@ -1510,7 +1511,7 @@ export default function LeaderboardTab() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Dead target
                   </div>
-                  <div className="truncate font-pixel text-sm">
+                  <div className="truncate font-semibold tracking-tight text-sm">
                     {targetPlant.name || `Plant #${targetPlant.id}`}
                   </div>
                   <div className="text-xs text-muted-foreground">Collects 1 star</div>
@@ -1701,7 +1702,7 @@ export default function LeaderboardTab() {
                       <DisabledReason>Checking revive cost and SEED balance...</DisabledReason>
                     ) : !hasEnough && data && (
                       <InlineBalanceNotice>
-                        Not enough SEED. Balance: {formatTokenAmount(data.balance)} • Required: {formatTokenAmount(data.price)}
+                        {getBalanceShortfallMessage(data.balance, data.price, 'SEED')}
                       </InlineBalanceNotice>
                     )}
                   </>

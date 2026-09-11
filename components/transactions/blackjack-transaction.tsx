@@ -1,4 +1,5 @@
 "use client";
+import { microSound } from "@/lib/sensory-feedback";
 import { isGameTransactionFailure } from "@/lib/game-transaction-status";
 import { parseBlackjackTransactionResult, type BlackjackTransactionResult } from "@/lib/blackjack-events";
 import type { TransactionCall } from "@/lib/types";
@@ -291,6 +292,7 @@ export default function BlackjackTransaction({
                 onComplete?.({ success: true });
                 return;
             }
+            microSound('card');
             newReceipts.forEach(r => {
                 if (r?.transactionHash) processedTxHashes.current.add(r.transactionHash);
             });

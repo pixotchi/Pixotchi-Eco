@@ -1464,3 +1464,11 @@
 @media (max-width: 53.999rem), (pointer: coarse) {
   [data-form-control] { font-size: 1rem; }
 }
+
+/* Calm, content-shaped loading; transforms stay inside the reserved geometry. */
+.glass-skeleton { position: relative; overflow: hidden; isolation: isolate; }
+.glass-skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(100deg, transparent 20%, hsl(var(--foreground) / .045) 50%, transparent 80%); animation: glass-sweep 1.8s ease-in-out infinite; }
+@keyframes glass-sweep { to { transform: translateX(100%); } }
+.type-numeric, [role="timer"], .tabular-nums { font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+@media (prefers-reduced-motion: reduce) { .glass-skeleton::after { animation: none; } }
+.performance-mode .glass-skeleton::after { animation: none; }

@@ -458,7 +458,7 @@ export default function PlantProfileDialog({
               {/* Plant Info */}
               <div className="mt-6 mb-2 flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <DialogTitle className={`truncate text-2xl ${isWalletVariant ? 'font-bold' : 'font-pixel'}`}>
+                  <DialogTitle className={`truncate text-2xl ${isWalletVariant ? 'font-bold' : 'font-semibold tracking-tight'}`}>
                     {showPrimaryLoading ? <Skeleton className="h-7 w-40" /> : displayTitle}
                   </DialogTitle>
                   {displaySubtitle && !showPrimaryLoading && (
