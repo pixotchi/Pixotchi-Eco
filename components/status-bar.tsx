@@ -12,6 +12,7 @@ import { getClientGamificationPolicy } from "@/lib/gamification-client";
 import { openTasksDialog } from "@/lib/app-events";
 import { Button } from "./ui/button";
 import { cn } from '@/lib/utils';
+import { RotateCw } from 'lucide-react';
 
 function TasksRockIcon() {
   return (
@@ -20,7 +21,7 @@ function TasksRockIcon() {
       alt=""
       width={16}
       height={16}
-      className="h-4 w-4 object-contain max-[340px]:h-3.5 max-[340px]:w-3.5"
+      className="h-4 w-4 object-contain"
       aria-hidden="true"
     />
   );
@@ -192,10 +193,11 @@ export default function StatusBar({
   const ethText = ethLoading || ethBalance === undefined && !ethError
     ? <Skeleton className={balanceSkeletonClassName} />
     : ethValue;
-  const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1.5 max-[360px]:gap-1";
-  const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-bold leading-none tabular-nums max-[340px]:text-[11px]";
-  const balanceIconClassName = "h-[18px] w-[18px] shrink-0 max-[380px]:h-4 max-[380px]:w-4 max-[340px]:h-3.5 max-[340px]:w-3.5";
-  const statusActionButtonClassName = "px-2.5 max-tablet:h-8 max-tablet:min-h-8 max-tablet:py-1 max-[420px]:px-2 max-[420px]:!gap-1 max-[380px]:px-1.5 max-[340px]:text-[11px]";
+  const balanceItemClassName = "flex min-w-0 shrink-0 items-center gap-1 sm:gap-1.5";
+  const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-semibold leading-none tabular-nums sm:text-[0.8125rem]";
+  const balanceIconClassName = "h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]";
+  // Keep icons and labels side by side at every width, with tighter phone padding.
+  const statusActionButtonClassName = "min-w-[44px] max-[380px]:h-8 max-[380px]:min-h-8 max-sm:!gap-1 max-sm:px-1";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana
     ? solanaLoading ? <Skeleton className={balanceSkeletonClassName} /> : solanaError ? 'Unavailable' : formatTokenShort(solBalance, 9)
@@ -221,58 +223,59 @@ export default function StatusBar({
         className={
           isHeaderPlacement
             ? "w-full min-w-0 max-w-full px-0 py-0"
-            : "app-status-scroll bg-transparent px-4 pb-2 pt-1.5 max-[380px]:px-2 max-[340px]:px-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-[var(--radius-panel)] xl:border xl:border-[hsl(var(--border-strong)/0.28)] xl:bg-secondary/70"
+            : "bg-transparent px-4 pb-1 pt-0 max-[380px]:px-2 max-[340px]:px-1.5 xl:mx-4 xl:mb-3 xl:w-fit xl:max-w-full xl:rounded-[var(--radius-panel)] xl:border xl:border-[hsl(var(--border-strong)/0.28)] xl:bg-secondary/70"
         }
       >
-        <div className={isHeaderPlacement ? "flex w-full min-w-0 items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:justify-start"}>
-          <div tabIndex={0} className={cn("rounded-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring", isHeaderPlacement ? "app-status-scroll flex min-w-0 items-center gap-2 overflow-x-auto" : "app-status-scroll flex min-w-0 flex-1 items-center gap-2 max-[380px]:gap-1.5 max-[340px]:gap-1 xl:gap-3")} role="group" aria-label="Token balances">
+        <div className={isHeaderPlacement ? "flex w-full min-w-0 items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-sm:gap-1 xl:justify-start"}>
+          <div tabIndex={0} className={cn("app-status-scroll flex min-w-0 items-center gap-2 rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring", !isHeaderPlacement && "flex-1 sm:gap-3")} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
             {isSolana && (
               <div className={balanceItemClassName}>
                 <Image src="/icons/solana.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                 <span className="sr-only">SOL balance </span>
-                <span className={balanceTextClassName}>{solText}</span><span aria-hidden="true" className="hidden text-xs text-muted-foreground sm:inline">SOL</span>
+                <span className={balanceTextClassName}>{solText}</span>
               </div>
             )}
             {showEthBalance && (
               <div className={balanceItemClassName}>
                 <Image src="/icons/ethlogo.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                 <span className="sr-only">ETH balance </span>
-                <span className={balanceTextClassName}>{ethText}</span><span aria-hidden="true" className="hidden text-xs text-muted-foreground sm:inline">ETH</span>
+                <span className={balanceTextClassName}>{ethText}</span>
               </div>
             )}
             <div className={balanceItemClassName}>
               <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
               <span className="sr-only">SEED balance </span>
-              <span className={balanceTextClassName}>{seedText}</span><span aria-hidden="true" className="hidden text-xs text-muted-foreground sm:inline">SEED</span>
+              <span className={balanceTextClassName}>{seedText}</span>
             </div>
             {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
             {!isSolana && (
               <div className={balanceItemClassName}>
                 <Image src="/icons/leaf.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                 <span className="sr-only">LEAF balance </span>
-                <span className={balanceTextClassName}>{leafText}</span><span aria-hidden="true" className="hidden text-xs text-muted-foreground sm:inline">LEAF</span>
+                <span className={balanceTextClassName}>{leafText}</span>
               </div>
             )}
             <div className={balanceItemClassName}>
               <Image src="/icons/cc.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
               <span className="sr-only">PIXOTCHI balance </span>
-              <span className={balanceTextClassName}>{pixotchiText}</span><span aria-hidden="true" className="hidden text-xs text-muted-foreground sm:inline">PIXOTCHI</span>
+              <span className={balanceTextClassName}>{pixotchiText}</span>
             </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-[hsl(var(--divider)/0.72)]" : "hidden h-5 w-px bg-[hsl(var(--divider)/0.72)] xl:block"} aria-hidden="true" />
-          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-[420px]:gap-1">
+          <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-sm:gap-1">
             {balanceReadError && !balanceReadPending && (
               <Button
                 type="button"
                 onClick={retryBalances}
                 variant="statusAction"
-                size="touchCompact"
+                size="status"
                 className={statusActionButtonClassName}
+                leadingIcon={<RotateCw className="h-4 w-4" aria-hidden="true" />}
                 aria-label="Retry balance reads"
                 title={balanceErrorMessage || 'Retry balance reads'}
               >
-                Retry
+                <span>Retry</span>
               </Button>
             )}
             {/* Show Solana badge when connected via Solana */}
@@ -282,10 +285,11 @@ export default function StatusBar({
                 type="button"
                 onClick={handleTasksClick}
                 variant="statusAction"
-                size="touchCompact"
+                size="status"
                 leadingIcon={<TasksRockIcon />}
                 className={statusActionButtonClassName}
                 aria-label="Open tasks"
+                title="Tasks"
                 aria-haspopup="dialog"
               >
                 <span>Tasks</span>
@@ -297,10 +301,11 @@ export default function StatusBar({
                 type="button"
                 onClick={openStaking}
                 variant="statusAction"
-                size="touchCompact"
+                size="status"
                 leadingIcon={<StakeTokenPairIcon />}
                 className={statusActionButtonClassName}
                 aria-label="Open staking dialog"
+                title="Stake"
                 aria-expanded={stakingOpen}
                 aria-haspopup="dialog"
               >

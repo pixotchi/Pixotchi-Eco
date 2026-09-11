@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { GardenPreview } from './garden-preview';
 
 /**
  * The hook-free half of the login screen.
@@ -14,17 +15,19 @@ import Image from "next/image";
  */
 export function LoginHero({ title = "PIXOTCHI" }: { title?: string }) {
   return (
-    <div className="login-hero flex flex-col items-center space-y-3 mb-8">
-      <Image
-        src="/PixotchiKit/Logonotext.svg"
-        alt="Pixotchi Mini Logo"
-        width={80}
-        height={80}
-        preload
-        sizes="80px"
-        quality={90}
-      />
-      <h1 className="text-2xl font-pixel text-foreground">{title}</h1>
+    <div className="login-hero mb-5 flex w-full flex-col items-center gap-4">
+      <div className="flex items-center gap-2.5">
+        <Image
+          src="/PixotchiKit/Logonotext.svg"
+          alt="Pixotchi Mini Logo"
+          width={28}
+          height={28}
+          sizes="28px"
+          quality={90}
+        />
+        <h1 className="text-lg font-pixel text-foreground">{title}</h1>
+      </div>
+      <GardenPreview />
     </div>
   );
 }
@@ -32,9 +35,9 @@ export function LoginHero({ title = "PIXOTCHI" }: { title?: string }) {
 export function LoginIntro() {
   return (
     <>
-      <h2 className="login-intro-title text-xl font-semibold text-foreground mb-2">Welcome!</h2>
+      <h2 className="login-intro-title type-page-title mb-2 text-foreground">A little care. A growing world.</h2>
       <p className="login-intro-copy text-muted-foreground mb-6 max-w-xs md:max-w-md">
-        Connect your wallet, mint a plant and begin your farming journey on Base.
+        Find your first plant, keep it growing, and build your own farm on Base. Sign in with a wallet or email to begin.
       </p>
     </>
   );

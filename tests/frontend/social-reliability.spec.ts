@@ -25,33 +25,33 @@ test('Verify Claim ignores a slow already-claimed response from the previous wal
   const region = page.getByRole('region', { name: 'Claim reliability' });
   await region.getByRole('button', { name: 'Switch claim wallet' }).click();
   await region.getByRole('button', { name: 'B eligible' }).click();
-  await expect(region.getByRole('button', { name: 'Verify & Claim', exact: true })).toBeEnabled();
+  await expect(region.getByRole('button', { name: 'Check eligibility & claim', exact: true })).toBeEnabled();
   await region.getByRole('button', { name: 'A already claimed' }).click();
-  await expect(region.getByRole('button', { name: 'Verify & Claim', exact: true })).toBeEnabled();
+  await expect(region.getByRole('button', { name: 'Check eligibility & claim', exact: true })).toBeEnabled();
 });
 
 test('Verify Claim does not submit after the signer changes wallet', async ({ page }) => {
   const region = page.getByRole('region', { name: 'Claim reliability' });
   await region.getByRole('button', { name: 'A eligible' }).click();
-  await region.getByRole('button', { name: 'Verify & Claim', exact: true }).click();
+  await region.getByRole('button', { name: 'Check eligibility & claim', exact: true }).click();
   await region.getByRole('button', { name: 'Switch claim wallet' }).click();
   await region.getByRole('button', { name: 'Resolve signature' }).click();
   await region.getByRole('button', { name: 'B eligible' }).click();
-  await expect(region.getByRole('button', { name: 'Verify & Claim', exact: true })).toBeEnabled();
+  await expect(region.getByRole('button', { name: 'Check eligibility & claim', exact: true })).toBeEnabled();
   await expect(region.getByLabel('Submitted claims')).toHaveText('0');
 });
 
 test('a submitted old-wallet claim cannot celebrate under the new wallet', async ({ page }) => {
   const region = page.getByRole('region', { name: 'Claim reliability' });
   await region.getByRole('button', { name: 'A eligible' }).click();
-  await region.getByRole('button', { name: 'Verify & Claim', exact: true }).click();
+  await region.getByRole('button', { name: 'Check eligibility & claim', exact: true }).click();
   await region.getByRole('button', { name: 'Resolve signature' }).click();
   await expect(region.getByLabel('Submitted claims')).toHaveText('1');
   await region.getByRole('button', { name: 'Switch claim wallet' }).click();
   await region.getByRole('button', { name: 'B eligible' }).click();
   await region.getByRole('button', { name: 'Resolve submitted claim' }).click();
   await expect(region.getByLabel('Claim successes')).toHaveText('0');
-  await expect(region.getByRole('button', { name: 'Verify & Claim', exact: true })).toBeEnabled();
+  await expect(region.getByRole('button', { name: 'Check eligibility & claim', exact: true })).toBeEnabled();
 });
 
 for (const replaceHistory of ['none', 'after', 'during'] as const) {

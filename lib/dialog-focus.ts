@@ -29,6 +29,12 @@ function recordPointer(event: PointerEvent) {
 
 function clearPointer() { pointerOpener = null; }
 
+/** Hand off a menu action to a dialog whose opener must survive menu unmount. */
+export function setDialogOpener(opener: HTMLElement) {
+  pointerOpener = opener;
+  pointerTime = Date.now();
+}
+
 export function trackDialogOpeners() {
   if (roots++ === 0) {
     document.addEventListener('pointerdown', recordPointer, true);

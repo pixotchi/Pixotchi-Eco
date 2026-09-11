@@ -577,7 +577,7 @@ export default function SwapTab() {
         ]} />
       </div>
       <TabCard className={formVisible ? 'min-w-0' : 'hidden'}>
-        <CardHeader><CardTitle>Swap</CardTitle></CardHeader>
+        <CardHeader><CardTitle level="page">Swap</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {isSwapModuleDisabled ? <SwapLockedState message={swapDisabledMessage} /> : (
             <ErrorBoundary variant="inline" showErrorDetails><PixotchiSwapPanel isPanelVisible={formVisible} /></ErrorBoundary>
@@ -587,13 +587,13 @@ export default function SwapTab() {
       </TabCard>
       {(isDesktopSwapLayout || swapView === 'chart') && (
         <TabCard className="flex min-h-0 min-w-0 flex-col" padding="none">
-          <CardHeader className="px-4 pt-4"><CardTitle>Chart</CardTitle></CardHeader>
+          <CardHeader className="px-4 pt-4"><CardTitle level="page">Chart</CardTitle></CardHeader>
           <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4"><SeedChartPanel marketData={seedMarketData} showStats={!isDesktopSwapLayout} /></CardContent>
         </TabCard>
       )}
       {(isDesktopSwapLayout || swapView === 'info') && (
         <TabCard className="tablet:col-span-2">
-          <CardHeader><CardTitle>Token Info</CardTitle></CardHeader>
+          <CardHeader><CardTitle level="page">Token Info</CardTitle></CardHeader>
           <CardContent><TokenInfoPanel activeToken={activeInfoToken} currentBurnedSupplyLabel={currentBurnedSupplyLabel} isMiniApp={isMiniApp} rewardsData={seedMarketData} setActiveToken={setActiveInfoToken} /></CardContent>
         </TabCard>
       )}

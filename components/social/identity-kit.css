@@ -23,10 +23,11 @@ button.profile-follow-button.follow-button {
 
 button.profile-follow-button.follow-button-following,
 button.profile-follow-button.follow-button[aria-pressed="true"] {
-  border-color: hsl(var(--success) / 0.58) !important;
-  background-color: hsl(var(--success)) !important;
-  background-image: var(--gradient-success) !important;
-  color: hsl(var(--success-foreground)) !important;
+  border-color: hsl(var(--edge-panel)) !important;
+  background-color: hsl(var(--card)) !important;
+  background-image: none !important;
+  color: hsl(var(--foreground)) !important;
+  --tw-shadow: var(--shadow-hairline);
 }
 
 button.profile-follow-button.follow-button.pending {

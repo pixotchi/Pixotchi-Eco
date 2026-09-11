@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { LandResourceBadges } from '@/components/land-resource-badges';
 import { useLandQuestSlots } from '@/hooks/useLandQuestSlots';
 import { ResourceState } from '@/components/ui/resource-state';
+import { BackgroundRefresh } from '@/components/ui/background-refresh';
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyFarm } from '@/components/empty-farm';
 import { Card, CardContent, CardHeader, CardTitle, TabCard } from "@/components/ui/card";
@@ -87,7 +88,6 @@ type LandUtilityPanel = 'batch-claim' | 'batch-quests';
 type LandInvariant = (lands: Land[]) => boolean;
 type ApprovalFetchIdentity = { generation: number; ownerKey: string };
 type BuildingFetchIdentity = {
-  buildingType: BuildingType;
   generation: number;
   landId: bigint;
   ownerKey: string;
@@ -111,7 +111,6 @@ function buildingFetchIdentityMatches(
 ): boolean {
   return Boolean(
     left
-    && left.buildingType === right.buildingType
     && left.generation === right.generation
     && left.landId === right.landId
     && left.ownerKey === right.ownerKey
@@ -484,12 +483,11 @@ function LandsViewContent() {
     const landId = selectedLandId;
     const generation = ownerGenerationRef.current;
     // Preserve one follow-up only for the exact request already in flight. A
-    // different land/owner/generation/type starts a new authoritative request
+    // different land/owner/generation starts a new authoritative request
     // and invalidates any queued work owned by the older identity.
     const pendingIdentity = fetchBuildingDataPendingRef.current;
     if (
       pendingIdentity
-      && pendingIdentity.buildingType === buildingType
       && pendingIdentity.generation === generation
       && pendingIdentity.landId === landId
       && pendingIdentity.ownerKey === ownerKey
@@ -499,7 +497,6 @@ function LandsViewContent() {
     }
 
     const requestIdentity: BuildingFetchIdentity = {
-      buildingType,
       generation,
       landId,
       ownerKey,
@@ -524,8 +521,7 @@ function LandsViewContent() {
         buildingFetchIdentityMatches(fetchBuildingDataPendingRef.current, requestIdentity) &&
         ownerGenerationRef.current === generation &&
         ownerKeyRef.current === ownerKey &&
-        selectedLandIdRef.current === landId &&
-        buildingTypeRef.current === buildingType
+        selectedLandIdRef.current === landId
       ) {
         setSnapshotIdentity(`${ownerKey}:${landId}`);
         setVillageBuildings(villageData || []);
@@ -617,11 +613,14 @@ function LandsViewContent() {
         setTownBuildings(allTownBuildings);
 
         // Choose preferred building for the new land: try last selected id, else first
-        const currentBuildings = buildingType === 'village' ? (villageData || []) : allTownBuildings;
+        // Both areas belong to one land snapshot. A user may change areas while
+        // it loads; apply fresh data to their current selection, not the old one.
+        const currentType = buildingTypeRef.current;
+        const currentBuildings = currentType === 'village' ? (villageData || []) : allTownBuildings;
 
         if (currentBuildings.length > 0) {
           const mission = getPendingMissionLand();
-          const preferredId = mission?.owner === ownerKey && mission.landId === landId.toString() && mission.buildingType === buildingType
+          const preferredId = mission?.owner === ownerKey && mission.landId === landId.toString() && mission.buildingType === currentType
             ? mission.buildingId : lastSelectedBuildingIdRef.current;
 
           // If we have a preferred ID (e.g. from previous selection), try to find it in the NEW data
@@ -651,8 +650,7 @@ function LandsViewContent() {
         buildingFetchIdentityMatches(fetchBuildingDataPendingRef.current, requestIdentity) &&
         ownerGenerationRef.current === generation &&
         ownerKeyRef.current === ownerKey &&
-        selectedLandIdRef.current === landId &&
-        buildingTypeRef.current === buildingType
+        selectedLandIdRef.current === landId
       ) {
         setVillageBuildings([]);
         setTownBuildings([]);
@@ -677,14 +675,12 @@ function LandsViewContent() {
           && ownerGenerationRef.current === generation
           && ownerKeyRef.current === ownerKey
           && selectedLandIdRef.current === landId
-          && buildingTypeRef.current === buildingType
         ) {
           setTimeout(() => {
             if (
               ownerGenerationRef.current === generation
               && ownerKeyRef.current === ownerKey
               && selectedLandIdRef.current === landId
-              && buildingTypeRef.current === buildingType
             ) {
               void fetchBuildingData();
             }
@@ -692,7 +688,7 @@ function LandsViewContent() {
         }
       }
     }
-  }, [selectedLandId, buildingType, ownerKey, setSelectedBuilding]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
+  }, [selectedLandId, ownerKey, setSelectedBuilding]); // Selection persistence is tracked through lastSelectedBuildingIdRef.
 
   // When switching back to Warehouse, refresh the land summary to get latest warehouse balances
   useEffect(() => {
@@ -1150,7 +1146,10 @@ function LandsViewContent() {
           <TabCard className="xl:h-fit xl:w-full">
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>Buildings</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Buildings</CardTitle>
+                  <BackgroundRefresh active={buildingsLoading && snapshotMatches} label="Refreshing buildings" />
+                </div>
                 <div className="max-w-full xl:hidden">
                   <ToggleGroup
                     ariaLabel="Land area"
@@ -1175,8 +1174,7 @@ function LandsViewContent() {
             <CardContent>
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,1fr)] xl:items-start">
                 {/* Building Grid */}
-                <div aria-label="Choose a building" className="space-y-4">
-                  {buildingsLoading && snapshotMatches && <p role="status" className="text-xs text-muted-foreground">Refreshing this land’s buildings…</p>}
+                <div aria-label="Choose a building" aria-busy={buildingsLoading} className="space-y-4">
                   {buildingsError ? <ResourceState status="error" title="Buildings unavailable" description={buildingsError} onRetry={() => { void fetchBuildingData(); }} /> : buildingsLoading && (!villageBuildings.length && !townBuildings.length) ? (
                     <div className="text-center text-muted-foreground p-6">
                       Loading buildings...

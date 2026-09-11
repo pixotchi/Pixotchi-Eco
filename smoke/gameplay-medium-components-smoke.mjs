@@ -11,6 +11,7 @@ import { chromium, webkit, expect } from '@playwright/test';
 
 const cwd = process.cwd();
 const missionsOnly = process.argv.includes('--missions-only');
+const refreshOnly = process.argv.includes('--refresh-only');
 const batchEligibilityOnly = process.argv.includes('--batch-eligibility-only');
 const boundary = `
 import React, { useEffect, useRef } from 'react';
@@ -170,6 +171,49 @@ async function run(browserType,viewport){
  const settle=async(kind,value,fail=false)=>{await page.waitForFunction(k=>window.gameplayMedium.reads[k]?.length,kind);await page.evaluate(({kind,value,fail})=>{const r=window.gameplayMedium.reads[kind].shift();if(fail)r.reject(new Error('Injected read failure'));else r.resolve(value);},{kind,value,fail});};
   const garden=price=>[{id:'1',name:'Water',price,points:0,timeExtension:86400},{id:'2',name:'Mystery sprout',price:2n,points:0,timeExtension:0}];
  try {
+  if(refreshOnly) {
+   await go('scenario=lands');
+   const village = [{id:0,level:1,maxLevel:4,isUpgrading:false}];
+   const town = [{id:7,level:1,maxLevel:3,isUpgrading:false}];
+   await settle('village',village);await settle('town',town);await settle('landLeaf',10n);await settle('landSeed',10n);
+   const grid=page.getByLabel('Choose a building',{exact:true});
+   const choose=async(type,name)=>{
+    if(viewport.width<1280)await page.getByRole('radio',{name:type,exact:true}).click();
+    await page.getByRole('button',{name:'Select '+name,exact:true}).click();
+   };
+   const outstanding=()=>page.evaluate(()=>Object.fromEntries(['village','town'].map(k=>[k,window.gameplayMedium.reads[k].map(r=>r.id)])));
+   await choose('Town','Warehouse');await choose('Village','Solar Panels');await choose('Town','Warehouse');
+   assert.deepEqual(await outstanding(),{village:[],town:[]},'Selecting cached buildings must not refetch either area');
+   const documentTop=()=>grid.evaluate(el=>el.getBoundingClientRect().top+scrollY);
+   const originalTop=await documentTop();
+   const status=page.getByRole('status').filter({has:page.locator('svg')});
+   await page.clock.install();
+   const refresh=()=>page.evaluate(()=>window.dispatchEvent(new Event('buildings:refresh')));
+   await refresh();await expect(grid).toHaveAttribute('aria-busy','true');await page.clock.runFor(350);
+   await expect(status).toHaveCount(0);assert.equal(await documentTop(),originalTop);
+   await settle('village',village);await settle('town',town);await expect(grid).toHaveAttribute('aria-busy','false');
+   await page.clock.runFor(600);await expect(status).toHaveCount(0);assert.equal(await documentTop(),originalTop);
+   await refresh();await expect(grid).toHaveAttribute('aria-busy','true');await page.clock.runFor(600);
+   await expect(page.getByTitle('Refreshing buildings',{exact:true})).toBeVisible();assert.equal(await documentTop(),originalTop);
+   await grid.locator('..').locator('..').locator('..').screenshot({path:'output/medium-gameplay/'+browserType.name()+'-'+viewport.width+'-refresh-slow.png'});
+   await choose('Village','Solar Panels');await choose('Town','Warehouse');
+   assert.deepEqual(await outstanding(),{village:[1],town:[1]},'Changing areas during refresh must share the land request');
+   await settle('village',village);await settle('town',town);await expect(grid).toHaveAttribute('aria-busy','false');
+   await expect(page.locator('[data-detail-building="3"]')).toBeVisible();assert.equal(await documentTop(),originalTop);
+   await expect(status).toHaveCount(0);
+   await grid.locator('..').locator('..').locator('..').screenshot({path:'output/medium-gameplay/'+browserType.name()+'-'+viewport.width+'-refresh-settled.png'});
+   // A superseded land must neither replace the new snapshot nor consume its follow-up.
+   await refresh();await page.getByRole('button',{name:'Next land'}).click();
+   await expect(page.locator('[data-detail-land="1"]')).toHaveCount(0);
+   await refresh();await settle('village',village);await settle('town',town);
+   await expect(page.locator('[data-detail-land="1"]')).toHaveCount(0);await expect(grid).toHaveAttribute('aria-busy','true');
+   await settle('village',[{...village[0],level:4}]);await settle('town',town);await page.clock.runFor(1);
+   assert.deepEqual(await outstanding(),{village:[2],town:[2]},'Only the current land may drain its queued refresh');
+   await settle('village',[{...village[0],level:4}]);await settle('town',town);await expect(grid).toHaveAttribute('aria-busy','false');
+   await choose('Village','Solar Panels');await expect(page.locator('[data-detail-land="2"]')).toContainText('Details level 4');
+   assert.deepEqual(pageErrors,[]);console.log(browserType.name()+' '+viewport.width+': cached area selection, fast/slow refresh without layout shift, selection preservation, and stale-land queue passed');
+   return;
+  }
   if(batchEligibilityOnly) {
    await go('scenario=batch-eligibility');
    await settle('village',[{id:0,level:1,maxLevel:4,isUpgrading:false}]);await settle('town',[{id:7,level:1,maxLevel:3,isUpgrading:false}]);await settle('landLeaf',10n);await settle('landSeed',10n);
@@ -210,7 +254,7 @@ async function run(browserType,viewport){
    await expect(page.getByText('Loading your lands...', {exact:true})).toHaveCount(1);
    await expect.poll(pending).toMatchObject(target);
    await page.evaluate(()=>window.gameplayMedium.mission.load());
-   await page.waitForFunction(()=>window.gameplayMedium.reads.village?.length>=2);
+   await page.waitForFunction(()=>window.gameplayMedium.reads.village?.length>=1);
    assert.equal(await page.evaluate(()=>window.gameplayMedium.reads.village.every(read=>read.id===2)),true,'Stored land must not replace the mission destination');
    await settleBuildings();
    await expect(page.locator('[data-detail-land="2"][data-detail-building="7"]')).toBeVisible();

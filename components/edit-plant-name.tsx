@@ -164,7 +164,7 @@ function EditPlantName({
   const ethButtonText = (() => {
     if (isTransactionPending) return 'Changing Name…';
     if (priceStatus !== 'ready') return priceStatus === 'loading' ? 'Checking rename price…' : 'Rename price unavailable';
-    if (ethQuoteLoading) return 'Updating ETH quote…';
+    if (ethQuoteLoading && !ethQuote) return 'Updating ETH quote…';
     if (!ethQuote) return 'ETH quote unavailable';
     if (!ethBalanceKnown) return ethBalanceLoading ? 'Checking ETH balance' : 'ETH balance unavailable';
     if (!canAffordNameChange) return 'Insufficient ETH';

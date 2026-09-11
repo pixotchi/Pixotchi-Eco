@@ -68,16 +68,17 @@ const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 
 CardHeader.displayName = 'CardHeader';
 
-const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, children, ...props }, ref) => {
+const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement> & { level?: 'page' | 'section' }>(
+  ({ className, children, level = 'section', ...props }, ref) => {
+    const Heading = level === 'page' ? 'h2' : 'h3';
     return (
-      <h3
+      <Heading
         ref={ref}
-        className={cn('type-section-title', className)}
+        className={cn(level === 'page' ? 'type-page-title' : 'type-section-title', className)}
         {...props}
       >
         {children}
-      </h3>
+      </Heading>
     );
   }
 );

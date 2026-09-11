@@ -409,7 +409,7 @@ const plantsViewSource = projectFile('components/tabs/plants-view.tsx');
 // A superseded land request must not consume or replay the selected land's
 // queued building refresh. The queue carries the same full identity as the
 // pending slot, and only the exact owner may drain it.
-assert.match(landsView, /type BuildingFetchIdentity = \{[\s\S]*buildingType: BuildingType;[\s\S]*generation: number;[\s\S]*landId: bigint;[\s\S]*ownerKey: string;[\s\S]*requestGeneration: number;/);
+assert.match(landsView, /type BuildingFetchIdentity = \{[\s\S]*generation: number;[\s\S]*landId: bigint;[\s\S]*ownerKey: string;[\s\S]*requestGeneration: number;/);
 assert.match(landsView, /requestGeneration: \+\+buildingFetchRequestGenerationRef\.current/);
 assert.match(landsView, /left\.requestGeneration === right\.requestGeneration/);
 assert.match(landsView, /fetchBuildingDataQueuedRef = useRef<BuildingFetchIdentity \| null>\(null\)/);
@@ -1352,24 +1352,11 @@ assert.doesNotMatch(
 );
 delete (globalThis as { window?: unknown }).window;
 
-// The About tab's docs link was removed in 436d689 and pinned out with a pair
-// of doesNotMatch assertions. It was reinstated on request as a fourth action
-// button, so the pin now asserts the intended shape instead of its absence.
-const aboutTab = projectFile('components/tabs/about-tab.tsx');
-assert.match(aboutTab, /openExternalUrl\('https:\/\/doc\.pixotchi\.tech'\)/);
-assert.match(aboutTab, /aria-label="Open Pixotchi documentation"/);
-// The mobile action grid is two columns, so only an odd number of buttons may
-// take a full-width final row. With the tutorial button that is four, without
-// it three — the span therefore belongs to the last button, not to Status.
-assert.match(
-  aboutTab,
-  /className=\{enabled \? "tablet:w-auto" : "col-span-2 tablet:col-span-1 tablet:w-auto"\}/,
-);
-assert.doesNotMatch(
-  aboutTab,
-  /onClick=\{\(\) => openExternalUrl\('https:\/\/status\.pixotchi\.tech'\)\}\s*\n\s*className=\{enabled \? "col-span-2/,
-  'Status must no longer carry the odd-count row span',
-);
+// Help destinations remain directly available in Settings after the About split.
+const gameSettings = projectFile('components/game-settings-menu.tsx');
+assert.match(gameSettings, /https:\/\/doc\.pixotchi\.tech/);
+assert.match(gameSettings, /Documentation/);
+assert.match(gameSettings, /https:\/\/status\.pixotchi\.tech/);
 
 const appPage = projectFile('app/(game)/page.tsx');
 assert.match(appPage, /function SharedFarmMintMobileToggle/);

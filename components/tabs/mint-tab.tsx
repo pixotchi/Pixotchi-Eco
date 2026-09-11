@@ -20,6 +20,7 @@ import { InlineBalanceNotice } from '@/components/ui/premium';
 import { VerifyClaim } from '@/components/verify-claim';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import { useFarmView } from '@/lib/farm-view-context';
+import { navigateToGameTab } from '@/lib/game-navigation';
 import { useBalances } from '@/lib/balance-context';
 import { PLANT_STRAINS_BY_ID } from '@/lib/constants';
 import { checkLandMintApproval,checkTokenApproval,getFormattedTokenBalance,getLandBalance,getLandMintPrice,getLandMintStatus,getLandSupply,getStrainInfo,getTokenBalanceForToken,getTokenSymbol,JESSE_TOKEN_ADDRESS,LAND_CONTRACT_ADDRESS,PIXOTCHI_NFT_ADDRESS,PIXOTCHI_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -30,7 +31,7 @@ import { useFrameContext } from '@/lib/frame-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from "@/lib/tab-visibility-context";
 import { Strain } from '@/lib/types';
-import { formatNumber,formatTokenAmount,getFriendlyErrorMessage, formatAddress } from "@/lib/utils";
+import { cn,formatNumber,formatTokenAmount,getFriendlyErrorMessage, formatAddress } from "@/lib/utils";
 import Image from 'next/image';
 import { useCallback,useEffect,useLayoutEffect,useRef,useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -571,7 +572,7 @@ export default function MintTab() {
                   unoptimized
                 />
                 <div className="min-w-0">
-                  <CardTitle>Mint a Plant</CardTitle>
+                  <CardTitle level="page">Mint a Plant</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">{PLANT_MINT_DESCRIPTION}</p>
                   {sharedStartingLifetimeCopy && <p className="mt-1 text-sm text-muted-foreground">{sharedStartingLifetimeCopy}</p>}
                 </div>
@@ -737,7 +738,7 @@ export default function MintTab() {
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Mint a Plant</CardTitle>
+              <CardTitle level="page">Mint a Plant</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">{PLANT_MINT_DESCRIPTION}</p>
               {sharedStartingLifetimeCopy && <p className="mt-1 text-sm text-muted-foreground">{sharedStartingLifetimeCopy}</p>}
             </div>
@@ -786,7 +787,7 @@ export default function MintTab() {
                       {selectedStrain && isSmartWallet && isEthMode && ethQuote && isSeedPaymentStrain(selectedStrain) ? (
                         <>
                           <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                          {ethQuoteLoading ? 'Loading…' : <TokenAmount amount={ethQuote.ethAmountWithBuffer} unit="ETH" mode="estimate" precision={8} withIcon={false} />}
+                          <TokenAmount amount={ethQuote.ethAmountWithBuffer} unit="ETH" mode="estimate" precision={8} withIcon={false} />
                         </>
                       ) : selectedStrain && plantUsesEth ? (
                         <>
@@ -847,7 +848,7 @@ export default function MintTab() {
                       void notifyMintSuccess(submittedStrain.name);
                     }}
                     buttonText={!plantMintAvailable ? (strainsError ? 'Strain data unavailable' : !selectedStrain.isActive ? 'Strain unavailable' : 'Strain sold out')
-                      : ethQuoteLoading ? 'Fetching ETH quote...'
+                      : ethQuoteLoading && !ethQuote ? 'Fetching ETH quote...'
                       : !ethQuote ? 'ETH quote unavailable'
                       : ethBalanceStatus !== 'ready'
                       ? (ethBalanceReadError ? "ETH balance unavailable" : "Checking ETH balance...")
@@ -908,13 +909,12 @@ export default function MintTab() {
 
               {!plantUsesEth && selectedStrain && hasInsufficientPlantBalance && (
                 <div className="space-y-2">
-                  <DisabledTransaction
-                    buttonText="Insufficient Balance"
-                    buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                  />
-                  <InlineBalanceNotice>
+                  <InlineBalanceNotice tone="neutral" className="text-sm">
                     Not enough {paymentTokenSymbol}. Balance: {plantBalanceLabel} • Required: {plantRequiredLabel}
                   </InlineBalanceNotice>
+                  {paymentTokenSymbol === 'SEED'
+                    ? <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
+                    : <DisabledTransaction buttonText="Insufficient Balance" buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS} />}
                 </div>
               )}
 
@@ -978,7 +978,7 @@ export default function MintTab() {
     return (
       <TabCard padding="sm">
         <CardHeader className="pb-3">
-          <CardTitle>Mint Land</CardTitle>
+          <CardTitle level="page">Mint Land</CardTitle>
           <p className="text-sm text-muted-foreground">{LAND_MINT_DESCRIPTION}</p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -987,7 +987,7 @@ export default function MintTab() {
                     {isSmartWallet && isEthMode && landEthQuote ? (
                       <>
                         <Image src="/icons/ethlogo.svg" alt="ETH" width={16} height={16} />
-                        {landEthQuoteLoading ? 'Loading…' : <TokenAmount amount={landEthQuote.ethAmountWithBuffer} unit="ETH" mode="estimate" precision={8} withIcon={false} />}
+                        <TokenAmount amount={landEthQuote.ethAmountWithBuffer} unit="ETH" mode="estimate" precision={8} withIcon={false} />
                       </>
                     ) : landUsesEth ? (
                       <>
@@ -1049,7 +1049,7 @@ export default function MintTab() {
                   buttonText={landMintError ? 'Land mint data unavailable'
                     : landMintDataUnknown ? 'Checking land mint data...'
                     : !landMintStatus?.canMint ? (landMintStatus?.reason || 'Land mint unavailable')
-                    : landEthQuoteLoading ? 'Fetching ETH quote...'
+                    : landEthQuoteLoading && !landEthQuote ? 'Fetching ETH quote...'
                     : !landEthQuote ? 'ETH quote unavailable'
                     : ethBalanceStatus !== 'ready'
                     ? (ethBalanceReadError ? "ETH balance unavailable" : "Checking ETH balance...")
@@ -1094,13 +1094,10 @@ export default function MintTab() {
                   />
                 ) : hasInsufficientLandBalance ? (
                   <>
-                    <DisabledTransaction
-                      buttonText="Insufficient Balance"
-                      buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                    />
-                    <InlineBalanceNotice>
+                    <InlineBalanceNotice tone="neutral" className="text-sm">
                       Not enough SEED. Balance: {formatTokenAmount(seedBalanceRaw)} • Required: {formatTokenAmount(landMintPrice)}
                     </InlineBalanceNotice>
+                    <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
                   </>
                 ) : (
                   <ApprovalActionTransaction
@@ -1188,23 +1185,24 @@ export default function MintTab() {
     return (
       <div className="space-y-4 tablet:space-y-3">
         <div className="grid grid-cols-1 items-start gap-3 min-[54rem]:grid-cols-[minmax(0,1.48fr)_minmax(300px,0.9fr)] xl:grid-cols-[minmax(0,1.58fr)_minmax(340px,0.86fr)] 2xl:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.8fr)]">
-          <section className={mintType === 'plant' ? 'block' : 'hidden min-[54rem]:block'}>
-            {renderDesktopPlantMinting()}
-          </section>
-
-          {/* The land controller retains one mounted position across layouts. */}
-          <aside className="flex min-w-0 flex-col gap-3">
-            <div className={mintType === 'land' ? 'block min-w-0' : 'hidden min-w-0 min-[54rem]:block'}>
-              {renderDesktopLandMinting()}
-            </div>
-            <div className={mintType === 'plant' ? '[&:empty]:hidden' : 'hidden min-[54rem]:block [&:empty]:hidden'}>
+          {/* On phones, contents lets the claim precede the paid plant choices.
+              On desktop, both small options share a bounded side column. The
+              same controllers stay mounted when the layout changes. */}
+          <aside className="contents min-[54rem]:col-start-2 min-[54rem]:row-start-1 min-[54rem]:flex min-[54rem]:min-w-0 min-[54rem]:flex-col min-[54rem]:gap-3">
+            <div role="region" aria-label="Free plant claim" className={cn('order-1 w-full max-w-md [&:empty]:hidden', mintType !== 'plant' && 'hidden min-[54rem]:block')}>
               <VerifyClaim appearance="compact" strainId={4} onClaimSuccess={({ strainId, mintTxHash }) => {
                 incrementForcedFetch();
                 const claimStrain = PLANT_STRAINS_BY_ID[strainId];
                 openMintShareModal(strainId, claimStrain?.name || 'Plant', mintTxHash);
               }} />
             </div>
+            <div className={cn('order-3 min-w-0', mintType !== 'land' && 'hidden min-[54rem]:block')}>
+              {renderDesktopLandMinting()}
+            </div>
           </aside>
+          <section className={cn('order-2 min-w-0 min-[54rem]:col-start-1 min-[54rem]:row-start-1', mintType !== 'plant' && 'hidden min-[54rem]:block')}>
+            {renderDesktopPlantMinting()}
+          </section>
         </div>
 
         <MintShareModal

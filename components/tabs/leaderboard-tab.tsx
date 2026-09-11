@@ -679,7 +679,6 @@ export default function LeaderboardTab() {
     mobilePageCount: number,
     desktopPageCount: number,
     renderRow: (row: T, compact?: boolean) => React.ReactNode,
-    fillDesktop = false
   ) {
     const usePageScroll = usesCompactPageScroll && !isDesktopBoard;
 
@@ -687,10 +686,6 @@ export default function LeaderboardTab() {
       <div className={cn(
         "flex min-h-0 flex-col gap-3",
         usePageScroll ? "h-auto" : "h-full",
-        // Desktop pages are a fixed row count, so the panel hugs its content
-        // instead of stretching to the viewport and leaving a dead band above
-        // the pagination. Mobile keeps its fill-and-scroll behaviour.
-        fillDesktop && "tablet:flex tablet:h-auto tablet:min-h-0 tablet:flex-col",
       )}>
         {!isDesktopBoard && (
           <ScrollArea
@@ -704,7 +699,18 @@ export default function LeaderboardTab() {
           </ScrollArea>
         )}
 
-        {isDesktopBoard && <RankingColumns rows={desktopRows} renderRow={renderRow} />}
+        {isDesktopBoard && (
+          <ScrollArea
+            key={`${boardType}:${filterMode}:${showOnlyMyPlants}`}
+            data-ranking-scroll
+            role="region"
+            aria-label="Ranking entries"
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[var(--radius-panel)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <RankingColumns rows={desktopRows} renderRow={renderRow} />
+          </ScrollArea>
+        )}
 
         {!isDesktopBoard && renderPagination(mobilePageCount, "tablet:hidden")}
         {isDesktopBoard && renderPagination(desktopPageCount, "hidden tablet:flex")}
@@ -1088,22 +1094,22 @@ export default function LeaderboardTab() {
       );
     }
 
-    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow, true);
+    return renderResponsiveRows(currentPlants, desktopPlants, totalPages, desktopTotalPages, renderPlantRow);
   };
 
   return (
-    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-auto tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
+    <div className={cn("min-h-0 space-y-4 tablet:mx-auto tablet:h-full tablet:max-w-7xl", usesCompactPageScroll ? "h-auto" : "h-full")}>
       <TabCard className={cn(
         "flex flex-col",
         usesCompactPageScroll
           ? "h-auto min-h-0 overflow-visible"
-          // Match the plant board's mobile frame and scrolling behavior. Desktop
-          // keeps its two content-sized columns. Clip the footer to the card radius.
-          : "h-full min-h-[26rem] overflow-hidden tablet:h-auto",
+          // The shell supplies the available height. Only entries scroll, so
+          // filters and pagination stay in view even on short desktop windows.
+          : "h-full min-h-[26rem] overflow-hidden tablet:min-h-0",
       )}>
         <CardHeader className="flex-none">
           <div className="flex flex-col items-start gap-3 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between tablet:grid tablet:grid-cols-[auto_minmax(0,1fr)_auto]">
-            <CardTitle>
+            <CardTitle level="page">
               Ranking
             </CardTitle>
             {boardType === 'plants' && isDesktopBoard && (
@@ -1179,7 +1185,7 @@ export default function LeaderboardTab() {
             playerRanking.loading ? renderRankingState(<BaseExpandedLoadingPageLoader text="Loading player ranking..." />)
               : playerRanking.error ? renderRankingState(<ResourceState status="error" title="Player ranking unavailable" description={playerRanking.error} onRetry={() => { void playerRanking.refresh(); }} />)
               : totalPlayerItems === 0 ? renderRankingState(<EmptyState icon={Flower2} title="No players ranked yet" description="Players appear here when they own a plant." />)
-              : renderResponsiveRows(currentPlayers, desktopPlayers, totalPlayerPages, desktopPlayerPages, renderPlayerRow, true)
+              : renderResponsiveRows(currentPlayers, desktopPlayers, totalPlayerPages, desktopPlayerPages, renderPlayerRow)
           ) : boardType === 'lands' ? (
             landRanking.loading && totalLandItems === 0 ? (
               renderRankingState(
@@ -1198,7 +1204,7 @@ export default function LeaderboardTab() {
                 />
               )
             ) : (
-              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow, true)
+              renderResponsiveRows(currentLands, desktopLands, totalLandPages, desktopLandPages, renderLandRow)
             )
           ) : boardType === 'stake' ? (
             stakeLoading && totalStakeItems === 0 ? (
@@ -1220,7 +1226,7 @@ export default function LeaderboardTab() {
                 />
               )
             ) : (
-              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow, true)
+              renderResponsiveRows(currentStakes, desktopStakes, totalStakePages, desktopStakePages, renderStakeRow)
             )
           ) : rocksDisabledNotice ? (
             renderRankingState(
@@ -1246,7 +1252,7 @@ export default function LeaderboardTab() {
                 <div className="text-center text-muted-foreground">No rock earners found.</div>
               )
             ) : (
-              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow, true)
+              renderResponsiveRows(currentRocks, desktopRocks, totalRockPages, desktopRockPages, renderRockRow)
             )
           )}
         </CardContent>

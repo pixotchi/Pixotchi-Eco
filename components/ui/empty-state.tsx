@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { CardTitle } from './card';
 
 /**
  * Shared empty state.
@@ -24,20 +25,24 @@ export function EmptyState({
   className,
   description,
   icon: Icon,
+  illustration,
+  level = 'section',
   title,
 }: {
   action?: ReactNode;
   className?: string;
   description: ReactNode;
   icon: LucideIcon;
+  illustration?: ReactNode;
+  level?: 'page' | 'section';
   title: string;
 }) {
   return (
     <div className={cn("flex flex-col items-center justify-center p-4 text-center", className)}>
-      <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-muted">
+      {illustration ? <div className="mb-4 w-full max-w-xs">{illustration}</div> : <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-muted">
         <Icon className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
-      </div>
-      <h3 className="mb-2 text-lg font-semibold text-foreground">{title}</h3>
+      </div>}
+      <CardTitle level={level} className={cn('mb-2 text-foreground', level === 'section' && 'text-lg')}>{title}</CardTitle>
       <p className="max-w-sm text-muted-foreground">{description}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>

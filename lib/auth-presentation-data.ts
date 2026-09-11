@@ -28,8 +28,8 @@ export function readMiniAppPresentation(value: unknown) {
   const fid = user?.fid;
   return {
     location: { type: text(location?.type), referrer: text(location?.referrerDomain) ?? text(location?.referrer) },
-    client: { name: text(client?.name), version: text(client?.version), added: typeof client?.added === 'boolean' ? client.added : undefined },
-    user: { fid: typeof fid === 'number' && Number.isSafeInteger(fid) && fid > 0 ? fid : undefined },
+    client: { name: text(client?.name), version: text(client?.version), platformType: text(client?.platformType), added: typeof client?.added === 'boolean' ? client.added : undefined },
+    user: { fid: typeof fid === 'number' && Number.isSafeInteger(fid) && fid > 0 ? fid : undefined, username: text(user?.username), displayName: text(user?.displayName) },
   };
 }
 

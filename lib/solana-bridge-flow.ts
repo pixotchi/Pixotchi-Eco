@@ -80,7 +80,8 @@ export function getSolanaActionButtonLabel({
   if (!connected) return 'Connect Solana Wallet';
   if (pending) return 'Check Base status';
   if (needsImplicitSetup) return 'Setup Bridge Access';
-  if (quoteLoading) return 'Loading price...';
+  // A refresh still gates submission; only the first quote replaces the label.
+  if (quoteLoading && !quoteReady) return 'Loading price...';
   if (!quoteReady) return 'Price unavailable';
   return requestedLabel || defaultLabel;
 }

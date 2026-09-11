@@ -87,7 +87,7 @@ test('local wallet completes navigation, safe drafts, transfer review recovery a
 
     await test.step('Select the application theme through its real menu', async () => {
       const theme = testInfo.project.name === 'app-desktop-1440' ? 'Dark' : 'Light';
-      await page.getByRole('button', { name: /^Current theme:/ }).click();
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
       const choice = page.getByRole('menuitemradio', { name: theme, exact: true });
       await choice.click();
       await expect(choice).toHaveAttribute('aria-checked', 'true');

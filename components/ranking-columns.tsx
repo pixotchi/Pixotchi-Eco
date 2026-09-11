@@ -3,13 +3,8 @@ import { splitDesktopRows, getRankRangeLabel, type RankedRow } from '@/lib/ranki
 export function RankingColumns<T extends RankedRow>({ rows, renderRow }: { rows: T[]; renderRow: (row: T, compact?: boolean) => React.ReactNode }) {
     const columns = splitDesktopRows(rows);
 
-    // A desktop page is always DESKTOP_ITEMS_PER_PAGE rows split across two
-    // columns, so the content height is bounded and known. These columns used
-    // to be stretched to the viewport (`flex-1`) with an inner scroller, which
-    // on any tall window left a band of dead space under the last row inside
-    // each card and pushed the pagination to the bottom of the screen. Sizing
-    // them to their rows removes the gap; the two columns still match each
-    // other's height because grid items stretch by default.
+    // Both columns sit in one viewport-bounded scroll region owned by Ranking.
+    // Rows retain their natural height and scroll together; pagination stays outside.
     return (
       <div className="hidden tablet:grid tablet:grid-cols-2 tablet:gap-4">
         {columns.map((column, columnIndex) => (

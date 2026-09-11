@@ -68,23 +68,7 @@ for (const enlarged of [false, true]) test(`Wallet Profile keeps content and act
   expect(titleBox.y).toBeGreaterThanOrEqual((await surface.boundingBox())!.y);
   expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(closeBox.x);
   await page.screenshot({ path: test.info().outputPath(`header-${enlarged ? '200' : '100'}pct.png`) });
-  const performance = page.getByRole('switch', { name: 'Performance Mode' });
-  await expectUnoccluded(performance);
-  expect(await performance.evaluate(element => {
-    for (let node = element.parentElement; node; node = node.parentElement) if (node.scrollLeft !== 0) return false;
-    return true;
-  })).toBe(true);
-  await performance.focus();
-  await page.keyboard.press('Space');
-  await expect(performance).toBeChecked();
-  const track = performance.locator(':scope > span');
-  const thumb = track.locator(':scope > span');
-  const trackBox = (await track.boundingBox())!;
-  const thumbBox = (await thumb.boundingBox())!;
-  expect(trackBox.width).toBe(48);
-  expect(thumbBox.width).toBe(20);
-  expect(thumbBox.x - trackBox.x).toBe(22);
-  await page.screenshot({ path: test.info().outputPath(`performance-${enlarged ? '200' : '100'}pct.png`) });
+  await expect(page.getByRole('switch', { name: /^(ETH Mode|Performance Mode)$/ })).toHaveCount(0);
   const token = page.getByTitle('3 PIXOTCHI', { exact: true });
   await expectUnoccluded(token);
   await expect(token).toHaveAttribute('aria-label', '3 PIXOTCHI');
@@ -110,28 +94,25 @@ for (const enlarged of [false, true]) test(`Wallet Profile keeps content and act
   await expect(page.getByRole('button', { name: 'Open wallet profile' })).toBeFocused();
 });
 
-test('Wallet Profile preserves focused controls and state through text resize and a short viewport', async ({ page }) => {
+test('Wallet Profile preserves focused controls through text resize and a short viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await open(page);
-  const performance = page.getByRole('switch', { name: 'Performance Mode' });
-  const originalControl = await performance.elementHandle();
-  await performance.click();
-  await performance.focus();
+  const copy = page.getByRole('button', { name: 'Copy wallet address', exact: true });
+  const originalControl = await copy.elementHandle();
+  await copy.focus();
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
   await expect(page.locator('[data-viewport-debug-dialog-surface]')).toHaveAttribute('data-dialog-scroll', 'content');
-  await expect(performance).toBeChecked();
-  await expect(performance).toBeFocused();
-  expect(await performance.evaluate((element, original) => element === original, originalControl)).toBe(true);
-  await expectUnoccluded(performance);
+  await expect(copy).toBeFocused();
+  expect(await copy.evaluate((element, original) => element === original, originalControl)).toBe(true);
+  await expectUnoccluded(copy);
   await page.setViewportSize({ width: 320, height: 420 });
-  await expectUnoccluded(performance);
+  await expectUnoccluded(copy);
   await page.evaluate(() => { document.documentElement.style.fontSize = '100%'; });
   await page.setViewportSize({ width: 820, height: 900 });
   await expect(page.locator('[data-viewport-debug-dialog-surface]')).toHaveAttribute('data-dialog-scroll', 'body');
-  await expect(performance).toBeChecked();
-  await expect(performance).toBeFocused();
-  expect(await performance.evaluate((element, original) => element === original, originalControl)).toBe(true);
-  await expectUnoccluded(performance);
+  await expect(copy).toBeFocused();
+  expect(await copy.evaluate((element, original) => element === original, originalControl)).toBe(true);
+  await expectUnoccluded(copy);
   const scrollers = await page.locator('[data-viewport-debug-dialog-surface]').evaluate(element => Array.from(element.querySelectorAll('*')).filter(node => node instanceof HTMLElement && /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1).length);
   expect(scrollers).toBe(1);
 });

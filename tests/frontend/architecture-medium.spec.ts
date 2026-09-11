@@ -307,6 +307,10 @@ test('ARC-07 auth and status boundaries reject malformed external fields', () =>
   expect(readWalletName({ name: {}, standardWallet: { name: 'Phantom' } })).toBe('Phantom');
   expect(readMiniAppPresentation({ user: { fid: -1 }, client: { added: 'false', name: [] } })?.user.fid).toBe(undefined);
   expect(readMiniAppPresentation({ user: { fid: 123 }, client: { added: true } })?.client.added).toBe(true);
+  const feedback = readMiniAppPresentation({ user: { username: ['invalid'], displayName: 'Grower' }, client: { platformType: 'web' } });
+  expect(feedback?.user.username).toBe(undefined);
+  expect(feedback?.user.displayName).toBe('Grower');
+  expect(feedback?.client.platformType).toBe('web');
   expect(parseStatusSnapshot({ generatedAt: 'not-a-date', overall: 'operational', services: [] })).toBe(null);
   expect(publicRpcMetrics({ healthyCount: 9, totalCount: 2 })).toBe(undefined);
   expect(publicRpcMetrics({ healthyCount: 1, totalCount: 2 })).toEqual({ healthyCount: 1, totalCount: 2 });

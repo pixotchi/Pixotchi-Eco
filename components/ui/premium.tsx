@@ -40,8 +40,9 @@ export function StatusChip({
 export function InlineBalanceNotice({
   children,
   className,
+  tone = 'danger',
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: React.HTMLAttributes<HTMLDivElement> & { tone?: 'neutral' | 'danger' }) {
   if (!children) return null;
   return (
     <div
@@ -51,14 +52,15 @@ export function InlineBalanceNotice({
         // case for "Balance: x • Required: y") the capsule radius grew with the
         // height and broke the app's corner language. DisabledReason below
         // already uses a radius token for the same reason.
-        "mt-2 flex min-h-10 w-full items-center justify-start gap-2 rounded-[var(--radius-control)] border border-destructive/35 bg-destructive/10 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.10)_0%,hsl(var(--destructive)/0.06)_100%)] px-3.5 py-2 text-left text-xs font-medium leading-snug text-foreground/70 shadow-[var(--shadow-hairline)]",
+        "mt-2 flex min-h-10 w-full items-center justify-start gap-2 rounded-[var(--radius-control)] border px-3.5 py-2 text-left text-xs font-medium leading-snug text-foreground shadow-[var(--shadow-hairline)]",
+        tone === 'neutral' ? 'border-border/40 bg-muted/30' : 'border-destructive/35 bg-destructive/10 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.10)_0%,hsl(var(--destructive)/0.06)_100%)]',
         className
       )}
       role="status"
       aria-live="polite"
       {...props}
     >
-      <Info className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+      <Info className={cn('h-3.5 w-3.5 shrink-0', tone === 'neutral' ? 'text-muted-foreground' : 'text-destructive')} aria-hidden="true" />
       <div className="min-w-0 [overflow-wrap:anywhere]">{children}</div>
     </div>
   );

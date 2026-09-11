@@ -1,13 +1,11 @@
 "use client";
 
 import { AirdropClaimCard } from "@/components/airdrop-claim-card";
-import { Switch } from '@/components/ui/switch';
 import { copyWithToast } from '@/lib/clipboard';
 import { usePrimaryName } from "@/components/hooks/usePrimaryName";
 import { SolanaBridgeBadge,useIsSolanaWallet,useSolanaWallet } from "@/components/solana";
 import { Alert } from "@/components/ui/alert";
 import { BASE_BRAND_BUTTON_CLASSNAME, Button } from "@/components/ui/button";
-import { usePerformanceMode } from "@/components/ui/performance-mode";
 import {
 Dialog,
 DialogBody,
@@ -21,7 +19,6 @@ import { WalletAvatar } from "@/components/ui/wallet-avatar";
 import { useAuthSurface } from "@/hooks/useAuthSurface";
 import { getAuthErrorMessage, readMiniAppPresentation, readWalletName } from "@/lib/auth-presentation-data";
 import { disconnectWalletIdentity } from "@/lib/disconnect-wallet-identity";
-import { useEthMode } from "@/lib/eth-mode-context";
 import { useFrameContext } from "@/lib/frame-context";
 import { openExternalUrl } from "@/lib/open-external";
 import { clearOwnerResources } from "@/lib/owner-resource-invalidation";
@@ -178,36 +175,6 @@ function WalletInfoRow({
     </div>
   );
 }
-
-// Compact ETH Mode toggle row for Connection card
-const EthModeToggleRow = () => {
-  const { isEthMode, toggleEthMode, isFeatureEnabled } = useEthMode();
-
-  // Don't render if feature is disabled via env var
-  if (!isFeatureEnabled) return null;
-
-  return (
-    <WalletInfoRow
-      label="ETH Mode"
-      description="Pay with ETH for supported SEED purchases"
-    >
-      <Switch checked={isEthMode} onCheckedChange={() => toggleEthMode()} aria-label="ETH Mode" />
-    </WalletInfoRow>
-  );
-};
-
-const PerformanceModeToggleRow = () => {
-  const { enabled, setEnabled } = usePerformanceMode();
-
-  return (
-    <WalletInfoRow
-      label="Performance Mode"
-      description="Disable effects and animations"
-    >
-      <Switch checked={enabled} onCheckedChange={() => setEnabled((current) => !current)} aria-label="Performance Mode" />
-    </WalletInfoRow>
-  );
-};
 
 interface WalletProfileProps {
   open: boolean;
@@ -601,7 +568,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
               <DialogTitle className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">Wallet Profile</DialogTitle>
             </div>
             <DialogDescription>
-              View your wallet details, balances, and connection information.
+              Your balances and account settings.
             </DialogDescription>
           </DialogHeader>
 
@@ -710,11 +677,6 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                           )}
                         </WalletInfoRow>
 
-                        {(isSmartWallet || isSolana) && (
-                          <EthModeToggleRow />
-                        )}
-
-                        <PerformanceModeToggleRow />
                       </div>
 
                       {debugMode && isMiniApp && fcContext && (

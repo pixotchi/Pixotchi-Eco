@@ -548,7 +548,7 @@ export default function ItemDetailsPanel({
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
-                    !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethQuoteLoading ? 'Updating ETH quote…' : ethBalance < ethAmount
+                    !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethBalance < ethAmount
                       ? "Insufficient ETH Balance"
                       : `Buy ${activeFenceV2Days} Day${activeFenceV2Days === 1 ? '' : 's'} Fence with ETH`
                   }
@@ -571,7 +571,7 @@ export default function ItemDetailsPanel({
                   }}
                   onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
-                    !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethQuoteLoading ? 'Updating ETH quote…' : ethBalance < ethAmount
+                    !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethBalance < ethAmount
                       ? "Insufficient ETH Balance"
                       : `${itemPurchaseLabel} with ETH`
                   }

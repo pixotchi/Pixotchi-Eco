@@ -49,10 +49,7 @@
       gap: 0.5rem;
     }
 
-    .login-hero img {
-      width: 3.5rem;
-      height: 3.5rem;
-    }
+    .login-hero .garden-preview { max-width: 14rem; padding-block: 0.5rem; }
 
     .login-intro-copy {
       margin-bottom: 0;
@@ -87,53 +84,41 @@
   }
 }
 
-.login-theme-cycle {
-  --login-theme-transition-duration: var(--motion-modal);
+.login-scene {
   position: relative;
   isolation: isolate;
   color: hsl(var(--foreground));
-  transition: color var(--login-theme-transition-duration) var(--ease-standard);
 }
 
-.login-theme-cycle .app-shell-inner[data-connected="false"] {
+.login-scene .app-shell-inner[data-connected="false"] {
   max-width: 100%;
 }
-.login-theme-cycle :is(button, [role="alert"], .login-web-app-alert) {
-  transition-duration: var(--login-theme-transition-duration);
-  transition-property: background-color, border-color, color, opacity;
-  transition-timing-function: var(--ease-standard);
+@layer components {
+.garden-preview {
+  display: grid;
+  grid-template-columns: 0.7fr 0.85fr 1fr 1.15fr;
+  grid-template-rows: auto auto;
+  width: 100%;
+  max-width: 25rem;
+  align-items: end;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem 0.5rem;
+  background: radial-gradient(ellipse at 50% 75%, hsl(var(--success) / 0.09), transparent 70%);
 }
-
-.login-theme-cycle :is(button, [role="button"], .surface-control) {
-  background-image: none !important;
+.garden-preview-stage { display: grid; grid-row: span 2; grid-template-rows: subgrid; min-width: 0; align-items: end; justify-items: center; }
+.garden-preview-stage img { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-control); }
+.garden-preview-stage span { align-self: start; font-size: 0.75rem; line-height: 1.25rem; font-weight: 500; text-align: center; color: hsl(var(--muted-foreground)); }
+.garden-preview-reward-art {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid hsl(var(--primary) / 0.2);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, hsl(var(--primary) / 0.2), hsl(var(--primary) / 0.04));
 }
-
-.login-theme-cycle .login-web-app-alert {
-  background-color: hsl(var(--card) / 0.86);
-  background-image: none !important;
-  border-color: hsl(var(--edge-panel));
-}
-
-.login-theme-background {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background-color: hsl(var(--background));
-}
-
-.login-theme-layer {
-  position: absolute;
-  inset: 0;
-  background-color: hsl(var(--background));
-  background-image: var(--gradient-content-well);
-  background-position: center top;
-  background-size: 160% 120%;
-  opacity: 0;
-  transition: opacity var(--login-theme-transition-duration) var(--ease-standard);
-}
-
-.login-theme-layer.is-active {
-  opacity: 1;
+.garden-preview-reward-art img { width: 82%; }
+.garden-preview-reward span { color: hsl(var(--primary-strong)); }
+.garden-preview-compact { max-width: 23rem; padding-block: 0.5rem; }
 }

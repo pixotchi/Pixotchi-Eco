@@ -421,22 +421,8 @@ export default function PlantProfileDialog({
           className="w-[min(94vw,27.5rem)] max-w-[27.5rem]"
         >
           <ScrollArea className="flex max-h-[inherit] flex-col overflow-y-auto overflow-x-hidden">
-            <div className="relative min-h-36 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
+            <div className="relative min-h-24 overflow-visible border-b border-border/45 bg-card bg-[image:var(--gradient-surface)]">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent" aria-hidden="true" />
-              {/* pr-16 clears the primitive's absolute close button (which paints
-                  over x∈[right-3, right-3+44px]) — the EFP link used to sit under it. */}
-              <div className="relative z-[1] flex items-center justify-between gap-3 px-6 pb-12 pr-16 pt-8 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span className="shrink-0">Powered by:</span>
-                <button
-                  type="button"
-                  onClick={() => openExternalUrl('https://efp.app')}
-                  className="inline-flex min-h-10 min-w-0 items-center justify-end gap-2 rounded-[var(--radius-control)] px-1 text-right text-xs font-semibold normal-case tracking-[0.14em] text-foreground/85 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
-                  aria-label="Open Ethereum Follow Protocol"
-                >
-                  <Image src="/icons/efp-logo.svg" alt="EFP" width={16} height={16} />
-                  <span className="min-w-0 truncate">Ethereum Follow Protocol</span>
-                </button>
-              </div>
               <div className="absolute -bottom-8 left-6 z-[2]">
                 <div className="relative">
                   <div
@@ -533,7 +519,7 @@ export default function PlantProfileDialog({
                       ) : ownerName ? (
                         <span className="min-w-0 break-all text-right text-sm text-primary font-medium">{ownerName}</span>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">No ENS/Basename found</span>
+                        <span className="text-sm text-muted-foreground">{ownerAddress ? formatAddress(ownerAddress) : "Unknown owner"}</span>
                       )}
                     </div>
                   </div>
@@ -614,6 +600,10 @@ export default function PlantProfileDialog({
                     </div>
                   )}
 
+                <Button variant="ghost" className="mt-3 h-auto min-h-11 w-full gap-2 whitespace-normal text-xs text-muted-foreground" onClick={() => openExternalUrl('https://efp.app')} aria-label="Open Ethereum Follow Protocol">
+                  <Image src="/icons/efp-logo.svg" alt="" width={16} height={16} />
+                  Social features by Ethereum Follow Protocol
+                </Button>
               </>
             </div>
           </ScrollArea>

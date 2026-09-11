@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ActivityTab from '@/components/tabs/activity-tab';
-import AboutTab from '@/components/tabs/about-tab';
+import FeedbackDialog from '@/components/feedback-dialog';
 import { ChatProvider, useChat } from '@/components/chat/chat-context';
 import ChatMessages from '@/components/chat/chat-messages';
 import { SecretGardenOverlay } from '@/components/secret-garden-overlay';
@@ -11,6 +11,10 @@ import { AirdropClaimCard } from '@/components/airdrop-claim-card';
 import { A, B, failFixtureRecovery, setFixtureOwner, setFixtureVisible, useFixtureRecoveryCount, useFixtureSignatures } from './social-medium-io';
 import type { BroadcastMessage } from '@/lib/broadcast-service';
 
+function FeedbackFixture() {
+  const [open, setOpen] = useState(false);
+  return <><button onClick={() => setOpen(true)}>Open feedback dialog</button><FeedbackDialog open={open} onOpenChange={setOpen} /></>;
+}
 function ChatFixture() {
   const chat = useChat();
   const recoveryCount = useFixtureRecoveryCount();
@@ -50,7 +54,7 @@ function Fixture() {
   return <main className="p-4" data-fixtures-ready="true">
     <output aria-label="Fixture signatures">{signatures}</output>
     <button onClick={() => setFixtureOwner(A)}>Wallet A</button><button onClick={() => setFixtureOwner(B)}>Wallet B</button><button onClick={() => setFixtureOwner(undefined)}>Disconnect fixture</button>
-    {scenario === 'chat' ? <ChatProvider><ChatFixture /></ChatProvider> : scenario === 'feedback' ? <AboutTab /> : scenario === 'claim' ? <VerifyClaimContent address={A} signMessageAsync={async () => '0x1234'} onClaimSuccess={() => {}} /> : scenario === 'airdrop' ? <AirdropClaimCard /> : scenario === 'overlay' ? <OverlayFixture /> : <><button onClick={() => setFixtureVisible(false)}>Hide Activity</button><button onClick={() => setFixtureVisible(true)}>Show Activity</button><div style={{ height: 650 }}><ActivityTab /></div></>}
+    {scenario === 'chat' ? <ChatProvider><ChatFixture /></ChatProvider> : scenario === 'feedback' ? <FeedbackFixture /> : scenario === 'claim' ? <VerifyClaimContent address={A} signMessageAsync={async () => '0x1234'} onClaimSuccess={() => {}} /> : scenario === 'airdrop' ? <AirdropClaimCard /> : scenario === 'overlay' ? <OverlayFixture /> : <><button onClick={() => setFixtureVisible(false)}>Hide Activity</button><button onClick={() => setFixtureVisible(true)}>Show Activity</button><div style={{ height: 650 }}><ActivityTab /></div></>}
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

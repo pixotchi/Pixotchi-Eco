@@ -48,6 +48,7 @@ import { toast } from "react-hot-toast";
 import { useWalletClient, useAccount, useBalance } from "wagmi";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { ResourceState } from '@/components/ui/resource-state';
+import { BackgroundRefresh } from '@/components/ui/background-refresh';
 import { getClientCasinoPolicy } from "@/lib/casino-client";
 
 interface CasinoPanelProps {
@@ -543,9 +544,11 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
     <div className="space-y-4">
       {error && <ResourceState status="error" title="Casino configuration unavailable" description={error} onRetry={() => { void loadCasinoState(true); }} />}
       {Object.values(roundStatus).some(status => status === 'error') && <ResourceState status="error" title="Some round statuses could not be checked" description="Known rounds remain available to resume. Use Check round for a game whose status is unavailable." onRetry={() => { void loadCasinoState(true); }} />}
-      {isLoading && <p role="status" className="text-xs text-muted-foreground">Refreshing Casino status…</p>}
       <div className="text-muted-foreground text-sm">
-        Roulette and Baccarat use block reveal; Blackjack uses verified signed randomness.
+        <div className="flex items-start justify-between gap-2">
+          <span>Roulette and Baccarat use block reveal; Blackjack uses verified signed randomness.</span>
+          <BackgroundRefresh active={isLoading || statsLoading} label="Refreshing Casino status" />
+        </div>
         <div className="mt-2 text-xs text-primary font-medium bg-primary/10 p-2 rounded border border-primary/20 text-left">
           Roulette and Baccarat have a {BACCARAT_REVEAL_WINDOW_BLOCKS.toString()}-block reveal window ({formatUpgradeDuration(BACCARAT_REVEAL_WINDOW_BLOCKS)}). Follow the deadline shown in the game; expired bets are forfeited. For Blackjack, follow the timer shown for your current action.
         </div>
@@ -592,8 +595,7 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
         </div>
       ) : null}
 
-      {selectedToken && (statsError ? <ResourceState status="error" title="Statistics unavailable" description="Any retained statistics are from the last successful check." onRetry={() => { void loadSelectedTokenStats(); }} />
-        : statsLoading ? <p role="status" className="text-xs text-muted-foreground">Checking statistics…</p> : null)}
+      {selectedToken && statsError && <ResourceState status="error" title="Statistics unavailable" description="Any retained statistics are from the last successful check." onRetry={() => { void loadSelectedTokenStats(); }} />}
 
       {(currentStats || currentBlackjackStats || currentBaccaratStats) && selectedToken && (
         <div className="flex flex-col gap-1 text-xs text-muted-foreground py-1">

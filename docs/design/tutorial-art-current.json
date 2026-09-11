@@ -1,0 +1,169 @@
+{
+  "date": "2026-09-11",
+  "method": "Actual app screenshots composed in phone frames; original repository assets. No generative artwork.",
+  "reproduction": [
+    "npx tsx scripts/capture-tutorial.mts",
+    "node scripts/render-tutorial-art.mjs"
+  ],
+  "sampleData": "Plant, land, selected balance and chat reads are seeded in the capture browser only. No app layout or asset substitutions. Prices and other unseeded readouts are snapshots and may change.",
+  "dimensions": {
+    "width": 1440,
+    "height": 900
+  },
+  "scenes": [
+    {
+      "key": "mint-plant",
+      "screen": "mint",
+      "detail": "plant-card",
+      "path": "MINT → PLANTS → CHOOSE A STRAIN",
+      "title": "Your first plant.",
+      "secondPhone": "plant",
+      "icons": []
+    },
+    {
+      "key": "token-flow",
+      "screen": "swap",
+      "detail": "swap",
+      "path": "SWAP → ETH → SEED",
+      "title": "SEED starts here.",
+      "icons": [
+        "PixotchiKit/COIN.svg",
+        "icons/ethlogo.svg"
+      ]
+    },
+    {
+      "key": "plant-items",
+      "screen": "care",
+      "detail": "care-review",
+      "path": "FARM → PLANTS → PLANT CARE",
+      "title": "Choose care. Review its effect.",
+      "icons": [
+        "icons/WATERDROPS.png",
+        "icons/SUN.png",
+        "icons/FERTILIZER.png"
+      ]
+    },
+    {
+      "key": "ptstod",
+      "screen": "plant",
+      "detail": "plant-card",
+      "path": "FARM → PLANTS",
+      "title": "Watch points and lifetime.",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 716,
+        "height": 740
+      },
+      "icons": [
+        "icons/pts.svg",
+        "icons/HEART.svg"
+      ]
+    },
+    {
+      "key": "attack",
+      "screen": "ranking",
+      "detail": "fence",
+      "path": "RANKING · FARM → PLANT CARE → FENCE",
+      "title": "Attack. Protect your progress.",
+      "icons": [
+        "icons/Fence.png"
+      ]
+    },
+    {
+      "key": "land",
+      "screen": "land",
+      "detail": "building-detail",
+      "path": "FARM → LANDS → VILLAGE",
+      "title": "Your land supports your plants.",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 650,
+        "height": 610
+      },
+      "icons": [
+        "icons/solar-panels.png",
+        "icons/soil-factory.png",
+        "icons/bee-house.png"
+      ]
+    },
+    {
+      "key": "buildings",
+      "screen": "town",
+      "detail": "town",
+      "path": "FARM → LANDS → BUILDINGS → TOWN",
+      "title": "Choose a building.",
+      "icons": [
+        "icons/farmer-house.png",
+        "icons/marketplace.png"
+      ]
+    },
+    {
+      "key": "staking",
+      "screen": "plant",
+      "detail": "stake",
+      "path": "HEADER → STAKE",
+      "title": "Stake SEED. Earn LEAF.",
+      "crop": {
+        "left": 0,
+        "top": 300,
+        "width": 716,
+        "height": 850
+      },
+      "icons": [
+        "PixotchiKit/COIN.svg",
+        "icons/leaf.png"
+      ]
+    },
+    {
+      "key": "chat",
+      "screen": "chat",
+      "detail": "chat",
+      "path": "HEADER → CHAT → PUBLIC / AI",
+      "title": "Help is always close.",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 716,
+        "height": 530
+      },
+      "icons": [
+        "icons/neuralseed.png",
+        "icons/chat-icon.webp"
+      ]
+    },
+    {
+      "key": "tasks",
+      "screen": "plant",
+      "detail": "tasks",
+      "path": "HEADER → TASKS",
+      "title": "Find your next task.",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 716,
+        "height": 1040
+      },
+      "icons": [
+        "icons/Volcanic_Rock.svg"
+      ]
+    },
+    {
+      "key": "base",
+      "screen": "settings",
+      "detail": "settings",
+      "path": "HEADER → SETTINGS",
+      "title": "Your guide, whenever you need it.",
+      "crop": {
+        "left": 0,
+        "top": 560,
+        "width": 436,
+        "height": 705
+      },
+      "icons": [
+        "PixotchiKit/Logonotext.svg"
+      ]
+    }
+  ]
+}

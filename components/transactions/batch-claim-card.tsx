@@ -3,6 +3,7 @@
 import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ResourceState } from "@/components/ui/resource-state";
+import { BackgroundRefresh } from "@/components/ui/background-refresh";
 import { useBatchReconciliation } from '@/hooks/useBatchReconciliation';
 import { useBalances } from '@/lib/balance-context';
 import { getLandBuildingsBatch,getReadClient,LAND_CONTRACT_ADDRESS } from '@/lib/contracts';
@@ -312,7 +313,7 @@ export default function BatchClaimCard({
   const content = (
     <>
         <div className="flex justify-between items-center pb-2 border-b border-border/50">
-          <span className="font-semibold">Batch Claim</span>
+          <span className="flex items-center gap-2 font-semibold">Batch Claim<BackgroundRefresh active={loading} label="Updating production before the next batch" /></span>
           <div className="flex items-center gap-2 text-xs">
             {totalClaimedThisSession > 0 && (
               <span className="text-[hsl(var(--success-strong))] font-medium">
@@ -401,7 +402,6 @@ export default function BatchClaimCard({
             </div>
             {hasMultipleBatches && <p className="px-1 text-xs text-muted-foreground">Remaining total cost: {(totalBatches * BURN_AMOUNT_TOKENS).toLocaleString()} PIXOTCHI across {totalBatches} batches.</p>}
             {scanError && <ResourceState status="error" title="Production refresh delayed" description={scanError} onRetry={() => void scanLands()} />}
-            {loading && <p role="status" className="text-xs text-muted-foreground">Updating production before the next batch…</p>}
             <SmartWalletTransaction
               successFeedback="feature"
               effects={{ domains: ["buildings", "lands", "balances", "rewards"] }}

@@ -227,15 +227,15 @@
   /* Light is the default/classless theme and intentionally has its own palette logic. */
   :root,
   .light {
-    --background: 210 55% 78%;
+    --background: 214 28% 96%;
     --foreground: 218 50% 12%;
-    --card: 210 48% 90%;
+    --card: 0 0% 100%;
     --card-foreground: 218 50% 12%;
-    --popover: 210 50% 91%;
+    --popover: 0 0% 100%;
     --popover-foreground: 218 50% 12%;
-    --secondary: 210 46% 82%;
+    --secondary: 214 24% 94%;
     --secondary-foreground: 218 50% 12%;
-    --muted: 210 48% 85%;
+    --muted: 214 22% 92%;
     --muted-foreground: 216 30% 22%;
     --primary: 211 82% 34%;
     --primary-foreground: 0 0% 98%;
@@ -262,16 +262,18 @@
     --input: 208 32% 50%;
     --ring: 211 82% 34%;
     --selected-control-foreground: 211 82% 29%; /* 5.16:1 on the selected pill */
+    --header-control-bg: 0 0% 100%;
+    --header-control-border: 216 18% 65%;
     --scene-glow: 190 84% 86%;
     --scene-floor: 166 58% 90%;
-    --chromatic-layer-surface: 210 62% 92%;
-    --chromatic-layer-highlight: 210 72% 95%;
-    --gradient-app-chrome: linear-gradient(180deg, hsl(210 58% 86% / 0.92), hsl(210 54% 81% / 0.76));
-    --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(210 54% 84% / 0.36) 0%, hsl(210 55% 78% / 0) 34%), linear-gradient(180deg, hsl(210 55% 78%) 0%, hsl(210 52% 80%) 44%, hsl(210 48% 85%) 100%);
-    --gradient-dialog: linear-gradient(180deg, hsl(210 50% 88%) 0%, hsl(210 48% 86%) 52%, hsl(210 46% 82%) 100%);
-    --gradient-surface: linear-gradient(180deg, hsl(210 50% 87% / 0.98) 0%, hsl(210 48% 85% / 0.92) 56%, hsl(210 46% 82% / 0.78) 100%);
-    --gradient-surface-strong: linear-gradient(180deg, hsl(210 50% 88% / 0.98) 0%, hsl(210 46% 82% / 0.92) 100%);
-    --gradient-panel: linear-gradient(180deg, hsl(210 46% 82% / 0.9) 0%, hsl(210 48% 85% / 0.76) 100%);
+    --chromatic-layer-surface: 214 28% 97%;
+    --chromatic-layer-highlight: 0 0% 100%;
+    --gradient-app-chrome: linear-gradient(180deg, hsl(0 0% 100% / 0.96), hsl(214 28% 97% / 0.92));
+    --gradient-content-well: linear-gradient(180deg, hsl(214 28% 96%), hsl(210 24% 94%));
+    --gradient-dialog: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 28% 98%));
+    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 28% 97%));
+    --gradient-surface-strong: var(--gradient-surface);
+    --gradient-panel: linear-gradient(180deg, hsl(214 24% 95%), hsl(214 22% 93%));
   }
 
   /* Shared semantic defaults for the six colorful themes. */
@@ -281,6 +283,11 @@
   .pink,
   .blue,
   .violet {
+    /* Preserve the original soft icon surface for every header action here.
+       Override the opaque Light defaults inherited from :root explicitly. */
+    --header-control-bg: var(--card) / 0.65;
+    --header-control-border: 0 0% 0% / 0;
+    --header-control-hover-border-alpha: 0.25;
     --foreground: 240 10% 4%;
     --card-foreground: 240 10% 4%;
     --popover-foreground: 240 10% 4%;
@@ -489,15 +496,15 @@
 
   /* Dark mirrors light's shade-selection pattern around #2D3C53. */
   .dark {
-    --background: 216 30% 25%;
+    --background: 216 22% 13%;
     --foreground: 210 45% 96%;
-    --card: 216 30% 31%;
+    --card: 216 22% 18%;
     --card-foreground: 210 45% 96%;
-    --popover: 216 31% 32%;
+    --popover: 216 22% 20%;
     --popover-foreground: 210 45% 96%;
-    --secondary: 216 28% 28%;
+    --secondary: 216 22% 16%;
     --secondary-foreground: 210 45% 96%;
-    --muted: 216 26% 29%;
+    --muted: 216 20% 21%;
     --muted-foreground: 214 22% 78%;
     --primary: 204 92% 74%;
     --primary-foreground: 218 45% 10%;
@@ -523,13 +530,12 @@
     --ring: 204 92% 74%;
     --selected-control-foreground: 204 92% 95%; /* 4.64:1 — the dark pill is lighter than the
                                              chrome, so the ink has to go up, not down */
+    --header-control-bg: 216 20% 30%;
+    --header-control-border: 216 20% 48%;
     --scene-glow: 204 92% 62%;
     --scene-floor: 216 30% 29%;
-    --chromatic-layer-surface: 216 28% 40%;
-    /* 42%, not 47%: this is the top stop of the gradient these panels paint, so it is
-       the lightest pixel any text on them sits over. At 47% it was 16 points lighter
-       than --card, which left no room for a coloured ink at AA. */
-    --chromatic-layer-highlight: 216 34% 42%;
+    --chromatic-layer-surface: 216 22% 23%;
+    --chromatic-layer-highlight: 216 22% 25%;
     --status-great: 150 70% 58%;
     --status-okay: 78 68% 58%;
     --status-dry: 32 90% 58%;
@@ -552,13 +558,13 @@
     --shadow-modal: 0 28px 90px -42px hsl(218 45% 6% / 0.82);
     --shadow-glow: 0 18px 42px -28px hsl(var(--primary) / 0.78);
     --gradient-solana: linear-gradient(135deg, hsl(265 80% 66%), hsl(184 82% 54%));
-    --gradient-control-surface: linear-gradient(180deg, hsl(216 32% 43% / 0.98) 0%, hsl(216 31% 39% / 0.94) 54%, hsl(216 30% 34% / 0.88) 100%);
-    --gradient-app-chrome: linear-gradient(180deg, hsl(216 30% 33% / 0.94), hsl(216 28% 28% / 0.82));
-    --gradient-content-well: radial-gradient(circle at 50% -12%, hsl(204 92% 40% / 0.24) 0%, hsl(216 30% 25% / 0) 34%), linear-gradient(180deg, hsl(216 30% 25%) 0%, hsl(216 29% 27%) 44%, hsl(216 30% 29%) 100%);
-    --gradient-dialog: linear-gradient(180deg, hsl(216 30% 33%) 0%, hsl(216 30% 31%) 52%, hsl(216 28% 28%) 100%);
-    --gradient-surface: linear-gradient(180deg, hsl(216 30% 32% / 0.98) 0%, hsl(216 29% 30% / 0.94) 56%, hsl(216 28% 28% / 0.72) 100%);
-    --gradient-surface-strong: linear-gradient(180deg, hsl(216 31% 34% / 0.98) 0%, hsl(216 30% 29% / 0.9) 100%);
-    --gradient-panel: linear-gradient(180deg, hsl(216 28% 28% / 0.88) 0%, hsl(216 26% 29% / 0.76) 100%);
+    --gradient-control-surface: linear-gradient(180deg, hsl(216 22% 24%), hsl(216 22% 21%));
+    --gradient-app-chrome: linear-gradient(180deg, hsl(216 22% 17% / 0.96), hsl(216 22% 15% / 0.94));
+    --gradient-content-well: linear-gradient(180deg, hsl(216 22% 13%), hsl(216 22% 15%));
+    --gradient-dialog: linear-gradient(180deg, hsl(216 22% 20%), hsl(216 22% 18%));
+    --gradient-surface: linear-gradient(180deg, hsl(216 22% 21%), hsl(216 22% 18%));
+    --gradient-surface-strong: var(--gradient-surface);
+    --gradient-panel: linear-gradient(180deg, hsl(216 22% 19%), hsl(216 22% 17%));
     --gradient-creature-stage: radial-gradient(circle at 50% 34%, hsl(var(--scene-glow) / 0.34) 0%, hsl(var(--scene-glow) / 0.14) 38%, hsl(var(--scene-floor) / 0.82) 76%, hsl(var(--card) / 0.94) 100%);
   }
 
@@ -809,13 +815,36 @@
   .surface-group { border: 0; background: transparent; box-shadow: none; }
   .surface-inset { border: 0; background: hsl(var(--muted) / 0.35); box-shadow: none; }
   /* Shared role scale: 12/14/16/18/24px at the default root size. */
-  .type-page-title { font-size: 1.5rem; font-weight: 700; line-height: 1.25; }
+  .type-page-title { font-size: 1.5rem; font-weight: 700; line-height: 1.3; letter-spacing: -0.025em; }
   .type-dialog-title { font-size: 1.125rem; font-weight: 700; line-height: 1.35; }
   .type-section-title { font-size: 1rem; font-weight: 700; line-height: 1.4; }
   .type-label { font-size: 0.875rem; font-weight: 500; line-height: 1.5; }
   .type-body { font-size: 0.875rem; font-weight: 400; line-height: 1.5; }
   .type-secondary { font-size: 0.75rem; font-weight: 400; line-height: 1.5; }
   .type-numeric { font-variant-numeric: tabular-nums; }
+
+  /* Keep material preferences independent from reduced motion. */
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    :root { --blur-overlay: 0px; --blur-surface: 0px; }
+    .surface-panel, .surface-lifted, .surface-detail, .surface-subpanel,
+    [data-viewport-debug-dialog-surface] {
+      background-color: hsl(var(--card)) !important;
+      background-image: none !important;
+      backdrop-filter: none !important;
+    }
+    [data-viewport-shell="nav"], [data-viewport-shell="desktop-nav"],
+    [data-viewport-shell="inner"] > div:first-child {
+      background-color: hsl(var(--secondary)) !important;
+      background-image: none !important;
+      backdrop-filter: none !important;
+    }
+  }
+  @media (prefers-contrast: more) {
+    .surface-panel, .surface-lifted, .surface-detail, .surface-subpanel,
+    [data-viewport-debug-dialog-surface], button:not(:disabled), input, textarea, select {
+      border-color: hsl(var(--foreground) / 0.65) !important;
+    }
+  }
   /* (removed legacy spacing/padding helpers; use Tailwind utilities directly) */
 
   .surface-header-divider {
@@ -987,20 +1016,10 @@
   }
 
   /*
-   * Dark theme: the "white surface" family is a deliberately LIFTED panel — in light
-   * themes it emulates a near-white card, and in dark it sits well above --card
-   * (216 28% 40% against 216 30% 31%). Every semantic ink in the dark palette was
-   * tuned against --card, so on these panels they all measured under AA:
-   * muted-foreground 3.46:1, destructive-strong 3.36:1, success-strong 3.65:1,
-   * warning-strong 3.97:1, value 4.14:1 — measured on the real elements, against the
-   * lightest point of the panel gradient. That is every "Price"/"Cost"/"Effect" label
-   * and every price figure in the marketplace, mint, chat and building panels.
-   *
-   * Treat the family as its own surface with its own foreground scale rather than
-   * darkening it (which would erase the lift the name describes) or lifting the whole
-   * dark palette (which would wash out text on --card). Descendants inherit these
-   * through var(), so one block fixes every ink on every one of these panels.
-   * All values verified >= 4.6:1 against the gradient's top stop.
+   * Raised dark panels inherit a brighter foreground scale for prices, effects,
+   * links and status labels. Keep these tokens scoped to the surface family so
+   * adjustments to the canvas do not weaken text on tinted inner panels.
+   * foundation-medium.spec.ts samples the actual composited backgrounds.
    */
   .dark :is(
     .surface-lifted,

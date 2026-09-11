@@ -7,13 +7,12 @@ import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/*
- * One surface, three variant names. headerIcon/statusAction/surfaceControl were
- * three byte-identical strings that could drift independently; the names are
- * kept as call-site aliases (16 call sites) but there is a single source now.
- */
+// All header actions match; theme tokens strengthen contrast only in Light/Dark.
+const HEADER_CONTROL_VARIANT =
+  "border border-[hsl(var(--header-control-border))] bg-[hsl(var(--header-control-bg))] text-foreground shadow-none hover:border-[hsl(var(--primary)/var(--header-control-hover-border-alpha,0.5))] hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong";
+
 const CONTROL_SURFACE_VARIANT =
-  "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-control)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong";
+  "border border-transparent bg-card/65 text-foreground shadow-none hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong";
 
 /*
  * Base-brand action surface (deliberately theme-independent: it is Base's own
@@ -43,15 +42,15 @@ const buttonVariants = cva(
          */
         navSliding:
           "!rounded-[var(--radius-nav)] border border-transparent bg-transparent shadow-none text-muted-foreground hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:bg-[image:var(--gradient-nav-hover)] hover:text-primary-strong hover:shadow-[var(--shadow-nav-hover)] data-[active=true]:text-[hsl(var(--selected-control-foreground))] data-[active=true]:hover:bg-transparent data-[active=true]:hover:bg-none data-[active=true]:hover:shadow-none",
-        headerIcon: CONTROL_SURFACE_VARIANT,
-        statusAction: CONTROL_SURFACE_VARIANT,
+        headerIcon: HEADER_CONTROL_VARIANT,
+        statusAction: HEADER_CONTROL_VARIANT,
         surfaceControl: CONTROL_SURFACE_VARIANT,
         imageCardPrimary:
           "border border-white/30 bg-slate-950 bg-[image:linear-gradient(180deg,hsl(222_47%_20%)_0%,hsl(222_47%_11%)_56%,hsl(229_84%_5%)_100%)] text-white shadow-[0_10px_24px_-14px_rgba(2,6,23,0.9)] hover:brightness-[1.06] hover:text-white hover:shadow-[0_14px_30px_-16px_rgba(2,6,23,0.95)]",
         outline:
-          "border border-[hsl(var(--edge-panel))] bg-card bg-[image:var(--gradient-control-surface)] text-foreground shadow-[var(--shadow-hairline)] hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
+          "border border-[hsl(var(--edge-panel))] bg-card text-foreground shadow-none hover:border-primary/45 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
         secondary:
-          "border border-[hsl(var(--edge-panel))] bg-secondary/90 bg-[image:var(--gradient-panel)] text-secondary-foreground shadow-[var(--shadow-hairline)] hover:border-primary/35 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
+          "border border-transparent bg-secondary text-secondary-foreground shadow-none hover:border-primary/25 hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
         ghost: "hover:bg-[hsl(var(--nav-hover-bg))] hover:text-primary-strong",
         link: "text-primary-strong underline-offset-4 hover:underline",
       },

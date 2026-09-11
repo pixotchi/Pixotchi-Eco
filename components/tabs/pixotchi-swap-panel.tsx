@@ -38,6 +38,7 @@ import { base } from 'viem/chains';
 import { useAccount, useBalance, useSwitchChain, useWalletClient } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { estimateNextSwapFee, requireSwapCallFunds } from '@/lib/swap/gas';
+import { swapFeeQueryKey } from '@/lib/swap/fee-query-key';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -460,7 +461,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       sellBalanceRaw,
       SWAP_TOKEN_MAP[sellToken].decimals,
       sellToken === 'USDC' ? 2 : 6,
-    )}${sellReadState !== 'ready' ? ' (last known)' : ''}`;
+    )}${sellReadState === 'error' ? ' (last known)' : ''}`;
   }, [address, sellReadState, sellBalanceData, sellBalanceRaw, sellToken]);
   const buyBalanceText = useMemo(() => {
     if (!address) return '';
@@ -471,7 +472,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       buyBalanceData?.value ?? BigInt(0),
       SWAP_TOKEN_MAP[buyToken].decimals,
       buyToken === 'USDC' ? 2 : 6,
-    )}${buyReadState !== 'ready' ? ' (last known)' : ''}`;
+    )}${buyReadState === 'error' ? ' (last known)' : ''}`;
   }, [address, buyBalanceData, buyReadState, buyToken]);
 
   const { quoteState, fetchQuoteOnce, refreshQuoteNow, markQuoteActivity } = useSwapQuote({
@@ -490,7 +491,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
   const isAmountValid = Boolean(parsedAmount && parsedAmount > BigInt(0));
   const isDeferredLagging = sellAmount !== deferredSellAmount;
   const hasInsufficientBalance = Boolean(
-    address && sellReadState === 'ready' &&
+    address && sellBalanceData !== undefined && !sellBalanceError &&
       parsedAmount &&
       parsedAmount > BigInt(0) &&
       parsedAmount > sellBalanceRaw,
@@ -500,10 +501,14 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     typeof walletClient?.sendCalls === 'function' &&
     typeof walletClient?.waitForCallsStatus === 'function';
   const spendingReadsReady = sellReadState === 'ready' && (usesSmartWalletBatch && isSponsored && sellToken !== 'ETH' || ethReadState === 'ready');
+  // Retain labels during a same-wallet refresh, but keep the spending gate below.
+  const hasSpendingSnapshot = sellBalanceData !== undefined && (
+    usesSmartWalletBatch && isSponsored && sellToken !== 'ETH' || ethBalanceData !== undefined
+  );
   const balanceReadError = Boolean(sellBalanceError || buyBalanceError || ethBalanceError);
   const retrySwapBalances = useCallback(() => Promise.allSettled([refetchSellBalance(), refetchBuyBalance(), refetchEthBalance()]), [refetchBuyBalance, refetchEthBalance, refetchSellBalance]);
   const feeQuery = useQuery({
-    queryKey: ['swapFee', address, chainId, currentQuote?.quoteToken],
+    queryKey: swapFeeQueryKey(address, chainId, currentQuote),
     queryFn: async ({ signal }) => {
       if (!address || !currentQuote?.quoteToken || !currentQuote.steps[0]) throw new Error('A fresh quote is required.');
       const step = currentQuote.steps[0];
@@ -1818,7 +1823,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     }
     if (chainId !== BASE_CHAIN_ID) return S.errors.switchToBase;
     if (!walletClient?.account) return S.errors.walletClientUnavailable;
-    if (!spendingReadsReady) return balanceReadError ? 'Balance unavailable. Retry the balance check.' : 'Checking spendable balances…';
+    if (!spendingReadsReady && (balanceReadError || !hasSpendingSnapshot)) return balanceReadError ? 'Balance unavailable. Retry the balance check.' : 'Checking spendable balances…';
     if (!sellAmount.trim()) return null;
     if (!isAmountValid) return S.errors.enterValidAmount(SWAP_TOKEN_MAP[sellToken].displaySymbol);
     if (hasInsufficientBalance) return S.errors.insufficientBalance(SWAP_TOKEN_MAP[sellToken].displaySymbol);
@@ -1847,6 +1852,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     walletClient?.account,
     balanceReadError,
     spendingReadsReady,
+    hasSpendingSnapshot,
   ]);
   const actionButtonLabel = useMemo(() => {
     if (!actionDisabled || isExecuting) return S.buttons.swap;
@@ -1854,7 +1860,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     if (isPeerBlocked) return 'Wallet Transaction Pending';
     if (chainId !== BASE_CHAIN_ID) return 'Switch to Base';
     if (!walletClient?.account) return 'Connect Wallet';
-    if (!spendingReadsReady) return balanceReadError ? 'Balance Unavailable' : 'Checking Balances…';
+    if (!spendingReadsReady && (balanceReadError || !hasSpendingSnapshot)) return balanceReadError ? 'Balance Unavailable' : 'Checking Balances…';
     if (!sellAmount.trim()) return S.buttons.swap;
     if (!isAmountValid) return 'Enter Valid Amount';
     if (hasInsufficientBalance) return `Insufficient ${SWAP_TOKEN_MAP[sellToken].displaySymbol}`;
@@ -1883,6 +1889,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     walletClient?.account,
     balanceReadError,
     spendingReadsReady,
+    hasSpendingSnapshot,
   ]);
   const handleSwitchToBase = useCallback(() => {
     if (chainId === BASE_CHAIN_ID || isSwitchingChain) return;

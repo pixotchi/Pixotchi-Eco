@@ -509,7 +509,7 @@ export default function ActivityTab() {
         <CardHeader className="flex-none">
           <div className="flex justify-between items-center gap-3">
             <div className="min-w-0">
-              <CardTitle>Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
+              <CardTitle level="page">Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
             <ToggleGroup
               ariaLabel="Activity scope"
@@ -554,7 +554,7 @@ export default function ActivityTab() {
         <TabCard className="tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col tablet:overflow-hidden">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
+              <CardTitle level="page">All Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
             <ActivityFilterBar
               category={desktopAllFilter.category}
@@ -576,7 +576,7 @@ export default function ActivityTab() {
         <TabCard className="tablet:flex tablet:h-full tablet:min-h-0 tablet:flex-col tablet:overflow-hidden">
           <CardHeader className="flex-none">
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
+              <CardTitle level="page">My Activity <span className="text-sm font-medium text-muted-foreground">(Last 24h)</span></CardTitle>
             </div>
             <ActivityFilterBar
               category={desktopMyFilter.category}

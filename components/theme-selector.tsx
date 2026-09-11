@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { Palette } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -53,20 +53,24 @@ const themeTriggerSwatchClass = "absolute bottom-[6px] right-[6px] h-[10px] w-[1
  * reach any control. The whole menu was keyboard-dead (WCAG 2.1.1, Level A) — and
  * "menu" may not own "radiogroup"/"switch" in the first place.
  *
- * onSelect is prevented on every item so the menu stays open, which the multi-pick
+ * onSelect is prevented on theme/effect items so the menu stays open, which the multi-pick
  * theme sequence depends on. onCheckedChange still fires.
  */
-function MenuSwitchItem({
+export function MenuSwitchItem({
   label,
+  description,
   checked,
   onCheckedChange,
 }: {
   label: string;
+  description?: string;
   checked: boolean;
   onCheckedChange: () => void;
 }) {
   return (
     <DropdownMenuCheckboxItem
+      title={description}
+      aria-description={description}
       checked={checked}
       onCheckedChange={onCheckedChange}
       onSelect={(event) => event.preventDefault()}
@@ -104,11 +108,17 @@ function MenuSwitchItem({
 interface ThemeSelectorProps {
   enableSecretGardenProgress?: boolean;
   showMusicToggle?: boolean;
+  children?: React.ReactNode;
+  triggerRef?: React.Ref<HTMLButtonElement>;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function ThemeSelector({
   enableSecretGardenProgress = true,
   showMusicToggle = true,
+  children,
+  triggerRef,
+  onCloseAutoFocus,
 }: ThemeSelectorProps) {
   const { theme, setTheme } = useTheme();
   const { isEnabled: isSnowEnabled, isFeatureEnabled: isSnowFeatureEnabled, toggleSnow } = useSnow();
@@ -184,8 +194,8 @@ export function ThemeSelector({
   if (!mounted) {
     // Render a placeholder to prevent layout shift
     return (
-      <Button variant="headerIcon" size="headerIcon" disabled aria-label="Loading theme selector">
-        <Palette className="h-5 w-5" aria-hidden="true" />
+      <Button variant="headerIcon" size="headerIcon" disabled aria-label="Loading settings">
+        <Settings className="h-5 w-5" aria-hidden="true" />
       </Button>
     );
   }
@@ -196,21 +206,28 @@ export function ThemeSelector({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="headerIcon"
           size="headerIcon"
-          title={`Change theme: ${currentTheme.label}`}
-          aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
+          title={`Settings · ${currentTheme.label} theme`}
+          aria-label="Settings"
           className="relative"
         >
-          <Palette className="h-5 w-5 text-foreground/85" aria-hidden="true" />
+          <Settings className="h-5 w-5 text-foreground/85" aria-hidden="true" />
           <span className={`${themeTriggerSwatchClass} ${currentTheme.color}`} aria-hidden="true" />
-          <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
       {/* No aria-label here: Radix already points aria-labelledby at the trigger. */}
-      <DropdownMenuContent align="end" className="p-2">
+      <DropdownMenuContent
+        align="end"
+        // Four 44px swatches, three gaps, padding, and the border set the width.
+        className={cn("w-[calc(176px+2.5rem+2px)] p-2", children && "[--menu-max-height:48rem]")}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <div className="px-2 pb-2 pt-1 text-xs font-medium text-muted-foreground">Appearance</div>
         <DropdownMenuRadioGroup
-          className="grid grid-cols-4 gap-2"
+          className="grid grid-cols-[repeat(4,44px)] justify-center gap-2"
+          aria-label="Theme"
           value={theme ?? ""}
           onValueChange={handleThemeChange}
         >
@@ -263,6 +280,7 @@ export function ThemeSelector({
             />
           </>
         )}
+        {children}
       </DropdownMenuContent>
     </DropdownMenu>
   );

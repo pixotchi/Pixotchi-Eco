@@ -113,6 +113,14 @@ assert.equal(
   'Setup Bridge Access',
 );
 
+// A scheduled refresh retains the action label, but an initial quote is explicit.
+for (const quoteReady of [true, false]) {
+  assert.equal(getSolanaActionButtonLabel({
+    connected: true, needsImplicitSetup: false, pending: false,
+    quoteLoading: true, quoteReady, requestedLabel: 'Buy Item', defaultLabel: 'Continue',
+  }), quoteReady ? 'Buy Item' : 'Loading price...');
+}
+
 // Quote and pending-action identities include every input that changes execution.
 assert.notEqual(
   getSolanaQuoteKey('mint', { strain: 1 }),

@@ -1,5 +1,6 @@
 "use client";
 import { TokenAmount } from '@/components/ui/token-amount';
+import { BackgroundRefresh } from '@/components/ui/background-refresh';
 
 import { useBarracksSnapshot } from "@/hooks/useBarracksSnapshot";
 import { useBarracksRaidPreview } from '@/hooks/useBarracksRaidPreview';
@@ -120,6 +121,7 @@ export default function BarracksPanelV2({
   const { address } = useAccount();
   const { config, landState, lastOutgoingReport, lastIncomingReport, loading, error: snapshotError, loadedStateLandId, loadState } = useBarracksSnapshot({ landId });
   const [targetsLoading, setTargetsLoading] = useState(false);
+  const [targetsLoadedLandId, setTargetsLoadedLandId] = useState<bigint | null>(null);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [, setCountdownTick] = useState(0);
   const [buildAllowance, setBuildAllowance] = useState(ZERO_BIGINT);
@@ -301,6 +303,7 @@ export default function BarracksPanelV2({
       ) return;
 
       setEligibleTargets(targetLands);
+      setTargetsLoadedLandId(requestLandId);
       setSelectedTargetLandId((current) =>
         current && targetLands.some((target) => target.tokenId === current)
           ? current
@@ -328,6 +331,7 @@ export default function BarracksPanelV2({
     targetsRequestRef.current += 1;
     targetsInFlightRef.current = null;
     setEligibleTargets([]);
+    setTargetsLoadedLandId(null);
     setSelectedTargetLandId(null);
     setTargetsError(null);
     setTargetsLoading(false);
@@ -760,16 +764,10 @@ export default function BarracksPanelV2({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Select target</span>
-              {targetsLoading ? (
-                <span className="inline-flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Refreshing
-                </span>
-              ) : attackCooldownActive ? (
-                <span>Cooldown active</span>
-              ) : (
-                <span>{eligibleTargets.length} available</span>
-              )}
+              <span className="inline-flex items-center gap-1">
+                <span>{attackCooldownActive ? 'Cooldown active' : `${eligibleTargets.length} available`}</span>
+                <BackgroundRefresh active={targetsLoading} label="Refreshing eligible targets" />
+              </span>
             </div>
 
             <DropdownMenu>
@@ -788,7 +786,7 @@ export default function BarracksPanelV2({
                     </div>
                   ) : (
                     <span className="text-muted-foreground">
-                      {targetsLoading ? "Loading targets..." : emptyRaidTargetMessage}
+                      {targetsLoading && targetsLoadedLandId !== landId ? "Loading targets..." : emptyRaidTargetMessage}
                     </span>
                   )}
                   <ChevronDown className="h-4 w-4 shrink-0" />

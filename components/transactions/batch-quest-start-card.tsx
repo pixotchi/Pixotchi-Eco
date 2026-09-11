@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ResourceValue } from '@/components/ui/resource-value';
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { ResourceState } from "@/components/ui/resource-state";
+import { BackgroundRefresh } from "@/components/ui/background-refresh";
 import { useBatchReconciliation } from "@/hooks/useBatchReconciliation";
 import { useQuestRewardsAvailability } from "@/hooks/useQuestRewardsAvailability";
 import { useQuestConfiguration } from '@/hooks/useQuestConfiguration';
@@ -434,7 +435,7 @@ export default function BatchQuestStartCard({
         description={rewards.error ? 'Retry before starting quests. Existing loot bags can still be checked and opened in Farmer House.' : undefined}
         onRetry={() => { void rewards.refresh(); }} />}
       <div className="flex items-center justify-between border-b border-border/50 pb-2">
-        <span className="font-semibold">Batch Quests</span>
+        <span className="flex items-center gap-2 font-semibold">Batch Quests<BackgroundRefresh active={loading} label="Updating farmers before the next batch" /></span>
         <div className="flex items-center gap-2 text-xs">
           {totalSentThisSession > 0 && (
             <span className="font-medium text-[hsl(var(--success-strong))]">
@@ -486,7 +487,6 @@ export default function BatchQuestStartCard({
           </div>
 
           {scanError && <ResourceState status="error" title="Farmer refresh delayed" description={scanError} onRetry={() => void scanQuests()} />}
-          {loading && <p role="status" className="text-xs text-muted-foreground">Updating farmers before the next batch…</p>}
 
           {(counts.ready_to_commit > 0 || counts.committed > 0 || counts.expired > 0) && (
             <div className="rounded-[var(--radius-control)] border border-border/45 bg-background/45 p-2 text-xs text-muted-foreground">

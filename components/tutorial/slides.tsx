@@ -22,7 +22,7 @@ export const slides: TutorialSlide[] = [
   },
   {
     id: 'next-step', title: 'Choose your next step', art: 'chat',
-    content: <div className="space-y-2 text-sm"><p>Your First Care checklist stays in Farm. It points to the next available activity for your account.</p><p>Open Chat for community help. The full game guide is always available in About, and resumes where you leave it.</p></div>,
+    content: <div className="space-y-2 text-sm"><p>Your First Care checklist stays in Farm. It points to the next available activity for your account.</p><p>Open Chat for community help. Choose Tutorial in Settings for the full game guide. It resumes where you leave it.</p></div>,
   },
   // 1) Swap
   {
@@ -74,7 +74,7 @@ export const slides: TutorialSlide[] = [
   {
     id: "items",
     title: "Attack & Defend",
-    art: "plant-items",
+    art: "attack",
     content: (
       <div className="space-y-2 text-sm">
         <p>Watch out for other players!</p>

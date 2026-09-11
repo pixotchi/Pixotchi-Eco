@@ -2719,7 +2719,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
       }),
       execute: async ({ includeSocials }) => withToolResult(
         'get_support_links',
-        'Bundled public Pixotchi support and About-tab navigation guide',
+        'Bundled public Pixotchi support and Settings navigation guide',
         {
           cache: 'Bundled public app URLs and known About-tab actions.',
           includeBlock: false,
@@ -2742,10 +2742,10 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
               : []),
           ],
           inAppActions: [
-            { id: 'about', label: 'About tab', routeHint: 'Open About from the main tab bar.' },
-            { id: 'tutorial', label: 'Game guide', routeHint: 'Open About -> Game guide.' },
-            { id: 'feedback', label: 'Feedback', routeHint: 'Open About -> Feedback. Requires connected wallet.' },
-            { id: 'documentation', label: 'Documentation', routeHint: 'Use About/official community links when a dedicated docs button is visible.' },
+            { id: 'about', label: 'About tab', routeHint: 'Open Settings using the gear in the header, then About.' },
+            { id: 'tutorial', label: 'Tutorial', routeHint: 'Open Settings -> Tutorial.' },
+            { id: 'feedback', label: 'Feedback', routeHint: 'Open Settings -> Feedback. Requires connected wallet.' },
+            { id: 'documentation', label: 'Documentation', routeHint: 'Open Settings -> Documentation.' },
           ],
           safety: {
             privateSupportDataReadable: false,

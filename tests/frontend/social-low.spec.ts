@@ -293,7 +293,7 @@ test('wallet export joins the nested dialog layer and restores its opener', asyn
 
 test('About uses a deliberate heading outline', async ({ page }) => {
   await open(page, 'about');
-  await expect(page.getByRole('heading', { name: 'Join our Community', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'About Pixotchi', level: 2 })).toBeVisible();
   await expect(page.locator('h1')).toHaveCount(1);
 });
 

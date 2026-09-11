@@ -6,10 +6,9 @@ import { ChatButton } from "@/components/chat";
 import { AppUpdateBanner } from "@/components/app-update-banner";
 import StatusBar from "@/components/status-bar";
 import { useIsSolanaWallet } from "@/components/solana";
-import { ThemeSelector } from "@/components/theme-selector";
+import { GameSettingsMenu } from "@/components/game-settings-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
-import { usePerformanceMode } from "@/components/ui/performance-mode";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
 import { LoginHero, LoginIntro } from "@/components/login-hero";
 
@@ -20,7 +19,7 @@ import { History,Info,LandPlot,Leaf,PlusCircle,Repeat,Sparkles,Trophy,type Lucid
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Activity,memo,useCallback,useEffect,useMemo,useRef,useState,type ComponentType,type CSSProperties,type KeyboardEvent } from "react";
+import { Activity,memo,useCallback,useEffect,useMemo,useRef,useState,type ComponentType,type KeyboardEvent } from "react";
 
 let farcasterSdkPromise: Promise<typeof import('@farcaster/miniapp-sdk')> | null = null;
 
@@ -111,13 +110,6 @@ const tabPrefetchers: Record<Tab, () => Promise<unknown>> = {
 };
 
 const TAB_VALUES: Tab[] = ["dashboard", "mint", "activity", "leaderboard", "swap", "about"];
-const LOGIN_THEME_SEQUENCE = ["light", "dark", "green", "yellow", "red", "pink", "blue", "violet"] as const;
-const LOGIN_THEME_INTERVAL_MS = 4000;
-const LOGIN_THEME_LAYER_STYLE: CSSProperties = {
-  backgroundImage: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--secondary)) 52%, hsl(var(--card)) 100%)",
-  backgroundPosition: "center top",
-  backgroundSize: "100% 100%",
-};
 /**
  * Warm the chunks for tabs the user is likely to open next.
  *
@@ -248,7 +240,7 @@ type AppTabDefinition = {
 type TabChangeSource = "keyboard" | "pointer";
 
 // Static — hoisted so the two SlidingNavTabs (memoized below) don't reconcile
-// all 12 nav buttons on every App render.
+// the primary navigation buttons on every App render.
 const APP_TABS: AppTabDefinition[] = [
   { id: "dashboard", label: "Farm", icon: Leaf },
   { id: "mint", label: "Mint", icon: Sparkles },
@@ -257,6 +249,8 @@ const APP_TABS: AppTabDefinition[] = [
   { id: "swap", label: "Swap", icon: Repeat },
   { id: "about", label: "About", icon: Info },
 ];
+
+const PRIMARY_APP_TABS = APP_TABS.filter(tab => tab.id !== "about");
 
 const SlidingNavTabs = memo(function SlidingNavTabs({
   activeTab,
@@ -307,7 +301,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
         "relative isolate",
         mode === "desktop"
           ? "flex shrink-0 flex-col gap-2"
-          : "grid w-full grid-cols-6 items-center gap-0.5",
+          : "grid w-full grid-cols-5 items-stretch gap-0.5",
       )}
       role="tablist"
       aria-label="Application tabs"
@@ -341,7 +335,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
               !animateIndicator && "transition-none",
               mode === "desktop"
                 ? "flex h-[68px] w-full shrink-0 flex-col items-center justify-center gap-1 !rounded-[var(--radius-nav)] px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                : "flex h-auto w-full min-w-0 flex-col items-center space-y-0.5 !rounded-[var(--radius-nav)] px-1 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-[340px]:px-0.5",
+                : "flex h-auto w-full min-w-0 flex-col items-center justify-start gap-1 !rounded-[var(--radius-nav)] px-0 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             )}
             role="tab"
             id={`tab-${mode}-${tab.id}`}
@@ -352,7 +346,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
                diverge from the visible one (WCAG 2.5.3) and, because
                aria-labelledby resolves before aria-label, leaked that string
                into the tabpanel's name too. */
-            tabIndex={isActive ? 0 : -1}
+            tabIndex={isActive || (selectedIndex < 0 && index === 0) ? 0 : -1}
           >
             <Icon
               className={cn(
@@ -367,7 +361,7 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
             <span
               className={cn(
                 "font-medium leading-tight",
-                mode === "mobile" && "max-w-full truncate text-[11px] max-[340px]:text-[10px]",
+                mode === "mobile" && "max-w-full whitespace-normal break-words text-xs",
               )}
             >
               {tab.label}
@@ -381,7 +375,6 @@ const SlidingNavTabs = memo(function SlidingNavTabs({
 
 export default function App() {
   const { theme } = useTheme();
-  const { enabled: performanceModeEnabled } = usePerformanceMode();
   const { startIfFirstVisit } = useSlideshow();
   const {
     address,
@@ -418,11 +411,6 @@ export default function App() {
   const isTabletViewport = useMediaQuery(TABLET_MEDIA_QUERY);
   const isHeaderStatusPlacement = isDesktopShell || isCompactLandscape;
   const showStandaloneEthBalance = isTabletViewport && !isDesktopShell && !isCompactLandscape;
-  const [loginThemeState, setLoginThemeState] = useState({
-    current: 0,
-    previous: 0,
-    activeLayer: 0,
-  });
   const lastDismissedRef = useRef<string | null>(null);
   const broadcastEverShownRef = useRef(false);
 
@@ -440,12 +428,6 @@ export default function App() {
       setWalletProfileLoading(false);
     }
   }, [WalletProfileComponent, walletProfileLoading]);
-  const loginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.current];
-  const previousLoginTheme = LOGIN_THEME_SEQUENCE[loginThemeState.previous];
-  const loginThemeLayers = [
-    loginThemeState.activeLayer === 0 ? loginTheme : previousLoginTheme,
-    loginThemeState.activeLayer === 1 ? loginTheme : previousLoginTheme,
-  ] as const;
 
   // Only render tabs the user has actually opened. React 19's <Activity mode="hidden">
   // still RENDERS its children (it defers effects, not rendering), so every
@@ -475,61 +457,6 @@ export default function App() {
     );
   }, []);
 
-  useEffect(() => {
-    if (isConnected || performanceModeEnabled) {
-      return;
-    }
-
-    // Stop the cycle entirely for reduced-motion users and Performance Mode. The CSS
-    // escape hatch only removes the cross-fade — leaving the timer running would swap
-    // the palette in a hard cut every 4s, which is worse than the fade it was meant to soften.
-    const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const advanceLoginTheme = () => {
-      setLoginThemeState(({ activeLayer, current }) => ({
-        activeLayer: activeLayer === 0 ? 1 : 0,
-        current: (current + 1) % LOGIN_THEME_SEQUENCE.length,
-        previous: current,
-      }));
-    };
-
-    let intervalId: number | null = null;
-    const stopThemeCycle = () => {
-      if (intervalId === null) return;
-      window.clearInterval(intervalId);
-      intervalId = null;
-    };
-    const startThemeCycle = () => {
-      if (intervalId !== null || motionQuery?.matches) return;
-      intervalId = window.setInterval(advanceLoginTheme, LOGIN_THEME_INTERVAL_MS);
-    };
-
-    const handleMotionPreferenceChange = () => {
-      if (motionQuery?.matches) {
-        stopThemeCycle();
-      } else {
-        startThemeCycle();
-      }
-    };
-    handleMotionPreferenceChange();
-
-    if (motionQuery) {
-      if (typeof motionQuery.addEventListener === "function") {
-        motionQuery.addEventListener("change", handleMotionPreferenceChange);
-      } else {
-        motionQuery.addListener(handleMotionPreferenceChange);
-      }
-    }
-
-    return () => {
-      stopThemeCycle();
-      if (!motionQuery) return;
-      if (typeof motionQuery.removeEventListener === "function") {
-        motionQuery.removeEventListener("change", handleMotionPreferenceChange);
-      } else {
-        motionQuery.removeListener(handleMotionPreferenceChange);
-      }
-    };
-  }, [isConnected, performanceModeEnabled]);
 
   // Broadcast messages system
   const { messages: broadcastMessages, dismissMessage, trackImpression } = useBroadcastMessages();
@@ -667,30 +594,9 @@ export default function App() {
       data-viewport-shell="outer"
       className={cn(
         "flex justify-center w-full min-h-dvh bg-background bg-[image:var(--gradient-content-well)] overscroll-none",
-        !isConnected && "login-theme-cycle",
-        !isConnected && loginTheme,
+        !isConnected && "login-scene",
       )}
     >
-      {!isConnected && (
-        <div className="login-theme-background" aria-hidden="true">
-          <div
-            className={cn(
-              "login-theme-layer",
-              loginThemeLayers[0],
-              loginThemeState.activeLayer === 0 && "is-active",
-            )}
-            style={LOGIN_THEME_LAYER_STYLE}
-          />
-          <div
-            className={cn(
-              "login-theme-layer",
-              loginThemeLayers[1],
-              loginThemeState.activeLayer === 1 && "is-active",
-            )}
-            style={LOGIN_THEME_LAYER_STYLE}
-          />
-        </div>
-      )}
       <div
         data-viewport-shell="inner"
         data-connected={isConnected ? "true" : "false"}
@@ -723,7 +629,7 @@ export default function App() {
                     preload
                   />
                   {/* min-w-0 + truncate: at 320px with four 44px header actions the
-                      old shrink-0 group pushed the ThemeSelector past the chrome's
+                      old shrink-0 group pushed the settings control past the chrome's
                       overflow-hidden edge; the title is the element that gives way. */}
                   <h1 className="min-w-0 truncate text-sm font-pixel text-foreground">
                     {fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}
@@ -782,7 +688,7 @@ export default function App() {
                       preload
                     />
                   </Button>
-                  <ThemeSelector />
+                  <GameSettingsMenu onAbout={() => handleTabChange("about", "pointer")} />
                 </div>
               </div>
             </header>
@@ -842,7 +748,7 @@ export default function App() {
                   animateIndicator={shouldAnimateTabChange}
                   mode="desktop"
                   onTabChange={handleTabChange}
-                  tabs={APP_TABS}
+                  tabs={PRIMARY_APP_TABS}
                 />
               </nav>
 
@@ -887,12 +793,10 @@ export default function App() {
                       return (
                         <Activity key={tab.id} mode={activityMode}>
                           {/*
-                            One tabpanel per tab, not one shared panel, and one for
-                            EVERY tab rather than only visited ones: each of the 12 nav
-                            buttons (6 desktop + 6 mobile) sets
-                            aria-controls="tabpanel-<id>", so all six ids must exist or
-                            those references dangle. Rendering the panel element is not
-                            what costs anything — mounting <TabComponent /> is, because
+                            Keep each destination's panel mounted for navigation
+                            references and retained state. About is opened from
+                            Settings and has its own accessible label.
+                            Mounting <TabComponent /> is the expensive part, because
                             <Activity mode="hidden"> still renders its children and would
                             pull every next/dynamic tab chunk on first connect. So the
                             element is always here and only the contents wait for a visit.
@@ -900,7 +804,8 @@ export default function App() {
                           <div
                             role="tabpanel"
                             id={`tabpanel-${tab.id}`}
-                            aria-labelledby={`tab-desktop-${tab.id}`}
+                            aria-labelledby={tab.id === "about" ? undefined : `tab-desktop-${tab.id}`}
+                            aria-label={tab.id === "about" ? tab.label : undefined}
                             className={
                               activeTab === tab.id
                                 ? cn(
@@ -932,13 +837,13 @@ export default function App() {
               </div>
 
               {/* Bottom Navigation with safe area */}
-              <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-2 max-[340px]:px-1.5 xl:hidden" role="navigation" aria-label="Main navigation">
+              <nav data-viewport-shell="nav" className="surface-footer-divider rounded-t-[var(--radius-panel)] border-x border-t border-x-[hsl(var(--border-strong)/0.28)] border-t-[hsl(var(--divider)/0.66)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] px-4 py-1 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 overscroll-none touch-pan-x select-none safe-area-bottom max-[380px]:px-[8px] max-[340px]:px-[6px] xl:hidden" role="navigation" aria-label="Main navigation">
                 <SlidingNavTabs
                   activeTab={activeTab}
                   animateIndicator={shouldAnimateTabChange}
                   mode="mobile"
                   onTabChange={handleTabChange}
-                  tabs={APP_TABS}
+                  tabs={PRIMARY_APP_TABS}
                 />
               </nav>
             </>

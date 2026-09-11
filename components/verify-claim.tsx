@@ -317,8 +317,7 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
   // 2. Still loading claim status
   // 3. User has already claimed (Redis is source of truth)
   if (statusLoading && claimState === null) {
-    // Optionally show a loading skeleton, or just return null
-    return null;
+    return <Card aria-busy="true" role="status" className="min-h-28 justify-center"><p className="text-sm text-muted-foreground">Checking free-plant eligibility…</p></Card>;
   }
 
   if (claimState === 'complete' && step !== 'success') {
@@ -371,7 +370,7 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
 
   if (step === 'unverified') {
     return (
-      <Card className={compact ? 'overflow-hidden border-primary/20' : 'relative overflow-hidden font-sans'}>
+      <Card className={compact ? 'overflow-hidden border-primary/20 bg-primary/5' : 'relative overflow-hidden font-sans'}>
         {!compact && <div
           className="absolute inset-0 z-0 bg-slate-900"
           style={{
@@ -381,23 +380,23 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
             backgroundRepeat: 'no-repeat',
           }}
         />}
-        <div className={compact ? '' : 'relative z-10 text-white'}>
-          <CardHeader className={compact ? 'p-3 pb-2' : undefined}>
-          <CardTitle className={compact ? 'flex items-center gap-2 text-sm text-foreground' : 'flex items-center gap-2 text-white'}>
+        <div className={compact ? 'flex flex-col gap-3' : 'relative z-10 text-white'}>
+          <CardHeader className={compact ? 'mb-0 min-w-0' : undefined}>
+          <CardTitle className={compact ? 'flex items-center gap-2 text-base text-foreground' : 'flex items-center gap-2 text-white'}>
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
               <Image src="/icons/verified.svg" alt="Verified" width={24} height={24} />
             </div>
             Verification Required
           </CardTitle>
-            <CardDescription className={compact ? 'text-xs text-muted-foreground' : 'text-white/90'}>
+            <CardDescription className={compact ? 'text-sm text-muted-foreground' : 'text-white/90'}>
               You need to verify your X account first.
             </CardDescription>
           </CardHeader>
-          <CardContent className={compact ? 'space-y-2 p-3 pt-0' : 'space-y-3'}>
+          <CardContent className={compact ? 'space-y-2' : 'space-y-3'}>
             <Button
-              variant={compact ? 'outline' : 'imageCardPrimary'}
+              variant={compact ? 'default' : 'imageCardPrimary'}
               fullWidth
-              className="font-sans"
+              className="h-auto min-h-11 whitespace-normal font-sans leading-snug"
               onClick={() => openExternalUrl('https://verify.base.dev')}
             >
               Open Base Verify
@@ -419,7 +418,7 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
   }
 
   return (
-    <Card className={compact ? 'overflow-hidden border-primary/20' : 'relative overflow-hidden'}>
+    <Card className={compact ? 'overflow-hidden border-primary/20 bg-primary/5' : 'relative overflow-hidden'}>
       {!compact && <div
         className="absolute inset-0 z-0 bg-slate-900"
         style={{
@@ -429,21 +428,21 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
           backgroundRepeat: 'no-repeat',
         }}
       />}
-      <div className={compact ? '' : 'relative z-10 font-sans text-white'}>
-        <CardHeader className={compact ? 'p-3 pb-2' : undefined}>
-          <CardTitle className={compact ? 'flex items-center gap-2 text-sm text-foreground' : 'flex items-center gap-2 text-white'}>
+      <div className={compact ? 'flex flex-col gap-3' : 'relative z-10 font-sans text-white'}>
+        <CardHeader className={compact ? 'mb-0 min-w-0' : undefined}>
+          <CardTitle className={compact ? 'flex items-center gap-2 text-base text-foreground' : 'flex items-center gap-2 text-white'}>
             <div className="bg-white rounded-full p-0.5 flex items-center justify-center">
               <Image src="/icons/verified.svg" alt="" aria-hidden="true" width={24} height={24} />
             </div>
             {claimState === 'retryable' ? 'Retry your free plant claim' : 'Claim your free plant'}
           </CardTitle>
-          <CardDescription className={compact ? 'text-xs text-muted-foreground' : 'text-white/90'}>
+          <CardDescription className={compact ? 'text-sm text-muted-foreground' : 'text-white/90'}>
             {claimState === 'retryable'
               ? 'Your earlier attempt stopped before submission. Verify again to retry safely.'
               : <>Verify your X account to claim {rewardDescription}!</>}
           </CardDescription>
         </CardHeader>
-        <CardContent className={compact ? 'space-y-2 p-3 pt-0' : 'space-y-4'}>
+        <CardContent className={compact ? 'space-y-2' : 'space-y-4'}>
           {error && (
             <div className={`rounded border border-destructive/30 bg-destructive/15 p-3 text-sm flex gap-2 items-start ${compact ? 'text-foreground' : 'text-white/90 font-sans'}`}>
               <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${compact ? 'text-destructive' : 'text-white'}`} />
@@ -452,9 +451,9 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
           )}
 
           <Button 
-            variant={compact ? 'outline' : 'imageCardPrimary'}
+            variant={compact ? 'default' : 'imageCardPrimary'}
             fullWidth
-            className="font-sans" 
+            className="h-auto min-h-11 whitespace-normal font-sans leading-snug"
             onClick={handleVerify}
             disabled={loading}
           >
@@ -464,7 +463,7 @@ export function VerifyClaimContent({ onClaimSuccess, strainId = 4, appearance = 
                 {step === 'verifying' ? 'Verifying...' : 'Claiming...'}
               </>
             ) : (
-              claimState === 'retryable' ? 'Verify & Retry Claim' : 'Verify & Claim'
+              claimState === 'retryable' ? 'Verify & Retry Claim' : 'Check eligibility & claim'
             )}
           </Button>
           <p className={compact ? 'text-xs text-muted-foreground text-center' : 'text-xs text-white/80 text-center font-sans'}>

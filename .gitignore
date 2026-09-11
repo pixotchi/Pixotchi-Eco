@@ -17,6 +17,8 @@ contracts/
 # Note: `scripts/*` (contents) rather than `scripts/` (the directory), because git
 # cannot re-include a path whose parent directory is excluded.
 scripts/*
+!scripts/capture-tutorial.mts
+!scripts/render-tutorial-art.mjs
 !scripts/check-base-rpc-hardening.mjs
 !scripts/check-frontend-release.mjs
 !scripts/check-frontend-p1.mjs
@@ -82,3 +84,4 @@ tsconfig.tsbuildinfo
 CLAUDE.md
 /tmp
 /docs/research
+/reports

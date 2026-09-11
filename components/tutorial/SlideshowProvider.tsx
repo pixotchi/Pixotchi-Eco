@@ -93,7 +93,7 @@ export function SlideshowProvider({ children }: { children: React.ReactNode }) {
     });
   }, [envEnabled, read, persist]);
 
-  // About opens the full guide and resumes a previously paused full guide.
+  // Settings opens the full guide and resumes a previously paused full guide.
   const start = useCallback(
     (opts?: { reset?: boolean }) => {
       if (!envEnabled) return;

@@ -6,61 +6,12 @@ import { slides as allSlides } from "./slides";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
-import type { SyntheticEvent } from "react";
+import { TutorialArt, tutorialArtSrc } from "./tutorial-art";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { navigateToGameTab } from '@/lib/game-navigation';
 
-/*
- * No manual image preloading here any more: the old `new window.Image()` pass
- * requested the RAW /tutorial/*.png files (0.4-0.6MB each) while the rendered
- * next/image below requests optimized /_next/image URLs — so the "preload"
- * warmed nothing and doubled ~1MB of downloads on every new user's first
- * screen. next/image's own `preload` on the current slide is sufficient.
- */
-function Art({ type }: { type?: string }) {
-  if (!type) return null;
-  const map: Record<string, { src: string; alt: string }> = {
-    "token-flow": { src: "/tutorial/swap.webp", alt: "Swap ETH to SEED" },
-    "mint-plant": { src: "/tutorial/mint-plant.webp", alt: "Mint and feed plant" },
-    "ptstod": { src: "/tutorial/ptstod.webp", alt: "PTS and lifetime" },
-    "plant-items": { src: "/tutorial/plant-items.webp", alt: "Plant Items Marketplace" },
-    "attack": { src: "/tutorial/attack.webp", alt: "Attack rules" },
-    "land": { src: "/tutorial/mint-land.webp", alt: "Mint land" },
-    "buildings": { src: "/tutorial/buildings.webp", alt: "Buildings production" },
-    "staking": { src: "/tutorial/stake.webp", alt: "Staking to earn LEAF" },
-    "chat": { src: "/tutorial/chat.webp", alt: "Chat and AI assistant" },
-    "base": { src: "/tutorial/based.webp", alt: "Use Smart Wallet in the Base app" },
-    "tasks": { src: "/tutorial/tasks.webp", alt: "Streaks & Farmer's Tasks" },
-  };
-  const art = map[type];
-  if (!art) return null;
-  return (
-    <div key={type} className="w-full flex items-center justify-center">
-      <div className="aspect-[16/10] w-[90%] max-w-[360px] overflow-hidden rounded-[var(--radius-panel)] border border-[hsl(var(--edge-panel))] bg-card/70 shadow-[var(--shadow-hairline)]">
-        {/* No transition-opacity: the element is keyed by src, so it remounts per
-            slide and a transition can never interpolate — it was inert. */}
-        <Image
-          key={art.src}
-          src={art.src}
-          alt={art.alt}
-          width={720}
-          height={450}
-          sizes="(max-width: 640px) 90vw, 360px"
-          preload
-          className="w-full h-full object-cover"
-          onError={(event: SyntheticEvent<HTMLImageElement>) => {
-            try {
-              event.currentTarget.style.display = "none";
-            } catch {}
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function SlideshowModal() {
-  const { open, index, mode, slideIds, next, prev, close, finish, start } = useSlideshow();
+  const { open, index, mode, slideIds, next, prev, close, finish } = useSlideshow();
   const scrollRef = useRef<HTMLDivElement>(null);
   const slides = useMemo(
     () => allSlides.filter((slide) => slideIds.includes(slide.id)),
@@ -74,6 +25,13 @@ export default function SlideshowModal() {
    */
   useEffectArrowKeys(open, next, prev);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' }); }, [index, mode]);
+  // Warm the next illustration while the current step is being read.
+  const nextArt = slides[index + 1]?.art;
+  useEffect(() => {
+    if (!open || !nextArt) return;
+    const image = new window.Image();
+    image.src = tutorialArtSrc(nextArt);
+  }, [open, nextArt]);
 
   // No `if (!open) return null` before the Dialog: unmounting in the same
   // commit that open flips false skipped Radix's exit animation and the
@@ -103,7 +61,7 @@ export default function SlideshowModal() {
       >
         <DialogTitle className="sr-only">Pixotchi tutorial: {slide.title}</DialogTitle>
         <DialogDescription className="sr-only">
-          {mode === 'quick' ? 'A three-step introduction to your first plant and care.' : 'The full Pixotchi game guide. Skip saves your place so you can resume from About.'}
+          {mode === 'quick' ? 'A three-step introduction to your first plant and care.' : 'The full Pixotchi game guide. Skip saves your place so you can resume from Settings.'}
         </DialogDescription>
         {/* Header */}
         <div className="surface-header-divider dialog-header-surface flex shrink-0 items-center justify-between gap-2 px-4 py-3">
@@ -114,15 +72,14 @@ export default function SlideshowModal() {
           <Button variant="ghost" size="default" onClick={close} className="px-3 text-sm text-muted-foreground hover:text-foreground">Skip</Button>
         </div>
 
-        {/* Body (dvh, matching the panel's own cap — vh over-measures on mobile) */}
-        <ScrollArea ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Fit each step's content; scroll only when it exceeds the viewport cap. */}
+        <ScrollArea ref={scrollRef} className="min-h-0 flex-initial overflow-y-auto p-4 space-y-4">
           <div className="flex items-start gap-3">
             {slide.icon}
             <h2 className="text-lg font-semibold leading-tight">{slide.title}</h2>
           </div>
-          <Art type={slide.art} />
+          <TutorialArt type={slide.art} />
           <div className="text-foreground">{slide.content}</div>
-          {mode === 'full' && index > 0 && <Button variant="link" onClick={() => start({ reset: true })}>Restart guide</Button>}
         </ScrollArea>
 
         {/* Footer */}
@@ -148,6 +105,7 @@ function useEffectArrowKeys(open: boolean, next: () => void, prev: () => void) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('[data-tutorial-image-viewer]')) return;
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))) return;
       if (e.key === "ArrowRight") { e.preventDefault(); next(); }
       if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
