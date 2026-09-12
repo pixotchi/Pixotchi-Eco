@@ -93,17 +93,20 @@ DropdownMenuCheckboxItem.displayName =
 
 const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
+    indicatorPosition?: 'start' | 'end';
+  }
+>(({ className, children, indicatorPosition = 'start', ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex min-h-11 min-w-0 cursor-default select-none items-center whitespace-normal [overflow-wrap:anywhere] rounded-[var(--radius-nav)] py-2 pl-9 pr-3 text-sm outline-none transition-[background-color,color,box-shadow] focus:bg-[hsl(var(--nav-hover-bg))] focus:text-primary-strong focus:shadow-[var(--shadow-nav-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex min-h-11 min-w-0 cursor-default select-none items-center whitespace-normal [overflow-wrap:anywhere] rounded-[var(--radius-nav)] py-2 text-sm outline-none transition-[background-color,color,box-shadow] focus:bg-[hsl(var(--nav-hover-bg))] focus:text-primary-strong focus:shadow-[var(--shadow-nav-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      indicatorPosition === 'end' ? 'pl-3 pr-9' : 'pl-9 pr-3',
       className
     )}
     {...props}
   >
-    <span className="absolute left-3 flex h-4 w-4 items-center justify-center">
+    <span className={cn("absolute flex h-4 w-4 items-center justify-center", indicatorPosition === 'end' ? 'right-3' : 'left-3')}>
       <DropdownMenuPrimitive.ItemIndicator>
         <Circle className="h-2 w-2 fill-current" />
       </DropdownMenuPrimitive.ItemIndicator>

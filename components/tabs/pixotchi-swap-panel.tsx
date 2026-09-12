@@ -232,7 +232,9 @@ function TokenSelector({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <DropdownMenu onOpenChange={setIsOpen}>
+    // Keep the swap form accessible while choosing a token; modal menus can hide
+    // the focused trigger before focus has moved into the menu.
+    <DropdownMenu modal={false} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -284,7 +286,7 @@ function TokenSelector({
         align="end"
         sideOffset={6}
         collisionPadding={12}
-        className="w-max min-w-[10rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-panel)] p-2"
+        className="w-max min-w-[8rem] max-w-[calc(100vw-2rem)] rounded-[var(--radius-panel)] p-1"
       >
         <DropdownMenuRadioGroup value={value} onValueChange={(next) => onSelect(next as UserSwapTokenId)}>
         {options.map((option) => {
@@ -293,9 +295,10 @@ function TokenSelector({
             <DropdownMenuRadioItem
               key={option}
               value={option}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-control)] pl-8 pr-3 py-2.5"
+              indicatorPosition="end"
+              className="cursor-pointer rounded-[var(--radius-control)] pl-2 pr-8 py-2.5"
             >
-              <span className="flex items-center gap-3">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <Image
                   src={optionToken.image}
                   alt=""
