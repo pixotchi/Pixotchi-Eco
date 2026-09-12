@@ -1023,7 +1023,7 @@ function LandsViewContent() {
                       {selectedLand ? (
                         <div className="flex min-w-0 items-center space-x-2">
                           <LandPlot className="h-4 w-4 shrink-0" />
-                          <span className="truncate font-semibold tracking-tight">{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
+                          <span className="truncate font-pixel">{selectedLand.name || `Land #${selectedLand.tokenId}`}</span>
                         </div>
                       ) : "Select a Land"}
                       <ChevronDown className="h-4 w-4 shrink-0" />
@@ -1034,7 +1034,7 @@ function LandsViewContent() {
                       <DropdownMenuItem key={land.tokenId.toString()} onSelect={() => handleLandSelect(land.tokenId)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <LandPlot className="h-4 w-4 shrink-0" />
-                          <span className="truncate"><span className="font-semibold tracking-tight">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
+                          <span className="truncate"><span className="font-pixel">{land.name || `Land #${land.tokenId}`}</span> (XP {formatXP(land.experiencePoints)})</span>
                         </div>
                       </DropdownMenuItem>
                     ))}

@@ -17,7 +17,7 @@ import { formatStartingLifetime, getSharedStartingLifetimeCopy, LAND_MINT_DESCRI
 import { MintLandSummary, MintReview, MintStrainPicker } from '@/components/mint/mint-presentation';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { TokenAmount } from '@/components/ui/token-amount';
-import { InlineBalanceNotice } from '@/components/ui/premium';
+import { MintPaymentNotice } from '@/components/mint/mint-payment-notice';
 import { VerifyClaim } from '@/components/verify-claim';
 import { formatTokenDisplay, formatTokenEstimate } from '@/lib/token-display';
 import { useFarmView } from '@/lib/farm-view-context';
@@ -727,6 +727,17 @@ export default function MintTab() {
       : false;
     const showEthPlantMint = plantUsesEth && selectedStrain;
     const paymentToken = selectedStrain?.paymentToken || PIXOTCHI_TOKEN_ADDRESS;
+    const plantPaymentMessage = !selectedStrain ? null
+      : plantUsesEth
+        ? ethBalanceStatus !== 'ready'
+          ? ethBalanceReadError ? 'Your ETH balance could not be verified.' : 'Checking your ETH balance…'
+          : ethQuote ? getBalanceShortfallMessage(ethBalance, ethQuote.ethAmountWithBuffer, 'ETH') : null
+        : plantPaymentDataUnknown
+          ? strainsError ? 'The strain catalog could not be verified.'
+            : paymentTokenReadError ? 'Your payment balance could not be verified.'
+            : 'Checking your payment balance and allowance…'
+          : getBalanceShortfallMessage(selectedStrain.paymentPrice !== undefined ? paymentTokenBalance : seedBalanceRaw, requiredPayment, paymentTokenSymbol);
+    const plantPaymentRetry = plantUsesEth ? Boolean(ethBalanceReadError) : Boolean(strainsError || paymentTokenReadError);
     const plantRequiredLabel = selectedStrain?.paymentPrice !== undefined
       ? formatTokenAmount(selectedStrain.paymentPrice)
       : formatNumber(selectedStrain?.mintPrice || 0);
@@ -761,7 +772,7 @@ export default function MintTab() {
 
             <div className="min-w-0 flex-1 space-y-4 @min-[38rem]/mint-plant:flex-none @min-[38rem]/mint-plant:self-stretch">
               <div>
-                <h3 className="text-xl font-semibold">{selectedStrain?.name || 'Select a strain'}</h3>
+                <h3 className="text-xl font-pixel">{selectedStrain?.name || 'Select a strain'}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
                   {selectedStrain ? `${plantRequiredLabel} ${paymentTokenSymbol} · ${formatStartingLifetime(selectedStrain.strainInitialTOD)} starting lifetime` : 'Pick one of the available strains.'}
                 </p>
@@ -828,6 +839,9 @@ export default function MintTab() {
                 </p>
               )}
 
+              {selectedStrain && <MintPaymentNotice message={plantPaymentMessage}
+                onRetry={plantPaymentRetry ? retryMintReads : undefined} />}
+
               {showEthPlantMint && (
                 <div className="space-y-2">
                   <SwapMintBundle
@@ -861,55 +875,17 @@ export default function MintTab() {
                       <Button variant="ghost" className="w-full" disabled={plantMintPending || landMintPending} onClick={() => setEthMode(false)}>Switch to SEED</Button>
                     </div>
                   )}
-                  {ethBalanceStatus !== 'ready' ? (
-                    <>
-                      <InlineBalanceNotice>
-                        {ethBalanceReadError
-                          ? 'Your ETH balance could not be verified. Retry before minting.'
-                          : 'Checking your ETH balance before enabling minting...'}
-                      </InlineBalanceNotice>
-                      {ethBalanceReadError && (
-                        <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
-                          Retry balance check
-                        </Button>
-                      )}
-                    </>
-                  ) : ethQuote && ethBalance < ethQuote.ethAmountWithBuffer && (
-                    <InlineBalanceNotice>
-                      {getBalanceShortfallMessage(ethBalance, ethQuote.ethAmountWithBuffer, 'ETH')}
-                    </InlineBalanceNotice>
-                  )}
+
                 </div>
               )}
 
               {!plantUsesEth && selectedStrain && plantPaymentDataUnknown && (
-                <div className="space-y-2">
-                  <DisabledTransaction
-                    buttonText={strainsError
-                      ? "Strain data unavailable"
-                      : paymentTokenReadError ? "Balance unavailable" : "Checking balance..."}
-                    buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                  />
-                  <InlineBalanceNotice>
-                    {strainsError
-                      ? 'The strain catalog could not be verified. Retry before minting.'
-                      : paymentTokenReadError
-                      ? 'Your payment balance could not be verified. Retry before minting.'
-                      : 'Checking your payment balance and allowance...'}
-                  </InlineBalanceNotice>
-                  {(Boolean(strainsError) || Boolean(paymentTokenReadError)) && (
-                    <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
-                      Retry balance check
-                    </Button>
-                  )}
-                </div>
+                <DisabledTransaction buttonText="Mint Plant" buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS} />
               )}
 
               {!plantUsesEth && selectedStrain && hasInsufficientPlantBalance && (
                 <div className="space-y-2">
-                  <InlineBalanceNotice tone="neutral" className="text-sm">
-                    {getBalanceShortfallMessage(selectedStrain.paymentPrice !== undefined ? paymentTokenBalance : seedBalanceRaw, requiredPayment, paymentTokenSymbol)}
-                  </InlineBalanceNotice>
+
                   {paymentTokenSymbol === 'SEED'
                     ? <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
                     : <DisabledTransaction buttonText="Insufficient Balance" buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS} />}
@@ -972,6 +948,14 @@ export default function MintTab() {
     const needsLandApproval = landMintAllowance < landMintPrice;
     const landMintDataUnknown = !landMintDataCurrent || (!isEthMode && seedBalanceStatus !== 'ready');
     const hasInsufficientLandBalance = !landMintDataUnknown && seedBalanceRaw < landMintPrice;
+    const landPaymentMessage = landMintError || (landMintDataUnknown
+      ? 'Checking land price, supply, and wallet balance…'
+      : landUsesEth
+        ? ethBalanceStatus !== 'ready'
+          ? ethBalanceReadError ? 'Your ETH balance could not be verified.' : 'Checking your ETH balance…'
+          : landEthQuote ? getBalanceShortfallMessage(ethBalance, landEthQuote.ethAmountWithBuffer, 'ETH') : null
+        : getBalanceShortfallMessage(seedBalanceRaw, landMintPrice, 'SEED'));
+
 
     return (
       <TabCard padding="sm">
@@ -1012,25 +996,11 @@ export default function MintTab() {
           </div>
 
           <MintReview label="Review land mint">
-            {landMintError && (
-              <div role="alert" className="space-y-2 rounded-[var(--radius-control)] border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-foreground">
-                <p>{landMintError}</p>
-                <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
-                  Retry land mint data
-                </Button>
-              </div>
-            )}
+            <MintPaymentNotice message={landPaymentMessage}
+              onRetry={landMintError || (landUsesEth && ethBalanceReadError) ? retryMintReads : undefined} />
 
-            {!landUsesEth && !landMintError && landMintDataUnknown && (
-              <div className="space-y-2">
-                <DisabledTransaction
-                  buttonText="Checking land mint data..."
-                  buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS}
-                />
-                <InlineBalanceNotice>
-                  Checking land price, supply, and wallet balance before enabling minting.
-                </InlineBalanceNotice>
-              </div>
+            {!landUsesEth && (landMintError || landMintDataUnknown) && (
+              <DisabledTransaction buttonText="Mint Land" buttonClassName={SUCCESS_TRANSACTION_BUTTON_CLASS} />
             )}
 
             {landUsesEth && (
@@ -1062,24 +1032,7 @@ export default function MintTab() {
                     <Button variant="ghost" className="w-full" disabled={plantMintPending || landMintPending} onClick={() => setEthMode(false)}>Switch to SEED</Button>
                   </div>
                 )}
-                {ethBalanceStatus !== 'ready' ? (
-                  <>
-                    <InlineBalanceNotice>
-                      {ethBalanceReadError
-                        ? 'Your ETH balance could not be verified. Retry before minting.'
-                        : 'Checking your ETH balance before enabling land minting...'}
-                    </InlineBalanceNotice>
-                    {ethBalanceReadError && (
-                      <Button type="button" variant="outline" className="w-full" onClick={retryMintReads}>
-                        Retry balance check
-                      </Button>
-                    )}
-                  </>
-                ) : landEthQuote && ethBalance < landEthQuote.ethAmountWithBuffer && (
-                  <InlineBalanceNotice>
-                    {getBalanceShortfallMessage(ethBalance, landEthQuote.ethAmountWithBuffer, 'ETH')}
-                  </InlineBalanceNotice>
-                )}
+
               </div>
             )}
 
@@ -1092,9 +1045,7 @@ export default function MintTab() {
                   />
                 ) : hasInsufficientLandBalance ? (
                   <>
-                    <InlineBalanceNotice tone="neutral" className="text-sm">
-                      {getBalanceShortfallMessage(seedBalanceRaw, landMintPrice, 'SEED')}
-                    </InlineBalanceNotice>
+
                     <Button className="h-auto min-h-11 w-full whitespace-normal" onClick={() => navigateToGameTab('swap')}>Get SEED in Swap</Button>
                   </>
                 ) : (
@@ -1213,4 +1164,4 @@ export default function MintTab() {
   };
 
   return <div className="tablet:mx-auto tablet:max-w-7xl 2xl:max-w-[1360px]">{renderContent()}</div>;
-} 
+}

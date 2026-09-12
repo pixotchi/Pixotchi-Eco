@@ -229,13 +229,11 @@ export default function UpgradePanel({
           {hasInsufficientLeaf && !building.isUpgrading && !isMaxLevel && (
             <InlineBalanceNotice>
               {getBalanceShortfallMessage(userLeafBalance, building.levelUpgradeCostLeaf, 'LEAF')}
-              {' '}• Missing: {formatTokenAmount(building.levelUpgradeCostLeaf - userLeafBalance)} LEAF
             </InlineBalanceNotice>
           )}
           {hasInsufficientPixotchi && building.isUpgrading && (
             <InlineBalanceNotice>
               {getBalanceShortfallMessage(userPixotchiBalance, building.levelUpgradeCostSeedInstant, 'PIXOTCHI')}
-              {' '}• Missing: {formatTokenAmount(building.levelUpgradeCostSeedInstant - userPixotchiBalance)} PIXOTCHI
             </InlineBalanceNotice>
           )}
         </div>

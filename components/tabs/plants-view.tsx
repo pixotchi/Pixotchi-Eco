@@ -471,7 +471,7 @@ export default function PlantsView() {
                       {selectedPlant ? (
                         <div className="flex min-w-0 items-center space-x-2">
                           <PlantImage selectedPlant={selectedPlant} width={24} height={24} />
-                          <span className="truncate font-semibold tracking-tight">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
+                          <span className="truncate font-pixel">{selectedPlant.name || `Plant #${selectedPlant.id}`}</span>
                         </div>
                       ) : "Select a Plant"}
                       <ChevronDown className="h-4 w-4 shrink-0" />
@@ -482,7 +482,7 @@ export default function PlantsView() {
                       <DropdownMenuItem key={plant.id} onSelect={() => choosePlant(plant.id)}>
                         <div className="flex min-w-0 items-center space-x-2">
                           <PlantImage selectedPlant={plant} width={24} height={24} />
-                          <span className="truncate"><span className="font-semibold tracking-tight">{plant.name || `Plant #${plant.id}`}</span> (Level {plant.level})</span>
+                          <span className="truncate"><span className="font-pixel">{plant.name || `Plant #${plant.id}`}</span> (Level {plant.level})</span>
                         </div>
                       </DropdownMenuItem>
                     ))}
@@ -613,7 +613,7 @@ export default function PlantsView() {
                     Level {selectedPlant.level}
                   </span>
                   <span aria-hidden="true">•</span>
-                  <span>{getStrainName(selectedPlant.strain)}</span>
+                  <span className="font-pixel">{getStrainName(selectedPlant.strain)}</span>
                   {selectedPlant.timePlantBorn && (
                     <>
                       <span aria-hidden="true">•</span>

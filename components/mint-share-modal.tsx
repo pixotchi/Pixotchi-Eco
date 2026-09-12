@@ -264,7 +264,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                   preload
                 />
               </div>
-              <div className="text-center text-xl font-semibold leading-tight">{data.strainName}</div>
+              <div className="text-center text-xl font-pixel leading-tight">{data.strainName}</div>
             </div>
 
             {/* Share Buttons */}

@@ -29,6 +29,7 @@ assert.match(mintTab, /strainsError !== null \|\| plantPaymentBalanceStatus/);
 assert.match(mintTab, /plantUsesEth && plantMintAvailable/);
 assert.match(mintTab, /!plantPaymentDataUnknown && !hasInsufficientPlantBalance/);
 assert.match(mintTab, /Retry strain catalog/);
-assert.match(mintTab, /Retry balance check/);
+assert.match(mintTab, /MintPaymentNotice/);
+assert.match(projectFile('components/mint/mint-payment-notice.tsx'), /Retry balance check/);
 
 console.log('Balance/mint read-state smoke passed');

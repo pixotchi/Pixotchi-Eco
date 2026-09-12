@@ -1,6 +1,6 @@
-import { formatTokenDisplay, formatTokenSymbol } from './token-display';
+import { formatTokenCost, formatTokenSymbol } from './token-display';
 
-/** Use raw units so shortfalls remain exact, including very small gas amounts. */
+/** Calculate in raw units, then round up for a readable funding target. */
 export function getBalanceShortfallMessage(
   balance: bigint,
   required: bigint,
@@ -9,8 +9,11 @@ export function getBalanceShortfallMessage(
 ): string | null {
   if (balance >= required) return null;
   const token = formatTokenSymbol(symbol) ?? symbol;
+  const precision = ['ETH', 'SOL', 'WSOL'].includes(token) ? 6 : 2;
+  const amount = formatTokenCost(required - balance, decimals, precision)
+    .replace(/^</, 'less than ');
   if (balance === BigInt(0)) {
-    return `You need ${formatTokenDisplay(required, decimals, decimals)} ${token}.`;
+    return `You need ${amount} ${token}.`;
   }
-  return `Not enough ${token}. You need ${formatTokenDisplay(required - balance, decimals, decimals)} more.`;
+  return `Not enough ${token}. You need ${amount} more.`;
 }

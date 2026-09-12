@@ -1,0 +1,36 @@
+.preview {
+  position: relative;
+  width: 176px;
+  height: 176px;
+  margin-inline: auto;
+}
+
+.art { position: relative; width: 100%; height: 100%; }
+.strain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: strain-fade 15s var(--ease-standard) infinite;
+}
+
+/* Each strain holds for 2.4s, then crossfades for 600ms into the next. */
+@keyframes strain-fade {
+  0%, 16%, 100% { opacity: 1; }
+  20%, 96% { opacity: 0; }
+}
+
+.preview[data-paused='true'] .strain { animation-play-state: paused; }
+.preview[data-still='true'] .strain { animation: none; opacity: 0; }
+.preview[data-still='true'] .strain:first-child { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .strain { animation: none; opacity: 0; }
+  .strain:first-child { opacity: 1; }
+}
+
+:global(.performance-mode) .strain { animation: none; opacity: 0; }
+:global(.performance-mode) .strain:first-child { opacity: 1; }

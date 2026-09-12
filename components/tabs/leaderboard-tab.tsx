@@ -748,7 +748,7 @@ export default function LeaderboardTab() {
     const isMine = isUserPlant(plant);
     const canShowKill = !isMine && plant.isDead;
     const canShowRevive = isMine && plant.isDead;
-    const plantImageSize = compact ? 28 : 48;
+    const plantImageSize = compact ? 56 : 64;
 
     return (
       <div
@@ -773,8 +773,9 @@ export default function LeaderboardTab() {
           <div
             className={cn(
               "relative flex-shrink-0 cursor-pointer rounded-[var(--radius-control)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              compact && "flex h-11 w-11 items-center justify-center"
+              "flex items-center justify-center"
             )}
+            style={{ width: plantImageSize, height: plantImageSize }}
             onClick={() => handlePlantImageClick(plant)}
             role="button"
             tabIndex={0}
@@ -790,7 +791,6 @@ export default function LeaderboardTab() {
               selectedPlant={plant}
               width={plantImageSize}
               height={plantImageSize}
-              className={compact ? "h-7 w-7" : ""}
             />
             {hasActiveFence(plant) && (
               <div className={cn("absolute z-10", compact ? "right-0 top-0" : "-top-1 -right-1")}>
@@ -903,7 +903,7 @@ export default function LeaderboardTab() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2">
-            <h4 className={cn("font-semibold truncate pr-6", compact ? "text-sm" : "text-base")}>
+            <h4 className={cn("font-pixel truncate pr-6", compact ? "text-sm" : "text-base")}>
               {row.name}
             </h4>
           </div>
@@ -1278,7 +1278,7 @@ export default function LeaderboardTab() {
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Target
                     </div>
-                    <div className="truncate font-semibold tracking-tight text-sm">
+                    <div className="truncate font-pixel text-sm">
                       {targetPlant.name || `Plant #${targetPlant.id}`}
                     </div>
                     <div className="text-xs text-muted-foreground">Level {targetPlant.level}</div>
@@ -1349,7 +1349,7 @@ export default function LeaderboardTab() {
                         <div className="flex min-w-0 items-center gap-2">
                           <PlantImage selectedPlant={selectedAttacker} width={30} height={30} />
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">
+                            <div className="truncate text-sm font-pixel">
                               {selectedAttacker.name || `Plant #${selectedAttacker.id}`}
                             </div>
                             <div className="text-xs font-normal text-muted-foreground">
@@ -1382,7 +1382,7 @@ export default function LeaderboardTab() {
                             <div className="flex min-w-0 items-center gap-2">
                               <PlantImage selectedPlant={attacker} width={28} height={28} />
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">
+                                <div className="truncate text-sm font-pixel">
                                   {attacker.name || `Plant #${attacker.id}`}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
@@ -1511,7 +1511,7 @@ export default function LeaderboardTab() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Dead target
                   </div>
-                  <div className="truncate font-semibold tracking-tight text-sm">
+                  <div className="truncate font-pixel text-sm">
                     {targetPlant.name || `Plant #${targetPlant.id}`}
                   </div>
                   <div className="text-xs text-muted-foreground">Collects 1 star</div>
@@ -1563,7 +1563,7 @@ export default function LeaderboardTab() {
                         <div className="flex min-w-0 items-center gap-2">
                           <PlantImage selectedPlant={selectedKillerPlant} width={30} height={30} />
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">
+                            <div className="truncate text-sm font-pixel">
                               {selectedKillerPlant.name || `Plant #${selectedKillerPlant.id}`}
                             </div>
                             <div className="text-xs font-normal text-muted-foreground">
@@ -1596,7 +1596,7 @@ export default function LeaderboardTab() {
                             <div className="flex min-w-0 items-center gap-2">
                               <PlantImage selectedPlant={plant} width={28} height={28} />
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">
+                                <div className="truncate text-sm font-pixel">
                                   {plant.name || `Plant #${plant.id}`}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
@@ -1665,7 +1665,7 @@ export default function LeaderboardTab() {
           <div className="space-y-3">
             {targetPlant && (
               <div className="text-sm text-muted-foreground">
-                You are reviving <span className="font-medium">{targetPlant.name || `Plant #${targetPlant.id}`}</span>.
+                You are reviving <span className="font-pixel">{targetPlant.name || `Plant #${targetPlant.id}`}</span>.
                 {reviveReady && currentReviveRead?.data && <> Cost: <ResourceValue resource="seed">{formatTokenAmount(currentReviveRead.data.price)} SEED</ResourceValue>.</>}
               </div>
             )}

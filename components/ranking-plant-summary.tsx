@@ -7,7 +7,7 @@ export function RankingPlantSummary({ name, level, isMine, points, stars, reward
 }) {
   return <div className={cn('min-w-0 py-1 [overflow-wrap:anywhere]', !compact && 'min-[520px]:flex min-[520px]:items-center min-[520px]:justify-between min-[520px]:gap-2')}>
     <div className="min-w-0 space-y-1">
-    <h4 className="font-semibold tracking-tight text-sm leading-snug">{name}{isMine && <span className="ml-1 font-sans text-xs text-primary">(You)</span>}</h4>
+    <h4 className="font-pixel text-sm leading-snug">{name}{isMine && <span className="ml-1 font-sans text-xs text-primary">(You)</span>}</h4>
     <p className="text-xs leading-tight text-muted-foreground">Level {level}</p>
     </div>
     <div className={cn('mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-muted-foreground', !compact && 'min-[520px]:mt-0 min-[520px]:justify-end')}>

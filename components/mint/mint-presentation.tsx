@@ -29,7 +29,7 @@ export function MintStrainPicker({ strains, selectedId, onSelect, imageForStrain
           className={`flex min-h-[58px] min-w-0 flex-wrap items-center gap-2 rounded-[var(--radius-control)] border px-3 py-2 text-left transition-[background-color,border-color,color,opacity,scale] duration-[var(--motion-quick)] ease-[var(--ease-standard)] active:scale-[0.985] focus-visible:active:scale-100 focus-visible:transition-none motion-reduce:active:scale-100 motion-reduce:active:opacity-90 [.motion-off_&]:active:scale-100 [.motion-off_&]:active:opacity-90 [.performance-mode_&]:active:scale-100 [.performance-mode_&]:active:opacity-90 disabled:scale-100 disabled:opacity-50 ${selectedId === strain.id ? 'border-primary/50 bg-primary/10' : 'border-border/60 bg-transparent hover:bg-[hsl(var(--nav-hover-bg))]'}`}>
           <Image src={imageForStrain(strain.id)} alt="" width={28} height={28} className="shrink-0" unoptimized />
           <span className="min-w-0 flex-1 basis-[4rem] [overflow-wrap:anywhere]">
-            <span className="block text-sm font-semibold">{strain.name}</span>
+            <span className="block text-sm font-pixel">{strain.name}</span>
             {soldOut ? <Badge variant="danger" className="min-h-0 whitespace-nowrap py-0.5">Sold</Badge>
               : baseOnly ? <Badge variant="chain" className="min-h-0 whitespace-nowrap py-0.5">Base</Badge>
               : !strain.isActive ? <span className="block text-xs text-muted-foreground">Unavailable</span>
