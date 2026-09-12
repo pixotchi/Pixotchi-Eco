@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { redisExpire, redisIncrBy } from './redis';
+import { redisIncrementWithExpiry } from './redis';
 
 interface RateLimitRule {
-  kind: 'ip' | 'address';
+  kind: 'ip' | 'address' | 'global';
   identifier?: string | null;
   limit: number;
   windowSeconds: number;
@@ -11,6 +11,8 @@ interface RateLimitRule {
 interface EnforceRateLimitOptions {
   /** Paid/signing endpoints should reject requests when durable accounting is unavailable. */
   failClosed?: boolean;
+  /** Charge by actual bounded work, rather than just the HTTP request count. */
+  cost?: number;
   scope: string;
   rules: RateLimitRule[];
 }
@@ -40,14 +42,16 @@ export async function enforceRateLimit(
   options: EnforceRateLimitOptions,
 ): Promise<NextResponse | null> {
   let retryAfterSeconds = 0;
+  const cost = options.cost ?? 1;
+  if (!Number.isSafeInteger(cost) || cost < 1) throw new Error('Invalid rate limit cost');
 
   for (const rule of options.rules) {
-    const normalizedIdentifier = normalizeIdentifier(rule.kind, rule.identifier);
+    const normalizedIdentifier = rule.kind === 'global' ? 'all' : normalizeIdentifier(rule.kind, rule.identifier);
     if (!normalizedIdentifier) continue;
 
     const currentWindow = Math.floor(Date.now() / 1000 / rule.windowSeconds);
     const rateLimitKey = `ratelimit:${options.scope}:${rule.kind}:${normalizedIdentifier}:${currentWindow}`;
-    const hits = await redisIncrBy(rateLimitKey, 1);
+    const hits = await redisIncrementWithExpiry(rateLimitKey, cost, rule.windowSeconds + 5);
 
     if (hits === null && options.failClosed) {
       return NextResponse.json(
@@ -60,10 +64,6 @@ export async function enforceRateLimit(
           },
         },
       );
-    }
-
-    if (hits === 1) {
-      await redisExpire(rateLimitKey, rule.windowSeconds + 5);
     }
 
     if (hits !== null && hits > rule.limit) {

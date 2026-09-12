@@ -61,10 +61,9 @@ function getExpectedAddress(payload: MissionTrackingPayload): string | null {
 }
 
 function isRetrySafe(payload: MissionTrackingPayload): boolean {
-  // Boolean mission flags are naturally idempotent on the server. Counted
-  // progress is additive, so an ambiguous network failure must not be replayed
-  // without server-side idempotency support.
-  return typeof payload.count !== "number";
+  const proof = payload.proof as { txHash?: unknown } | undefined;
+  return typeof payload.count !== "number"
+    || (typeof proof?.txHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(proof.txHash));
 }
 
 function getMissionOutboxId(payload: MissionTrackingPayload): string {

@@ -1,3 +1,4 @@
+import { parseBaseNotificationOutcome } from './delivery-outcome';
 import { CLIENT_ENV, SERVER_ENV } from '@/lib/env-config';
 import {
   BASE_NOTIFICATIONS_API_BASE_URL,
@@ -229,50 +230,7 @@ export async function sendBaseNotificationBatch(
     throw buildBaseApiError(response.status, payload, 'Failed to send Base notifications');
   }
 
-  const rawResults =
-    payload && typeof payload === 'object' && 'results' in payload && Array.isArray(payload.results)
-      ? payload.results
-      : [];
-
-  const results: BaseNotificationSendResult[] = [];
-  for (const entry of rawResults) {
-    if (!entry || typeof entry !== 'object') {
-      continue;
-    }
-
-    const walletAddress =
-      'walletAddress' in entry && typeof entry.walletAddress === 'string' ? entry.walletAddress : null;
-    const sent = 'sent' in entry && typeof entry.sent === 'boolean' ? entry.sent : false;
-    const failureReason =
-      'failureReason' in entry && typeof entry.failureReason === 'string' ? entry.failureReason : undefined;
-
-    if (!walletAddress) {
-      continue;
-    }
-
-    results.push({ walletAddress, sent, failureReason });
-  }
-
-  const sentCount =
-    payload && typeof payload === 'object' && 'sentCount' in payload && typeof payload.sentCount === 'number'
-      ? payload.sentCount
-      : results.filter((entry) => entry.sent).length;
-  const failedCount =
-    payload && typeof payload === 'object' && 'failedCount' in payload && typeof payload.failedCount === 'number'
-      ? payload.failedCount
-      : results.filter((entry) => !entry.sent).length;
-  const success =
-    payload && typeof payload === 'object' && 'success' in payload && typeof payload.success === 'boolean'
-      ? payload.success
-      : failedCount === 0;
-
-  return {
-    success,
-    sentCount,
-    failedCount,
-    results,
-    raw: payload,
-  };
+  return parseBaseNotificationOutcome(payload, addresses);
 }
 
 export async function sendBaseNotificationsInChunks(

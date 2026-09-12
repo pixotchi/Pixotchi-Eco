@@ -1,3 +1,4 @@
+import { abortable } from './abortable';
 import { isAddress } from 'viem';
 import { getBaseReadClient, getEthereumEnsClient } from './base-rpc';
 import { redis } from './redis';
@@ -150,7 +151,7 @@ async function resolveEnsName(address: `0x${string}`): Promise<string | null> {
  */
 export async function resolvePrimaryName(
   address: string,
-  { refresh = false }: { refresh?: boolean } = {},
+  { refresh = false, signal }: { refresh?: boolean; signal?: AbortSignal } = {},
 ): Promise<string | null> {
   const normalised = normaliseAddress(address);
   if (!normalised) {
@@ -166,7 +167,13 @@ export async function resolvePrimaryName(
   }
 
   try {
-    const rawName = (await resolveBasename(normalised)) ?? (await resolveEnsName(normalised));
+    signal?.throwIfAborted();
+    const basenameRead = resolveBasename(normalised);
+    const basename = await (signal ? abortable(basenameRead, signal) : basenameRead);
+    signal?.throwIfAborted();
+    const ensRead = basename === null ? resolveEnsName(normalised) : Promise.resolve(basename);
+    const rawName = await (signal ? abortable(ensRead, signal) : ensRead);
+    signal?.throwIfAborted();
     const name = sanitiseResolvedName(normalised, rawName ?? null);
     await writeCache(cacheKey, name);
     return name;
@@ -175,6 +182,7 @@ export async function resolvePrimaryName(
       address: normalised,
       error: error instanceof Error ? error.message : String(error),
     });
+    signal?.throwIfAborted();
     // Cache the failure to avoid repeated failed lookups
     await writeCache(cacheKey, null);
     return null;
@@ -186,8 +194,9 @@ export async function resolvePrimaryName(
  */
 export async function resolvePrimaryNames(
   addresses: string[],
-  options: { refresh?: boolean } = {},
+  options: { refresh?: boolean; signal?: AbortSignal } = {},
 ): Promise<Map<string, string | null>> {
+  options.signal?.throwIfAborted();
   const unique = Array.from(new Set(addresses.map((addr) => addr.toLowerCase())));
   const resultMap = new Map<string, string | null>();
 
@@ -221,12 +230,14 @@ export async function resolvePrimaryNames(
     let nextIndex = 0;
     const resolveNext = async () => {
       while (nextIndex < addressesToFetch.length) {
+        options.signal?.throwIfAborted();
         const address = addressesToFetch[nextIndex++];
         try {
           // The batch cache was already checked above, so skip its second
           // per-address read before performing the RPC lookup.
-          resultMap.set(address, await resolvePrimaryName(address, { refresh: true }));
+          resultMap.set(address, await resolvePrimaryName(address, { refresh: true, signal: options.signal }));
         } catch (error) {
+          options.signal?.throwIfAborted();
           console.warn('[Identity Resolver] Failed to resolve name in batch', { address, error });
           resultMap.set(address, null);
         }

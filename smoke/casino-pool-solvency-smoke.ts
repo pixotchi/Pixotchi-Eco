@@ -26,8 +26,8 @@ for (const dialog of [roulette, baccarat]) {
 }
 assert.match(roulette, /getPoolBoundedAdditionalBet/);
 assert.match(roulette, /selectedBetsExceedPool/);
-assert.match(roulette, /bettingInputDisabled = bettingLocked \|\| payoutPoolReadStatus !== 'ready'/);
-assert.match(baccarat, /BACCARAT_WORST_CASE_RETURN_FACTOR/);
+assert.match(roulette, /bettingInputDisabled = bettingLocked \|\|[^;\n]*payoutPoolReadStatus !== 'ready'/);
+assert.match(baccarat, /getPoolBoundedMaxBet\(uiMaxBet, payoutPoolBalance, baccaratWorstCaseReturn\(payoutRules\)\)/);
 assert.match(baccarat, /payoutPoolUnknown/);
 assert.match(baccarat, /betWei <= offeredMaxBet/);
 

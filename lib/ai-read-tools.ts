@@ -1,4 +1,5 @@
 import 'server-only';
+import { abortable } from './abortable';
 import { readQuestRewardsSnapshot } from './quest-rewards-read';
 import { canSettleQuestRewards } from './quest-rewards-readiness';
 import { landPointsToNumber, readBuildingProduction } from './land-production';
@@ -2668,12 +2669,14 @@ export async function executeReadOnlyAITool(
     throw new Error(`Read-only AI tool ${toolName} is not executable.`);
   }
 
-  return selectedTool.execute(input, {
+  abortSignal?.throwIfAborted();
+  const work = Promise.resolve(selectedTool.execute(input, {
     abortSignal,
     context: normalizeReadOnlyAIToolContext(context),
     messages: [],
     toolCallId: `direct-${toolName}`,
-  });
+  }));
+  return abortSignal ? abortable(work, abortSignal) : work;
 }
 
 export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: {

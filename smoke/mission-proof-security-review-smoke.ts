@@ -63,7 +63,7 @@ async function main() {
     resolve(process.cwd(), 'app/api/gamification/missions/route.ts'),
     'utf8',
   );
-  const replayPreflightIndex = routeSource.indexOf('await assertMissionProofUnused');
+  const replayPreflightIndex = routeSource.indexOf('await getMissionProofReplay');
   const receiptReadIndex = routeSource.indexOf('getTransactionReceiptWithRetry(canonicalProof.txHash)');
   assert.ok(replayPreflightIndex > 0 && replayPreflightIndex < receiptReadIndex,
     'known replayed hashes must be rejected before receipt RPC reads');
@@ -80,7 +80,7 @@ async function main() {
     resolve(process.cwd(), 'lib/gamification-service.ts'),
     'utf8',
   );
-  assert.match(serviceSource, /assertMissionProofUnused[\s\S]*result\.status === 'unavailable'[\s\S]*MissionProofPersistenceError/);
+  assert.match(serviceSource, /getMissionProofReplay[\s\S]*result\.status === 'unavailable'[\s\S]*MissionProofPersistenceError/);
   assert.match(serviceSource, /if \(!redisClient\) throw new MissionProofPersistenceError/);
   assert.match(serviceSource, /Stored mission progress is invalid/);
 

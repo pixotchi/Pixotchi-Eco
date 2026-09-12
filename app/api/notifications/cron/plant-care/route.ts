@@ -1,3 +1,4 @@
+import { confirmedBaseRecipients } from '@/lib/notifications/delivery-outcome';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { differenceInSeconds } from 'date-fns';
@@ -422,19 +423,8 @@ async function applyBasePlantCareDeliveryOutcome(
   const deliveredAddresses = new Set<string>();
 
   for (const batch of response.batches) {
-    if (batch.response.results.length > 0) {
-      for (const entry of batch.response.results) {
-        if (entry.sent) {
-          deliveredAddresses.add(entry.walletAddress.toLowerCase());
-        }
-      }
-      continue;
-    }
-
-    if (batch.response.failedCount === 0) {
-      for (const address of batch.requestedAddresses) {
-        deliveredAddresses.add(address.toLowerCase());
-      }
+    for (const address of confirmedBaseRecipients(batch.response, batch.requestedAddresses)) {
+      deliveredAddresses.add(address);
     }
   }
 

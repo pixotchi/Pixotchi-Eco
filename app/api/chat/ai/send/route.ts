@@ -1,3 +1,5 @@
+import { createAIRequestSignal } from '@/lib/ai-request-deadline';
+import { abortable } from '@/lib/abortable';
 import { NextRequest, NextResponse } from 'next/server';
 import { streamAIMessage, validateAIMessage, type PixotchiAIUIMessage } from '@/lib/ai-service';
 import {
@@ -39,7 +41,7 @@ function noStoreJson(error: string, status: number): NextResponse {
   );
 }
 
-async function readJsonBodyWithLimit(request: NextRequest): Promise<ParsedRequestBody> {
+async function readJsonBodyWithLimit(request: NextRequest, signal: AbortSignal): Promise<ParsedRequestBody> {
   const declaredLength = request.headers.get('content-length');
   if (declaredLength) {
     const parsedLength = Number.parseInt(declaredLength, 10);
@@ -62,7 +64,7 @@ async function readJsonBodyWithLimit(request: NextRequest): Promise<ParsedReques
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await abortable(reader.read(), signal);
       if (done) break;
       if (!value) continue;
 
@@ -74,8 +76,12 @@ async function readJsonBodyWithLimit(request: NextRequest): Promise<ParsedReques
 
       chunks.push(value);
     }
-  } catch {
+  } catch (error) {
+    void reader.cancel().catch(() => undefined);
+    if (signal.aborted) throw error;
     return { ok: false, response: noStoreJson('Failed to read request body.', 400) };
+  } finally {
+    reader.releaseLock();
   }
 
   const bytes = new Uint8Array(totalBytes);
@@ -160,14 +166,15 @@ function sanitizeOriginalMessages(messages: UntypedValue): PixotchiAIUIMessage[]
 }
 
 export async function POST(request: NextRequest) {
+  const signal = createAIRequestSignal(request.signal);
   try {
-    const { session, sessionId } = await getChatSessionOrQuickAuthFromRequest(request);
+    const { session, sessionId } = await abortable(getChatSessionOrQuickAuthFromRequest(request), signal);
 
     if (!session) {
       return createChatAuthRequiredResponse({ clearCookie: Boolean(sessionId) });
     }
 
-    const parsedBody = await readJsonBodyWithLimit(request);
+    const parsedBody = await readJsonBodyWithLimit(request, signal);
     if (!parsedBody.ok) {
       return parsedBody.response;
     }
@@ -184,7 +191,8 @@ export async function POST(request: NextRequest) {
       return noStoreJson(messageError, 400);
     }
 
-    const rateLimitResponse = await enforceRateLimit(request, {
+    const rateLimitResponse = await abortable(enforceRateLimit(request, {
+      failClosed: true,
       scope: 'api:chat:ai:send',
       rules: [
         {
@@ -200,19 +208,20 @@ export async function POST(request: NextRequest) {
           windowSeconds: AI_CHAT_ADDRESS_COOLDOWN_SECONDS,
         },
       ],
-    });
+    }), signal);
 
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
 
     return await streamAIMessage(session.address, message, {
-      abortSignal: request.signal,
+      abortSignal: signal,
       conversationId,
       originalMessages,
       sourceAddress: session.sourceAddress ?? null,
     });
   } catch (error) {
+    if (signal.aborted) return noStoreJson('AI request timed out. Please try again.', 504);
     if (error instanceof ChatAuthError) {
       return createChatAuthErrorResponse(error);
     }

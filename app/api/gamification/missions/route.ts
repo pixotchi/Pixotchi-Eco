@@ -9,7 +9,7 @@ import {
   getMissionDay,
   markMissionTask,
   getMissionScore,
-  assertMissionProofUnused,
+  getMissionProofReplay,
   MissionProofAlreadyUsedError,
   MissionProofPersistenceError,
 } from '@/lib/gamification-service';
@@ -287,7 +287,8 @@ export async function POST(request: NextRequest) {
 
     // This read is an optimization only; the atomic write in markMissionTask
     // remains the authoritative race-safe replay guard.
-    await assertMissionProofUnused(canonicalProof.txHash);
+    const replay = await getMissionProofReplay(address, taskId, canonicalProof.txHash);
+    if (replay) return NextResponse.json({ success: true, day: replay });
 
     const receipt = await getTransactionReceiptWithRetry(canonicalProof.txHash);
     if (!receipt || receipt.status !== 'success') {
@@ -357,7 +358,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'count does not match the verified purchase events' }, { status: 400 });
     }
 
-    const updated = await markMissionTask(address, taskId, canonicalProof, verifiedCount || 1);
+    const updated = await markMissionTask(address, taskId, { ...canonicalProof, evidenceIds: evidence.evidenceIds }, verifiedCount || 1);
     return NextResponse.json({ success: true, day: updated });
   } catch (error) {
     if (error instanceof ChatAuthError) {

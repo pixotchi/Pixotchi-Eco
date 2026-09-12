@@ -103,6 +103,11 @@ if redis.call("EXISTS", KEYS[1]) == 1 then
 end
 return 0
 `;
+const CHAT_SESSION_ROTATE_SCRIPT = `
+redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
+if KEYS[2] and KEYS[2] ~= KEYS[1] then redis.call("DEL", KEYS[2]) end
+return 1
+`;
 const ERC1271_ABI = [
   {
     inputs: [
@@ -887,28 +892,17 @@ export async function issueBaseAuthNonce(): Promise<string> {
 
 async function consumeBaseAuthNonce(nonce: string): Promise<boolean> {
   if (!redis) {
-    return false;
+    throw new ChatAuthError('Base authentication persistence is unavailable.', 503);
   }
 
   const key = withPrefix(getBaseNonceKey(nonce));
 
   try {
-    const evalFn = (redis as UntypedValue)?.eval;
-    if (typeof evalFn === 'function') {
-      const result = await evalFn.call(redis, BASE_NONCE_CONSUME_SCRIPT, [key], []);
-      return Number(result) === 1;
-    }
+    return Number(await redis.eval(BASE_NONCE_CONSUME_SCRIPT, [key], [])) === 1;
   } catch (error) {
-    console.warn('[chat-auth] Failed to consume nonce atomically, falling back to GET/DEL.', error);
+    console.warn('[chat-auth] Failed to consume nonce atomically.', error);
+    throw new ChatAuthError('Base authentication persistence is unavailable. Please retry.', 503);
   }
-
-  const existing = await redisGetJSON<{ createdAt: number }>(getBaseNonceKey(nonce));
-  if (!existing) {
-    return false;
-  }
-
-  await redisDel(getBaseNonceKey(nonce));
-  return true;
 }
 
 export async function getChatSessionFromRequest(request: NextRequest): Promise<{
@@ -925,11 +919,16 @@ export async function getChatSessionFromRequest(request: NextRequest): Promise<{
     await redisGetJSONResult<ChatSessionRecord>(getChatSessionKey(sessionId)),
   );
   if (session) {
-    void redisSetJSON(getChatSessionKey(sessionId), session, CHAT_SESSION_TTL_SECONDS).catch(
-      (error) => {
-        console.warn('[chat-auth] Failed to refresh public chat session TTL.', error);
-      },
-    );
+    // EXPIRE cannot recreate a record deleted by logout/rotation. Awaiting it
+    // also detects a revocation that committed after the read above.
+    if (!redis) throw new ChatAuthError('Session persistence is unavailable.', 503);
+    let refreshed: number;
+    try {
+      refreshed = await redis.expire(withPrefix(getChatSessionKey(sessionId)), CHAT_SESSION_TTL_SECONDS);
+    } catch {
+      throw new ChatAuthError('Session persistence is unavailable. Please retry.', 503);
+    }
+    if (refreshed !== 1) return { session: null, sessionId };
   }
   return {
     session,
@@ -1050,7 +1049,9 @@ export async function clearChatSessionForRequest(request: NextRequest): Promise<
     return;
   }
 
-  await redisDel(getChatSessionKey(sessionId));
+  if (!await redisDel(getChatSessionKey(sessionId))) {
+    throw new ChatAuthError('Failed to revoke public chat session. Please retry.', 503);
+  }
 }
 
 export async function createChatSessionResponse(request: NextRequest, identity: ChatIdentity): Promise<NextResponse> {
@@ -1070,14 +1071,14 @@ export async function createChatSessionResponse(request: NextRequest, identity: 
     ...(identity.userId ? { userId: identity.userId } : {}),
   };
 
-  const stored = await redisSetJSON(getChatSessionKey(sessionId), session, CHAT_SESSION_TTL_SECONDS);
-  if (!stored) {
-    throw new ChatAuthError('Failed to create public chat session.', 503);
-  }
-
   const previousSessionId = request.cookies.get(CHAT_SESSION_COOKIE_NAME)?.value;
-  if (previousSessionId && previousSessionId !== sessionId) {
-    await redisDel(getChatSessionKey(previousSessionId));
+  try {
+    await redis.eval(CHAT_SESSION_ROTATE_SCRIPT, [
+      withPrefix(getChatSessionKey(sessionId)),
+      ...(previousSessionId ? [withPrefix(getChatSessionKey(previousSessionId))] : []),
+    ], [JSON.stringify(session), String(CHAT_SESSION_TTL_SECONDS)]);
+  } catch {
+    throw new ChatAuthError('Failed to rotate public chat session. Please retry.', 503);
   }
 
   const response = NextResponse.json(toSessionSummary(session), {

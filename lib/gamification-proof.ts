@@ -65,6 +65,8 @@ export type MissionProofDependencies = {
 export type MissionProofValidation = {
   valid: boolean;
   count?: number;
+  /** Canonical receipt positions, assigned only by server verification. */
+  evidenceIds?: string[];
 };
 
 const MAX_RECEIPT_LOGS = 512;
@@ -147,15 +149,15 @@ function matchingLogs(
   receipt: MissionReceiptEvidence,
   contract: string,
   events: AbiEvent | readonly AbiEvent[],
-): Array<Record<string, unknown>> {
+): Array<Record<string, unknown> & { proofLogIndex: number }> {
   const candidates = Array.isArray(events) ? events : [events];
-  const matches: Array<Record<string, unknown>> = [];
-  for (const log of receipt.logs) {
+  const matches: Array<Record<string, unknown> & { proofLogIndex: number }> = [];
+  for (const [proofLogIndex, log] of receipt.logs.entries()) {
     if (!sameAddress(log.address, contract)) continue;
     for (const event of candidates) {
       const args = decodeArgs(log, event);
       if (args) {
-        matches.push(args);
+        matches.push({ ...args, proofLogIndex });
         break;
       }
     }
@@ -163,22 +165,28 @@ function matchingLogs(
   return matches;
 }
 
+function proofFromLogs(matches: Array<{ proofLogIndex: number }>, counted = false): MissionProofValidation {
+  const selected = counted ? matches.slice(0, 120) : matches.slice(0, 1);
+  return { valid: selected.length > 0, evidenceIds: selected.map(log => `log:${log.proofLogIndex}`),
+    ...(counted ? { count: selected.length } : {}) };
+}
+
 async function anyAssetAccess(
-  matches: Array<Record<string, unknown>>,
+  matches: Array<Record<string, unknown> & { proofLogIndex: number }>,
   field: string,
   check: (tokenId: bigint) => Promise<boolean>,
-): Promise<boolean> {
+): Promise<MissionProofValidation> {
   const checked = new Set<string>();
   for (const args of matches) {
     const tokenId = args[field];
     if (typeof tokenId !== 'bigint' || tokenId < BigInt(0)) continue;
     const key = tokenId.toString();
     if (checked.has(key)) continue;
-    if (checked.size >= MAX_ASSET_ACCESS_CHECKS) return false;
+    if (checked.size >= MAX_ASSET_ACCESS_CHECKS) return { valid: false };
     checked.add(key);
-    if (await check(tokenId)) return true;
+    if (await check(tokenId)) return proofFromLogs([args]);
   }
-  return false;
+  return { valid: false };
 }
 
 async function validateSwap(
@@ -227,38 +235,40 @@ export async function validateMissionProofEvidence(
 
   switch (taskId) {
     case 's1_make_swap':
-      return { valid: await validateSwap(address, receipt, transaction) };
+      return await validateSwap(address, receipt, transaction)
+        ? proofFromLogs(matchingLogs(receipt, SEED_ADDRESS, EVENTS.transfer).filter(args => positive(args.value) && (sameAddress(args.from, address) || sameAddress(args.to, address))))
+        : { valid: false };
     case 's1_stake_seed': {
       const matches = matchingLogs(receipt, STAKE_CONTRACT_ADDRESS, EVENTS.tokensStaked);
-      return { valid: matches.some(args => sameAddress(args.staker, address) && positive(args.amount)) };
+      return proofFromLogs(matches.filter(args => sameAddress(args.staker, address) && positive(args.amount)));
     }
     case 's1_claim_stake': {
       const matches = matchingLogs(receipt, STAKE_CONTRACT_ADDRESS, EVENTS.rewardsClaimed);
-      return { valid: matches.some(args => sameAddress(args.staker, address) && positive(args.rewardAmount)) };
+      return proofFromLogs(matches.filter(args => sameAddress(args.staker, address) && positive(args.rewardAmount)));
     }
     case 's1_place_order': {
       const matches = matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.orderCreated);
-      return { valid: matches.some(args => sameAddress(args.seller, address) && positive(args.amount) && positive(args.amountAsk)) };
+      return proofFromLogs(matches.filter(args => sameAddress(args.seller, address) && positive(args.amount) && positive(args.amountAsk)));
     }
     case 's3_apply_resources': {
       const pointMatches = matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.plantPointsAssigned)
         .filter(args => positive(args.addedPoints));
       const lifetimeMatches = matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.plantLifetimeAssigned)
         .filter(args => positive(args.lifetime));
-      const valid = await anyAssetAccess(
+      const proof = await anyAssetAccess(
         [...pointMatches, ...lifetimeMatches],
         'landId',
         landId => dependencies.hasLandAccess(address, landId),
       );
-      return { valid };
+      return proof;
     }
     case 's3_send_quest': {
       const matches = matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.questStarted);
-      return { valid: await anyAssetAccess(matches, 'landId', landId => dependencies.hasLandAccess(address, landId)) };
+      return anyAssetAccess(matches, 'landId', landId => dependencies.hasLandAccess(address, landId));
     }
     case 's3_claim_production': {
       const matches = matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.villageProductionClaimed);
-      return { valid: await anyAssetAccess(matches, 'landId', landId => dependencies.hasLandAccess(address, landId)) };
+      return anyAssetAccess(matches, 'landId', landId => dependencies.hasLandAccess(address, landId));
     }
     case 's3_play_casino_game': {
       const matches = [
@@ -267,36 +277,38 @@ export async function validateMissionProofEvidence(
         ...matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.blackjackComplete),
         ...matchingLogs(receipt, LAND_CONTRACT_ADDRESS, EVENTS.baccaratResult),
       ];
-      return { valid: matches.some(args => sameAddress(args.player, address)) };
+      return proofFromLogs(matches.filter(args => sameAddress(args.player, address)));
     }
     case 's4_buy10_elements': {
       const matches = matchingLogs(receipt, PIXOTCHI_NFT_ADDRESS, EVENTS.itemConsumed)
         .filter(args => sameAddress(args.giver, address));
-      return { valid: matches.length > 0, count: Math.min(matches.length, 120) };
+      return proofFromLogs(matches, true);
     }
     case 's4_buy_shield': {
       const matches = matchingLogs(receipt, PIXOTCHI_NFT_ADDRESS, EVENTS.shopItemPurchased)
         .filter(args => sameAddress(args.buyer, address));
       for (const args of matches) {
         if (typeof args.itemId === 'bigint' && await dependencies.isFenceShopItem(args.itemId)) {
-          return { valid: true };
+          return proofFromLogs([args]);
         }
       }
       return {
         valid: sameAddress(transaction.from, address)
           && sameAddress(transaction.to, PIXOTCHI_NFT_ADDRESS)
           && isValidFenceCallData(transaction.input),
+        evidenceIds: ['call:0'],
       };
     }
     case 's4_collect_star': {
       const matches = matchingLogs(receipt, PIXOTCHI_NFT_ADDRESS, EVENTS.killed);
-      return { valid: matches.some(args => sameAddress(args.killer, address) && positive(args.reward)) };
+      return proofFromLogs(matches.filter(args => sameAddress(args.killer, address) && positive(args.reward)));
     }
     case 's4_play_arcade': {
       const spinMatches = matchingLogs(receipt, PIXOTCHI_NFT_ADDRESS, EVENTS.spinPlayed);
-      if (spinMatches.some(args => sameAddress(args.player, address))) return { valid: true };
+      const ownedSpin = spinMatches.filter(args => sameAddress(args.player, address));
+      if (ownedSpin.length) return proofFromLogs(ownedSpin);
       const legacyMatches = matchingLogs(receipt, PIXOTCHI_NFT_ADDRESS, EVENTS.played);
-      return { valid: await anyAssetAccess(legacyMatches, 'id', id => dependencies.hasPlantAccess(address, id)) };
+      return anyAssetAccess(legacyMatches, 'id', id => dependencies.hasPlantAccess(address, id));
     }
     case 's2_follow_player':
     case 's2_chat_message':

@@ -26,7 +26,8 @@ import {
 } from './ai-read-tools';
 import { classifyAIUserMessage } from './ai-safety';
 import { formatDisplayName } from './chat-service';
-import { redis,redisScanKeysRaw } from './redis';
+import { redis,redisScanKeysRaw,redisScanKeysRawStrict } from './redis';
+import { SELECT_AI_CONVERSATION_LUA, STORE_AI_MESSAGE_LUA, MIGRATE_AI_MESSAGE_INDEX_LUA } from './ai-conversation-scripts';
 import { AIChatMessage,AIConversation,AIUsageStats,AIToolCallTrace } from './types';
 
 const AI_MESSAGE_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -1862,26 +1863,13 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
   const lowerAddress = address.toLowerCase();
   const activeConversationKey = `ai:user_active_conversation:${lowerAddress}`;
 
-  try {
-    // Try to get active conversation ID from index
-    const activeId = await redis.get(activeConversationKey);
-    if (activeId && typeof activeId === 'string') {
-      return activeId;
-    }
-
-    // Fallback: check legacy keys pattern if no index found
-    // This provides backward compatibility during migration
-    const conversationKeys = await redisScanKeysRaw(`ai:conversations:${lowerAddress}:*`);
-    if (conversationKeys.length > 0) {
-      const legacyId = conversationKeys[0].split(':')[3];
-      // Index it for next time
-      await redis.set(activeConversationKey, legacyId, { ex: AI_MESSAGE_TTL });
-      await redis.sadd('ai:conversations:index', conversationKeys[0]);
-      return legacyId;
-    }
-  } catch (error) {
-    console.warn('Error checking existing conversations:', error);
-  }
+  // A failed lookup is not evidence that the user has no conversation.
+  const activeId = await redis.get<string>(activeConversationKey);
+  if (activeId && typeof activeId !== 'string') throw new Error('Invalid active conversation');
+  if (activeId && await getAIConversationForAddress(lowerAddress, activeId)) return activeId;
+  const legacyKeys = await redisScanKeysRawStrict(`ai:conversations:${lowerAddress}:*`);
+  // Recheck the active pointer and legacy record atomically after the scan.
+  const legacyKey = legacyKeys.sort()[0];
 
   // Create new conversation
   const conversationId = nanoid();
@@ -1900,19 +1888,9 @@ export async function getOrCreateConversation(address: string, firstMessage?: st
 
   const conversationKey = `ai:conversations:${lowerAddress}:${conversationId}`;
 
-  try {
-    // Use pipeline for atomic updates
-    const pipeline = redis.pipeline();
-    pipeline.set(conversationKey, JSON.stringify(conversation), { ex: AI_MESSAGE_TTL });
-    pipeline.set(activeConversationKey, conversationId, { ex: AI_MESSAGE_TTL });
-    pipeline.sadd('ai:conversations:index', conversationKey);
-    await pipeline.exec();
-  } catch (error) {
-    console.error('Error creating conversation:', error);
-    throw error;
-  }
-
-  return conversationId;
+  return await redis.eval<string[], string>(SELECT_AI_CONVERSATION_LUA, [
+    activeConversationKey, 'ai:conversations:index', conversationKey, legacyKey || conversationKey,
+  ], [JSON.stringify(conversation), String(AI_MESSAGE_TTL), `ai:conversations:${lowerAddress}:`, lowerAddress]);
 }
 
 // Store AI chat message
@@ -1957,74 +1935,34 @@ export async function storeAIMessage(
   const conversationKey = `ai:conversations:${lowerAddress}:${conversationId}`;
   const listKey = `ai:conversation_messages:${conversationId}`;
 
-  try {
-    const pipeline = redis.pipeline();
-
-    // 1. Store message object
-    pipeline.set(messageKey, JSON.stringify(aiMessage), { ex: AI_MESSAGE_TTL });
-
-    // 2. Add key to ordered list (replaces KEYS scan)
-    pipeline.rpush(listKey, messageKey);
-    pipeline.expire(listKey, AI_MESSAGE_TTL);
-
-    // 3. Update conversation metadata
-    const conversationData = await redis.get(conversationKey);
-
-    if (conversationData) {
-      let conversation: AIConversation;
-      if (typeof conversationData === 'object') {
-        conversation = conversationData as AIConversation;
-      } else {
-        conversation = JSON.parse(conversationData as string);
-      }
-
-      conversation.lastMessageAt = timestamp;
-      conversation.messageCount += 1;
-      conversation.totalTokens += tokensUsed;
-
-      pipeline.set(conversationKey, JSON.stringify(conversation), { ex: AI_MESSAGE_TTL });
-    }
-
-    await pipeline.exec();
-  } catch (error) {
-    console.error('Error storing AI message:', error);
-    throw error;
-  }
-
-  return aiMessage;
+  if (!Number.isSafeInteger(tokensUsed) || tokensUsed < 0) throw new Error('Invalid message token count');
+  const stored = await redis.eval<string[], AIChatMessage | string>(STORE_AI_MESSAGE_LUA, [
+    conversationKey, listKey, messageKey,
+    `ai:message_commit:${conversationId}:${messageId}`,
+    `ai:user_active_conversation:${lowerAddress}`,
+    `ai:conversation_index_complete:${conversationId}`,
+  ], [JSON.stringify(aiMessage), String(AI_MESSAGE_TTL)]);
+  return typeof stored === 'string' ? JSON.parse(stored) as AIChatMessage : stored;
 }
 
 // Get conversation messages
 export async function getAIConversationMessages(conversationId: string, limit: number = 50): Promise<AIChatMessage[]> {
   if (!redis) {
-    return [];
+    throw new Error('AI conversation storage is unavailable');
   }
 
   try {
     const listKey = `ai:conversation_messages:${conversationId}`;
 
-    // 1. Try to get from new List structure first
-    let messageKeys = await redis.lrange(listKey, -limit, -1);
-
-    // 2. Fallback to KEYS if List is empty (migration path)
-    if (messageKeys.length === 0) {
-      const legacyKeys = await redisScanKeysRaw(`ai:messages:${conversationId}:*`);
-      if (legacyKeys.length > 0) {
-        // Sort keys by timestamp (ascending)
-        legacyKeys.sort((a, b) => {
-          const timestampA = parseInt(a.split(':')[3] || '0');
-          const timestampB = parseInt(b.split(':')[3] || '0');
-          return timestampA - timestampB;
-        });
-        messageKeys = legacyKeys.slice(-limit);
-
-        // Optional: Backfill list for future speed
-        if (messageKeys.length > 0) {
-          await redis.rpush(listKey, ...messageKeys);
-          await redis.expire(listKey, AI_MESSAGE_TTL);
-        }
-      }
+    const completeKey = `ai:conversation_index_complete:${conversationId}`;
+    if (!await redis.exists(completeKey)) {
+      const prefix = `ai:messages:${conversationId}:`;
+      const legacyKeys = await redisScanKeysRawStrict(`${prefix}*`);
+      await redis.eval(MIGRATE_AI_MESSAGE_INDEX_LUA, [listKey, completeKey], [
+        JSON.stringify(legacyKeys), String(AI_MESSAGE_TTL), prefix,
+      ]);
     }
+    const messageKeys = await redis.lrange(listKey, -limit, -1);
 
     if (messageKeys.length === 0) return [];
 
@@ -2038,7 +1976,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
           const message = typeof data === 'object' ? data : JSON.parse(data as string);
           messages.push(message as AIChatMessage);
         } catch {
-          // Ignore malformed messages
+          throw new Error('Stored AI message is invalid');
         }
       }
     }
@@ -2046,7 +1984,7 @@ export async function getAIConversationMessages(conversationId: string, limit: n
     return messages;
   } catch (error) {
     console.error('Error fetching AI messages:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -2055,7 +1993,7 @@ export async function getAIConversationForAddress(
   conversationId: string,
 ): Promise<AIConversation | null> {
   if (!redis) {
-    return null;
+    throw new Error('AI conversation storage is unavailable');
   }
 
   const conversationKey = `ai:conversations:${address.toLowerCase()}:${conversationId}`;
@@ -2066,14 +2004,19 @@ export async function getAIConversationForAddress(
       return null;
     }
 
-    if (typeof data === 'object') {
-      return data as AIConversation;
+    const record: unknown = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Invalid conversation metadata');
+    const conversation = record as AIConversation;
+    if (conversation.id !== conversationId || conversation.address !== address.toLowerCase()
+      || !Number.isSafeInteger(conversation.messageCount) || conversation.messageCount < 0
+      || !Number.isSafeInteger(conversation.totalTokens) || conversation.totalTokens < 0
+      || !Number.isFinite(conversation.lastMessageAt) || typeof conversation.title !== 'string') {
+      throw new Error('Invalid conversation metadata');
     }
-
-    return JSON.parse(data as string) as AIConversation;
+    return conversation;
   } catch (error) {
     console.error('Error fetching AI conversation metadata:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -2390,6 +2333,7 @@ async function buildDeterministicToolContext(options: {
         toolName: request.toolName,
       });
     } catch (error) {
+      options.abortSignal?.throwIfAborted();
       rawResults.push({
         error: error instanceof Error ? error.message : String(error),
         input: request.input,
@@ -2706,6 +2650,7 @@ export async function streamAIMessage(
   message: string,
   options: StreamAIMessageOptions = {},
 ): Promise<Response> {
+  options.abortSignal?.throwIfAborted();
   const conversationId = await resolveConversationId(address, message, options.conversationId);
   const historyMessages = await getAIConversationMessages(conversationId, 10);
   await storeAIMessage(address, message, 'user', conversationId);
@@ -2744,6 +2689,7 @@ export async function streamAIMessage(
     throw new Error(`AI configuration error: ${configValidation.errors.join(', ')}`);
   }
 
+  options.abortSignal?.throwIfAborted();
   const reservedBudget = await reserveAIRequestBudget(address, modelConfig);
   const requestBudget = reservedBudget.budget;
   if (requestBudget.mode === 'blocked') {
@@ -2783,6 +2729,7 @@ export async function streamAIMessage(
   let recoveredFromLength = false;
 
   try {
+    options.abortSignal?.throwIfAborted();
 
     console.log('AI stream prompt info:', {
       hasHistory: historyMessages.length > 0,
@@ -2827,6 +2774,7 @@ export async function streamAIMessage(
   }
 
   if (isDirectGoogleGemini3Model()) {
+    options.abortSignal?.throwIfAborted();
     paidGenerationStarted = true;
     const planning = await buildGemini3SingleRoundToolContext({
       abortSignal: options.abortSignal,
@@ -2893,6 +2841,7 @@ export async function streamAIMessage(
     },
     ...getModelRequestSettings(),
   };
+  options.abortSignal?.throwIfAborted();
   paidGenerationStarted = true;
   const result = generationTools
     ? streamText({
@@ -2930,7 +2879,7 @@ export async function streamAIMessage(
       }
 
       if (finishReason === 'length' && streamedResponseText.trim()) {
-        if (requestBudget.autoContinueOnLength && requestBudget.continuationMaxOutputTokens > 0) {
+        if (!options.abortSignal?.aborted && requestBudget.autoContinueOnLength && requestBudget.continuationMaxOutputTokens > 0) {
           try {
             const continuation = await generateLengthContinuation({
               abortSignal: options.abortSignal,
@@ -3622,6 +3571,9 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
       pipeline.del(...legacyKeys);
     }
 
+    const commitKeys = await redisScanKeysRawStrict(`ai:message_commit:${conversationId}:*`);
+    if (commitKeys.length) pipeline.del(...commitKeys);
+
     // 2. Delete conversation metadata
     const conversationKeys = await redisScanKeysRaw(`ai:conversations:*:${conversationId}`);
     if (conversationKeys.length > 0) {
@@ -3639,7 +3591,7 @@ export async function deleteAIConversation(conversationId: string): Promise<bool
     }
 
     // 3. Delete the message list
-    pipeline.del(listKey);
+    pipeline.del(listKey, `ai:conversation_index_complete:${conversationId}`);
 
     await pipeline.exec();
     return true;
@@ -3693,9 +3645,14 @@ export async function deleteAllAIConversations(): Promise<number> {
       conversationEntries.map((entry) => redisScanKeysRaw(`ai:messages:${entry.conversationId}:*`))
     );
 
+    const commitKeysPerConversation = await Promise.all(
+      conversationEntries.map(entry => redisScanKeysRawStrict(`ai:message_commit:${entry.conversationId}:*`)),
+    );
+
     conversationEntries.forEach((entry, index) => {
+      if (commitKeysPerConversation[index].length) pipeline.del(...commitKeysPerConversation[index]);
       const listKey = `ai:conversation_messages:${entry.conversationId}`;
-      messageListKeys.push(listKey);
+      messageListKeys.push(listKey, `ai:conversation_index_complete:${entry.conversationId}`);
       activeConversationKeys.add(`ai:user_active_conversation:${entry.address}`);
 
       const messageKeys = messageKeysPerConversation[index];

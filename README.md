@@ -91,6 +91,10 @@ Built on Base and designed to be fast, simple, and fun.
 
 Production deployments fail fast unless the required public URL, at least one unique Base RPC endpoint, indexer config and shared secret, CDP client key, and Privy client/server keys are present. RPC endpoints may come from any mix of vendors, including a single vendor. Redis/KV and admin credentials are not part of the global production boot gate, but the features that persist app state require them.
 
+Use **separate Redis databases for production, preview, and local development**. `UPSTASH_KEY_PREFIX` only scopes callers of the prefix helpers; historical chat, AI, and notification code also uses raw key namespaces. Different prefixes do not isolate two deployments sharing a database. Do not change a production prefix to migrate data: existing indexes, references, usage reservations, and signed decisions require a planned migration.
+
+Run `npm run audit:regressions` for concurrency and failure-injection regressions against a disposable Docker Redis instance. The test harness blocks external HTTP and never loads environment files. If using a separately started disposable local Redis, set `AUDIT_TEST_REDIS_PORT` to its loopback port (other than 6379).
+
 ## Configuration notes
 - Feature flags control major surfaces: gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
 - Blackjack is fail-closed while the deployed contract uses its legacy randomness signature. Enabling it requires both the public/server feature flags and the server-only `BLACKJACK_UNSAFE_LEGACY_SIGNATURES_ACKNOWLEDGED=true`; keep that acknowledgement off unless the legacy risk is consciously accepted.

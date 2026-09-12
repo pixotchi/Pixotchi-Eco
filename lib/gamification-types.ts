@@ -72,6 +72,8 @@ export type GmStreak = {
 
 export type GmProgressProof = {
   txHash?: string;
+  /** Assigned by server receipt verification; never accepted from a client. */
+  evidenceIds?: string[];
 };
 
 export type GmLeaderEntry = { address: string; value: number };

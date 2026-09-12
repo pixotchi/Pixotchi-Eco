@@ -12,6 +12,7 @@
     "lint": "node ./scripts/run-eslint-chunked.mjs && npm run lint:base-rpc",
     "lint:base-rpc": "node ./scripts/check-base-rpc-hardening.mjs",
     "typecheck": "tsc --noEmit",
+    "audit:regressions": "node scripts/run-audit-regressions.mjs",
     "contracts:check": "tsx scripts/check-contract-deployments.ts",
     "contracts:smoke": "tsx smoke/deployment-check-smoke.ts",
     "ai:smoke:kill-cooldown": "node scripts/run-react-server-smoke.mjs smoke/kill-cooldown-smoke.ts",

@@ -8,6 +8,7 @@ const projectFile = (relativePath: string) => fs.readFileSync(
 );
 
 const providers = projectFile('app/providers.tsx');
+const hostWalletBoundary = projectFile('components/auth/host-wallet-boundary.tsx');
 const hostEnvironment = projectFile('lib/host-environment.tsx');
 const solanaProvider = projectFile('components/solana/SolanaWalletProvider.tsx');
 const privySolanaIdentity = projectFile('components/solana/PrivySolanaWalletIdentity.tsx');
@@ -23,7 +24,7 @@ assert.doesNotMatch(
   'the always-mounted provider shell must not statically load Farcaster',
 );
 assert.match(
-  providers,
+  hostWalletBoundary,
   /import\('@farcaster\/miniapp-sdk'\)\.then\(\(\{ sdk \}\) => sdk\.actions\.ready\(\)\)/,
   'the independent Mini App ready signal must remain dynamically loaded',
 );

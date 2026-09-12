@@ -1,6 +1,5 @@
 import {
   redis,
-  redisCompareAndSetJSON,
   redisGetJSON,
   redisGetJSONResult,
   redisScanKeys,
@@ -24,7 +23,9 @@ const keys = {
   missions: (address: string, day: GmDay) => `${PX}missions:${address.toLowerCase()}:${day}`,
   missionsLeaderboard: (yyyymm: string) => `${PX}missions:leaderboard:${yyyymm}`,
   proof: (address: string, day: GmDay, taskId: string) => `${PX}missions:proof:${address.toLowerCase()}:${day}:${taskId}`,
-  proofUsed: (txHash: string) => `${PX}missions:proof-used:${txHash.toLowerCase()}`,
+  legacyProofUsed: (txHash: string) => `${PX}missions:proof-used:${txHash.toLowerCase()}`,
+  proofUsed: (address: string, taskId: string, txHash: string) => `${PX}missions:proof-used:v2:8453:${address.toLowerCase()}:${taskId}:${txHash.toLowerCase()}`,
+  evidence: (txHash: string, taskId: string, id: string) => `${PX}missions:evidence:v2:8453:${txHash.toLowerCase()}:${taskId}:${id}`,
   todayActiveSet: (day: GmDay) => `${PX}streak:activity:${day}`,
   idemp: (address: string, rewardId: string) => `${PX}idemp:${address.toLowerCase()}:${rewardId}`,
   adminLastReset: `${PX}admin:lastResetAt`,
@@ -48,72 +49,103 @@ export class MissionProofPersistenceError extends Error {
   }
 }
 
-/**
- * Reject an already-consumed proof before doing chain RPC work. The atomic Lua
- * update below is still the final replay fence for concurrent requests.
- */
-export async function assertMissionProofUnused(txHash: string): Promise<void> {
-  const result = await redisGetJSONResult<unknown>(keys.proofUsed(txHash));
+/** Exact retries return the committed day without repeating chain reads. */
+export async function getMissionProofReplay(address: string, taskId: GmTaskId, txHash: string): Promise<GmMissionDay | null> {
+  const result = await redisGetJSONResult<unknown>(keys.proofUsed(address, taskId, txHash));
   if (result.status === 'unavailable') throw new MissionProofPersistenceError();
-  if (result.status === 'ok') throw new MissionProofAlreadyUsedError();
+  const legacy = result.status === 'missing'
+    ? await redisGetJSONResult<unknown>(keys.legacyProofUsed(txHash)) : result;
+  if (legacy.status === 'unavailable') throw new MissionProofPersistenceError();
+  if (legacy.status === 'missing') return null;
+  const value = legacy.value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MissionProofPersistenceError('Stored proof is invalid');
+  const record = value as Record<string, unknown>;
+  if (typeof record.address !== 'string' || typeof record.day !== 'string' || typeof record.taskId !== 'string') {
+    throw new MissionProofPersistenceError('Stored proof is invalid');
+  }
+  // v2 writes an old-format key only to fence older deployed workers.
+  if (result.status === 'missing' && record.version === 2) return null;
+  if (result.status === 'missing' && record.taskId !== taskId) return null;
+  // Legacy records did not retain log identities. Keep same-task legacy
+  // receipts conservative across actors until their mission day has expired.
+  if (record.address.toLowerCase() !== address.toLowerCase() || record.taskId !== taskId || record.day !== getTodayDateString()) {
+    throw new MissionProofAlreadyUsedError();
+  }
+  return getMissionDay(address, record.day);
 }
 
 const MISSION_PROOF_CAS_SCRIPT = `
 local missionKey = KEYS[1]
 local proofUsedKey = KEYS[2]
 local taskProofKey = KEYS[3]
+local leaderboardKey = KEYS[4]
 local expected = ARGV[1]
 local nextMission = ARGV[2]
 local proofRecord = ARGV[3]
+local gained = tonumber(ARGV[4])
+local actor = ARGV[5]
 
-if redis.call("EXISTS", proofUsedKey) == 1 then
-  return -1
+-- Validate types before the first write: Lua does not roll back script errors.
+for i, key in ipairs(KEYS) do
+  local kind = redis.call("TYPE", key).ok
+  local wanted = i == 4 and "zset" or "string"
+  if kind ~= "none" and kind ~= wanted then return redis.error_reply("Invalid mission storage type") end
 end
-
-if expected == "__nil__" then
-  if redis.call("EXISTS", missionKey) == 1 then
-    return 0
+if proofRecord ~= "" then
+  if redis.call("EXISTS", proofUsedKey) == 1 then return 2 end
+  local legacy = redis.call("GET", KEYS[5])
+  if legacy then
+    local prior = cjson.decode(legacy)
+    local candidate = cjson.decode(proofRecord)
+    if prior.version ~= 2 and prior.taskId == candidate.taskId then
+      if prior.address == candidate.address and prior.day == candidate.day then return 2 end
+      return -1
+    end
   end
-elseif redis.call("GET", missionKey) ~= expected then
-  return 0
+  for i = 6, #KEYS do
+    if redis.call("EXISTS", KEYS[i]) == 1 then return -1 end
+  end
 end
+if expected == "__nil__" then
+  if redis.call("EXISTS", missionKey) == 1 then return 0 end
+elseif redis.call("GET", missionKey) ~= expected then return 0 end
 
 redis.call("SET", missionKey, nextMission)
-redis.call("SET", proofUsedKey, proofRecord)
-redis.call("SET", taskProofKey, proofRecord)
+if proofRecord ~= "" then
+  redis.call("SET", proofUsedKey, proofRecord)
+  redis.call("SET", taskProofKey, proofRecord)
+  -- Older workers only check this transaction-wide key. Keep them fenced.
+  redis.call("SET", KEYS[5], proofRecord, "NX")
+  for i = 6, #KEYS do redis.call("SET", KEYS[i], proofRecord) end
+end
+if gained > 0 then redis.call("ZINCRBY", leaderboardKey, gained, actor) end
 return 1
 `;
 
-async function compareAndSetMissionWithProof(
-  missionKey: string,
-  expected: string | null,
-  nextMission: string,
-  proofUsedKey: string,
-  taskProofKey: string,
-  proofRecord: string,
-): Promise<'updated' | 'conflict' | 'duplicate'> {
+async function compareAndSetMission(
+  missionKey: string, expected: string | null, nextMission: string,
+  address: string, day: GmDay, taskId: GmTaskId, gained: number, proof?: GmProgressProof,
+): Promise<'updated' | 'conflict' | 'duplicate' | 'replayed'> {
   if (!redis) throw new MissionProofPersistenceError();
-  const evalFn = (redis as UntypedValue)?.eval;
-  if (typeof evalFn !== 'function') {
-    throw new MissionProofPersistenceError('Atomic mission proof persistence is unavailable');
-  }
-
-  let result: unknown;
+  const hash = proof?.txHash;
+  const record = hash ? JSON.stringify({ version: 2, address: address.toLowerCase(), day, taskId, txHash: hash }) : '';
   try {
-    result = await evalFn.call(
-      redis,
-      MISSION_PROOF_CAS_SCRIPT,
-      [withPrefix(missionKey), withPrefix(proofUsedKey), withPrefix(taskProofKey)],
-      [expected ?? '__nil__', nextMission, proofRecord],
-    );
+    const result = Number(await redis.eval(MISSION_PROOF_CAS_SCRIPT, [
+      missionKey,
+      hash ? keys.proofUsed(address, taskId, hash) : `${missionKey}:unused`,
+      keys.proof(address, day, taskId),
+      keys.missionsLeaderboard(toMonth(day)),
+      hash ? keys.legacyProofUsed(hash) : `${missionKey}:unused`,
+      ...(hash ? proof.evidenceIds!.map(id => keys.evidence(hash, taskId, id)) : []),
+    ].map(withPrefix), [expected ?? '__nil__', nextMission, record, String(gained), address.toLowerCase()]));
+    if (result === 1) return 'updated';
+    if (result === 2) return 'replayed';
+    if (result === -1) return 'duplicate';
+    return 'conflict';
   } catch (error) {
-    console.warn('Atomic mission proof persistence failed:', error);
+    console.warn('Atomic mission persistence failed:', error);
     throw new MissionProofPersistenceError();
   }
-
-  if (Number(result) === 1) return 'updated';
-  if (Number(result) === -1) return 'duplicate';
-  return 'conflict';
 }
 
 function toMonth(day: GmDay): string {
@@ -227,75 +259,70 @@ function applyMissionTaskProgress(m: GmMissionDay, taskId: GmTaskId, count: numb
   }
 }
 
+function parseStreak(value: unknown): GmStreak {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MissionProofPersistenceError('Stored streak is invalid');
+  const record = value as Record<string, unknown>;
+  if (!Number.isSafeInteger(record.current) || Number(record.current) < 0 || !Number.isSafeInteger(record.best) || Number(record.best) < 0
+    || typeof record.lastActive !== 'string' || (record.lastActive !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(record.lastActive))) {
+    throw new MissionProofPersistenceError('Stored streak is invalid');
+  }
+  return { current: Number(record.current), best: Number(record.best), lastActive: record.lastActive };
+}
+
 export async function getStreak(address: string): Promise<GmStreak> {
-  const data = await redisGetJSON<GmStreak>(keys.streak(address));
-  if (data) return data;
-  return { current: 0, best: 0, lastActive: '' };
+  const result = await redisGetJSONResult<unknown>(keys.streak(address));
+  if (result.status === 'unavailable') throw new MissionProofPersistenceError('Streak persistence is unavailable');
+  const streak = result.status === 'missing' ? { current: 0, best: 0, lastActive: '' } : parseStreak(result.value);
+  return normalizeStreakIfMissed(address, streak);
 }
 
-/**
- * Normalize a streak on read: if the user has missed at least one full UTC day
- * since lastActive, their current streak should be 0 while preserving best.
- * This persists the normalized value so subsequent reads are consistent.
- */
-export async function normalizeStreakIfMissed(address: string, s: GmStreak): Promise<GmStreak> {
-  try {
-    const day = getTodayDateString();
-    if (!s?.lastActive || s.lastActive === day) return s;
-
-    const yesterday = new Date(day);
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const ystr = yesterday.toISOString().slice(0, 10);
-
-    const missed = s.lastActive !== ystr; // not yesterday → at least one day gap
-    if (!missed) return s;
-
-    const updated: GmStreak = { current: 0, best: s.best || 0, lastActive: s.lastActive };
-    await redisSetJSON(keys.streak(address), updated);
-    return updated;
-  } catch (error) {
-    console.warn('Failed to normalize streak:', error);
-    return s; // Return original on error
-  }
-}
-
-export async function trackDailyActivity(address: string): Promise<GmStreak> {
-  if (isGamificationDisabled()) {
-    return getStreak(address);
-  }
-
+/** Read-only projection: a stale read must never overwrite a newer activity. */
+export async function normalizeStreakIfMissed(_address: string, s: GmStreak): Promise<GmStreak> {
   const day = getTodayDateString();
-  const k = keys.streak(address);
-  const s = (await redisGetJSON<GmStreak>(k)) || { current: 0, best: 0, lastActive: '' };
-  if (s.lastActive === day) return s; // already counted today
-
-  // Determine if consecutive (yesterday)
   const yesterday = new Date(day);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const ystr = yesterday.toISOString().slice(0, 10);
+  return s.lastActive && s.lastActive < yesterday.toISOString().slice(0, 10) ? { ...s, current: 0 } : s;
+}
 
-  const consecutive = s.lastActive === ystr;
-  const current = consecutive ? (s.current || 0) + 1 : 1;
-  const best = Math.max(s.best || 0, current);
-  const updated: GmStreak = { current, best, lastActive: day };
-  await redisSetJSON(k, updated);
-  // Add to activity set for analytics (best-effort, non-blocking)
-  Promise.resolve().then(async () => {
-    try {
-      await (redis as UntypedValue)?.sadd?.(withPrefix(keys.todayActiveSet(day)), address.toLowerCase());
-    } catch (error) {
-      console.warn('Failed to update activity set:', error);
-    }
-  });
-  // Update monthly leaderboard (best-effort, non-blocking)
-  Promise.resolve().then(async () => {
-    try {
-      await (redis as UntypedValue)?.zadd?.(withPrefix(keys.streakLeaderboard(toMonth(day))), { score: current, member: address.toLowerCase() });
-    } catch (error) {
-      console.warn('Failed to update streak leaderboard:', error);
-    }
-  });
-  return updated;
+const STREAK_ACTIVITY_SCRIPT = `
+local raw = redis.call("GET", KEYS[1])
+local streak = raw and cjson.decode(raw) or {current=0, best=0, lastActive=""}
+if type(streak.current) ~= "number" or type(streak.best) ~= "number" or type(streak.lastActive) ~= "string"
+  or streak.current < 0 or streak.best < 0 or streak.current % 1 ~= 0 or streak.best % 1 ~= 0 then
+  return redis.error_reply("Invalid stored streak")
+end
+local leaderboardType = redis.call("TYPE", KEYS[2]).ok
+local activityType = redis.call("TYPE", KEYS[3]).ok
+if (leaderboardType ~= "none" and leaderboardType ~= "zset") or (activityType ~= "none" and activityType ~= "set") then
+  return redis.error_reply("Invalid streak storage type")
+end
+if streak.lastActive > ARGV[1] then return raw end
+if streak.lastActive ~= ARGV[1] then
+  streak.current = streak.lastActive == ARGV[2] and streak.current + 1 or 1
+  streak.best = math.max(streak.best, streak.current)
+  streak.lastActive = ARGV[1]
+end
+local encoded = cjson.encode(streak)
+redis.call("SET", KEYS[1], encoded)
+redis.call("ZADD", KEYS[2], streak.current, ARGV[3])
+redis.call("SADD", KEYS[3], ARGV[3])
+return encoded
+`;
+
+export async function trackDailyActivity(address: string): Promise<GmStreak> {
+  if (isGamificationDisabled()) return getStreak(address);
+  if (!redis) throw new MissionProofPersistenceError('Streak persistence is unavailable');
+  const day = getTodayDateString();
+  const yesterday = new Date(day);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  try {
+    const raw = await redis.eval(STREAK_ACTIVITY_SCRIPT, [
+      keys.streak(address), keys.streakLeaderboard(toMonth(day)), keys.todayActiveSet(day),
+    ].map(withPrefix), [day, yesterday.toISOString().slice(0, 10), address.toLowerCase()]);
+    return parseStreak(typeof raw === 'string' ? JSON.parse(raw) : raw);
+  } catch {
+    throw new MissionProofPersistenceError('Streak persistence is unavailable');
+  }
 }
 
 export async function getMissionDay(address: string, day?: GmDay): Promise<GmMissionDay> {
@@ -360,6 +387,12 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
 
   if (!redisClient) throw new MissionProofPersistenceError('Mission progress persistence is unavailable');
 
+  if (proofTxHash && (!proof?.evidenceIds?.length || proof.evidenceIds.length > 120
+    || new Set(proof.evidenceIds).size !== proof.evidenceIds.length
+    || proof.evidenceIds.some(id => !/^(log:\d+|call:0)$/.test(id)))) {
+    throw new MissionProofPersistenceError('Verified receipt evidence is required');
+  }
+
   const prefixedKey = withPrefix(k);
   const maxAttempts = 5;
   let lastError: UntypedValue = null;
@@ -392,37 +425,11 @@ export async function markMissionTask(address: string, taskId: GmTaskId, proof?:
       const gained = awardPoints(mission);
       const nextRaw = JSON.stringify(mission);
 
-      if (proofTxHash) {
-        const proofRecord = JSON.stringify({
-          address: address.toLowerCase(),
-          day: d,
-          taskId,
-          txHash: proofTxHash,
-        });
-        const result = await compareAndSetMissionWithProof(
-          k,
-          typeof raw === 'string' ? raw : null,
-          nextRaw,
-          keys.proofUsed(proofTxHash),
-          keys.proof(address, d, taskId),
-          proofRecord,
-        );
-        if (result === 'duplicate') throw new MissionProofAlreadyUsedError();
-        if (result === 'conflict') continue;
-      } else {
-        const setSuccess = await redisCompareAndSetJSON(k, typeof raw === 'string' ? raw : null, nextRaw);
-        if (!setSuccess) continue;
-      }
-
-      if (gained > 0) {
-        Promise.resolve().then(async () => {
-          try {
-            await (redis as UntypedValue)?.zincrby?.(withPrefix(keys.missionsLeaderboard(toMonth(d))), gained, address.toLowerCase());
-          } catch (error) {
-            console.warn('Failed to update missions leaderboard:', error);
-          }
-        });
-      }
+      const result = await compareAndSetMission(k, typeof raw === 'string' ? raw : null, nextRaw,
+        address, d, taskId, gained, proofTxHash ? { ...proof, txHash: proofTxHash } : undefined);
+      if (result === 'duplicate') throw new MissionProofAlreadyUsedError();
+      if (result === 'replayed') return getMissionDay(address, d);
+      if (result === 'conflict') continue;
 
       return mission;
     } catch (error) {
@@ -482,10 +489,10 @@ async function getCombinedStreakLeaderboard(limit: number = 50): Promise<GmLeade
   for (const key of streakKeys) {
     try {
       // Extract address from key (pixotchi:gm:streak:0x123... -> 0x123...)
-      const address = key.replace(`${PX}streak:`, '').toLowerCase();
+      const address = key.slice(withPrefix(`${PX}streak:`).length).toLowerCase();
       if (!address.startsWith('0x')) continue; // Skip non-address keys like leaderboard:*
 
-      const data = await redisGetJSON<GmStreak>(key.replace('pixotchi:', '')); // Remove outer prefix for redisGetJSON
+      const data = await redisGetJSON<GmStreak>(key);
       if (data && typeof data.best === 'number' && data.best > 0) {
         results.push({ address, value: data.best });
       }

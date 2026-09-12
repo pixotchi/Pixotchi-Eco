@@ -1943,7 +1943,16 @@ export type FenceV2Config = {
   maxDurationDays: number;
 };
 
-const normalizeFenceV2Config = (result: UntypedValue): FenceV2Config => {
+type FenceV2ConfigResult = {
+  readonly [index: number]: bigint | number | undefined;
+  readonly pricePerDay?: bigint;
+  readonly minDurationDays?: bigint | number;
+  readonly maxDurationDays?: bigint | number;
+  readonly minDays?: bigint | number;
+  readonly maxDays?: bigint | number;
+};
+
+const normalizeFenceV2Config = (result: FenceV2ConfigResult): FenceV2Config => {
   const priceRaw = result?.pricePerDay ?? result?.[0] ?? 0;
   const hasExplicitMin =
     typeof result?.minDurationDays !== 'undefined' ||

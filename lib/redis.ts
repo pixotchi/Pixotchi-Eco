@@ -61,7 +61,8 @@ export const redis = (() => {
   }
 })();
 
-// Safe key prefixing to avoid collisions
+// Prefixing applies to these wrappers, not every raw Redis namespace.
+// Use a separate database per deployment environment (see README).
 const KEY_PREFIX = env.UPSTASH_KEY_PREFIX || 'pixotchi:';
 
 export const withPrefix = (key: string) => (key.startsWith(KEY_PREFIX) ? key : `${KEY_PREFIX}${key}`);
@@ -242,6 +243,25 @@ export async function redisScanKeysRaw(pattern: string, count: number = 1000): P
   return scanKeysInternal(pattern, count);
 }
 
+/** Use when an unavailable/incomplete index must not be treated as empty. */
+export async function redisScanKeysRawStrict(pattern: string): Promise<string[]> {
+  if (!redis) throw new Error('Redis is unavailable');
+  let cursor = '0';
+  const keys = new Set<string>();
+  let pages = 0;
+  do {
+    const result: unknown = await redis.scan(cursor, { match: pattern, count: 1000 });
+    if (!Array.isArray(result) || result.length !== 2 || !/^\d+$/.test(String(result[0]))
+      || !Array.isArray(result[1]) || !result[1].every(key => typeof key === 'string')) {
+      throw new Error('Redis returned an invalid scan page');
+    }
+    cursor = String(result[0]);
+    result[1].forEach(key => keys.add(key));
+    if (++pages > 1000) throw new Error('Redis scan exceeded its page budget');
+  } while (cursor !== '0');
+  return [...keys];
+}
+
 export async function redisIncrBy(key: string, amount: number = 1): Promise<number | null> {
   if (!redis) return null;
   try {
@@ -249,6 +269,20 @@ export async function redisIncrBy(key: string, amount: number = 1): Promise<numb
     return val as UntypedValue as number;
   } catch (error) {
     logger.error('redisIncrBy failed', error, { key, amount });
+    return null;
+  }
+}
+
+export async function redisIncrementWithExpiry(key: string, amount: number, ttlSeconds: number): Promise<number | null> {
+  if (!redis) return null;
+  try {
+    return Number(await redis.eval(`
+local count = redis.call("INCRBY", KEYS[1], ARGV[1])
+redis.call("EXPIRE", KEYS[1], ARGV[2])
+return count
+`, [withPrefix(key)], [String(amount), String(ttlSeconds)]));
+  } catch (error) {
+    logger.error('Atomic rate accounting failed', error, { key });
     return null;
   }
 }

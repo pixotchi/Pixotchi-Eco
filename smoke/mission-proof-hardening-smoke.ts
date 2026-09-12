@@ -61,6 +61,14 @@ async function main() {
   );
   assert.equal(validStake.valid, true, 'stake proof binds the configured contract, event, actor, and positive amount');
 
+  const sharedReceipt = { status: 'success' as const, logs: [
+    eventLog(STAKE_CONTRACT_ADDRESS, staked, { staker: USER, amount: BigInt(10) }),
+    eventLog(STAKE_CONTRACT_ADDRESS, staked, { staker: OTHER, amount: BigInt(20) }),
+  ] };
+  assert.deepEqual((await validateMissionProofEvidence(USER, 's1_stake_seed', sharedReceipt, {}, dependencies)).evidenceIds, ['log:0']);
+  assert.deepEqual((await validateMissionProofEvidence(OTHER, 's1_stake_seed', sharedReceipt, {}, dependencies)).evidenceIds, ['log:1'],
+    'Receipt evidence retains independent event identities for batched smart-wallet actors');
+
   const wrongActor = await validateMissionProofEvidence(
     USER,
     's1_stake_seed',
@@ -92,7 +100,7 @@ async function main() {
     {},
     dependencies,
   );
-  assert.deepEqual(purchases, { valid: true, count: 2 }, 'purchase count comes from matching receipt events');
+  assert.deepEqual(purchases, { valid: true, count: 2, evidenceIds: ['log:0', 'log:1'] }, 'purchase count comes from matching receipt events');
 
   const fenceFunction = parseAbiItem('function fenceV2Purchase(uint256 nftId, uint256 days) payable');
   const fenceInput = encodeFunctionData({

@@ -11,17 +11,16 @@ const itemDetailsPanel = projectFile("components/item-details-panel.tsx");
 const upgradePanel = projectFile("components/building-details/UpgradePanel.tsx");
 const warehouseApply = projectFile("components/transactions/warehouse-apply-transaction.tsx");
 const plantsView = projectFile("components/tabs/plants-view.tsx");
+const reviveReadiness = projectFile("hooks/useReviveReadiness.ts");
 const editPlantName = projectFile("components/edit-plant-name.tsx");
 
-assert.match(itemDetailsPanel, /type FenceV2QuoteState =/);
-assert.match(itemDetailsPanel, /status: 'loading'/);
-assert.match(itemDetailsPanel, /status: 'known'/);
-assert.match(itemDetailsPanel, /status: 'error'/);
-assert.match(
-  itemDetailsPanel,
-  /quote > BigInt\(0\)[\s\S]*status: 'known'/,
-  "only a positive Fence quote may enter the known state",
-);
+assert.match(itemDetailsPanel, /const fenceQuoteQuery = useQuery/);
+assert.match(itemDetailsPanel, /enabled: canQuoteFence/);
+assert.match(itemDetailsPanel, /quote <= BigInt\(0\)\) throw new Error\('Fence quote unavailable'\)/,
+  'zero and negative quotes must fail the query');
+assert.match(itemDetailsPanel, /canQuoteFence && !fenceQuoteQuery.isError \? fenceQuoteQuery.data \?\? null : null/,
+  'disabled or failed queries cannot reuse stale quote data');
+assert.match(itemDetailsPanel, /fenceV2QuoteLoading = canQuoteFence && fenceQuoteQuery.isPending/);
 assert.doesNotMatch(
   itemDetailsPanel,
   /setFenceV2Quote\(BigInt\(0\)\)/,
@@ -38,7 +37,7 @@ assert.match(
   "purchase paths must require a ready Fence quote",
 );
 
-const upgradeBranch = upgradePanel.indexOf("{building.isUpgrading ? (");
+const upgradeBranch = upgradePanel.indexOf("building.isUpgrading ? (");
 const maxLevelBranch = upgradePanel.indexOf(") : isMaxLevel ? (");
 assert.ok(upgradeBranch >= 0 && maxLevelBranch > upgradeBranch, "active upgrades must precede max-level rendering");
 
@@ -49,14 +48,15 @@ assert.match(
 );
 
 for (const source of [plantsView, editPlantName]) {
-  assert.match(source, /status: ['"]loading['"]/);
-  assert.match(source, /status: ['"]known['"]/);
-  assert.match(source, /status: ['"]error['"]/);
   assert.match(source, /ApprovalActionTransaction/);
-  assert.match(source, /checkTokenApproval/);
 }
-assert.match(plantsView, /!reviveAllowanceKnown[\s\S]*SEED allowance unavailable/);
-assert.match(editPlantName, /!seedAllowanceKnown[\s\S]*SEED allowance unavailable/);
+for (const source of [reviveReadiness, editPlantName]) assert.match(source, /checkTokenApproval/);
+assert.match(reviveReadiness, /queryKey: \['revive-read', identity, 'allowance'\]/);
+assert.match(reviveReadiness, /query.data !== undefined && !query.isError/);
+assert.match(reviveReadiness, /currentIdentity.current !== identity/);
+assert.match(plantsView, /disabled=\{!reviveReads.ready \|\| seedBalance < revivePrice\}/);
+for (const state of ['loading', 'known', 'error']) assert.ok(editPlantName.includes(`status: '${state}'`));
+assert.match(editPlantName, /!seedAllowanceKnown[\s\S]*SEED permission unavailable/);
 assert.match(plantsView, /needsApproval=\{reviveNeedsApproval\}/);
 assert.match(editPlantName, /needsApproval=\{seedNeedsApproval\}/);
 assert.match(plantsView, /reviveAllowance\.owner === address\?\.toLowerCase\(\)/);

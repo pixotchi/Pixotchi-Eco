@@ -1,5 +1,7 @@
 'use client';
 
+import { ENS_LOOKUP_BATCH_SIZE } from '@/lib/ens-lookup-policy';
+
 /*
  * Shared engine behind usePrimaryName and useEnsAvatar — the two hooks were
  * ~160-line copy-pastes of each other, and both shared three real flaws this
@@ -42,6 +44,7 @@ export function createBatchedAddressResolver({
   const subscribers = new Map<string, Set<(value: string | null) => void>>();
   let flushTimeout: ReturnType<typeof setTimeout> | null = null;
   let oldestQueuedAt: number | null = null;
+  let flushing = false;
 
   function store(address: string, value: string | null, ttl: number) {
     if (cache.size >= CACHE_CAP) {
@@ -71,41 +74,48 @@ export function createBatchedAddressResolver({
   }
 
   async function flushQueue() {
-    if (queue.size === 0) return;
-
-    const addresses = Array.from(queue);
-    queue.clear();
-    oldestQueuedAt = null;
-
+    if (flushing || queue.size === 0) return;
+    flushing = true;
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addresses }),
-      });
+      while (queue.size > 0) {
+        const addresses = Array.from(queue).slice(0, ENS_LOOKUP_BATCH_SIZE);
+        addresses.forEach(address => queue.delete(address));
+        oldestQueuedAt = null;
 
-      if (!response.ok) {
-        addresses.forEach((addr) => {
-          store(addr, null, FAILURE_RETRY_TTL_MS);
-          notifySubscribers(addr);
-        });
-        console.warn(`[${logLabel}] Resolver returned ${response.status}`);
-        return;
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses }),
+            signal: AbortSignal.timeout(25_000),
+          });
+
+          if (!response.ok) {
+            addresses.forEach((addr) => {
+              store(addr, null, FAILURE_RETRY_TTL_MS);
+              notifySubscribers(addr);
+            });
+            console.warn(`[${logLabel}] Resolver returned ${response.status}`);
+            continue;
+          }
+
+          const data = await response.json();
+          const values = data?.[responseKey] ?? {};
+
+          addresses.forEach((addr) => {
+            store(addr, values[addr] ?? null, SUCCESS_TTL_MS);
+            notifySubscribers(addr);
+          });
+        } catch (error) {
+          addresses.forEach((addr) => {
+            store(addr, null, FAILURE_RETRY_TTL_MS);
+            notifySubscribers(addr);
+          });
+          console.warn(`[${logLabel}] Failed to resolve`, error);
+        }
       }
-
-      const data = await response.json();
-      const values = data?.[responseKey] ?? {};
-
-      addresses.forEach((addr) => {
-        store(addr, values[addr] ?? null, SUCCESS_TTL_MS);
-        notifySubscribers(addr);
-      });
-    } catch (error) {
-      addresses.forEach((addr) => {
-        store(addr, null, FAILURE_RETRY_TTL_MS);
-        notifySubscribers(addr);
-      });
-      console.warn(`[${logLabel}] Failed to resolve`, error);
+    } finally {
+      flushing = false;
     }
   }
 

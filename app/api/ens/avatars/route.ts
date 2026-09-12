@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { isAddress } from 'viem';
+import { createEnsLookupHandler } from '@/lib/ens-request';
+import { ENS_LOOKUP_CONCURRENCY } from '@/lib/ens-lookup-policy';
 
 export const runtime = 'nodejs';
 
@@ -27,11 +27,12 @@ function normalizeAvatarUrl(value: UntypedValue): string | null {
   return null;
 }
 
-async function fetchAvatar(address: string): Promise<string | null> {
+async function fetchAvatar(address: string, signal: AbortSignal): Promise<string | null> {
   const response = await fetch(
     `${ENS_AVATAR_API_BASE}/${encodeURIComponent(address)}/ens`,
     {
       headers: { Accept: 'application/json' },
+      signal,
       next: { revalidate: 60 * 60 },
     },
   );
@@ -53,59 +54,16 @@ async function fetchAvatar(address: string): Promise<string | null> {
   );
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const addresses: UntypedValue = body?.addresses;
-
-    if (!Array.isArray(addresses) || addresses.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'addresses must be a non-empty array' },
-        { status: 400 },
-      );
+export const POST = createEnsLookupHandler('avatars', async (addresses, signal) => {
+  const avatars: Record<string, string | null> = {};
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(ENS_LOOKUP_CONCURRENCY, addresses.length) }, async () => {
+    while (cursor < addresses.length) {
+      signal.throwIfAborted();
+      const address = addresses[cursor++];
+      try { avatars[address] = await fetchAvatar(address, signal); }
+      catch { signal.throwIfAborted(); avatars[address] = null; }
     }
-
-    const validAddresses = Array.from(
-      new Set(
-        addresses
-          .filter((address): address is string => typeof address === 'string')
-          .map((address) => address.toLowerCase())
-          .filter((address) => isAddress(address)),
-      ),
-    );
-
-    if (validAddresses.length === 0) {
-      return NextResponse.json({ success: true, avatars: {} });
-    }
-
-    const avatarEntries = await Promise.allSettled(
-      validAddresses.map(async (address) => [address, await fetchAvatar(address)] as const),
-    );
-
-    const avatars: Record<string, string | null> = {};
-
-    avatarEntries.forEach((entry, index) => {
-      const key = validAddresses[index];
-      if (!key) {
-        return;
-      }
-
-      avatars[key] = entry.status === 'fulfilled' ? entry.value[1] : null;
-    });
-
-    return NextResponse.json(
-      { success: true, avatars },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=300, s-maxage=3600',
-        },
-      },
-    );
-  } catch (error) {
-    console.error('[ENS Avatar API] Failed to resolve avatars', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to resolve avatars' },
-      { status: 500 },
-    );
-  }
-}
+  }));
+  return avatars;
+});

@@ -109,7 +109,6 @@ await assert.rejects(
   postMissionProgress({
     address,
     count: 1,
-    proof: { txHash: `0x${"1".repeat(64)}` },
     taskId: "s4_buy10_elements",
   }),
 );
@@ -131,6 +130,16 @@ assert.equal(
   "the latest address-bound error must be replayed to a late-mounted notice UI",
 );
 unsubscribeReplay();
+// Verified transaction identities now make counted mission retries safe too.
+missionFetchCount = 0;
+recoveryRequestCount = 0;
+const queued = await postMissionProgress({ address, count: 1,
+  proof: { txHash: `0x${"1".repeat(64)}` }, taskId: "s4_buy10_elements" });
+assert.equal(queued.status, 202);
+assert.equal(missionFetchCount, 2);
+assert.equal(recoveryRequestCount, 1);
+localStorage.clear();
+
 globalThis.fetch = originalFetch;
 
 const missionSource = readFileSync(

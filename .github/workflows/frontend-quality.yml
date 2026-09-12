@@ -16,6 +16,13 @@ jobs:
     env:
       NEXT_PUBLIC_URL: http://localhost:3000
       NEXT_TELEMETRY_DISABLED: 1
+      # Build-only placeholders. No live credentials are available to PR jobs.
+      RPC_NODE: http://127.0.0.1:1
+      INDEXER_UPSTREAM_URL: http://127.0.0.1:1
+      INDEXER_SHARED_SECRET: ci-fixture-only
+      NEXT_PUBLIC_CDP_CLIENT_API_KEY: 00000000-0000-4000-8000-000000000000
+      NEXT_PUBLIC_PRIVY_APP_ID: c000000000000000000000000
+      PRIVY_APP_SECRET: ci-fixture-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,6 +82,7 @@ jobs:
       - run: npm ci
       - run: npm run remediation:smoke
       - run: npm run remediation:redis:smoke
+      - run: npm run audit:regressions
       - run: npm run contracts:check
       - run: npx playwright install --with-deps chromium --only-shell
       - run: npm run gameplay-guards:smoke

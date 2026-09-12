@@ -30,6 +30,7 @@ scripts/*
 !scripts/test-arcade-p1.mjs
 !scripts/run-eslint-chunked.mjs
 !scripts/run-react-server-smoke.mjs
+!scripts/run-audit-regressions.mjs
 !scripts/check-contract-deployments.ts
 !scripts/reconcile-blackjack-aliases.ts
 !scripts/reconcile-airdrop.ts
@@ -85,3 +86,4 @@ CLAUDE.md
 /tmp
 /docs/research
 /reports
+/docs/audits

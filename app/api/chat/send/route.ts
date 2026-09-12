@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     const gamificationPolicy = getGamificationPolicy();
 
     if (gamificationPolicy.enabled) {
-      Promise.allSettled([
+      await Promise.allSettled([
         markMissionTask(senderAddress, 's2_chat_message').catch((error) => {
           console.warn('Failed to mark mission task:', error);
         }),
