@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { setSensoryPreference } from "@/lib/sensory-feedback";
 
 const PERFORMANCE_MODE_STORAGE_KEY = "pixotchi:performance-mode";
 const PERFORMANCE_MODE_EVENT = "pixotchi:performance-mode-change";
@@ -36,6 +37,7 @@ function applyPerformanceMode(enabled: boolean) {
   document.documentElement.classList.toggle("performance-mode", enabled);
   if (enabled) {
     document.documentElement.dataset.performanceMode = "enabled";
+    setSensoryPreference("haptics", false);
   } else {
     delete document.documentElement.dataset.performanceMode;
   }

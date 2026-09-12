@@ -59,7 +59,7 @@ interface BatchQuestStartCardProps {
   className?: string;
 }
 
-const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_QUEST_BURN_AMOUNT || 85000);
+const BURN_AMOUNT_TOKENS = Number(process.env.NEXT_PUBLIC_BATCH_QUEST_BURN_AMOUNT || 40000);
 const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
 /**

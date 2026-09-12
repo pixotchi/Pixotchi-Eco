@@ -248,7 +248,7 @@ assert.equal(isBatchQuestRunPaid(RUN_A, T0), false, 'clearing must end the run')
 const batchCard = projectFile('components/transactions/batch-quest-start-card.tsx');
 assert.match(batchCard, /buildQuestStartCall/);
 assert.doesNotMatch(batchCard, /questCommit|questFinalize/);
-assert.match(batchCard, /NEXT_PUBLIC_BATCH_QUEST_BURN_AMOUNT \|\| 85000/);
+assert.match(batchCard, /NEXT_PUBLIC_BATCH_QUEST_BURN_AMOUNT \|\| 40000/);
 assert.match(batchCard, /NEXT_PUBLIC_BATCH_QUEST_MAX_SIZE \|\| 100/);
 assert.match(batchCard, /0x000000000000000000000000000000000000dEaD/);
 assert.match(batchCard, /useQuestRewardsAvailability/);

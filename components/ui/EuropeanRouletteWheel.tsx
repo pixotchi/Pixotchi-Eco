@@ -1,6 +1,5 @@
 "use client";
 
-import { useMechanicalFeedback } from '@/hooks/useMechanicalFeedback';
 import { RED_NUMBERS } from '@/lib/casino-hardening-rules.mjs';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { usePerformanceMode } from '@/components/ui/performance-mode';
@@ -28,7 +27,6 @@ export default function EuropeanRouletteWheel({
     winningNumber,
     onSpinComplete
 }: EuropeanRouletteWheelProps) {
-    useMechanicalFeedback(spinning);
     const { enabled: performanceModeEnabled } = usePerformanceMode();
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const [pageVisible, setPageVisible] = useState(true);

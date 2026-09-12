@@ -58,48 +58,55 @@ export function MenuSwitchItem({
   label,
   description,
   checked,
+  disabled = false,
   onCheckedChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
+  disabled?: boolean;
   onCheckedChange: () => void;
 }) {
+  const labelId = React.useId();
+
   return (
-    <DropdownMenuCheckboxItem
-      title={description}
-      aria-description={description}
-      checked={checked}
-      onCheckedChange={onCheckedChange}
-      onSelect={(event) => event.preventDefault()}
-      className={cn(
-        "min-h-11 w-full justify-between gap-4 py-2 pl-2 pr-2 text-left",
-        // Radix renders its own check indicator as the first child; this control
-        // shows state with the pill instead.
-        "[&>span:first-child]:hidden",
-        checked && "bg-background/55 shadow-[var(--shadow-hairline)]",
-      )}
-    >
-      <span className="text-xs font-medium">{label}</span>
-      <span
-        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-[background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] ${
-          checked
-            ? "border border-primary/35 bg-primary bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
-            : "border border-[hsl(var(--edge-panel))] bg-muted/75 bg-[image:var(--gradient-panel)] shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.10)]"
-        }`}
-        aria-hidden="true"
+    <div className="flex min-h-11 w-full select-none items-center justify-between gap-2 px-2">
+      <span id={labelId} className="min-w-0 text-xs font-medium [overflow-wrap:anywhere]">{label}</span>
+      <DropdownMenuCheckboxItem
+        title={description}
+        aria-labelledby={labelId}
+        aria-description={description}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        onSelect={(event) => event.preventDefault()}
+        className={cn(
+          "h-[44px] min-h-[44px] w-[44px] min-w-[44px] shrink-0 cursor-pointer justify-center rounded-full p-0 focus:bg-transparent focus:text-inherit focus:shadow-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring",
+          // Keep the switch in Radix's keyboard navigation while its label
+          // stays noninteractive. The pill replaces the default check indicator.
+          "[&>span:first-child]:hidden",
+        )}
       >
         <span
-          className={`inline-block h-5 w-5 transform-gpu rounded-full border transition-[translate,background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${
-            checked ? "translate-x-[18px]" : "translate-x-0.5"
-          } ${
+          className={`relative inline-flex h-[24px] w-[40px] shrink-0 items-center rounded-full transition-[background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] ${
             checked
-              ? "border-white/55 bg-primary-foreground shadow-[var(--shadow-hairline)]"
-              : "border-[hsl(var(--edge-strong))] bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.20)]"
+              ? "border border-primary/35 bg-primary bg-[image:var(--gradient-control-active)] shadow-[var(--shadow-hairline)]"
+              : "border border-[hsl(var(--edge-panel))] bg-muted/75 bg-[image:var(--gradient-panel)] shadow-[inset_0_1px_2px_hsl(var(--foreground)/0.10)]"
           }`}
-        />
-      </span>
-    </DropdownMenuCheckboxItem>
+          aria-hidden="true"
+        >
+          <span
+            className={`inline-block h-[20px] w-[20px] transform-gpu rounded-full border transition-[translate,background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none ${
+              checked ? "translate-x-[18px]" : "translate-x-[2px]"
+            } ${
+              checked
+                ? "border-white/55 bg-primary-foreground shadow-[var(--shadow-hairline)]"
+                : "border-[hsl(var(--edge-strong))] bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.20)]"
+            }`}
+          />
+        </span>
+      </DropdownMenuCheckboxItem>
+    </div>
   );
 }
 

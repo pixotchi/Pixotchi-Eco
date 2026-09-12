@@ -81,8 +81,13 @@ export function GameSettingsMenu({ onAbout }: { onAbout: () => void }) {
           checked={performanceModeEnabled}
           onCheckedChange={() => setPerformanceModeEnabled(current => !current)}
         />
-        <MenuSwitchItem label="Touch feedback" description="Subtle haptics on supported devices" checked={sensory.haptics} onCheckedChange={() => setSensoryPreference('haptics', !sensory.haptics)} />
-        <MenuSwitchItem label="Interaction sounds" description="Quiet game and confirmation sounds" checked={sensory.sounds} onCheckedChange={() => setSensoryPreference('sounds', !sensory.sounds)} />
+        <MenuSwitchItem
+          label="Touch feedback"
+          description={performanceModeEnabled ? "Disable Performance Mode to use touch feedback" : "Subtle haptics on supported devices"}
+          checked={!performanceModeEnabled && sensory.haptics}
+          disabled={performanceModeEnabled}
+          onCheckedChange={() => setSensoryPreference('haptics', !sensory.haptics)}
+        />
         <DropdownMenuSeparator className="my-2" />
         {enabled && (
           <DropdownMenuItem onSelect={() => { pendingDialogRef.current = () => start(); }} className={actionClassName}>

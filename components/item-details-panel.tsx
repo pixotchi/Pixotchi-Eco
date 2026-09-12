@@ -1,6 +1,5 @@
 "use client";
 import { getBalanceShortfallMessage } from '@/lib/balance-shortfall';
-import { microSound } from '@/lib/sensory-feedback';
 
 import { SolanaNotSupported,useIsSolanaWallet } from '@/components/solana';
 import ApprovalActionTransaction from '@/components/transactions/approval-action-transaction';
@@ -325,7 +324,6 @@ export default function ItemDetailsPanel({
     : itemPurchaseLabel;
 
   const handlePurchaseSuccess = (tx: UntypedValue) => {
-    if (itemType === 'garden') microSound('water');
     onPurchaseSuccess();
 
     try {

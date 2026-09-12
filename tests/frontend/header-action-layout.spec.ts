@@ -98,6 +98,94 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
   await header.screenshot({ path: test.info().outputPath(`header${enlarged ? '-200pct' : ''}.png`) });
 });
 
+test.describe('Settings switches', () => {
+  test.use({ hasTouch: true });
+
+  test('only switches respond to taps and Performance Mode disables touch feedback', async ({ page }) => {
+    await page.getByRole('button', { name: 'Settings', exact: true }).tap();
+    const menu = page.getByRole('menu');
+    await expect(menu.getByText('Interaction sounds', { exact: true })).toHaveCount(0);
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Music', exact: true })).toBeVisible();
+    for (const control of await menu.getByRole('menuitemcheckbox').all()) {
+      const checked = await control.getAttribute('aria-checked');
+      const row = control.locator('..');
+      const label = row.locator(':scope > span');
+      await label.tap();
+      await label.dblclick();
+      await expect(control).toHaveAttribute('aria-checked', checked!);
+      await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      expect(await page.evaluate(() => getSelection()?.toString())).toBe('');
+      const bounds = (await control.boundingBox())!;
+      expect(bounds.width).toBe(44);
+      expect(bounds.height).toBe(44);
+    }
+
+    const touch = menu.getByRole('menuitemcheckbox', { name: 'Touch feedback', exact: true });
+    const performance = menu.getByRole('menuitemcheckbox', { name: 'Performance Mode', exact: true });
+    await touch.tap();
+    await expect(touch).toBeChecked();
+    await performance.tap();
+    await expect(performance).toBeChecked();
+    await expect(touch).not.toBeChecked();
+    await expect(touch).toBeDisabled();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pixotchi:sensory-feedback')!))).toEqual({ haptics: false });
+    await expect(performance).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(performance.locator('..')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await menu.screenshot({ path: test.info().outputPath('settings-performance-mode.png') });
+
+    await performance.focus();
+    await page.keyboard.press('Space');
+    await expect(performance).not.toBeChecked();
+    await expect(touch).toBeEnabled();
+    await expect(touch).not.toBeChecked();
+    await page.keyboard.press('ArrowDown');
+    await expect(touch).toBeFocused();
+    await expect(touch).toHaveCSS('outline-style', 'solid');
+    await page.keyboard.press('Space');
+    await expect(touch).toBeChecked();
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings', exact: true }).tap();
+    await expect(touch).toBeChecked();
+    await expect(performance).not.toBeChecked();
+  });
+
+  test('saved Performance Mode and changes from another tab keep touch feedback off', async ({ page, context }) => {
+    test.setTimeout(60_000);
+    await page.evaluate(() => {
+      localStorage.setItem('pixotchi:performance-mode', '1');
+      localStorage.setItem('pixotchi:sensory-feedback', JSON.stringify({ haptics: true, sounds: true }));
+    });
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const touch = page.getByRole('menuitemcheckbox', { name: 'Touch feedback', exact: true });
+    const performance = page.getByRole('menuitemcheckbox', { name: 'Performance Mode', exact: true });
+    await expect(performance).toBeChecked();
+    await expect(touch).not.toBeChecked();
+    await expect(touch).toBeDisabled();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pixotchi:sensory-feedback')!))).toEqual({ haptics: false });
+
+    // A blank same-origin page changes storage without a second provider tree.
+    const other = await context.newPage();
+    await other.route('**/settings-storage-test', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Settings storage test</title>' }));
+    await other.goto('/settings-storage-test');
+    await other.evaluate(() => localStorage.setItem('pixotchi:sensory-feedback', JSON.stringify({ haptics: true })));
+    await expect.poll(() => other.evaluate(() => JSON.parse(localStorage.getItem('pixotchi:sensory-feedback')!))).toEqual({ haptics: false });
+    await expect(touch).not.toBeChecked();
+    await other.evaluate(() => localStorage.setItem('pixotchi:performance-mode', '0'));
+    await expect(performance).not.toBeChecked();
+    await expect(touch).toBeEnabled();
+    await expect(touch).not.toBeChecked();
+    await touch.click();
+    await expect(touch).toBeChecked();
+    await other.evaluate(() => localStorage.setItem('pixotchi:performance-mode', '1'));
+    await expect(performance).toBeChecked();
+    await expect(touch).not.toBeChecked();
+    await expect(touch).toBeDisabled();
+    await other.close();
+  });
+});
+
 test('status actions stay compact and keep labels and balances visible across phone and desktop widths', async ({ page }) => {
   await page.evaluate(() => document.fonts.ready);
   await page.emulateMedia({ reducedMotion: 'no-preference' });

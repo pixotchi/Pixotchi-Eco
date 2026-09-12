@@ -2,7 +2,7 @@
 
 import { getBoxResult, type BoxResult } from "@/lib/box-result";
 import type { LifecycleStatus, TransactionProof } from "./transaction-kit";
-import React from 'react';
+import React, { useRef } from 'react';
 import GameTransaction from './game-transaction';
 import { BOX_GAME_ABI, PIXOTCHI_NFT_ADDRESS } from '@/lib/contracts';
 import { toast } from 'react-hot-toast';
@@ -42,6 +42,7 @@ export default function BoxGameTransaction({
   onResult,
 }: BoxGameTransactionProps) {
   const { address } = useAccount();
+  const handledResultRef = useRef<string | null>(null);
   const functionName = withStar ? 'boxGamePlayWithStar' : 'boxGamePlay';
   const calls = [{
     address: PIXOTCHI_NFT_ADDRESS,
@@ -81,16 +82,32 @@ export default function BoxGameTransaction({
       showToast={showToast}
       onStatusUpdate={(status: LifecycleStatus) => {
         try { onStatusUpdate?.(status); } catch {}
+        if (status.statusName === 'buildingTransaction') handledResultRef.current = null;
         if (status.statusName === 'success') {
+          const proof = extractTransactionHash(status.statusData)
+            ?? status.statusData.transactionReceipts.map(extractTransactionHash).find(Boolean)
+            ?? status.statusData.transactionId
+            ?? 'confirmed';
+          if (handledResultRef.current === proof) return;
+          handledResultRef.current = proof;
           const result = getBoxResult(status.statusData.transactionReceipts, plantId, PIXOTCHI_NFT_ADDRESS);
-          onResult?.(result);
-          if (!result) {
-            toast('Play confirmed. Check Activity for the reward.', { id: 'box-result' });
-          } else if (!onResult) {
-            const points = formatScore(Math.abs(result.pointsDelta));
-            const lifetime = result.timeAdded ? ' and ' + (result.timeAdded > 0 ? '+' : '-') + formatDuration(Math.abs(result.timeAdded)) + ' lifetime' : '';
-            toast.success('You got ' + (result.pointsDelta < 0 ? '-' : '+') + points + ' PTS' + lifetime, { id: 'box-result' });
+
+          // The persistent result can be below the fold. Its callback must not
+          // suppress the visible notification or turn a loss into a success.
+          if (showToast && feedbackMode !== 'inline' && feedbackMode !== 'none') {
+            const options = { id: 'box-result', duration: 6000 };
+            if (!result) {
+              toast('Box play confirmed. The result is unavailable; check Activity.', options);
+            } else {
+              const parts: string[] = [];
+              if (result.pointsDelta !== 0) parts.push(`${result.pointsDelta > 0 ? '+' : '−'}${formatScore(Math.abs(result.pointsDelta))} PTS`);
+              if (result.timeAdded !== 0) parts.push(`${result.timeAdded > 0 ? '+' : '−'}${formatDuration(Math.abs(result.timeAdded))} lifetime`);
+              const message = parts.length ? `Box result: ${parts.join(' • ')}` : 'Box result: no reward this time.';
+              const gainedOnly = (result.pointsDelta > 0 || result.timeAdded > 0) && result.pointsDelta >= 0 && result.timeAdded >= 0;
+              (gainedOnly ? toast.success : toast)(message, options);
+            }
           }
+          onResult?.(result);
         }
       }}
     />
