@@ -4,9 +4,7 @@ import React from 'react';
 import { ProductionSummary } from './production-summary';
 import { useAccount } from 'wagmi';
 import { BuildingData } from '@/lib/types';
-import { getFriendlyErrorMessage } from '@/lib/utils';
 import BuildingClaimTransaction from '@/components/transactions/building-claim-transaction';
-import { toast } from 'react-hot-toast';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { postMissionProgress } from '@/lib/mission-tracking';
 
@@ -46,7 +44,6 @@ export default function ProductionPanel({ building, landId, onClaimSuccess }: Pr
                   postMissionProgress(payload);
                 } catch {}
               }}
-              onError={(e) => toast.error(getFriendlyErrorMessage(e))}
             />
           </div>
         </div>

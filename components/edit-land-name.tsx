@@ -15,7 +15,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@/components/ui/dialog';
-import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { Land } from '@/lib/types';
 import { LandNameTransaction } from '@/components/transactions/land-name-transaction';
@@ -55,7 +54,6 @@ export function EditLandName({ land, onNameChanged, className = "", iconSize = 1
 	const handleError = (error: UntypedValue) => {
 		if (submittedNameRef.current && !isCurrentSession(submittedNameRef.current.session)) return;
 		console.error('Land name change failed:', error);
-		toast.error('Failed to change land name. Please try again.');
 		setIsTransactionPending(false);
 	};
 

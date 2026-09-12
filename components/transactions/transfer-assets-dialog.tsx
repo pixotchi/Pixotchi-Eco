@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import GlobalTransactionToast from "@/components/transactions/global-transaction-toast";
 import { TransactionRecoveryOptions } from "@/components/transactions/transaction-recovery-options";
-import { Transaction,TransactionButton,TransactionStatus,type LifecycleStatus } from "@/components/transactions/transaction-kit";
+import { Transaction,TransactionButton,TransactionRecoveryFallback,type LifecycleStatus } from "@/components/transactions/transaction-kit";
 import { TransferPlanReview } from '@/components/transactions/transfer-plan-review';
 import { getStepAssetIds, type TransferPlanStep } from '@/lib/transfer-assets-review';
 import { useDebounce } from "@/hooks/useDebounce";
@@ -680,13 +680,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
       toast.success(collection === "plants" ? "Plants approved" : "Lands approved");
       return;
     }
-    if (status.statusName === "transactionRejected") {
-      toast("Approval cancelled", { icon: "✖️" });
-      return;
-    }
-    if (["error", "failed", "reverted", "buildError"].includes(status.statusName)) {
-      toast.error(collection === "plants" ? "Plant approval failed" : "Land approval failed");
-    }
+    // Pending, cancellation and failure feedback belongs to the transaction popup.
   }, []);
 
   const activeStep = activePlan?.steps[activePlan.nextStepIndex] ?? null;
@@ -1009,7 +1003,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       onStatus={(status) => onApprovalStatus("plants", ownerKey, operationChainId, status)}
                     >
                       <TransactionButton disabled={loading} text="Approve Plants" />
-                      <TransactionStatus suppressSuccess className="mt-1 text-xs" />
+                      <TransactionRecoveryFallback />
                       <GlobalTransactionToast suppressSuccess />
                     </Transaction>
                   </ApprovalState>
@@ -1024,7 +1018,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
                       onStatus={(status) => onApprovalStatus("lands", ownerKey, operationChainId, status)}
                     >
                       <TransactionButton disabled={loading} text="Approve Lands" />
-                      <TransactionStatus suppressSuccess className="mt-1 text-xs" />
+                      <TransactionRecoveryFallback />
                       <GlobalTransactionToast suppressSuccess />
                     </Transaction>
                   </ApprovalState>
@@ -1141,7 +1135,7 @@ export default function TransferAssetsDialog({ open, onOpenChange }: TransferAss
             )}
           </div>
           {activePlan && activeStepCall && activeStepIntentKey && (
-            <TransactionStatus suppressSuccess className="text-xs" />
+            <TransactionRecoveryFallback />
           )}
         </div>
         )}

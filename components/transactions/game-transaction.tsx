@@ -21,6 +21,7 @@ import {
   Transaction,
   TransactionButton,
   TransactionStatus,
+  TransactionRecoveryFallback,
   type LifecycleStatus,
   type TransactionProof,
   type TransactionFeedbackMode,
@@ -205,10 +206,8 @@ export default function GameTransaction({
   // Commit/reveal and similarly prepared actions render before their calldata
   // exists. Zero calls is a valid disabled state, but never a valid submission.
   const isSubmissionDisabled = disabled || transformedCalls.length === 0;
-  const showInlineStatus = !hideStatus
-    && (resolvedFeedbackMode === "inline" || resolvedFeedbackMode === "both");
-  const showGlobalToast = showToast
-    && (resolvedFeedbackMode === "toast" || resolvedFeedbackMode === "both");
+  const showInlineStatus = !hideStatus && resolvedFeedbackMode === "inline";
+  const showGlobalToast = showToast && resolvedFeedbackMode === "toast";
 
   return (
     <Transaction
@@ -231,7 +230,10 @@ export default function GameTransaction({
         pendingText={pendingText}
       />
       {showInlineStatus && <TransactionStatus suppressSuccess={successFeedback === 'feature'} />}
-      {showGlobalToast && <GlobalTransactionToast successMessage={outcome} suppressSuccess={successFeedback === 'feature'} />}
+      {showGlobalToast && <>
+        <GlobalTransactionToast successMessage={outcome} suppressSuccess={successFeedback === 'feature'} />
+        <TransactionRecoveryFallback />
+      </>}
     </Transaction>
   );
 }

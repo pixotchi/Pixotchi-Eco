@@ -518,7 +518,6 @@ export default function CasinoPanel({ landId, initialIsBuilt, onSpinComplete }: 
                 intentKey={`casino:build:${landId}`}
                 calls={[buildCasinoBuildCall(landId)]}
                 onSuccess={onBuildSuccess}
-                onError={(err) => setError(err instanceof Error ? err.message : 'Casino could not be built. Please retry.')}
                 buttonText={`Build (${buildCostDisplay} ${buildTokenSymbol})`}
                 buttonClassName="w-full"
                 disabled={!walletClient || !configurationReady || !buildingConfig || buildReadiness !== 'ready' || !buildTokenMetadata.isReady}

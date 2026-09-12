@@ -547,7 +547,6 @@ export default function ItemDetailsPanel({
                     onPurchaseSuccess();
 
                   }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
                     !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethBalance < ethAmount
                       ? "Insufficient ETH Balance"
@@ -570,7 +569,6 @@ export default function ItemDetailsPanel({
                     onPurchaseSuccess();
 
                   }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={
                     !ethQuote ? (ethQuoteLoading ? 'Updating ETH quote…' : 'ETH quote unavailable') : ethBalance < ethAmount
                       ? "Insufficient ETH Balance"
@@ -601,7 +599,6 @@ export default function ItemDetailsPanel({
                 onApprovalSuccess={() => { void allowanceQuery.refetch(); }}
                 onSuccess={handlePurchaseSuccess}
                 onButtonClick={requireCurrentPurchase}
-                onError={error => toast.error(getFriendlyErrorMessage(error))}
                 batchButtonText={disabledMessage || approvalActionButtonText}
                 approvalButtonText={disabledMessage || 'Approve SEED'}
                 actionButtonText={disabledMessage || (!seedBalanceReady ? 'SEED balance unavailable' : !allowanceReady ? 'Checking SEED permission…' : purchaseActionButtonText)}

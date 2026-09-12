@@ -8,6 +8,8 @@ export const fixtureWallet = {
   notify: () => {},
   capabilityCalls: 0,
   rejectWallet: true,
+  walletError: null as string | null,
+  nftApprovals: false,
   ambiguousWallet: false,
   deferWallet: false,
   direct: false,
@@ -40,6 +42,7 @@ const client = {
       await new Promise<void>(resolve => { fixtureWallet.resolveWallet = resolve; });
     }
     if (fixtureWallet.ambiguousWallet) throw new Error('Wallet response lost after broadcast; network timeout');
+    if (fixtureWallet.walletError) throw new Error(fixtureWallet.walletError);
     if (shouldReject) throw Object.assign(new Error('User rejected the request'), { code: 4001 });
     return { id: `0x${'b'.repeat(64)}` };
   },
@@ -90,7 +93,7 @@ export const getBaseReadClient = () => ({
   readContract: async ({ functionName }: { functionName: string }) => {
     if (functionName === 'getPlantsByOwnerExtended') return [];
     if (functionName === 'landGetByOwner') return [{ tokenId: BigInt(1112), name: 'Fixture land' }];
-    if (functionName === 'isApprovedForAll') return false;
+    if (functionName === 'isApprovedForAll') return fixtureWallet.nftApprovals;
     throw new Error(`Unexpected fixture read: ${functionName}`);
   },
 });

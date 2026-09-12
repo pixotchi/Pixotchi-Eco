@@ -54,7 +54,7 @@ type TransactionToastProps = {
   position?: TransactionFeedbackPosition;
 };
 
-export type TransactionFeedbackMode = "inline" | "toast" | "both" | "none";
+export type TransactionFeedbackMode = "inline" | "toast" | "none";
 
 type TransactionToastActionProps = {
   className?: string;
@@ -330,6 +330,13 @@ export function TransactionButton({
         : buttonContent}
     </button>
   );
+}
+
+/** Keep recovery reachable after dismissing a delayed transaction's popup. */
+export function TransactionRecoveryFallback() {
+  const { status, isToastVisible, acknowledgeStale, isExecuting } = useTransactionContext();
+  if (isToastVisible || status.statusName !== 'transactionStale') return null;
+  return <TransactionRecoveryOptions onContinue={() => { void acknowledgeStale(); }} disabled={isExecuting} />;
 }
 
 export function TransactionStatus({

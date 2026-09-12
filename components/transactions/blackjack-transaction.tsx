@@ -390,7 +390,7 @@ export default function BlackjackTransaction({
                 capabilities={builderCapabilities}
             >
                 <div className="space-y-2">
-                    <p role="status" className="text-center text-xs text-white/80">{phase === "ready" ? `${resolvedButtonText} is ready. Confirm to open your wallet.` : "Waiting for transaction confirmation…"}</p>
+                    {phase === "ready" && <p className="text-center text-xs text-white/80">{resolvedButtonText} is ready. Confirm to open your wallet.</p>}
                     <TransactionButton
                         text={phase === "ready" ? `Confirm ${resolvedButtonText}` : `Confirming ${resolvedButtonText}…`}
                         className={activeClassName}

@@ -725,9 +725,6 @@ export default function PlantsView() {
                         onSuccess={() => {
                           reconcileClaimSuccess();
                         }}
-                        onError={() => {
-                          toast.error('Claim failed');
-                        }}
                       />
                     ) : (
                       <ClaimRewardsTransaction
@@ -833,9 +830,6 @@ export default function PlantsView() {
                             onButtonClick={reviveReads.requireCurrent}
                             onApprovalSuccess={() => { void reviveReads.allowance.refetch(); }}
                             onSuccess={reconcileReviveSuccess}
-                            onError={(error) => {
-                              toast.error(error instanceof Error ? error.message : String(error));
-                            }}
                           />
                         {seedBalance < revivePrice && reviveReads.ready && (
                           <InlineBalanceNotice>

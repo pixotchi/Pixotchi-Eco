@@ -13,9 +13,7 @@ import { navigateToGameTab } from '@/lib/game-navigation';
 import { postMissionProgress } from '@/lib/mission-tracking';
 import { extractTransactionHash } from '@/lib/transaction-utils';
 import { Plant } from '@/lib/types';
-import { getFriendlyErrorMessage } from '@/lib/utils';
 import { useCallback,useEffect,useId,useMemo,useRef,useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { useAccount } from 'wagmi';
 
 interface WarehousePanelProps {
@@ -208,7 +206,6 @@ export default function WarehousePanel({
           buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyPts || ptsTooHigh || ptsInvalid}
           onSuccess={(tx) => completeApply('points', tx)}
-          onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
 
@@ -224,7 +221,6 @@ export default function WarehousePanel({
           buttonClassName="h-11 min-h-11 w-full px-4 text-sm"
           disabled={!currentSelectedPlantId || !applyTodMinutes || minutesTooHigh || minutesInvalid}
           onSuccess={(tx) => completeApply('lifetime', tx)}
-          onError={(e) => toast.error(getFriendlyErrorMessage(e))}
         />
       </div>
       <p className="text-xs text-muted-foreground">Apply plant points with up to 4 decimal places, or plant lifetime in whole minutes.</p>

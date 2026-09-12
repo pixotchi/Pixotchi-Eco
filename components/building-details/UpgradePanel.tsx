@@ -6,12 +6,11 @@ import { useAccount } from 'wagmi';
 import { useBuildingApproval } from '@/hooks/useBuildingApproval';
 import { ResourceValue } from '@/components/ui/resource-value';
 import { BuildingData, BuildingType } from '@/lib/types';
-import { formatTokenAmount, formatUpgradeDuration, calculateUpgradeProgress, calculateTimeLeft, getFriendlyErrorMessage } from '@/lib/utils';
+import { formatTokenAmount, formatUpgradeDuration, calculateUpgradeProgress, calculateTimeLeft } from '@/lib/utils';
 import BuildingUpgradeTransaction from '@/components/transactions/building-upgrade-transaction';
 import BuildingSpeedUpTransaction from '@/components/transactions/building-speedup-transaction';
 import DisabledTransaction from '@/components/transactions/disabled-transaction';
 import LeafApproveTransaction from '@/components/transactions/leaf-approve-transaction';
-import { toast } from 'react-hot-toast';
 import { InlineBalanceNotice } from '@/components/ui/premium';
 import { Button } from '@/components/ui/button';
 import { ResourceState } from '@/components/ui/resource-state';
@@ -108,7 +107,6 @@ export default function UpgradePanel({
 
                     onSeedApprovalSuccess();
                   }}
-                  onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                   buttonText={approval.active?.action === 'speedup' ? approval.active.label : allowancesReady ? 'Approve PIXOTCHI' : 'Approval status unavailable'}
                   disabled={approval.active?.settled || (!allowancesReady && !approval.active)}
                   buttonClassName="w-full"
@@ -121,7 +119,6 @@ export default function UpgradePanel({
               <LeafApproveTransaction
                 onStatusUpdate={approval.observe('upgrade', LEAF_CONTRACT_ADDRESS, 'Approve LEAF')}
                 onSuccess={() => {  onLeafApprovalSuccess(); }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={approval.active?.action === 'upgrade' ? approval.active.label : allowancesReady ? 'Approve LEAF' : 'Approval status unavailable'}
                 disabled={approval.active?.settled || (!allowancesReady && !approval.active)}
                 buttonClassName="w-full"
@@ -196,7 +193,6 @@ export default function UpgradePanel({
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`Speed Up (${formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI)`}
                 buttonClassName="w-full"
                 disabled={hasInsufficientPixotchi || !allowancesReady}
@@ -220,7 +216,6 @@ export default function UpgradePanel({
                   onUpgradeSuccess();
                   dispatchPostTransactionRefresh(['buildings:refresh']);
                 }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
                 buttonText={`Upgrade (${formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF)`}
                 buttonClassName="w-full"
                 disabled={hasInsufficientLeaf || needsLeafApproval || !allowancesReady}

@@ -43,13 +43,9 @@ import type {
   BuildingData,
   Land,
 } from "@/lib/types";
-import {
-  getFriendlyErrorMessage,
-} from "@/lib/utils";
 import { BarracksReportCard, type ReportMode } from './barracks-report';
 import { BarracksBattleTable as BattleReportTable } from './barracks-battle-table';
 import { TROOP_OPTIONS, getTroopOption, troopIdFromNumeric, troopNumericType, getTroopConfig, parsePositiveBigInt, parseOptionalBigInt, secondsUntil, formatRemaining, formatCooldownState, formatBarracksPoints, formatBarracksLifetime, formatDurationFromBigInt, formatQueueHint, formatPercentFromBps, getHomeDefenseBonusBps, formatLandLabel, formatCoordinates, getPreviewMessage } from '@/lib/barracks-view';
-import { toast } from "react-hot-toast";
 
 interface BarracksPanelV2Props {
   landId: bigint;
@@ -600,7 +596,6 @@ export default function BarracksPanelV2({
 
                   await refreshAfterSuccess();
                 }}
-                onError={(error) => toast.error(getFriendlyErrorMessage(error))}
               />
             )}
           </div>
@@ -741,7 +736,6 @@ export default function BarracksPanelV2({
 
                 await refreshAfterSuccess();
               }}
-              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
           )}
         </div>
@@ -951,7 +945,6 @@ export default function BarracksPanelV2({
                 setAttackPhalanx("");
                 await refreshAfterRaidSuccess();
               }}
-              onError={(error) => toast.error(getFriendlyErrorMessage(error))}
             />
         </div>
       )}

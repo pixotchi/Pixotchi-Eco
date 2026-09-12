@@ -199,10 +199,10 @@ function EditPlantName({
     scheduleAutoClose(submitted.session);
   };
 
-  const handleError = (error: UntypedValue) => {
+  const handleError = (error: UntypedValue, showNotification = true) => {
     if (submittedNameRef.current && !isCurrentSession(submittedNameRef.current.session)) return;
     console.error('Name change transaction failed:', error);
-    toast.error(error instanceof Error ? error.message : 'Failed to change plant name. Please try again.');
+    if (showNotification) toast.error(error instanceof Error ? error.message : 'Failed to change plant name. Please try again.');
     setIsTransactionPending(false);
   };
 
@@ -286,7 +286,7 @@ function EditPlantName({
                 ethAmount={ethQuote?.ethAmountWithBuffer ?? BigInt(0)}
                 minSeedOut={nameChangeCostWei}
                 onSuccess={handleSuccess}
-                onError={handleError}
+                onError={error => handleError(error, false)}
                 onButtonClick={handleTransactionStart}
                 buttonText={ethButtonText}
                 buttonClassName="w-full bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] hover:bg-[hsl(var(--success)/0.9)]"
@@ -337,7 +337,7 @@ function EditPlantName({
                 });
               }}
               onSuccess={handleSuccess}
-              onError={handleError}
+              onError={error => handleError(error, false)}
             />
           )}
           {usesEthPayment && ethBalanceKnown && !canAffordNameChange && ethQuote ? (

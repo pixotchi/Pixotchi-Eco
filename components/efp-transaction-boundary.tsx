@@ -27,7 +27,7 @@ import "ethereum-identity-kit/css";
 import {
   Transaction,
   TransactionButton,
-  TransactionStatus,
+  TransactionRecoveryFallback,
   getLifecycleTransactionProof,
   type LifecycleStatus,
 } from "@/components/transactions/transaction-kit";
@@ -727,7 +727,7 @@ function SafeEfpTransactionModal() {
             resetAfter={0}
           >
             <div className="space-y-4">
-              <TransactionStatus className="rounded-[var(--radius-control)] border border-border/70 bg-muted/35 px-3 py-2.5" />
+              <TransactionRecoveryFallback />
               <TransactionButton
                 render={({ context, isDisabled, onSubmit, status }) => {
                   const isCheckingOnly = context.status.statusName === "transactionUnresolved"

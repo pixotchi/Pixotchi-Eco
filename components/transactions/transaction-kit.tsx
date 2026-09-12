@@ -3,7 +3,7 @@ import { TransactionContext, getTransactionPhase, type LifecycleStatus, type Tra
 import { getExplorerHref } from './transaction-links';
 export { getTransactionPhase } from './transaction-context';
 export type { LifecycleStatus, TransactionPhase, TransactionProof } from './transaction-context';
-export { TransactionButton, TransactionStatus, TransactionToast, TransactionToastIcon, TransactionToastLabel, TransactionToastAction } from './transaction-controls';
+export { TransactionButton, TransactionStatus, TransactionToast, TransactionToastIcon, TransactionToastLabel, TransactionToastAction, TransactionRecoveryFallback } from './transaction-controls';
 export type { TransactionFeedbackMode } from './transaction-controls';
 import { getConfiguredPaymasterUrl } from '@/lib/paymaster-config';
 
