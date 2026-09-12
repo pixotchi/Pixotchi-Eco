@@ -1,4 +1,6 @@
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { decodeRedisJson } from '@/lib/redis-json';
 import { redis } from '@/lib/redis';
 import {
   BASE_API_LOCK_KEY,
@@ -79,6 +81,22 @@ export type PlantCareRunSummary = {
 };
 
 export type NotificationCampaignAudienceMode = 'all' | 'selected';
+
+const historyTime = z.string().refine(value => Number.isFinite(Date.parse(value)));
+const historyCount = z.number().int().nonnegative();
+const audienceHistorySchema: z.ZodType<BaseAudienceSnapshotMeta> = z.object({
+  id: z.string().min(1), provider: z.literal('base'), status: z.literal('completed'),
+  trigger: z.enum(['cron', 'admin']), startedAt: historyTime, completedAt: historyTime,
+  pagesFetched: historyCount, usersFetched: historyCount, uniqueAddresses: historyCount,
+});
+const plantCareHistorySchema: z.ZodType<PlantCareRunSummary> = z.object({
+  id: z.string().min(1), provider: z.enum(['base', 'neynar']), startedAt: historyTime, completedAt: historyTime,
+  dryRun: z.boolean(), totalRecipients: historyCount, notified: historyCount,
+  eligiblePlants: historyCount, elapsedMs: z.number().nonnegative(),
+  skippedNoAddress: historyCount.optional(), skippedNoDue: historyCount.optional(),
+  skippedThrottled: historyCount.optional(), skippedNotEnabled: historyCount.optional(),
+  debug: z.boolean().optional(), result: z.unknown().optional(),
+});
 
 export type NotificationCampaignMeta = {
   id: string;
@@ -341,13 +359,7 @@ export async function listBaseAudienceHistory(limit: number = 10): Promise<BaseA
   }
 
   return rows
-    .map((row) => {
-      try {
-        return JSON.parse(String(row)) as BaseAudienceSnapshotMeta;
-      } catch {
-        return null;
-      }
-    })
+    .map((row) => decodeRedisJson(row, audienceHistorySchema))
     .filter((row): row is BaseAudienceSnapshotMeta => row !== null);
 }
 
@@ -432,13 +444,7 @@ export async function getPlantCareStats(provider: NotificationProvider): Promise
 
   const recent = Array.isArray(recentRaw)
     ? recentRaw
-        .map((row) => {
-          try {
-            return JSON.parse(String(row)) as PlantCareRunSummary;
-          } catch {
-            return null;
-          }
-        })
+        .map((row) => decodeRedisJson(row, plantCareHistorySchema))
         .filter((row): row is PlantCareRunSummary => row !== null)
     : [];
 

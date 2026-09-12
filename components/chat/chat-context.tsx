@@ -1503,7 +1503,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }));
       if (!operation.isCurrent() || signal.aborted) return false;
       const response = await fetch(endpoint, {
-          body: JSON.stringify({ message: messageText }),
+          body: JSON.stringify({ message: messageText, requestId: optimisticId }),
           headers: {
             'Content-Type': 'application/json',
             ...authHeaders,

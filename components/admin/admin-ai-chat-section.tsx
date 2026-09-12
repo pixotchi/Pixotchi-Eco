@@ -218,7 +218,8 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
             <DollarSign className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Est. Cost</p>
-              <p className="text-2xl font-bold">${aiStats.costEstimate.toFixed(4)}</p>
+              <p className="text-2xl font-bold">{aiStats.costEstimate === null ? 'Unavailable' : `$${aiStats.costEstimate.toFixed(4)}`}</p>
+              {aiStats.costEstimate === null && <p className="text-xs text-muted-foreground">Check provider billing for actual spend.</p>}
             </div>
           </CardContent>
         </Card>

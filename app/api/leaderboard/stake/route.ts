@@ -8,9 +8,8 @@ export const dynamic = 'force-dynamic';
  * GET /api/leaderboard/stake
  * 
  * Returns the stake leaderboard with cached data.
- * Cache is warmed daily at midnight by cron job.
- * The response is cached by browsers/CDN for 24 hours; execution itself stays
- * dynamic because the service cache is warmed by the midnight cron.
+ * The service owns the shared 15-minute snapshot cache. Do not extend its
+ * lifetime with a second browser/CDN cache.
  */
 export async function GET() {
   try {
@@ -34,22 +33,20 @@ export async function GET() {
         totalStakers: serialized.length
       },
       {
-        // ✅ Add cache headers for browser/CDN (24 hours)
         headers: {
-          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+          'Cache-Control': 'no-store',
         }
       }
     );
-  } catch (error) {
-    console.error('❌ API: Error fetching stake leaderboard:', error);
+  } catch {
+    console.error('Stake leaderboard snapshot unavailable');
     
     return NextResponse.json(
       {
         success: false,
         error: 'Failed to fetch stake leaderboard',
-        details: error instanceof Error ? error.message : 'Unknown error'
       },
-      { status: 500 }
+      { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '30' } }
     );
   }
 }

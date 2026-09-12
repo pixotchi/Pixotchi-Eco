@@ -570,6 +570,33 @@ export function getVerifyWalletClaimKey(address: string): string {
   return `wallet_claims:${address.toLowerCase()}`;
 }
 
+/** Read both indexes before describing a reservation as a delivered claim. */
+export async function readVerifyWalletClaimState(
+  address: string,
+  client: VerifyClaimRedisClient | null = defaultRedisClient(),
+) {
+  const wallet = await readVerifyClaimJSON<Partial<VerifyClaimReservationRecord>>(getVerifyWalletClaimKey(address), client);
+  if (wallet.status === 'unavailable') throw new Error('Verify claim status is unavailable');
+  const record = wallet.status === 'ok' ? wallet.value : null;
+  const claim = typeof record?.verificationToken === 'string'
+    ? await readVerifyClaimJSON(getVerifyClaimKey(record.verificationToken), client)
+    : { status: 'missing' as const };
+  if (claim.status === 'unavailable') throw new Error('Verify claim status is unavailable');
+  const claimState = getVerifyClaimPairState(claim.status === 'ok' ? claim.value : null, record);
+  return {
+    claimed: claimState === 'complete',
+    claimState,
+    retryable: claimState === 'retryable',
+    blocksNewClaim: claimState !== 'unclaimed' && claimState !== 'retryable',
+    claimData: record ? {
+      status: record.status,
+      strainId: record.strainId,
+      timestamp: record.timestamp,
+      tokenId: record.tokenId,
+    } : null,
+  };
+}
+
 export function getVerifyClaimLockKey(token: string): string {
   return `claim_lock:${token}`;
 }

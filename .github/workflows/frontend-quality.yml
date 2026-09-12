@@ -83,6 +83,7 @@ jobs:
       - run: npm run remediation:smoke
       - run: npm run remediation:redis:smoke
       - run: npm run audit:regressions
+      - run: npm run audit:fixes:smoke
       - run: npm run contracts:check
       - run: npx playwright install --with-deps chromium --only-shell
       - run: npm run gameplay-guards:smoke

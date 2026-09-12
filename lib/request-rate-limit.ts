@@ -68,6 +68,7 @@ export async function enforceRateLimit(
 
     if (hits !== null && hits > rule.limit) {
       retryAfterSeconds = Math.max(retryAfterSeconds, rule.windowSeconds);
+      break; // Rejected traffic must not consume a later shared/global budget.
     }
   }
 

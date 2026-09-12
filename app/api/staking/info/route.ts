@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStakeComposite } from '@/lib/contracts';
+import { isAddress } from 'viem';
+import { enforcePublicReadLimit } from '@/lib/public-read-limit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,14 +16,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate address format
-    if (!address.startsWith('0x') || address.length !== 42) {
+    if (!isAddress(address)) {
       return NextResponse.json(
         { success: false, error: 'Invalid address format' },
         { status: 400 }
       );
     }
 
-    const stakingData = await getStakeComposite(address);
+    const limited = await enforcePublicReadLimit(request, 5);
+    if (limited) return limited;
+    const stakingData = await getStakeComposite(address.toLowerCase());
 
     // Convert bigint values to strings for JSON serialization
     const responseData = {
@@ -40,7 +44,7 @@ export async function GET(request: NextRequest) {
       totalStaked: stakingData.totalStaked ? stakingData.totalStaked.toString() : null
     };
 
-    return NextResponse.json(responseData);
+    return NextResponse.json(responseData, { headers: { 'Cache-Control': 'no-store' } });
 
   } catch {
     console.error('❌ Error fetching staking info');

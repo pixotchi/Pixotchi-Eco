@@ -20,7 +20,7 @@ export function parseAdminAiSnapshot(value: unknown): { conversations: AIConvers
   let stats: AIUsageStats | null = null;
   if (data.stats != null) {
     const item = record(data.stats);
-    if (!item || !count(item.totalConversations) || !count(item.totalMessages) || !count(item.totalTokens) || !count(item.dailyUsage) || !count(item.costEstimate)) return null;
+    if (!item || !count(item.totalConversations) || !count(item.totalMessages) || !count(item.totalTokens) || !count(item.dailyUsage) || (item.costEstimate !== null && !count(item.costEstimate))) return null;
     stats = { totalConversations: item.totalConversations, totalMessages: item.totalMessages, totalTokens: item.totalTokens, dailyUsage: item.dailyUsage, costEstimate: item.costEstimate };
   }
   return { conversations, stats };

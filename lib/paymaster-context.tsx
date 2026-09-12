@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, useContext, ReactNode } from "react";
+import { getConfiguredPaymasterUrl } from './paymaster-config';
 
 interface PaymasterContextType {
   isPaymasterEnabled: boolean;
+  /** Requests optional sponsorship; never use this to waive a gas reserve. */
   isSponsored: boolean;
 }
 
@@ -16,8 +18,7 @@ const PaymasterContext = createContext<PaymasterContextType | undefined>(undefin
 const IS_PAYMASTER_ENABLED = process.env.NEXT_PUBLIC_PAYMASTER_ENABLED === 'true';
 const PAYMASTER_CONTEXT_VALUE = Object.freeze({
   isPaymasterEnabled: IS_PAYMASTER_ENABLED,
-  // For CDP integration, we primarily need the CDP API key
-  isSponsored: IS_PAYMASTER_ENABLED && Boolean(process.env.NEXT_PUBLIC_CDP_CLIENT_API_KEY),
+  isSponsored: IS_PAYMASTER_ENABLED && Boolean(getConfiguredPaymasterUrl()),
 });
 
 export function PaymasterProvider({ children }: { children: ReactNode }) {
@@ -35,4 +36,4 @@ export function usePaymaster() {
     throw new Error('usePaymaster must be used within a PaymasterProvider');
   }
   return context;
-} 
+}

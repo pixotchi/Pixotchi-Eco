@@ -1,6 +1,7 @@
 import { redis } from './redis';
 import { nanoid } from 'nanoid';
-import { ChatMessage, ChatRateLimit, ChatStats, AdminChatMessage } from './types';
+import { ChatMessage, ChatStats, AdminChatMessage } from './types';
+import { ChatAdmissionError, STORE_PUBLIC_CHAT_MESSAGE_LUA, DELETE_PUBLIC_CHAT_MESSAGE_LUA } from './chat-message-admission';
 import { resolvePrimaryName } from './ens-resolver';
 import { ADDRESS_TRUNCATION } from './constants';
 import { withPrefix } from './redis';
@@ -103,9 +104,24 @@ async function backfillChatMessageIndex(): Promise<void> {
   const legacyKeys = await scanChatKeys('chat:messages:*');
   if (legacyKeys.length === 0) return;
 
+  const stableTimestamps = new Map<string, number>();
+  const stableKeys = legacyKeys.filter(key => /(?:^|:)chat:messages:v2:/.test(key));
+  for (let i = 0; i < stableKeys.length; i += 100) {
+    const batch = stableKeys.slice(i, i + 100);
+    const values = await redis.mget(...batch);
+    values.forEach((raw, index) => {
+      try {
+        const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (row && typeof row === 'object' && 'timestamp' in row && typeof row.timestamp === 'number') {
+          stableTimestamps.set(batch[index], row.timestamp);
+        }
+      } catch { /* Invalid/expired records cannot be added to the index. */ }
+    });
+  }
+
   const pipeline = redis.pipeline();
   for (const key of legacyKeys) {
-    const timestamp = extractChatMessageTimestamp(key);
+    const timestamp = stableTimestamps.get(key) ?? extractChatMessageTimestamp(key);
     if (!Number.isFinite(timestamp) || timestamp <= 0) continue;
     pipeline.zadd(CHAT_MESSAGE_INDEX_KEY, { score: timestamp, member: key });
   }
@@ -172,13 +188,13 @@ export function formatDisplayName(address: string): string {
 }
 
 // Store a new chat message
-export async function storeMessage(address: string, message: string): Promise<ChatMessage> {
+export async function storeMessage(address: string, message: string, requestId?: string): Promise<ChatMessage> {
   if (!redis) {
     throw new Error('Redis client not available');
   }
 
-  const messageId = nanoid();
-  const timestamp = Date.now();
+  if (requestId && !/^[a-zA-Z0-9_-]{16,80}$/.test(requestId)) throw new Error('Invalid message ID');
+  const messageId = requestId || nanoid();
 
   let displayName = formatDisplayName(address);
   try {
@@ -190,6 +206,8 @@ export async function storeMessage(address: string, message: string): Promise<Ch
     console.warn('Failed to resolve display name', { address, error });
   }
 
+  // Take time after optional name lookup so a slow lookup cannot age the cooldown.
+  const timestamp = Date.now();
   const chatMessage: ChatMessage = {
     id: messageId,
     address: address.toLowerCase(),
@@ -198,15 +216,18 @@ export async function storeMessage(address: string, message: string): Promise<Ch
     displayName,
   };
 
-  // Store message with TTL
-  const messageKey = `chat:messages:${timestamp}:${messageId}`;
-  const pipeline = redis.pipeline();
-  pipeline.set(messageKey, JSON.stringify(chatMessage), { ex: CHAT_MESSAGE_TTL });
-  pipeline.zadd(CHAT_MESSAGE_INDEX_KEY, { score: timestamp, member: messageKey });
-  pipeline.zremrangebyscore(CHAT_MESSAGE_INDEX_KEY, '-inf', timestamp - (CHAT_MESSAGE_TTL * 1000));
-  await pipeline.exec();
-
-  return chatMessage;
+  // Stable per-wallet key permits transport retries without a second message.
+  const messageKey = `chat:messages:v2:${address.toLowerCase()}:${messageId}`;
+  const result = await redis.eval<[number, string, number, number, number, number], [number, string | ChatMessage]>(STORE_PUBLIC_CHAT_MESSAGE_LUA, [
+    messageKey, CHAT_MESSAGE_INDEX_KEY, `chat:ratelimit:${address.toLowerCase()}`,
+    `chat:spam:${createMessageHash(message)}`,
+  ], [timestamp, JSON.stringify(chatMessage), RATE_LIMIT_WINDOW * 1000,
+    CHAT_MESSAGE_TTL, RATE_LIMIT_TTL, SPAM_DETECTION_TTL]);
+  if (result[0] === -1) throw new ChatAdmissionError('cooldown');
+  if (result[0] === -2) throw new ChatAdmissionError('duplicate');
+  if (result[0] === -3) throw new ChatAdmissionError('idempotency_conflict');
+  if (result[0] !== 1 || !result[1]) throw new Error('Chat persistence was not confirmed');
+  return typeof result[1] === 'string' ? JSON.parse(result[1]) as ChatMessage : result[1];
 }
 
 // Get recent messages (last 24 hours)
@@ -221,113 +242,6 @@ export async function getRecentMessages(limit: number = 50): Promise<ChatMessage
 
   // Sort by timestamp (ascending for display)
   return messages.sort((a, b) => a.timestamp - b.timestamp);
-}
-
-// Check rate limit for a user
-export async function checkRateLimit(address: string): Promise<boolean> {
-  if (!redis) {
-    return true; // Allow if Redis is not available
-  }
-
-  const rateLimitKey = `chat:ratelimit:${address.toLowerCase()}`;
-  const rateLimitData = await redis.get(rateLimitKey);
-
-  if (!rateLimitData) return true;
-
-  try {
-    let parsedData: ChatRateLimit;
-
-    if (typeof rateLimitData === 'object' && rateLimitData !== null) {
-      // If Redis returns an object directly, use it
-      parsedData = rateLimitData as ChatRateLimit;
-    } else if (typeof rateLimitData === 'string') {
-      // If Redis returns a string, parse it
-      parsedData = JSON.parse(rateLimitData);
-    } else {
-      // If it's something else, try to convert and parse
-      const dataString = String(rateLimitData);
-      parsedData = JSON.parse(dataString);
-    }
-
-    const now = Date.now();
-    return (now - parsedData.lastMessage) >= (RATE_LIMIT_WINDOW * 1000);
-
-  } catch (error) {
-    console.error('Error in checkRateLimit:', error);
-    console.error('Rate limit key:', rateLimitKey);
-    return true;
-  }
-}
-
-// Update rate limit for a user
-export async function updateRateLimit(address: string): Promise<void> {
-  if (!redis) {
-    return; // Skip if Redis is not available
-  }
-
-  const rateLimitKey = `chat:ratelimit:${address.toLowerCase()}`;
-  const now = Date.now();
-
-  const rateLimitData: ChatRateLimit = {
-    lastMessage: now,
-    messageCount: 1
-  };
-
-  await redis.set(rateLimitKey, JSON.stringify(rateLimitData), { ex: RATE_LIMIT_TTL });
-}
-
-// Check for spam (duplicate messages)
-export async function checkSpam(message: string, address: string): Promise<boolean> {
-  if (!redis) {
-    return false; // Allow if Redis is not available
-  }
-
-  const messageHash = createMessageHash(message);
-  const spamKey = `chat:spam:${messageHash}`;
-  const spamData = await redis.get(spamKey);
-
-  if (!spamData) {
-    // First time seeing this message, store it
-    await redis.set(spamKey, JSON.stringify({
-      count: 1,
-      addresses: [address.toLowerCase()]
-    }), { ex: SPAM_DETECTION_TTL });
-    return false;
-  }
-
-  try {
-    let spamInfo;
-    if (typeof spamData === 'object' && spamData !== null) {
-      spamInfo = spamData;
-    } else if (typeof spamData === 'string') {
-      spamInfo = JSON.parse(spamData);
-    } else {
-      const dataString = String(spamData);
-      spamInfo = JSON.parse(dataString);
-    }
-    const { count, addresses } = spamInfo;
-
-    // If same user is sending identical message within window, it's spam
-    if (addresses.includes(address.toLowerCase())) {
-      return true;
-    }
-
-    // If too many different users sending same message, it might be spam
-    if (count >= 3) {
-      return true;
-    }
-
-    // Update spam tracking
-    await redis.set(spamKey, JSON.stringify({
-      count: count + 1,
-      addresses: [...addresses, address.toLowerCase()]
-    }), { ex: SPAM_DETECTION_TTL });
-
-    return false;
-  } catch (error) {
-    console.error('Error parsing spam data:', error);
-    return false;
-  }
 }
 
 // Validate message content
@@ -409,10 +323,24 @@ export async function deleteMessage(messageId: string, timestamp: number): Promi
     return false;
   }
 
-  const key = `chat:messages:${timestamp}:${messageId}`;
-  const deleted = await redis.del(key);
-  await redis.zrem(CHAT_MESSAGE_INDEX_KEY, key);
-  return Number(deleted) > 0;
+  if (typeof messageId !== 'string' || !Number.isSafeInteger(timestamp) || timestamp <= 0) return false;
+  const legacyKey = `chat:messages:${timestamp}:${messageId}`;
+  const indexed = await redis.zrange(CHAT_MESSAGE_INDEX_KEY, timestamp, timestamp, { byScore: true }) as string[];
+  const candidates = Array.from(new Set([legacyKey, withPrefix(legacyKey), ...indexed]))
+    .filter(key => key.endsWith(`:${messageId}`));
+  const values = await redis.mget(...candidates);
+  const matches = candidates.filter((_, index) => {
+    try {
+      const value = values[index];
+      const message = typeof value === 'string' ? JSON.parse(value) : value;
+      return message?.id === messageId && message?.timestamp === timestamp;
+    } catch { return false; }
+  });
+  // The legacy admin API identifies messages by ID + time. Refuse ambiguity
+  // between wallets rather than deleting a different user's message.
+  if (matches.length !== 1) return false;
+  return Number(await redis.eval(DELETE_PUBLIC_CHAT_MESSAGE_LUA,
+    [matches[0], CHAT_MESSAGE_INDEX_KEY], [messageId, timestamp])) === 1;
 }
 
 // Delete all messages

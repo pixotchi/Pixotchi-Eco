@@ -15,6 +15,53 @@ async function main() {
     const { getBaseReadClient } = await import('../lib/base-rpc');
     const user = `0x${'1'.repeat(40)}`;
     const other = `0x${'2'.repeat(40)}`;
+    // F03: execute the production script against real Redis under contention.
+    const { STORE_PUBLIC_CHAT_MESSAGE_LUA } = await import('../lib/chat-message-admission');
+    const chatIndex = `${db.prefix}chat:index`;
+    const chatSpam = `${db.prefix}chat:spam`;
+    const now = Date.now();
+    const admitChat = (id: string, actor = user, timestamp = now, message = 'hello growers') => db.raw([
+      'EVAL', STORE_PUBLIC_CHAT_MESSAGE_LUA, 4,
+      `${db.prefix}chat:message:${id}`, chatIndex, `${db.prefix}chat:rate:${actor}`, chatSpam,
+      timestamp, JSON.stringify({ id, address: actor, message, timestamp }), 3000, 86400, 3600, 30,
+    ]) as Promise<[number, string]>;
+    const parallelChat = await Promise.all(Array.from({ length: 16 }, (_, i) => admitChat(`parallel-${i}`)));
+    assert.equal(parallelChat.filter(result => result[0] === 1).length, 1, 'Only one concurrent message passes admission');
+    assert.equal(await db.raw(['ZCARD', chatIndex]), 1);
+    const winningIndex = parallelChat.findIndex(result => result[0] === 1);
+    const retries = await Promise.all(Array.from({ length: 8 }, () => admitChat(`parallel-${winningIndex}`)));
+    assert.ok(retries.every(result => result[0] === 1 && result[1] === parallelChat[winningIndex][1]), 'Transport retries return the original stored message');
+    assert.equal(await db.raw(['ZCARD', chatIndex]), 1);
+    assert.equal((await admitChat(`parallel-${winningIndex}`, user, now, 'different message'))[0], -3);
+    assert.equal((await admitChat('duplicate-after-cooldown', user, now + 4000))[0], -2);
+    const spamContenders = await Promise.all(Array.from({ length: 12 }, (_, i) => admitChat(`actor-${i}`, `actor-${i}`)));
+    assert.equal(spamContenders.filter(result => result[0] === 1).length, 2, 'At most three wallets can post the same text in the spam window');
+    const corruptedIndex = `${db.prefix}chat:corrupt-index`;
+    await db.raw(['SET', corruptedIndex, 'wrong-type']);
+    await assert.rejects(db.raw(['EVAL', STORE_PUBLIC_CHAT_MESSAGE_LUA, 4,
+      `${db.prefix}chat:rejected`, corruptedIndex, `${db.prefix}chat:rejected-rate`, `${db.prefix}chat:rejected-spam`,
+      now, JSON.stringify({ address: user, message: 'different', timestamp: now }), 3000, 86400, 3600, 30,
+    ]), /Invalid chat storage type/);
+    assert.equal(await db.raw(['EXISTS', `${db.prefix}chat:rejected`, `${db.prefix}chat:rejected-rate`, `${db.prefix}chat:rejected-spam`]), 0, 'A storage failure consumes neither admission nor message writes');
+    const { loadSource } = await import('./helpers/load-source.mjs');
+    const redisModule = await import('../lib/redis');
+    const chat = await loadSource('lib/chat-service.ts', {
+      './redis': { redis: redisModule.redis, withPrefix: redisModule.withPrefix },
+      './ens-resolver': { resolvePrimaryName: async () => 'fixture.eth' },
+    });
+    const chatRequestId = randomUUID();
+    const chatText = `fixture ${chatRequestId}`;
+    const storedChat = await chat.storeMessage(user, chatText, chatRequestId);
+    assert.deepEqual(await chat.storeMessage(user, chatText, chatRequestId), storedChat);
+    assert.ok((await chat.getRecentMessages()).some((row: { id: string }) => row.id === chatRequestId));
+    await db.raw(['ZREM', 'chat:messages:index', `chat:messages:v2:${user}:${chatRequestId}`]);
+    assert.ok((await chat.getRecentMessages()).some((row: { id: string }) => row.id === chatRequestId), 'Stable keys can rebuild a missing index');
+    assert.equal(await chat.deleteMessage(chatRequestId, storedChat.timestamp), true, 'Admin deletion supports the new stable key');
+    assert.equal(await db.raw(['EXISTS', `chat:messages:v2:${user}:${chatRequestId}`]), 0);
+    const legacyChatKey = `chat:messages:${now}:${chatRequestId}`;
+    await db.raw(['SET', legacyChatKey, JSON.stringify({ ...storedChat, timestamp: now })]);
+    assert.equal(await chat.deleteMessage(chatRequestId, now), true, 'Legacy messages remain deletable without an index');
+    await db.raw(['DEL', `chat:ratelimit:${user}`, `chat:spam:${Buffer.from(chatText.toLowerCase().trim()).toString('base64')}`]);
     const req = (id?: string) => new NextRequest('http://localhost:3000/api/chat', { headers: id ? { cookie: `pixotchi_chat_session=${id}` } : {} });
     const identity = { address: user, provider: 'base', method: 'base-siwe' } as const;
     const created = await auth.createChatSessionResponse(req(), identity);
@@ -120,6 +167,25 @@ async function main() {
     assert.equal(upstream, 1, 'Quota outage does not make provider calls');
     db.setInterceptor();
     const ai = await import('../lib/ai-service');
+    const { generateText, wrapLanguageModel } = await import('ai');
+    const { AIProviderBudget, estimateAIInputAllowance, AI_DEFAULT_REQUEST_RESERVATION_TOKENS } = await import('../lib/ai-provider-budget');
+    const { READ_ONLY_AGENT_SYSTEM_PROMPT } = await import('../lib/ai-context');
+    const { createReadOnlyAITools, createReadOnlyAIToolsContext } = await import('../lib/ai-read-tools');
+    let initialPromptAllowance = 0;
+    const fixtureModel = {
+      specificationVersion: 'v4' as const, provider: 'fixture', modelId: 'fixture', supportedUrls: {},
+      doGenerate: async (params: Parameters<typeof estimateAIInputAllowance>[0]) => {
+        initialPromptAllowance = estimateAIInputAllowance(params);
+        return { content: [{ type: 'text' as const, text: 'fixture' }], finishReason: { unified: 'stop' as const, raw: 'stop' },
+          usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } }, warnings: [] };
+      },
+      doStream: async () => { throw new Error('Unused fixture stream'); },
+    };
+    const promptTools = createReadOnlyAITools();
+    await generateText({ model: wrapLanguageModel({ model: fixtureModel, middleware: new AIProviderBudget(AI_DEFAULT_REQUEST_RESERVATION_TOKENS).middleware }),
+      instructions: READ_ONLY_AGENT_SYSTEM_PROMPT, prompt: 'How do I care for my plants?', tools: promptTools,
+      toolsContext: createReadOnlyAIToolsContext({ userAddress: user }, promptTools), maxOutputTokens: 4096, maxRetries: 0 });
+    assert.ok(initialPromptAllowance > 0 && initialPromptAllowance + 4096 <= AI_DEFAULT_REQUEST_RESERVATION_TOKENS, 'The full production prompt and tool schemas fit the normal reservation');
     const aiAddress = `0x${randomUUID().replaceAll('-', '').padEnd(40, '0')}`;
     const conversations = await Promise.all(Array.from({ length: 16 }, () => ai.getOrCreateConversation(aiAddress, 'Hello')));
     assert.equal(new Set(conversations).size, 1, 'Concurrent first requests create exactly one conversation');

@@ -1,5 +1,6 @@
 import type { Connection, SignatureResult } from '@solana/web3.js';
 import { PublicKey } from '@solana/web3.js';
+import { abortable } from './abortable';
 import {
   encodeAbiParameters,
   getAddress,
@@ -296,71 +297,80 @@ export async function confirmSolanaTransaction(
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? BRIDGE_CONFIG.solanaConfirmationTimeoutMs;
   const pollMs = options.pollMs ?? BRIDGE_CONFIG.solanaConfirmationPollMs;
-  options.onPhase?.('solana-confirming');
-
-  try {
-    const confirmation = options.blockhash && options.lastValidBlockHeight !== undefined
-      ? await connection.confirmTransaction(
-          {
-            signature,
-            blockhash: options.blockhash,
-            lastValidBlockHeight: options.lastValidBlockHeight,
-          },
-          'confirmed',
-        )
-      : await connection.confirmTransaction(signature, 'confirmed');
-    assertSuccessfulSignatureResult(signature, confirmation.value);
-    options.onPhase?.('solana-confirmed');
-    return;
-  } catch (error) {
-    if (error instanceof SolanaTransactionExecutionError) throw error;
-    const reportedExpired = (
-      error instanceof SolanaTransactionExpiredError ||
-      (error instanceof Error && /block height exceeded|expired/i.test(error.message))
-    );
-    if (reportedExpired) {
-      const expiry = await resolveDefinitiveSolanaExpiry(connection, signature, options);
-      if (expiry === 'confirmed') {
-        options.onPhase?.('solana-confirmed');
-        return;
-      }
-      if (expiry === 'expired') throw new SolanaTransactionExpiredError(signature);
-    }
-  }
-
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const statuses = await connection.getSignatureStatuses([signature], {
-      searchTransactionHistory: true,
-    });
-    const status = statuses.value[0];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new SolanaConfirmationTimeoutError(signature)), timeoutMs);
+  const withinDeadline = <T>(work: Promise<T>) => abortable(work, controller.signal);
+  try {
+    options.onPhase?.('solana-confirming');
 
-    if (status?.err !== null && status?.err !== undefined) {
-      throw new SolanaTransactionExecutionError(signature, status.err);
-    }
-
-    if (isConfirmedSignatureStatus(signature, status)) {
+    try {
+      const confirmation = options.blockhash && options.lastValidBlockHeight !== undefined
+        ? await withinDeadline(connection.confirmTransaction(
+            {
+              signature,
+              blockhash: options.blockhash,
+              lastValidBlockHeight: options.lastValidBlockHeight,
+              abortSignal: controller.signal,
+            },
+            'confirmed',
+          ))
+        : await withinDeadline(connection.confirmTransaction(signature, 'confirmed'));
+      assertSuccessfulSignatureResult(signature, confirmation.value);
       options.onPhase?.('solana-confirmed');
       return;
+    } catch (error) {
+      if (controller.signal.aborted) throw controller.signal.reason;
+      if (error instanceof SolanaTransactionExecutionError) throw error;
+      const reportedExpired = (
+        error instanceof SolanaTransactionExpiredError ||
+        (error instanceof Error && /block height exceeded|expired/i.test(error.message))
+      );
+      if (reportedExpired) {
+        const expiry = await withinDeadline(resolveDefinitiveSolanaExpiry(connection, signature, options));
+        if (expiry === 'confirmed') {
+          options.onPhase?.('solana-confirmed');
+          return;
+        }
+        if (expiry === 'expired') throw new SolanaTransactionExpiredError(signature);
+      }
     }
 
-    if (
-      options.lastValidBlockHeight !== undefined &&
-      connection.getBlockHeight &&
-      (await connection.getBlockHeight('finalized')) > options.lastValidBlockHeight
-    ) {
-      const expiry = await resolveDefinitiveSolanaExpiry(connection, signature, options);
-      if (expiry === 'confirmed') {
+    while (Date.now() < deadline) {
+      const statuses = await withinDeadline(connection.getSignatureStatuses([signature], {
+        searchTransactionHistory: true,
+      }));
+      const status = statuses.value[0];
+
+      if (status?.err !== null && status?.err !== undefined) {
+        throw new SolanaTransactionExecutionError(signature, status.err);
+      }
+
+      if (isConfirmedSignatureStatus(signature, status)) {
         options.onPhase?.('solana-confirmed');
         return;
       }
-      if (expiry === 'expired') throw new SolanaTransactionExpiredError(signature);
+
+      if (
+        options.lastValidBlockHeight !== undefined &&
+        connection.getBlockHeight &&
+        (await withinDeadline(connection.getBlockHeight('finalized'))) > options.lastValidBlockHeight
+      ) {
+        const expiry = await withinDeadline(resolveDefinitiveSolanaExpiry(connection, signature, options));
+        if (expiry === 'confirmed') {
+          options.onPhase?.('solana-confirmed');
+          return;
+        }
+        if (expiry === 'expired') throw new SolanaTransactionExpiredError(signature);
+      }
+
+      await withinDeadline(delay(Math.min(pollMs, Math.max(0, deadline - Date.now()))));
     }
 
-    await delay(Math.min(pollMs, Math.max(0, deadline - Date.now())));
+    throw new SolanaConfirmationTimeoutError(signature);
+  } finally {
+    clearTimeout(timer);
   }
-
-  throw new SolanaConfirmationTimeoutError(signature);
 }
 
 interface DecodedCall {

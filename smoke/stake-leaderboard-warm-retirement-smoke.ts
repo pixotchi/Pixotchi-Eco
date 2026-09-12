@@ -18,9 +18,9 @@ assert.equal(
 
 const stakeService = projectFile('lib/stake-leaderboard-service.ts');
 assert.match(stakeService, /const CACHE_TTL = 15 \* 60/);
-assert.match(stakeService, /const cached = await redis\.get\(CACHE_KEY\)/);
-assert.match(stakeService, /const allStakers = await getAllStakersFromContract\(readClient\)/);
-assert.match(stakeService, /await redis\.setex\(CACHE_KEY, CACHE_TTL, serialized\)/);
+assert.match(stakeService, /parseCachedStakeLeaderboard\(await redis\.get\(CACHE_KEY\)\)/);
+assert.match(stakeService, /await readStakeLeaderboard\(readClient, STAKE_CONTRACT_ADDRESS\)/);
+assert.match(stakeService, /await redis\.setex\(CACHE_KEY, CACHE_TTL,/);
 
 const vercelConfig = JSON.parse(projectFile('vercel.json')) as {
   crons?: Array<{ path?: string }>;

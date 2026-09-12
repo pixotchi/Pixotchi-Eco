@@ -131,6 +131,10 @@ export default function StatusBar({
   const balanceErrorMessage = balanceError instanceof Error
     ? balanceError.message
     : typeof balanceError === 'string' ? balanceError : null;
+  const tokenBalancesUnavailable = !loading
+    && seedBalanceStatus === 'error'
+    && pixotchiBalanceStatus === 'error'
+    && (isSolana || leafBalanceStatus === 'error');
   const retryBalances = () => {
     void Promise.allSettled([
       refreshBalances(),
@@ -229,38 +233,44 @@ export default function StatusBar({
         <div className={isHeaderPlacement ? "flex w-full min-w-0 items-center justify-start gap-3" : "flex w-full min-w-0 items-center justify-between gap-2 max-sm:gap-1 xl:justify-start"}>
           <div tabIndex={0} className={cn("app-status-scroll flex min-w-0 items-center gap-2 rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring", !isHeaderPlacement && "flex-1 sm:gap-3")} role="group" aria-label="Token balances">
             {/* SOL balance - only for Solana users */}
-            {isSolana && (
+            {isSolana && (!tokenBalancesUnavailable || !solanaError || solanaLoading) && (
               <div className={balanceItemClassName}>
                 <Image src="/icons/solana.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                 <span className="sr-only">SOL balance </span>
                 <span className={balanceTextClassName}>{solText}</span>
               </div>
             )}
-            {showEthBalance && (
+            {showEthBalance && (!tokenBalancesUnavailable || !ethError || ethLoading) && (
               <div className={balanceItemClassName}>
                 <Image src="/icons/ethlogo.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                 <span className="sr-only">ETH balance </span>
                 <span className={balanceTextClassName}>{ethText}</span>
               </div>
             )}
-            <div className={balanceItemClassName}>
-              <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
-              <span className="sr-only">SEED balance </span>
-              <span className={balanceTextClassName}>{seedText}</span>
-            </div>
-            {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
-            {!isSolana && (
-              <div className={balanceItemClassName}>
-                <Image src="/icons/leaf.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
-                <span className="sr-only">LEAF balance </span>
-                <span className={balanceTextClassName}>{leafText}</span>
-              </div>
+            {tokenBalancesUnavailable ? (
+              <span className={balanceTextClassName} role="status">Balances unavailable</span>
+            ) : (
+              <>
+                <div className={balanceItemClassName}>
+                  <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                  <span className="sr-only">SEED balance </span>
+                  <span className={balanceTextClassName}>{seedText}</span>
+                </div>
+                {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
+                {!isSolana && (
+                  <div className={balanceItemClassName}>
+                    <Image src="/icons/leaf.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                    <span className="sr-only">LEAF balance </span>
+                    <span className={balanceTextClassName}>{leafText}</span>
+                  </div>
+                )}
+                <div className={balanceItemClassName}>
+                  <Image src="/icons/cc.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
+                  <span className="sr-only">PIXOTCHI balance </span>
+                  <span className={balanceTextClassName}>{pixotchiText}</span>
+                </div>
+              </>
             )}
-            <div className={balanceItemClassName}>
-              <Image src="/icons/cc.png" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
-              <span className="sr-only">PIXOTCHI balance </span>
-              <span className={balanceTextClassName}>{pixotchiText}</span>
-            </div>
           </div>
           <div className={isHeaderPlacement ? "h-5 w-px bg-[hsl(var(--divider)/0.72)]" : "hidden h-5 w-px bg-[hsl(var(--divider)/0.72)] xl:block"} aria-hidden="true" />
           <div data-status-actions className="flex shrink-0 items-center gap-1.5 max-sm:gap-1">

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  checkRateLimit,
-  checkSpam,
   storeMessage,
-  updateRateLimit,
   validateMessage,
 } from '@/lib/chat-service';
+import { ChatAdmissionError } from '@/lib/chat-message-admission';
 import {
   ChatAuthError,
   createChatAuthRequiredResponse,
@@ -30,6 +28,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const message = typeof body?.message === 'string' ? body.message : '';
+    const requestId = body?.requestId;
+    if (requestId !== undefined && (typeof requestId !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(requestId))) {
+      return NextResponse.json({ error: 'Invalid message ID' }, { status: 400 });
+    }
     const senderAddress = session.address;
 
     if (!message.trim()) {
@@ -79,53 +81,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const canSend = await checkRateLimit(senderAddress);
-    if (!canSend) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please wait before sending another message.' },
-        {
-          headers: {
-            'Cache-Control': 'private, no-store',
-          },
-          status: 429,
-        },
-      );
-    }
-
-    const isSpam = await checkSpam(message, senderAddress);
-    if (isSpam) {
-      return NextResponse.json(
-        { error: 'Duplicate or spam message detected' },
-        {
-          headers: {
-            'Cache-Control': 'private, no-store',
-          },
-          status: 429,
-        },
-      );
-    }
-
     let chatMessage;
     try {
-      chatMessage = await storeMessage(senderAddress, message);
+      chatMessage = await storeMessage(senderAddress, message, requestId);
     } catch (error) {
+      if (error instanceof ChatAdmissionError) {
+        return NextResponse.json({ error: error.message }, {
+          status: error.reason === 'idempotency_conflict' ? 409 : 429,
+          headers: { 'Cache-Control': 'private, no-store' },
+        });
+      }
       console.error('Public chat message storage failed:', error);
       return createChatUnavailableResponse('Failed to store message.');
-    }
-
-    try {
-      const updatePromise = updateRateLimit(senderAddress);
-      let timeoutId: NodeJS.Timeout | null = null;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Rate limit update timeout')), 3000);
-      });
-
-      await Promise.race([updatePromise, timeoutPromise]);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    } catch (error) {
-      console.error('Public chat rate limit update failed:', error);
     }
 
     const gamificationPolicy = getGamificationPolicy();

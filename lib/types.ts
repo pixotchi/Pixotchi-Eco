@@ -725,7 +725,8 @@ export type AIUsageStats = {
   totalMessages: number;
   totalTokens: number;
   dailyUsage: number;
-  costEstimate: number;
+  /** Null when historical provider billing/pricing data is unavailable. */
+  costEstimate: number | null;
   continuationCount?: number;
   lengthFinishCount?: number;
   recoveredFromLengthCount?: number;

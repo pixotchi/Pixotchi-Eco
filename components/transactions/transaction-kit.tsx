@@ -1,4 +1,5 @@
 "use client";
+import { getConfiguredPaymasterUrl } from '@/lib/paymaster-config';
 
 import { monitorSubmittedBatch, throwIfMonitoringAborted, withMonitoringAbort, waitForMonitorDelay } from "@/lib/transaction-monitor";
 import { parseWalletBatchStatus, parseWalletCallsId, getBatchTransactionHashes, hasWalletBatchResolution, type WalletBatchStatus } from "@/lib/wallet-batch-status";
@@ -1155,10 +1156,7 @@ export function Transaction({
           )
           && (requiresAtomicBundle || isSponsored || isSmartWallet)
         );
-      const paymasterUrl =
-        process.env.NEXT_PUBLIC_CDP_PAYMASTER_URL
-        || process.env.NEXT_PUBLIC_PAYMASTER_SERVICE_URL
-        || undefined;
+      const paymasterUrl = getConfiguredPaymasterUrl();
       const mergedCapabilities = {
         ...(capabilitiesRef.current || {}),
         ...(

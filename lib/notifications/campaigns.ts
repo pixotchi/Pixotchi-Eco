@@ -191,6 +191,7 @@ export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
     throw new Error('Base notifications API is busy with another sync or send job.');
   }
 
+  let deliveredResponse: Awaited<ReturnType<typeof sendBaseNotificationsInChunks>> | undefined;
   try {
     await setCampaignProgress(campaign.id, {
       processedBatches: 0,
@@ -212,6 +213,7 @@ export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
       },
     });
 
+    deliveredResponse = response;
     const result = {
       preview,
       ...response,
@@ -241,7 +243,7 @@ export async function sendBaseCampaign(input: BaseCampaignInput): Promise<{
     const partialResponse =
       typeof error === 'object' && error && 'partialResponse' in error
         ? (error as BaseNotificationChunkedSendError).partialResponse
-        : undefined;
+        : deliveredResponse;
 
     if (partialResponse) {
       await setCampaignResults(campaign.id, {

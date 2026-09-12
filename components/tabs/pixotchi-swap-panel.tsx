@@ -64,7 +64,6 @@ import type {
   SwapQuoteStep,
   UserSwapTokenId,
 } from '@/lib/swap/types';
-import { usePaymaster } from '@/lib/paymaster-context';
 import { useSmartWallet } from '@/lib/smart-wallet-context';
 import { useTabVisibility } from '@/lib/tab-visibility-context';
 import { getBaseReadClient, getBaseReceiptClient, waitForBaseReceipt } from '@/lib/base-rpc';
@@ -337,7 +336,6 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
   const { lastTransaction, remember: rememberTransaction } = useLastSwapTransaction(address);
   const { data: walletClient } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
-  const { isSponsored } = usePaymaster();
   const { isSmartWallet } = useSmartWallet();
   const { isTabVisible } = useTabVisibility();
   const readClient = useMemo(() => getBaseReadClient(), []);
@@ -504,10 +502,10 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
     isSmartWallet &&
     typeof walletClient?.sendCalls === 'function' &&
     typeof walletClient?.waitForCallsStatus === 'function';
-  const spendingReadsReady = sellReadState === 'ready' && (usesSmartWalletBatch && isSponsored && sellToken !== 'ETH' || ethReadState === 'ready');
+  const spendingReadsReady = sellReadState === 'ready' && ethReadState === 'ready';
   // Retain labels during a same-wallet refresh, but keep the spending gate below.
   const hasSpendingSnapshot = sellBalanceData !== undefined && (
-    usesSmartWalletBatch && isSponsored && sellToken !== 'ETH' || ethBalanceData !== undefined
+    ethBalanceData !== undefined
   );
   const balanceReadError = Boolean(sellBalanceError || buyBalanceError || ethBalanceError);
   const retrySwapBalances = useCallback(() => Promise.allSettled([refetchSellBalance(), refetchBuyBalance(), refetchEthBalance()]), [refetchBuyBalance, refetchEthBalance, refetchSellBalance]);
@@ -1740,7 +1738,8 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
       if (sellToken === 'ETH') {
         const balance = await readClient.getBalance({ address });
         amount = balance;
-        if (!(usesSmartWalletBatch && isSponsored)) {
+        {
+          // Optional sponsorship can be declined. Max must still leave gas.
           // Probe below the balance so estimation itself can afford gas, then
           // re-estimate the exact Max calldata and only adjust downward.
           let probe = balance / BigInt(2);
@@ -1770,7 +1769,7 @@ export default function PixotchiSwapPanel({ isPanelVisible = true }: { isPanelVi
         setIsSettingMax(false);
       }
     }
-  }, [address, buildStep, fetchQuoteOnce, isSponsored, markQuoteActivity, readClient, sellReadState, sellBalanceRaw, sellToken, usesSmartWalletBatch]);
+  }, [address, buildStep, fetchQuoteOnce, markQuoteActivity, readClient, sellReadState, sellBalanceRaw, sellToken]);
 
   const handleSellTokenSelect = useCallback(
     (next: UserSwapTokenId) => {

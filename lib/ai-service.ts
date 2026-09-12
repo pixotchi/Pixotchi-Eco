@@ -1,6 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { AIProviderBudget, AIRequestBudgetExceededError, AI_DEFAULT_REQUEST_RESERVATION_TOKENS } from './ai-provider-budget';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -8,6 +9,7 @@ import {
   generateText,
   isStepCount,
   streamText,
+  wrapLanguageModel,
   toUIMessageStream,
   type FinishReason,
   type GatewayModelId,
@@ -35,7 +37,7 @@ const AI_RATE_LIMIT_TTL = 60 * 60; // 1 hour in seconds
 const AI_USAGE_TTL = 24 * 60 * 60; // 24 hours in seconds
 // Covers output caps plus a conservative allowance for prompt, history, and tool tokens.
 // If a provider aborts without reporting usage, this reservation becomes the charge.
-const AI_USAGE_MIN_RESERVATION_TOKENS = 65_536;
+const AI_USAGE_MIN_RESERVATION_TOKENS = AI_DEFAULT_REQUEST_RESERVATION_TOKENS;
 
 // Rate limiting configuration
 const AI_RATE_LIMIT_WINDOW = 10; // 10 seconds between AI messages
@@ -123,6 +125,7 @@ type ReservedAIRequestBudget = {
 };
 
 type AIRequestBudget = {
+  providerBudget: AIProviderBudget;
   autoContinueOnLength: boolean;
   continuationMaxOutputTokens: number;
   hardStopReason?: string;
@@ -1659,6 +1662,7 @@ function buildAIRequestBudget(
 
   if (messageCapReached || tokenCapReached) {
     return {
+      providerBudget: new AIProviderBudget(0),
       autoContinueOnLength: false,
       continuationMaxOutputTokens: 0,
       hardStopReason: messageCapReached
@@ -1687,6 +1691,7 @@ function buildAIRequestBudget(
     : Math.min(AI_CONTINUATION_MAX_OUTPUT_TOKENS, remainingTokens);
 
   return {
+    providerBudget: new AIProviderBudget(remainingTokens),
     autoContinueOnLength: AI_AUTO_CONTINUE_ON_LENGTH,
     continuationMaxOutputTokens,
     maxOutputTokens,
@@ -1750,6 +1755,8 @@ async function reserveAIRequestBudget(
     if (status !== 1 || reservedTokens <= 0) {
       throw new AIUsageAccountingUnavailableError('AI usage reservation was not confirmed.');
     }
+
+    budget.providerBudget = new AIProviderBudget(reservedTokens);
 
     return {
       budget,
@@ -2383,7 +2390,8 @@ async function buildGemini3SingleRoundToolContext(options: {
     abortSignal: options.abortSignal,
     maxOutputTokens: Math.min(options.modelConfig.maxTokens, options.requestBudget.planningMaxOutputTokens),
     messages: buildPlainModelMessages(options.historyMessages, options.currentMessage),
-    model: getSDKModel(),
+    model: wrapLanguageModel({ model: getSDKModel(), middleware: options.requestBudget.providerBudget.middleware }),
+    maxRetries: 0,
     providerOptions: getAIProviderOptions(options.address),
     stopWhen: isStepCount(1),
     instructions: `${READ_ONLY_AGENT_SYSTEM_PROMPT}\n\n${options.requestBudget.responseInstruction}\n\nFor this tool-planning pass, call every needed read-only tool in a single round. Do not make sequential follow-up tool calls. Do not answer the user unless no tool is needed.`,
@@ -2527,7 +2535,8 @@ async function generateLengthContinuation(options: {
       partialResponse: options.partialResponse,
       toolContextText: options.toolContextText,
     }),
-    model: getSDKModel(),
+    model: wrapLanguageModel({ model: getSDKModel(), middleware: options.requestBudget.providerBudget.middleware }),
+    maxRetries: 0,
     providerOptions: getAIProviderOptions(options.address),
     stopWhen: isStepCount(1),
     instructions: buildResponseSystemPrompt(options.requestBudget),
@@ -2627,6 +2636,7 @@ function createStaticAIMessageResponse(
 }
 
 function normalizeAIProviderError(error: UntypedValue): string {
+  if (error instanceof AIRequestBudgetExceededError) return error.message;
   const statusCode = Number(error?.statusCode || error?.status || 0);
   const message = String(error?.message || '');
 
@@ -2717,7 +2727,6 @@ export async function streamAIMessage(
     throw new AIUsageAccountingUnavailableError('AI usage reservation was not created.');
   }
 
-  let paidGenerationStarted = false;
   let settlementHandedOff = false;
   let usageMeasurementIncomplete = false;
   let finishReason: string | undefined;
@@ -2775,7 +2784,6 @@ export async function streamAIMessage(
 
   if (isDirectGoogleGemini3Model()) {
     options.abortSignal?.throwIfAborted();
-    paidGenerationStarted = true;
     const planning = await buildGemini3SingleRoundToolContext({
       abortSignal: options.abortSignal,
       address,
@@ -2809,7 +2817,8 @@ export async function streamAIMessage(
     abortSignal: options.abortSignal,
     maxOutputTokens: requestBudget.maxOutputTokens,
     messages: generationMessages,
-    model: getSDKModel(),
+    model: wrapLanguageModel({ model: getSDKModel(), middleware: requestBudget.providerBudget.middleware }),
+    maxRetries: 0,
     onEnd: (event: UntypedValue) => {
       const usage = event.usage;
       finishReason = event.finishReason;
@@ -2842,7 +2851,6 @@ export async function streamAIMessage(
     ...getModelRequestSettings(),
   };
   options.abortSignal?.throwIfAborted();
-  paidGenerationStarted = true;
   const result = generationTools
     ? streamText({
       ...streamTextOptions,
@@ -2983,7 +2991,9 @@ export async function streamAIMessage(
       const settlementFinishReason = streamWasAborted
         ? 'abort'
         : (finalFinishReason || (usageMeasurementIncomplete ? 'error' : 'stop'));
-      await settleAIUsageReservation(usageReservation, {
+      if (!requestBudget.providerBudget.started) {
+        await refundAIUsageReservation(usageReservation);
+      } else await settleAIUsageReservation(usageReservation, {
         conservative: streamWasAborted || usageMeasurementIncomplete || tokensUsed === 0,
         continuations,
         finishReason: settlementFinishReason,
@@ -3039,7 +3049,7 @@ export async function streamAIMessage(
   return response;
   } catch (error) {
     if (!settlementHandedOff) {
-      if (paidGenerationStarted) {
+      if (requestBudget.providerBudget.started) {
         await settleAIUsageReservation(usageReservation, {
           conservative: isAbortError(error) || usageMeasurementIncomplete || tokensUsed === 0,
           continuations,
@@ -3094,7 +3104,7 @@ export async function sendAIMessage(address: string, message: string, options: S
 
   const modelConfig = getCurrentModelConfig();
   let usageReservation: AIUsageReservation | undefined;
-  let paidGenerationStarted = false;
+  let providerBudget: AIProviderBudget | undefined;
   let usageFinalized = false;
   let usageMeasurementIncomplete = false;
   let tokensUsed = 0;
@@ -3125,6 +3135,7 @@ export async function sendAIMessage(address: string, message: string, options: S
     }
 
     usageReservation = reservedBudget.reservation;
+    providerBudget = requestBudget.providerBudget;
     if (!usageReservation) {
       throw new AIUsageAccountingUnavailableError('AI usage reservation was not created.');
     }
@@ -3169,7 +3180,6 @@ export async function sendAIMessage(address: string, message: string, options: S
     }
 
     if (isDirectGoogleGemini3Model()) {
-      paidGenerationStarted = true;
       const planning = await buildGemini3SingleRoundToolContext({
         abortSignal: options.abortSignal,
         address,
@@ -3203,7 +3213,8 @@ export async function sendAIMessage(address: string, message: string, options: S
     const generateTextOptions = {
       abortSignal: options.abortSignal,
       maxOutputTokens: requestBudget.maxOutputTokens,
-      model: getSDKModel(),
+      model: wrapLanguageModel({ model: getSDKModel(), middleware: requestBudget.providerBudget.middleware }),
+      maxRetries: 0,
       messages: generationMessages,
       providerOptions: getAIProviderOptions(address),
       stopWhen: isStepCount(8),
@@ -3214,7 +3225,6 @@ export async function sendAIMessage(address: string, message: string, options: S
       },
       ...getModelRequestSettings(),
     };
-    paidGenerationStarted = true;
     const result = await (generationTools
       ? generateText({
         ...generateTextOptions,
@@ -3331,7 +3341,7 @@ export async function sendAIMessage(address: string, message: string, options: S
     return { userMessage, aiResponse };
   } catch (error) {
     if (usageReservation && !usageFinalized) {
-      usageFinalized = paidGenerationStarted
+      usageFinalized = providerBudget?.started
         ? await settleAIUsageReservation(usageReservation, {
           conservative: isAbortError(error) || usageMeasurementIncomplete || tokensUsed === 0,
           continuations,
@@ -3479,7 +3489,7 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
       totalMessages: 0,
       totalTokens: 0,
       dailyUsage: 0,
-      costEstimate: 0,
+      costEstimate: null,
       continuationCount: 0,
       lengthFinishCount: 0,
       recoveredFromLengthCount: 0,
@@ -3535,8 +3545,9 @@ export async function getAIUsageStats(): Promise<AIUsageStats> {
     console.error('Error calculating daily usage:', error);
   }
 
-  const config = getCurrentModelConfig();
-  const costEstimate = totalTokens * config.costPerToken;
+  // Conversation totals do not retain billing rates or routed-model costs.
+  // Repricing them with the active provider fabricates historical spend.
+  const costEstimate = null;
 
   return {
     totalConversations,

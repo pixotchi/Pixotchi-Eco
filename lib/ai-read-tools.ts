@@ -1,4 +1,5 @@
 import 'server-only';
+import { readVerifyWalletClaimState } from './verify-claim-records';
 import { abortable } from './abortable';
 import { readQuestRewardsSnapshot } from './quest-rewards-read';
 import { canSettleQuestRewards } from './quest-rewards-readiness';
@@ -5273,12 +5274,12 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
         async () => {
           const target = getTargetAddress(address, context.userAddress);
           const lower = target.toLowerCase();
-          const [airdropRaw, verifyRaw] = await Promise.all([
-            redis?.get(`airdrop:eligible:${lower}`),
-            redis?.get(`wallet_claims:${lower}`),
+          if (!redis) throw new Error('Claim status is unavailable');
+          const [airdropRaw, verifyClaim] = await Promise.all([
+            redis.get(`airdrop:eligible:${lower}`),
+            readVerifyWalletClaimState(lower),
           ]);
           const airdrop = safeJsonParse(airdropRaw);
-          const verifyClaim = safeJsonParse(verifyRaw);
 
           return {
             address: target,
@@ -5310,15 +5311,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
                 seed: CLIENT_ENV.VERIFY_CLAIM_SEED_BONUS_ENABLED ? 'Check the visible claim UI for current SEED bonus availability.' : null,
                 seedFundingDetails: createCustodyRedaction('verify_claim_seed_bonus_funding'),
               },
-              claimed: Boolean(verifyClaim),
-              claimData: verifyClaim
-                ? {
-                  status: verifyClaim.status,
-                  strainId: verifyClaim.strainId,
-                  timestamp: verifyClaim.timestamp,
-                  tokenId: verifyClaim.tokenId,
-                }
-                : null,
+              ...verifyClaim,
               enabled: CLIENT_ENV.VERIFY_CLAIM_ENABLED,
             },
           };
