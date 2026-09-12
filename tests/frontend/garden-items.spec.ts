@@ -16,11 +16,10 @@ test('large garden items display their category, effects, price and artwork', as
     await expect(group.getByRole('button')).toHaveCount(4);
     const grid = group.locator('.grid');
     const columns = await grid.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
-    expect(columns).toBeGreaterThanOrEqual(1);
-    expect(columns).toBeLessThanOrEqual(4);
+    expect(columns).toBe(4);
     for (const card of await group.getByRole('button').all()) {
       const cardWidth = (await card.boundingBox())!.width;
-      expect(cardWidth).toBeGreaterThanOrEqual(Math.min(128, (await grid.boundingBox())!.width) - 1);
+      expect(cardWidth).toBeGreaterThanOrEqual(44);
       expect(await card.locator('span').evaluateAll(nodes => nodes.every(node => parseFloat(getComputedStyle(node).fontSize) >= 12))).toBe(true);
     }
   }

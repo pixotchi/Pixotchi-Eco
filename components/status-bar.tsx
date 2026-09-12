@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useStakingDialog } from './staking/staking-provider';
 import { Skeleton } from "./ui/skeleton";
 import { useBalances } from "@/lib/balance-context";
+import { useEthMode } from "@/lib/eth-mode-context";
 import { formatTokenDisplay, formatTokenDisplayCompact } from "@/lib/token-display";
 import { useAccount, useBalance } from "wagmi";
 import { useIsSolanaWallet, SolanaBridgeBadge, useSolanaWallet } from "@/components/solana";
@@ -75,6 +76,8 @@ export default function StatusBar({
   } = useBalances();
   const { address } = useAccount();
   const isSolana = useIsSolanaWallet();
+  const { isEthMode } = useEthMode();
+  const replaceSeedWithEth = isEthMode && !isSolana;
   const {
     solBalance,
     isLoading: solanaLoading,
@@ -92,6 +95,7 @@ export default function StatusBar({
         !window.matchMedia?.("(min-width: 54rem)").matches),
   );
   const showEthBalance = (
+    replaceSeedWithEth ||
     isHeaderPlacement ||
     (showEthInStandalone && !useCompactStandaloneStatus)
   ) && !isSolana;
@@ -126,7 +130,7 @@ export default function StatusBar({
     || seedBalanceStatus === 'error'
     || leafBalanceStatus === 'error'
     || pixotchiBalanceStatus === 'error'
-    || ethError
+    || (showEthBalance && ethError)
     || Boolean(solanaError);
   const balanceErrorMessage = balanceError instanceof Error
     ? balanceError.message
@@ -173,7 +177,7 @@ export default function StatusBar({
     };
   }, [isHeaderPlacement]);
 
-  const useDetailedBalances = showEthBalance;
+  const useDetailedBalances = !isSolana && (isHeaderPlacement || (showEthInStandalone && !useCompactStandaloneStatus));
   const seedValue = seedBalanceStatus === 'ready'
     ? useDetailedBalances ? formatTokenDetailed(seed, 18, { maxFractionDigits: 2 }) : formatTokenShort(seed)
     : seedBalanceStatus === 'error' ? 'Unavailable' : 'Checking…';
@@ -184,9 +188,7 @@ export default function StatusBar({
     ? useDetailedBalances ? formatTokenDetailed(pixotchi, 18, { maxFractionDigits: 2 }) : formatTokenShort(pixotchi)
     : pixotchiBalanceStatus === 'error' ? 'Unavailable' : 'Checking…';
   const ethValue = ethBalance && !ethError
-    ? useDetailedBalances
-      ? formatTokenDetailed(ethBalance.value, ethBalance.decimals, { maxFractionDigits: 6, smallValueDigits: 6 })
-      : formatTokenShort(ethBalance.value, ethBalance.decimals)
+    ? formatTokenDetailed(ethBalance.value, ethBalance.decimals, { maxFractionDigits: 6 })
     : ethError ? "Unavailable" : "Checking…";
   const balanceSkeletonClassName = "h-4 w-10 max-[340px]:h-3.5 max-[340px]:w-8";
   const seedText = loading || seedBalanceStatus === 'unknown' ? <Skeleton className={balanceSkeletonClassName} /> : seedValue;
@@ -251,11 +253,11 @@ export default function StatusBar({
               <span className={balanceTextClassName} role="status">Balances unavailable</span>
             ) : (
               <>
-                <div className={balanceItemClassName}>
+                {!replaceSeedWithEth && <div className={balanceItemClassName}>
                   <Image src="/PixotchiKit/COIN.svg" alt="" width={18} height={18} className={balanceIconClassName} aria-hidden="true" />
                   <span className="sr-only">SEED balance </span>
                   <span className={balanceTextClassName}>{seedText}</span>
-                </div>
+                </div>}
                 {/* LEAF only for non-Solana users (Solana users can't stake/earn LEAF) */}
                 {!isSolana && (
                   <div className={balanceItemClassName}>

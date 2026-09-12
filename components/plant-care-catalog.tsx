@@ -41,6 +41,7 @@ export function PlantCareCatalog({
   onRetryGarden,
   onRetryShop,
 }: PlantCareCatalogProps) {
+  const gridClassName = "grid grid-cols-4 gap-1.5 @max-[12rem]/care:grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] sm:gap-2";
   const all: CareItem[] = [
     ...gardenItems.map((item) => ({ item, itemType: "garden" as const })),
     ...shopItems.map((item) => ({ item, itemType: "shop" as const })),
@@ -85,7 +86,7 @@ export function PlantCareCatalog({
             key={resource.label}
             role="status"
             aria-label={`Loading ${resource.label.toLowerCase()}`}
-            className="grid grid-cols-2 gap-2"
+            className={gridClassName}
           >
             {[0, 1, 2, 3].map((index) => (
               <Skeleton
@@ -116,7 +117,7 @@ export function PlantCareCatalog({
             <h4 className="text-xs font-medium text-muted-foreground">
               {group.label}
             </h4>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
+            <div className={gridClassName}>
               {group.items.map((option) => {
                 const { item } = option;
                 const selected =
@@ -148,7 +149,7 @@ export function PlantCareCatalog({
                     aria-haspopup="dialog"
                     aria-label={`Select ${item.name}`}
                     className={cn(
-                      "h-auto min-h-20 min-w-0 w-full flex-col items-center gap-1.5 whitespace-normal rounded-[var(--radius-control)] border px-2 py-3 text-center [overflow-wrap:anywhere]",
+                      "h-auto min-h-20 min-w-0 w-full flex-col items-center justify-start gap-1 whitespace-normal rounded-[var(--radius-control)] border px-0.5 py-2 text-center [overflow-wrap:anywhere] sm:gap-1.5 sm:px-2 sm:py-3",
                       selected
                         ? "border-primary bg-primary/10"
                         : "border-border/60 bg-card",
@@ -161,17 +162,17 @@ export function PlantCareCatalog({
                       alt=""
                       width={32}
                       height={32}
-                      className="shrink-0 [image-rendering:pixelated]"
+                      className="h-6 w-6 shrink-0 [image-rendering:pixelated] sm:h-8 sm:w-8"
                     />
-                    <span className="text-xs font-medium leading-4">
+                    <span className="flex min-h-8 items-center text-xs font-medium leading-4 tracking-tight sm:min-h-0 sm:tracking-normal">
                       {item.name}
                     </span>
-                    <span className="flex max-w-full flex-col items-center text-xs font-medium leading-relaxed tabular-nums text-foreground">
+                    <span className="flex max-w-full flex-col items-center text-xs font-medium leading-4 tabular-nums text-foreground sm:leading-relaxed">
                       {effects.map((effect) => (
                         <span key={effect}>{effect}</span>
                       ))}
                     </span>
-                    <span className="max-w-full text-xs font-normal leading-relaxed tabular-nums text-muted-foreground">
+                    <span className="mt-auto max-w-full text-xs font-normal leading-4 tabular-nums text-muted-foreground sm:leading-relaxed">
                       {isFence
                         ? "By duration"
                         : <TokenAmount amount={BigInt(item.price)} unit="SEED" mode="cost" withIcon={false} />}
