@@ -38,8 +38,8 @@ const themes = THEME_NAMES.map(name => ({ name, ...themePresentation[name] }));
 
 // The whole touch target is the swatch. Selection uses a check; keyboard focus
 // uses a separate outline so both states remain clear on every palette.
-const themeMenuButtonClass = "h-[44px] min-h-[44px] w-[44px] min-w-[44px] cursor-pointer justify-center rounded-full border border-black/10 p-0 shadow-none transition-[filter,box-shadow] duration-[var(--motion-quick)] hover:brightness-105 active:brightness-95 focus:shadow-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[3px] focus-visible:outline-ring";
-const themeTriggerSwatchClass = "absolute bottom-[6px] right-[6px] h-[10px] w-[10px] rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
+const themeMenuButtonClass = "h-[44px] min-h-[44px] w-[44px] min-w-[44px] cursor-pointer justify-center rounded-[10%] border border-black/10 p-0 shadow-none transition-[filter,box-shadow] duration-[var(--motion-quick)] hover:brightness-105 active:brightness-95 focus:shadow-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[3px] focus-visible:outline-ring";
+const themeTriggerSwatchClass = "absolute bottom-[6px] right-[6px] h-[10px] w-[10px] rounded-[10%] border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
 
 /*
  * A Radix menu item, not a hand-rolled button.
