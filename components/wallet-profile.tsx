@@ -722,7 +722,7 @@ export function WalletProfile({ open, onOpenChange }: WalletProfileProps) {
                         <div className="flex items-start gap-2 rounded-[var(--radius-control)] border border-[hsl(var(--info)/0.22)] bg-[hsl(var(--info)/0.08)] p-3 text-info-strong shadow-[var(--shadow-hairline)] max-[380px]:flex-col max-[380px]:p-[12px]">
                           <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           <span className="min-w-0 text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-                            Smart wallets can combine approvals and purchases into one confirmation.
+                            Smart wallets can use sponsored and batch transactions.
                           </span>
                         </div>
                       )}

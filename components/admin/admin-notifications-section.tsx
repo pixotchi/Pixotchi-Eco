@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { CLIENT_ENV } from '@/lib/env-config';
+import { getNotificationProviderLabel } from '@/lib/notifications/provider';
 import { AlertTriangle, Bell, Code, Eye, Megaphone, RefreshCw, Search, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -379,7 +380,7 @@ export function AdminNotificationsSection({ adminKey, isActive, showConfirmDialo
   return (<><div className="space-y-6">
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications ({isBaseNotifications ? 'Base App' : 'Neynar'})</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Bell className="w-5 h-5" /> Notifications ({getNotificationProviderLabel(notificationProvider)})</CardTitle>
       </CardHeader>
       <CardContent>
         <AdminReadError message={statsError} onRetry={fetchNotifStats} busy={notifLoading} />

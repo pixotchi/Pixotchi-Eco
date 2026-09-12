@@ -12,8 +12,8 @@ import { sessionStorageManager } from '@/lib/session-storage-manager';
 import { type BaseAuthPayload, type WalletRpcProvider, extractBasePayload, getPrimaryAccountAddress, readWalletProvider, readWalletRecord, readWalletSignature, summarizeBaseAccounts } from '@/lib/auth/base-wallet-boundary';
 
 const BASE_PERSONAL_SIGN_TIMEOUT_MS = 12_000;
-const BASE_APP_SIGNING_UNAVAILABLE_MESSAGE =
-  "This Base app wallet profile could not sign in. Open in your system browser, use a different Base app profile/device, or reset the Base app wallet session.";
+const COINBASE_WALLET_SIGNING_UNAVAILABLE_MESSAGE =
+  "This Coinbase Wallet profile could not sign in. Open in your system browser, use a different Coinbase Wallet profile/device, or reset the Coinbase Wallet session.";
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -157,7 +157,7 @@ export function useBaseWalletAuthentication<C extends AuthWalletConnector>({ con
           params: [stringToHex(message), checksummedAddress],
         }),
         BASE_PERSONAL_SIGN_TIMEOUT_MS,
-        BASE_APP_SIGNING_UNAVAILABLE_MESSAGE,
+        COINBASE_WALLET_SIGNING_UNAVAILABLE_MESSAGE,
       );
 
       const signature = readWalletSignature(rawSignature);

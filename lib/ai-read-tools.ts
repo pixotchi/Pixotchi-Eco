@@ -2149,7 +2149,7 @@ function classifyGameError(errorText: string, actionHint?: string) {
     add('feature_disabled', 'medium', 'The feature may be disabled, paused, or temporarily unavailable.', ['Check the Status page and feature flags.', 'Use the exact panel once it is enabled again.'], ['get_app_status']);
   }
   if (/wallet_sendcalls|sendcalls|atomic|bundle|method not found|unsupported method|-32601/.test(normalized)) {
-    add('unsupported_wallet_method', 'high', 'The wallet likely does not support atomic bundled transactions for this multi-step action.', ['Use Base App or a smart wallet if the UI offers one.', 'Try the non-bundled approve/action path if available.'], ['get_wallet_capabilities']);
+    add('unsupported_wallet_method', 'high', 'The wallet likely does not support atomic bundled transactions for this multi-step action.', ['Use Coinbase Wallet or a smart wallet if the UI offers one.', 'Try the non-bundled approve/action path if available.'], ['get_wallet_capabilities']);
   }
   if (/paymaster|sponsor|sponsored|gasless/.test(normalized)) {
     add('sponsored_gas', 'medium', 'Sponsored gas or paymaster support may be unavailable for this wallet/action.', ['Check app status.', 'Retry with normal gas if the UI offers it.', 'Use a supported smart wallet.'], ['get_wallet_capabilities', 'get_app_status']);
@@ -3062,7 +3062,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
               isContractWallet
                 ? 'Smart-wallet style flows may show sponsored badges, ETH-mode quotes, or bundled approve+action buttons.'
                 : 'EOA flows may need separate approve and action transactions, and some atomic bundle buttons may be unavailable.',
-              'For unsupported wallet_sendCalls or bundle errors, use Base App/a smart wallet or the non-bundled path when the UI offers one.',
+              'For unsupported wallet_sendCalls or bundle errors, use Coinbase Wallet/a smart wallet or the non-bundled path when the UI offers one.',
               'Neural Seed can explain the path, but only the visible wallet UI can build and confirm transactions.',
             ],
           };
@@ -5417,7 +5417,7 @@ export function createReadOnlyAITools({ readPlayerRanking = getPlayerRanking }: 
             },
             ui: {
               statusUrl: 'https://status.pixotchi.tech',
-              where: 'Mini app/Base App notification prompt and Status page',
+              where: 'Mini app/Coinbase Wallet notification prompt and Status page',
             },
           };
         },

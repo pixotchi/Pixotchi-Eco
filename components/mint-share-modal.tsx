@@ -137,7 +137,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
     return isMiniApp
       ? `🪴 Just planted a ${data.strainName} in Pixotchi Mini!\n\nJoin me, grow your own plants and earn ETH rewards! 🟦`
-      : `🪴 Just planted a ${data.strainName} on @baseapp!\n\nGrowing onchain with @pixotchi 🌿\n\nStart your farming journey and earn ETH rewards! 🟦`;
+      : `🪴 Just planted a ${data.strainName} in Coinbase Wallet!\n\nGrowing onchain with @pixotchi 🌿\n\nStart your farming journey and earn ETH rewards! 🟦`;
   }, [data, isMiniApp]);
 
   const tweetUrl = useMemo(() => {

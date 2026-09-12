@@ -15,6 +15,6 @@ export function EmptyFarm({ asset }: { asset: 'plant' | 'land' }) {
       src="/icons/village-start.png" alt="A Pixotchi land with empty building plots, paths and a river"
       width={192} height={192} className="mx-auto h-48 w-48 object-contain [image-rendering:pixelated]" />}
     title={asset === 'plant' ? 'Your farm starts here' : 'Your first plot awaits'}
-    description={asset === 'plant' ? 'Care for your plant and grow its points to earn a share of ETH rewards. Rewards vary with each distribution.' : 'Build a village that supplies your plants with points and lifetime. Review the plot price before minting. Land requires an EVM wallet.'}
+    description={asset === 'plant' ? 'Care for your plant and grow its points to earn a share of ETH rewards. Rewards vary with each distribution.' : 'Build a village that supplies your plants with points, lifetime and unlocks new activities! '}
     action={<Button onClick={() => { setMintType(asset); navigateToGameTab('mint'); }}>Get your first {asset}</Button>} />;
 }

@@ -39,8 +39,9 @@ test('large garden items display their category, effects, price and artwork', as
   await expect(raincloud).not.toContainText('PTS');
   for (const [button, icon, name] of [[superbloom, 'superbloom', 'Superbloom'], [everdew, 'everdew', 'Everdew'], [raincloud, 'raincloud', 'Raincloud']] as const) {
     await button.scrollIntoViewIfNeeded();
-    await expect(button.locator('img')).toHaveAttribute('src', new RegExp(`${icon}\\.png`));
-    await expect.poll(() => button.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    const artwork = button.locator(`img[src*="${icon}.png"]`);
+    await expect(artwork).toHaveCount(1);
+    await expect.poll(() => artwork.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     expect(await button.evaluate(node => node.scrollWidth <= node.clientWidth + 1 && node.scrollHeight <= node.clientHeight + 1)).toBe(true);
     await button.click();
     const review = page.getByRole('dialog', { name: 'Care item review' });

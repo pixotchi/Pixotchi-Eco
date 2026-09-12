@@ -4,7 +4,7 @@
 
 ## Pixotchi Ecosystem
 
-Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and care for NFT plants and lands, complete daily missions, climb leaderboards, chat with the community, and earn in‑game rewards. Runs on the web and as a Farcaster/Base-compatible Mini App.
+Pixotchi is a P2E onchain game. Grow a playful onchain garden on Base. Mint and care for NFT plants and lands, complete daily missions, climb leaderboards, chat with the community, and earn in‑game rewards. Runs on the web and as a Mini App in Farcaster and Coinbase Wallet (formerly Base App).
 
 <!-- Badges -->
 
@@ -31,7 +31,7 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 
 ## Try it
 - **Play now**: [mini.pixotchi.tech](https://mini.pixotchi.tech)
-- **Farcaster/Base App**: Available as a Mini App. (Search Pixotchi Mini in Apps)
+- **Farcaster/Coinbase Wallet**: Available as a Mini App. (Search Pixotchi Mini in Apps)
 
 ## Integrations
 - **Base** – Layer 2 network where Pixotchi runs.
@@ -41,7 +41,7 @@ Pixotchi is maintained by our team and open‑sourced for transparency and long�
 - **Coinbase CDP** – Service-side claim/airdrop automation and optional paymaster configuration.
 - **Privy** – Embedded wallet authentication and social login.
 - **EFP** – Onchain Social Graph by Ethereum Follow Protocol.
-- **Base App** – Notification delivery and enabled-wallet audience sync.
+- **Coinbase Wallet** – Notification delivery and enabled-wallet audience sync.
 - **Solana Bridge** – Experimental adapter-dependent Solana-to-Base flows; some EVM-only features remain unavailable from Solana wallets.
 
 ## Features
@@ -99,12 +99,12 @@ Run `npm run audit:regressions` for concurrency and failure-injection regression
 - Feature flags control major surfaces: gamification, casino/blackjack, barracks, swap module, Base Verify claims, and Solana support.
 - Blackjack is fail-closed while the deployed contract uses its legacy randomness signature. Enabling it requires both the public/server feature flags and the server-only `BLACKJACK_UNSAFE_LEGACY_SIGNATURES_ACKNOWLEDGED=true`; keep that acknowledgement off unless the legacy risk is consciously accepted.
 - Solana flows require `NEXT_PUBLIC_SOLANA_ENABLED=true` and a configured `NEXT_PUBLIC_SOLANA_TWIN_ADAPTER`.
-- Notifications can use the Base App provider or Neynar; keep `NEXT_PUBLIC_NOTIFICATION_PROVIDER` and `NOTIFICATION_PROVIDER` in sync.
+- Notifications can use the Coinbase Wallet provider (`base`) or Neynar; keep `NEXT_PUBLIC_NOTIFICATION_PROVIDER` and `NOTIFICATION_PROVIDER` in sync.
 - Neural Seed is intentionally read-only. Set `AI_PROVIDER` plus the matching provider key for AI chat.
 
 ## Who is this for?
 - **Players** who enjoy a cozy, streak‑based onchain game.  
-- **Farcaster/Base app users** who want a native, mobile‑friendly Mini App experience.  
+- **Farcaster/Coinbase Wallet users** who want a native, mobile‑friendly Mini App experience.
 - **Builders** who want to explore a production‑ready Next.js/React onchain game.
 
 

@@ -219,7 +219,7 @@ export function useBaseAuthAdapter<C extends AuthWalletConnector & { type?: stri
         dispatch({ type: "set-base-auth-status", status: "idle" });
 
         const fallbackMessage = shouldUseLegacyBaseFallback(error)
-          ? "This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
+          ? "This Coinbase Wallet version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
           : `${surfaceLabel} authentication failed. Please try again.`;
         const message = getErrorMessage(error, fallbackMessage);
 
@@ -600,7 +600,7 @@ export function useBaseAuthAdapter<C extends AuthWalletConnector & { type?: stri
             }
 
             const fallbackMessage = shouldUseLegacyBaseFallback(error)
-              ? "This Coinbase app version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
+              ? "This Coinbase Wallet version could not complete Sign in with Base. Update the app, open in your system browser, or use Privy."
               : "Base authentication failed. Please try again.";
 
             dispatch({ type: "set-error", message: getErrorMessage(error, fallbackMessage) });

@@ -14,6 +14,7 @@ import {
   type CareResourceStatus,
 } from "@/lib/care-catalog";
 import { ResourceState } from "./ui/resource-state";
+import { ResourceValue } from "./ui/resource-value";
 import { Skeleton } from "./ui/skeleton";
 import { TokenAmount } from "./ui/token-amount";
 
@@ -125,20 +126,8 @@ export function PlantCareCatalog({
                 const isFence =
                   getCareCapabilities(item, option.itemType).purchase ===
                   "fence-v2";
-                const effects =
-                  "points" in item
-                    ? [
-                        Number(item.points) > 0 &&
-                          `+${formatNumber(Number(item.points) / 1e12)} PTS`,
-                        Number(item.timeExtension) > 0 &&
-                          `+${formatDuration(Number(item.timeExtension))} lifetime`,
-                      ].filter(
-                        (effect): effect is string =>
-                          typeof effect === "string",
-                      )
-                    : isFence
-                      ? ["Attack protection"]
-                      : ["Review item effect"];
+                const points = "points" in item ? Number(item.points) / 1e12 : 0;
+                const lifetime = "timeExtension" in item ? Number(item.timeExtension) : 0;
                 return (
                   <Button
                     key={`${option.itemType}-${item.id}`}
@@ -168,9 +157,14 @@ export function PlantCareCatalog({
                       {item.name}
                     </span>
                     <span className="flex max-w-full flex-col items-center text-xs font-medium leading-4 tabular-nums text-foreground sm:leading-relaxed">
-                      {effects.map((effect) => (
-                        <span key={effect}>{effect}</span>
-                      ))}
+                      {"points" in item ? <>
+                        {points > 0 && <ResourceValue resource="points" className="flex-row-reverse gap-0.5">
+                          +{formatNumber(points)}<span className="sr-only"> PTS</span>
+                        </ResourceValue>}
+                        {lifetime > 0 && <ResourceValue resource="lifetime" className="flex-row-reverse gap-0.5">
+                          +{formatDuration(lifetime)}<span className="sr-only"> lifetime</span>
+                        </ResourceValue>}
+                      </> : <span>{isFence ? "Attack protection" : "Review item effect"}</span>}
                     </span>
                     <span className="mt-auto max-w-full text-xs font-normal leading-4 tabular-nums text-muted-foreground sm:leading-relaxed">
                       {isFence

@@ -9,7 +9,7 @@ export function normalizeNotificationProvider(value?: string | null): Notificati
 }
 
 export function getNotificationProviderLabel(provider: NotificationProvider): string {
-  return provider === 'base' ? 'Base App' : 'Neynar';
+  return provider === 'base' ? 'Coinbase Wallet' : 'Neynar';
 }
 
 export function isBaseNotificationProvider(value?: string | null): boolean {

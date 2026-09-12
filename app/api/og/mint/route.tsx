@@ -207,7 +207,7 @@ export async function GET(request: Request) {
               fontFamily: 'AdelleSans, sans-serif',
             }}
           >
-            Start your onchain farming journey today and earn ETH rewards on Base app!
+            Grow your onchain farm and earn ETH rewards with Coinbase Wallet!
           </div>
 
           {/* Footer branding */}
