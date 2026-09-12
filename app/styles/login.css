@@ -6,57 +6,59 @@
   }
 
   .login-safe-area {
-    justify-content: flex-start;
-    padding-top: 1rem !important;
-    padding-bottom: max(1rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom)) !important;
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2rem 1.5rem;
+    padding-bottom: max(2rem, env(safe-area-inset-bottom), var(--safe-area-inset-bottom), var(--browser-safe-area-bottom));
   }
+
   .login-fallback-safe-area {
-    padding-top: max(1rem, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top)) !important;
+    display: flex;
+    height: 100dvh;
+    flex-direction: column;
+    padding-top: max(0px, env(safe-area-inset-top), var(--safe-area-inset-top), var(--browser-safe-area-top));
   }
-  @media (min-width: 48rem) {
-    .login-safe-area {
-      justify-content: safe center;
-    }
+
+  .login-panel {
+    display: flex;
+    width: 100%;
+    max-width: 20rem;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 2rem;
+    margin-block: auto;
   }
+
+  .login-auth-actions,
+  .login-auth-actions-placeholder {
+    display: grid;
+    min-width: 0;
+    gap: 0.75rem;
+  }
+
   @media (orientation: landscape) and (min-width: 40rem) and (max-height: 30rem) {
-    .login-safe-area {
-      flex-direction: row !important;
+    .login-panel {
+      display: grid;
+      max-width: 40rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: center;
-      justify-content: center;
-      gap: 1rem;
-    }
-
-    .login-hero-copy,
-    .login-auth-actions,
-    .login-auth-actions-placeholder {
-      width: auto !important;
-      max-width: 20rem !important;
-      flex: 1 1 0 !important;
-    }
-
-    .login-hero-copy,
-    .login-auth-actions {
-      align-self: center;
-      border: 1px solid hsl(var(--edge-panel)) !important;
-      border-radius: var(--radius-panel) !important;
-      background-color: hsl(var(--card) / 0.82) !important;
-      padding: 1rem !important;
-      box-shadow: var(--shadow-hairline);
     }
 
     .login-hero {
-      margin-bottom: 1rem;
-      gap: 0.5rem;
+      gap: 0.75rem;
     }
 
-    .login-hero .garden-preview { max-width: 14rem; padding-block: 0.5rem; }
-
-    .login-intro-copy {
-      margin-bottom: 0;
-    }
-
-    .login-auth-actions-placeholder {
-      height: 19rem;
+    .login-hero img {
+      width: 3.5rem;
+      height: 3.5rem;
     }
 
     .not-found-shell {
@@ -88,11 +90,54 @@
   position: relative;
   isolation: isolate;
   color: hsl(var(--foreground));
+  background-color: hsl(var(--card));
+  background-image: none;
 }
 
 .login-scene .app-shell-inner[data-connected="false"] {
   max-width: 100%;
 }
+
+.login-auth-actions > fieldset > button {
+  height: auto;
+  min-height: 3rem;
+  border-radius: 0.75rem;
+  padding-block: 0.75rem;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+/* Match the vendor's outlined button to the adjacent sign-in action. */
+.login-base-action .-base-ui-sign-in-css-reset button.-base-ui-sign-in-button {
+  min-width: 0;
+  height: auto;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border-color: hsl(var(--edge-panel));
+  color: hsl(var(--foreground));
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--motion-quick);
+  transition-timing-function: var(--ease-standard);
+}
+
+.login-base-action .-base-ui-sign-in-css-reset button.-base-ui-sign-in-button:hover,
+.login-base-action .-base-ui-sign-in-css-reset button.-base-ui-sign-in-button:active {
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow: none;
+  transform: none;
+}
+
+.login-base-action .-base-ui-sign-in-css-reset button.-base-ui-sign-in-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  transition: none;
+}
+
 @layer components {
 .garden-preview {
   display: grid;

@@ -10,7 +10,7 @@ import { GameSettingsMenu } from "@/components/game-settings-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { ToggleGroup, type ToggleValue } from "@/components/ui/toggle-group";
-import { LoginHero, LoginIntro } from "@/components/login-hero";
+import { LoginPanel } from "@/components/login-hero";
 
 import { FarmViewProvider, useFarmView } from "@/lib/farm-view-context";
 import { TabVisibilityProvider } from "@/lib/tab-visibility-context";
@@ -725,15 +725,9 @@ export default function App() {
           aria-label="Main content area"
         >
           {(!isConnected) ? (
-            <div className="login-safe-area relative z-10 flex h-full flex-col items-center overflow-y-auto overscroll-contain p-4 md:w-full xl:p-5">
-              <div className="login-hero-copy flex-grow flex flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-t-[var(--radius-panel)] md:border md:border-b-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pt-5">
-                {/* Same components the server-rendered fallback uses (see
-                    app/(game)/layout.tsx), so the hand-off is seamless. */}
-                <LoginHero title={fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'} />
-                <LoginIntro />
-              </div>
+            <LoginPanel title={fc?.isInMiniApp ? 'PIXOTCHI MINI' : 'PIXOTCHI'}>
               <LoginAuthActions
-                className="login-auth-actions w-full max-w-xs space-y-3 md:max-w-[24rem] md:rounded-b-[var(--radius-panel)] md:border md:border-t-0 md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:pb-5 md:shadow-[var(--shadow-hairline)]"
+                className="login-auth-actions"
                 handleMiniAppReconnect={handleMiniAppReconnect}
                 isInMiniApp={Boolean(fc?.isInMiniApp)}
                 state={state}
@@ -743,7 +737,7 @@ export default function App() {
                 privyReady={privyReady}
                 switchAuthSurface={switchAuthSurface}
               />
-            </div>
+            </LoginPanel>
           ) : (
             <>
               <nav data-viewport-shell="desktop-nav" className="hidden xl:flex min-h-0 w-24 shrink-0 flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain scroll-py-3 border-r border-[hsl(var(--divider)/0.62)] bg-secondary/90 bg-[image:var(--gradient-app-chrome)] p-3 shadow-[var(--shadow-hairline)] backdrop-blur-md supports-[backdrop-filter]:bg-secondary/75 [scrollbar-width:thin]" role="navigation" aria-label="Main navigation">

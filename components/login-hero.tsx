@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { GardenPreview } from './garden-preview';
+import type { ReactNode } from 'react';
 
 /**
  * The hook-free half of the login screen.
@@ -15,46 +15,53 @@ import { GardenPreview } from './garden-preview';
  */
 export function LoginHero({ title = "PIXOTCHI" }: { title?: string }) {
   return (
-    <div className="login-hero mb-5 flex w-full flex-col items-center gap-4">
-      <div className="flex items-center gap-2.5">
-        <Image
-          src="/PixotchiKit/Logonotext.svg"
-          alt="Pixotchi Mini Logo"
-          width={28}
-          height={28}
-          sizes="28px"
-          quality={90}
-        />
-        <h1 className="text-lg font-pixel text-foreground">{title}</h1>
-      </div>
-      <GardenPreview />
+    <div className="login-hero flex flex-col items-center gap-4">
+      <Image
+        src="/PixotchiKit/Logonotext.svg"
+        alt="Pixotchi Mini Logo"
+        width={72}
+        height={72}
+        sizes="72px"
+        quality={90}
+        preload
+        className="h-[72px] w-[72px] [image-rendering:pixelated]"
+      />
+      <h1 className="text-2xl leading-snug font-pixel text-foreground max-[360px]:text-xl">{title}</h1>
     </div>
   );
 }
 
 export function LoginIntro() {
   return (
-    <>
-      <h2 className="login-intro-title type-page-title mb-2 text-foreground">A little care. A growing world.</h2>
-      <p className="login-intro-copy text-muted-foreground mb-6 max-w-xs md:max-w-md">
-        Find your first plant, keep it growing, and build your own farm on Base. Sign in with a wallet or email to begin.
-      </p>
-    </>
+    <p className="login-intro-copy mt-3 text-sm leading-6 text-muted-foreground">
+      Your pixel garden on Base.
+    </p>
   );
+}
+
+/** Shared geometry keeps the server fallback and ready sign-in screen aligned. */
+export function LoginPanel({ title, children }: { title?: string; children: ReactNode }) {
+  return <div className="login-safe-area">
+    <div className="login-panel">
+      <div className="login-hero-copy text-center">
+        <LoginHero title={title} />
+        <LoginIntro />
+      </div>
+      {children}
+    </div>
+  </div>;
 }
 
 /** The full centred hero, used as the pre-hydration fallback. */
 export function LoginHeroPanel({ title }: { title?: string }) {
   return (
-    <div className="login-fallback-safe-area login-safe-area relative z-10 flex min-h-dvh flex-col items-center overflow-y-auto overscroll-contain p-4 md:p-4 xl:p-5">
-      <div className="login-hero-copy flex flex-grow flex-col items-center justify-center text-center md:flex-grow-0 md:w-full md:max-w-[24rem] md:rounded-[var(--radius-panel)] md:border md:border-[hsl(var(--edge-panel))] md:bg-card/80 md:px-5 md:py-5">
-        <LoginHero title={title} />
-        <LoginIntro />
-      </div>
-      {/* Reserves the auth-actions block's footprint so the hero doesn't jump up
-          by half that height when hydration mounts the real buttons (the alert +
-          two sign-in buttons measure ~19rem). aria-hidden: it is pure spacing. */}
-      <div className="login-auth-actions-placeholder h-[19rem] w-full max-w-xs shrink-0 md:max-w-[24rem]" aria-hidden="true" />
+    <div className="login-scene login-fallback-safe-area">
+      <LoginPanel title={title}>
+        <div className="login-auth-actions-placeholder" aria-hidden="true">
+          <div className="h-12 rounded-[0.75rem] bg-primary/10" />
+          <div className="h-12 rounded-[0.75rem] border border-[hsl(var(--edge-panel))]" />
+        </div>
+      </LoginPanel>
     </div>
   );
 }

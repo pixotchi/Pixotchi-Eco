@@ -45,20 +45,20 @@ export function BaseAccountSurfaceButton({
 
   return (
     <div
-      className={isProcessing ? "pointer-events-none opacity-70" : undefined}
+      className={`login-base-action${isProcessing ? " pointer-events-none opacity-70" : ""}`}
       aria-busy={isProcessing || undefined}
     >
       {/* Visible pending feedback — the vendor button has no loading state of
           its own, so the switch used to give no signal at all. */}
       {isProcessing ? (
-        <div className="flex min-h-11 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+        <div className="flex min-h-12 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Connecting to Base...
         </div>
       ) : (
         <SignInWithBaseButton
           align="center"
-          variant="solid"
+          variant="transparent"
           colorScheme={colorScheme}
           onClick={handleClick}
         />
@@ -97,7 +97,7 @@ export function SolanaSurfaceButton({
   return (
     <Button
       fullWidth
-      variant="special"
+      variant="outline"
       onClick={handleClick}
       disabled={isProcessing}
       loading={isProcessing}
