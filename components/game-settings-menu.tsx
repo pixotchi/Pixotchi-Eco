@@ -1,6 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { createRetryableDialog } from '@/components/retryable-dialog';
 import { useRef, useState } from "react";
 import { BookOpen, Info, MessageCircle, PlayCircle, Radio } from "lucide-react";
 import { MenuSwitchItem, ThemeSelector } from "@/components/theme-selector";
@@ -15,7 +15,7 @@ import { useSmartWallet } from "@/lib/smart-wallet-context";
 import { useSensoryPreferences, setSensoryPreference } from '@/lib/sensory-feedback';
 import packageJson from "@/package.json";
 
-const FeedbackDialog = dynamic(() => import("@/components/feedback-dialog"));
+const FeedbackDialog = createRetryableDialog(() => import('@/components/feedback-dialog'), 'Share Your Feedback');
 const actionClassName = "gap-3 px-3 font-medium";
 
 const XBrandIcon = ({ className }: { className?: string }) => (

@@ -174,7 +174,7 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
     {aiStats && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
-          <CardContent className="flex items-center p-4">
+          <CardContent className="flex items-center">
             <MessageCircle className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Conversations</p>
@@ -184,7 +184,7 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
         </Card>
 
         <Card>
-          <CardContent className="flex items-center p-4">
+          <CardContent className="flex items-center">
             <Bot className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Messages</p>
@@ -194,7 +194,7 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
         </Card>
 
         <Card>
-          <CardContent className="flex items-center p-4">
+          <CardContent className="flex items-center">
             <TrendingUp className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Tokens</p>
@@ -204,7 +204,7 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
         </Card>
 
         <Card>
-          <CardContent className="flex items-center p-4">
+          <CardContent className="flex items-center">
             <Clock className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Daily Usage</p>
@@ -214,7 +214,7 @@ export function AdminAiChatSection({ adminKey, isActive, showConfirmDialog }: Pi
         </Card>
 
         <Card>
-          <CardContent className="flex items-center p-4">
+          <CardContent className="flex items-center">
             <DollarSign className="w-8 h-8 text-primary mr-3" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Est. Cost</p>

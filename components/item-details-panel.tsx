@@ -407,7 +407,7 @@ export default function ItemDetailsPanel({
               ) : isSolana ? (
                 solanaQuote ? (
                   solanaQuote.error ? (
-                    <span className="text-amber-500">Quote error</span>
+                    <span className="text-[hsl(var(--warning-strong))]">Quote error</span>
                   ) : (
                     <ResourceValue resource="sol">{formatWsol(solanaQuote.wsolAmount)} SOL</ResourceValue>
                   )

@@ -23,3 +23,23 @@ npx playwright test tests/frontend/dense-surfaces.spec.ts --project=390-light --
 When an intentional visual change requires an update, run the same command with `--update-snapshots`, inspect every changed image, then run the command again without that flag. Do not automatically approve image changes in CI.
 
 These are a small reference set, not a baseline for every dialog, theme or transaction state.
+
+## September 12 revalidation
+
+The current application at `9a48fe7` had moved to neutral card/page surfaces and
+flat chat bubbles, while the references and two gradient assertions still
+described the earlier appearance. Revalidation reproduced the chat assertion and
+Barracks screenshot failures in all three contexts above. The screenshot loop
+stopped at Barracks, so the older Chat and Arcade references were also reviewed.
+
+All nine current captures were visually inspected and updated on Windows on
+September 12. The review checked long troop/star values, unknown intelligence,
+timestamps, chat alignment, readable recovery text, and the existing compact
+24 px Profile action. The darker dark-theme card and neutral light-theme page,
+flat chat background, and minor text-wrap/raster differences are already-present
+application styling, not a redesign introduced by the audit fixes. This record
+supersedes the older medium-round paragraph's 44 px Profile description.
+
+The behavioral style assertion now expects flat chat surfaces. The subsequent
+five-project regression run used the command without `--update-snapshots` and
+passed all selected checks; all nine reviewed images matched their references.

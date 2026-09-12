@@ -268,7 +268,10 @@ test('ranking shares filter transitions and visible units across widths', async 
     await expect(page.getByText('PTS', { exact: true })).toBeVisible();
     await expect(page.getByText('stars', { exact: true })).toBeVisible();
     const balance = page.getByRole('group', { name: 'Token balances' });
-    if (width >= 640) await expect(balance.getByText('SEED', { exact: true })).toBeVisible();
+    // Header balances use token icons at every width; their full identity is
+    // retained as screen-reader text by the current StatusBar design.
+    await expect(balance).toContainText('SEED balance');
+    await expect(balance.locator('img[src="/PixotchiKit/COIN.svg"]')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`ranking-units-${width}.png`) });
   }

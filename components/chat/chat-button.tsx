@@ -4,14 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 import Image from "next/image";
-import dynamic from "next/dynamic";
+import { createRetryableDialog } from '@/components/retryable-dialog';
 import { useIsSolanaWallet, useSolanaWallet } from "@/components/solana";
 import { useChatHeader } from "./chat-view-context";
 import { onPublicChatOpen } from "@/lib/mission-navigation";
 
-const ChatDialog = dynamic(() => import("./chat-dialog"), {
-  ssr: false,
-});
+const ChatDialog = createRetryableDialog(() => import('./chat-dialog'), 'Public chat');
 
 interface ChatButtonProps {
   className?: string;

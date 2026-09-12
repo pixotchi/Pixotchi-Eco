@@ -222,7 +222,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, isUpgrading
                     )}
                     {stateOf(s) === 'expired' && (
                       <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                        <span className="text-xs text-amber-700">Loot bag expired; reset required</span>
+                        <span className="text-xs text-[hsl(var(--warning-strong))]">Loot bag expired; reset required</span>
                         <GameTransaction
                           successFeedback="feature"
                           effects={{ domains: ["balances"] }}
@@ -303,7 +303,7 @@ export default function FarmerHousePanel({ landId, farmerHouseLevel, isUpgrading
                     </div>
                     <QuestDifficultySummary value={difficulty[idx] ?? 0} />
                     {isRewardsUnavailable && (
-                      <p className="text-xs text-amber-800 sm:col-span-2">
+                      <p className="text-xs text-[hsl(var(--warning-strong))] sm:col-span-2">
                         Wait until rewards are available before sending a new quest.
                       </p>
                     )}

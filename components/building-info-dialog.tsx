@@ -607,7 +607,7 @@ export default function BuildingInfoDialog({
                   <InfoRow
                     label={building.isUpgrading ? `Current upgrade (Level ${building.level})` : `Next upgrade (Level ${building.level + 1})`}
                     value={<ResourceValue resource="leaf">{formatTokenAmount(building.levelUpgradeCostLeaf)} LEAF</ResourceValue>}
-                    valueClassName="text-amber-600"
+                    valueClassName="text-[hsl(var(--warning-strong))]"
                   />
                   <InfoRow
                     label="Construction time"
@@ -616,7 +616,7 @@ export default function BuildingInfoDialog({
                   <InfoRow
                     label="Optional speed up"
                     value={<ResourceValue resource="pixotchi">{formatTokenAmount(building.levelUpgradeCostSeedInstant)} PIXOTCHI</ResourceValue>}
-                    valueClassName="text-amber-600"
+                    valueClassName="text-[hsl(var(--warning-strong))]"
                   />
                 </InfoRows>
                 <p className="text-xs text-muted-foreground">Speed up completes an upgrade after it has started.</p>

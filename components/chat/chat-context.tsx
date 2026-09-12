@@ -5,6 +5,7 @@ import { asRecord } from "@/lib/transaction-utils";
 import { useOwnerOperationScope } from '@/hooks/useOwnerOperationScope';
 import { useChatSending } from '@/hooks/useChatSending';
 import { useChatHistoryRequests } from '@/hooks/useChatHistoryRequests';
+import { usePublicChatUnread } from '@/hooks/usePublicChatUnread';
 import { AIChatComposerContext, AIChatPaneContext, ChatControlsContext, ChatHeaderContext, ChatSessionContext, PublicChatComposerContext, PublicChatPaneContext } from './chat-view-context';
 import React, {
   createContext,
@@ -43,9 +44,7 @@ import {
 } from '@/lib/confirmed-miniapp-session';
 import { getMiniAppQuickAuthHeaders } from '@/lib/farcaster-miniapp-auth-client';
 import {
-  loadChatLastRead,
   loadChatMode,
-  storeChatLastRead,
   storeChatMode,
 } from '@/lib/chat-preferences';
 import { resolvePreferredAuthSurface, SecureSessionState } from '@/lib/auth-surface';
@@ -193,7 +192,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [loadingModes, setLoadingModes] = useState<Partial<Record<ChatMode, boolean>>>({});
   const [, setMessageCacheVersion] = useState(0);
-  const [publicMessageVersion, setPublicMessageVersion] = useState(0);
   const [publicChatSession, setPublicChatSession] = useState<PublicChatSession | null>(null);
   const [publicChatLoading, setPublicChatLoading] = useState(false);
   const [publicChatState, setPublicChatState] = useState<SecureSessionState>('unneeded');
@@ -574,7 +572,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messageCacheRef.current.public = [];
     messageCacheRef.current.ai = [];
     setMessageCacheVersion((version) => version + 1);
-    setPublicMessageVersion((version) => version + 1);
 
     if (modeRef.current === 'public' || modeRef.current === 'ai') {
       setMessages([]);
@@ -642,7 +639,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messageCacheRef.current.ai = [];
     setConversationId(null);
     setMessageCacheVersion((version) => version + 1);
-    setPublicMessageVersion((version) => version + 1);
 
     if (modeRef.current === 'public' || modeRef.current === 'ai') {
       setMessages([]);
@@ -686,46 +682,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     modeRef.current = mode;
   }, [mode]);
 
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(loadChatLastRead);
-
-  useEffect(() => {
-    const publicMessages = mode === 'public' && isChatOpen
-      ? messages
-      : (messageCacheRef.current.public || []);
-
-    if (publicMessages.length === 0) {
-      setUnreadCount(0);
-      return;
-    }
-
-    const count = publicMessages.filter((message) => {
-      const isNew = message.timestamp > lastReadTimestamp;
-      const isFromMe = publicIdentityAddress && message.address
-        ? message.address.toLowerCase() === publicIdentityAddress.toLowerCase()
-        : false;
-      return isNew && !isFromMe;
-    }).length;
-
-    setUnreadCount(count);
-  }, [isChatOpen, lastReadTimestamp, messages, mode, publicIdentityAddress, publicMessageVersion]);
-
-  const markAsRead = useCallback((throughTimestamp: number) => {
-    if (!isChatOpen || !Number.isFinite(throughTimestamp)) return;
-    setLastReadTimestamp(previous => {
-      const next = Math.max(previous, Math.min(Date.now(), throughTimestamp));
-      storeChatLastRead(next);
-      return next;
-    });
-  }, [isChatOpen]);
+  const { unreadCount, markAsRead } = usePublicChatUnread(
+    mode === 'public' && isChatOpen ? messages : messageCacheRef.current.public,
+    isChatOpen,
+    publicIdentityAddress,
+  );
 
   const writeModeMessages = useCallback((targetMode: ChatMode, next: AnyChatMessage[]) => {
     messageCacheRef.current[targetMode] = next;
     setMessageCacheVersion((version) => version + 1);
-
-    if (targetMode === 'public') {
-      setPublicMessageVersion((version) => version + 1);
-    }
 
     if (modeRef.current === targetMode) {
       setMessages(next);

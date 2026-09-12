@@ -46,9 +46,10 @@ test('chat long content and profile actions fit with readable timestamps', async
   const publicSurface = await publicBubble.evaluate(surface);
   expect(publicSurface).toEqual(await assistantBubble.evaluate(surface));
   expect(publicSurface.background).not.toBe('rgba(0, 0, 0, 0)');
-  expect(publicSurface.image).toContain('linear-gradient');
+  // Dense chat uses the approved flat mixed-card surface and outline action.
+  expect(publicSurface.image).toBe('none');
   expect(publicSurface.border).toBe('1px');
-  expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('linear-gradient');
+  expect(await button.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none');
 });
 
 test('arcade values wrap and ranking columns keep continuous order', async ({ page }, testInfo) => {

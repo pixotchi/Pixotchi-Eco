@@ -132,7 +132,7 @@ export default function AdminDashboard() {
         </nav>
 
         {/* Broadcast Tab */}
-        <AdminBroadcastSection adminKey={adminKey} isActive={activeTab === 'broadcast'} />
+        <AdminBroadcastSection adminKey={adminKey} isActive={activeTab === 'broadcast'} showConfirmDialog={showConfirmDialog} />
 
         {/* Chat Tab */}
         <AdminChatSection adminKey={adminKey} isActive={activeTab === 'chat'} showConfirmDialog={showConfirmDialog} />
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
         <AdminFeedbackSection adminKey={adminKey} isActive={activeTab === 'feedback'} showConfirmDialog={showConfirmDialog} />
 
         {/* Airdrop Tab */}
-        <AdminAirdropSection adminKey={adminKey} isActive={activeTab === 'airdrop'} />
+        <AdminAirdropSection adminKey={adminKey} isActive={activeTab === 'airdrop'} showConfirmDialog={showConfirmDialog} />
 
         {/* ==================== CLAIMS TAB ==================== */}
         <AdminClaimsSection adminKey={adminKey} isActive={activeTab === 'claims'} showConfirmDialog={showConfirmDialog} />

@@ -38,9 +38,7 @@ import { formatTokenAmount, getCasinoTokenImage, formatAddress } from "@/lib/uti
 import GameTransaction from "@/components/transactions/game-transaction";
 import ApproveTransaction from "@/components/transactions/approve-transaction";
 import { useBuildingApproval } from '@/hooks/useBuildingApproval';
-import CasinoDialog from "@/components/transactions/CasinoDialog";
-import BlackjackDialog from "@/components/transactions/BlackjackDialog";
-import BaccaratDialog from "@/components/transactions/BaccaratDialog";
+import { createRetryableDialog } from '@/components/retryable-dialog';
 import { PurchaseReadinessNotice } from './purchase-readiness-notice';
 import { getBuildingPurchaseReadiness } from '@/lib/building-purchase-readiness';
 import { formatTokenCost, formatTokenSymbol } from '@/lib/token-display';
@@ -50,6 +48,10 @@ import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { ResourceState } from '@/components/ui/resource-state';
 import { BackgroundRefresh } from '@/components/ui/background-refresh';
 import { getClientCasinoPolicy } from "@/lib/casino-client";
+
+const CasinoDialog = createRetryableDialog(() => import('@/components/transactions/CasinoDialog'), 'Roulette');
+const BlackjackDialog = createRetryableDialog(() => import('@/components/transactions/BlackjackDialog'), 'Blackjack');
+const BaccaratDialog = createRetryableDialog(() => import('@/components/transactions/BaccaratDialog'), 'Baccarat');
 
 interface CasinoPanelProps {
   landId: bigint;

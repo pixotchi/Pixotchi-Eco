@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, AlertTriangle, CheckCircle, Megaphone, ExternalLink } from 'lucide-react';
@@ -129,6 +129,8 @@ export function BroadcastMessageModal({
   return (
     <Dialog open={!!message} onOpenChange={(open) => !open && canDismiss && onDismiss()}>
       <DialogContent 
+        layout="form"
+        adaptiveScroll
         className="max-w-md"
         onEscapeKeyDown={(e) => !canDismiss && e.preventDefault()}
         onPointerDownOutside={(e) => !canDismiss && e.preventDefault()}
@@ -154,7 +156,7 @@ export function BroadcastMessageModal({
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
+        <DialogBody className="space-y-4">
           {/* Message Content */}
           <Alert className={`${config.bg} ${config.border}`}>
             <AlertDescription className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -166,24 +168,26 @@ export function BroadcastMessageModal({
           {activeMessage.action && (
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-11 w-full whitespace-normal px-[min(1rem,4vw)] leading-snug"
               onClick={handleAction}
               disabled={actionPending}
               aria-busy={actionPending}
             >
-              {activeMessage.action.label}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{activeMessage.action.label}</span>
               {activeMessage.action.url.startsWith('http') && (
-                <ExternalLink className="w-4 h-4 ml-2" />
+                <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
               )}
             </Button>
           )}
           {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
+        </DialogBody>
 
+        <DialogFooter>
           {/* Dismiss / delayed-unlock button */}
           {canDismiss && (
             <Button
               onClick={onDismiss}
-              className="w-full"
+              className="h-auto min-h-11 w-full whitespace-normal leading-snug [overflow-wrap:anywhere]"
               variant={activeMessage.type === 'warning' ? 'default' : 'secondary'}
             >
               {activeMessage.dismissible ? 'Got it' : 'Continue'}
@@ -198,7 +202,7 @@ export function BroadcastMessageModal({
               </p>
             </div>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

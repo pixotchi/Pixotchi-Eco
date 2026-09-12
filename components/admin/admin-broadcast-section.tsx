@@ -13,7 +13,7 @@ import { parseAdminBroadcast, parseAdminOperation, adminApiError } from '@/lib/a
 import { toast } from 'react-hot-toast';
 import { type AdminSectionProps, AdminReadError } from './admin-section-shared';
 
-export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionProps, 'adminKey' | 'isActive'>) {
+export function AdminBroadcastSection({ adminKey, isActive, showConfirmDialog }: AdminSectionProps) {
   const { data, loading: readLoading, error: readError, reload: fetchBroadcastMessages } = useAdminRead({ adminKey, isActive, endpoint: '/api/admin/broadcast', parse: parseAdminBroadcast, label: 'Broadcast' });
   const broadcastMessages = data?.messages ?? [];
   const broadcastStats = data?.stats ?? null;
@@ -116,7 +116,8 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
   };
 
   const handleBroadcastDelete = async (id: string) => {
-    if (!confirm('Delete this broadcast?')) return;
+    if (broadcastLoading) return;
+    setBroadcastLoading(true);
     try {
       const response = await fetch(`/api/admin/broadcast?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
@@ -130,6 +131,8 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
       }
     } catch {
       toast.error('Error deleting broadcast');
+    } finally {
+      setBroadcastLoading(false);
     }
   };
 
@@ -148,7 +151,8 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
   };
 
   const handleCleanupOrphans = async () => {
-    if (!confirm('Clean up orphaned dismissal records? This will remove dismissal records for deleted messages.')) return;
+    if (broadcastLoading) return;
+    setBroadcastLoading(true);
     try {
       const response = await fetch('/api/admin/broadcast/cleanup', {
         method: 'POST',
@@ -164,23 +168,14 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
       }
     } catch {
       toast.error('Error during cleanup');
+    } finally {
+      setBroadcastLoading(false);
     }
   };
 
   const handleNukeAllBroadcasts = async () => {
-    const confirmed = confirm(
-      '⚠️ DANGER: This will delete ALL broadcast data including messages, stats, and user dismissals.\n\n' +
-      'This action CANNOT be undone!\n\n' +
-      'Type "DELETE ALL" in the next prompt to confirm.'
-    );
-    if (!confirmed) return;
-
-    const verification = prompt('Type "DELETE ALL" to confirm (case-sensitive):');
-    if (verification !== 'DELETE ALL') {
-      toast.error('Verification failed. Operation cancelled.');
-      return;
-    }
-
+    if (broadcastLoading) return;
+    setBroadcastLoading(true);
     try {
       const response = await fetch('/api/admin/broadcast/cleanup?confirm=true', {
         method: 'DELETE',
@@ -196,6 +191,8 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
       }
     } catch {
       toast.error('Error during nuke operation');
+    } finally {
+      setBroadcastLoading(false);
     }
   };
 
@@ -206,7 +203,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
     {broadcastStats && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Messages</p>
@@ -217,7 +214,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Impressions</p>
@@ -228,7 +225,7 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Dismissals</p>
@@ -257,7 +254,13 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
           <Button
             variant="outline"
             size="sm"
-            onClick={handleCleanupOrphans}
+            disabled={broadcastLoading}
+            onClick={() => showConfirmDialog({
+              title: 'Clean up orphaned records?',
+              description: 'This will remove dismissal records for deleted messages.',
+              confirmText: 'Clean Orphaned Records',
+              onConfirm: () => { void handleCleanupOrphans(); },
+            })}
             className="flex items-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
@@ -266,7 +269,16 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
           <Button
             variant="destructive"
             size="sm"
-            onClick={handleNukeAllBroadcasts}
+            disabled={broadcastLoading}
+            onClick={() => showConfirmDialog({
+              title: 'Delete all broadcast data?',
+              description: 'This will permanently delete ALL broadcast messages, stats, and user dismissals. This action cannot be undone.',
+              confirmText: 'Delete All Broadcast Data',
+              isDangerous: true,
+              requiresTextConfirmation: true,
+              textToMatch: 'DELETE ALL',
+              onConfirm: () => { void handleNukeAllBroadcasts(); },
+            })}
             className="flex items-center gap-2"
           >
             <AlertTriangle className="w-4 h-4" />
@@ -569,7 +581,14 @@ export function AdminBroadcastSection({ adminKey, isActive }: Pick<AdminSectionP
                       size="sm"
                       className="h-11 w-11 p-0"
                       aria-label={`Delete broadcast: ${msg.title}`}
-                      onClick={() => handleBroadcastDelete(msg.id)}
+                      disabled={broadcastLoading}
+                      onClick={() => showConfirmDialog({
+                        title: 'Delete this broadcast?',
+                        description: `Delete “${msg.title || 'Untitled Message'}”? This action cannot be undone.`,
+                        confirmText: 'Delete Broadcast',
+                        isDangerous: true,
+                        onConfirm: () => { void handleBroadcastDelete(msg.id); },
+                      })}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>

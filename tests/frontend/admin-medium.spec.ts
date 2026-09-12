@@ -58,6 +58,49 @@ async function open(page: Page, provider: 'neynar' | 'base' = 'neynar', realStyl
 }
 async function section(page: Page, name: string) { await page.getByRole('navigation', { name: 'Admin dashboard sections' }).getByRole('button', { name, exact: true }).click(); }
 
+test('audit Airdrop actions fit narrow screens and its CSV picker works from the keyboard', async ({ page }) => {
+  await open(page, 'neynar', true);
+  await section(page, 'Airdrop');
+  for (const [width, scale] of [[320, 1], [390, 1], [320, 2]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(value => { document.documentElement.style.fontSize = `${value * 100}%`; }, scale);
+    const clear = page.getByRole('button', { name: 'Clear Unattempted', exact: true });
+    await clear.scrollIntoViewIfNeeded();
+    expect(await clear.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return box.left >= 0 && box.right <= innerWidth && node.scrollWidth <= node.clientWidth + 1;
+    })).toBe(true);
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+  const picker = page.getByRole('button', { name: 'Load File', exact: true });
+  await picker.focus();
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.press('Enter');
+  await (await chooser).setFiles({ name: 'eligibility.csv', mimeType: 'text/csv', buffer: Buffer.from(`address,seed,leaf,pixotchi\n${wallet},100,1,0`) });
+  await expect(page.getByRole('textbox', { name: 'Eligibility list CSV' })).toHaveValue(`address,seed,leaf,pixotchi\n${wallet},100,1,0`);
+});
+
+test('audit Airdrop and Broadcast use the shared confirmation without writing on cancel', async ({ page }) => {
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() !== 'GET' && !request.url().includes('/api/admin/auth')) writes.push(request.url()); });
+  await open(page, 'neynar', true);
+  await section(page, 'Airdrop');
+  await page.getByRole('button', { name: 'Clear Unattempted', exact: true }).click();
+  const clear = page.getByRole('dialog', { name: 'Clear unattempted allocations?', exact: true });
+  await clear.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await section(page, 'Broadcast');
+  await page.getByRole('button', { name: 'Delete All Broadcast Data', exact: true }).click();
+  const deletion = page.getByRole('dialog', { name: 'Delete all broadcast data?', exact: true });
+  const remove = deletion.getByRole('button', { name: 'Delete All Broadcast Data', exact: true });
+  await expect(remove).toBeDisabled();
+  await deletion.getByRole('textbox').fill('delete all');
+  await expect(remove).toBeDisabled();
+  await deletion.getByRole('textbox').fill('DELETE ALL');
+  await expect(remove).toBeEnabled();
+  await deletion.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(writes).toEqual([]);
+});
+
 test('ARC-07 admin read DTOs reject malformed nested fields and action identities', () => {
   expect(parseAdminBroadcast(broadcast)).not.toBeNull();
   expect(parseAdminBroadcast({ ...broadcast, stats: { ...broadcast.stats, totalMessages: {} } })).toBeNull();

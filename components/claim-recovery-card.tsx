@@ -14,7 +14,7 @@ export function ClaimRecoveryCard({ title, description, address, reference, txHa
   const transactionUrl = txHash && /^0x[0-9a-f]{64}$/i.test(txHash) ? `https://basescan.org/tx/${txHash}` : null;
   const supportUrl = 'https://t.me/pixotchi';
   return <Card>
-    <CardContent className="space-y-3 p-4">
+    <CardContent className="space-y-3">
       <div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>
       <dl className="space-y-1 text-xs [overflow-wrap:anywhere]">
         {address && <div><dt className="inline font-medium">Wallet: </dt><dd className="inline font-mono">{address}</dd></div>}

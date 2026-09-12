@@ -760,6 +760,7 @@ assert.notEqual(
 );
 
 const transactionKit = projectFile('components/transactions/transaction-kit.tsx');
+const transactionControls = projectFile('components/transactions/transaction-controls.tsx');
 assert.match(transactionKit, /statusName: "transactionUnresolved"/);
 assert.match(transactionKit, /hasSubmittedProof && !isDefinitivePostSubmissionError\(error\)/);
 assert.match(transactionKit, /pendingReceipt = requestCanonicalReceipt\(\)/);
@@ -786,7 +787,7 @@ assert.match(
   /currentPendingRecord\.proof\.kind === "calls"[\s\S]*id: currentPendingRecord\.proof\.id[\s\S]*kind: "calls"[\s\S]*kind: "hash"/,
   'a replaced batch receipt must retain its calls id while persisting the replacement hash',
 );
-assert.match(transactionKit, /if \(isSuccessful \|\| isCheckOnly\)/);
+assert.match(transactionControls, /if \(isSuccessful \|\| isCheckOnly\)/);
 assert.equal((transactionKit.match(/\.sendCalls\(\{/g) || []).length, 1);
 assert.equal((transactionKit.match(/\.sendTransaction\(\{/g) || []).length, 1);
 assert.match(transactionKit, /registerPendingEvmController/);
@@ -807,7 +808,7 @@ assert.match(
 assert.match(transactionKit, /statusName: "confirmedSyncing"/);
 assert.match(transactionKit, /await completeConfirmedTransaction/);
 assert.match(transactionKit, /Wallet reported success without a transaction hash; waiting for canonical Base receipt evidence/);
-assert.match(transactionKit, /size="touchCompact"/);
+assert.match(transactionControls, /size="touchCompact"/);
 assert.doesNotMatch(transactionKit, /subscribePendingEvmChanges/);
 const unsupportedFallbackSource = transactionKit.slice(
   transactionKit.indexOf('const unsupportedReservation = coordinatedPendingRecord'),

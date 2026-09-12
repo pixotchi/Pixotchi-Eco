@@ -214,6 +214,47 @@ test('Final automatic chat recovery exits loading when the asynchronous refresh 
   await expect(page.getByLabel('Chat state')).toHaveText('error');
 });
 
+test('Feedback stalled delivery releases its busy state and preserves the reopened draft without resending', async ({ page }) => {
+  await open(page, 'feedback');
+  await page.clock.install();
+  let requests = 0;
+  let finish: (() => Promise<void>) | undefined;
+  await page.route('**/api/feedback/submit', route => { requests += 1; finish = () => route.fulfill({ json: { success: true } }).catch(() => {}); });
+  await page.getByRole('button', { name: 'Open feedback dialog' }).click();
+  await page.getByRole('textbox').fill('Keep this feedback draft');
+  await page.getByRole('button', { name: 'Send Feedback' }).click();
+  await expect.poll(() => requests).toBe(1);
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await page.getByRole('button', { name: 'Open feedback dialog' }).click();
+  await page.clock.fastForward(16_000);
+  await expect(page.getByRole('alert')).toContainText('We could not confirm delivery');
+  await expect(page.getByRole('button', { name: 'Send Feedback' })).toBeEnabled();
+  await finish!();
+  await expect(page.getByRole('textbox')).toHaveValue('Keep this feedback draft');
+  expect(requests).toBe(1);
+});
+
+test('Feedback focused submit stays inside its scroll surface with enlarged text', async ({ page }) => {
+  await open(page, 'feedback');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'Open feedback dialog' }).click();
+  await page.getByRole('textbox').fill('Feedback layout fixture');
+  for (const [width, height, scale] of [[390, 360, 1], [320, 568, 2]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(value => { document.documentElement.style.fontSize = `${value * 100}%`; }, scale);
+    const submit = page.getByRole('button', { name: 'Send Feedback' });
+    await submit.scrollIntoViewIfNeeded();
+    await submit.focus();
+    const geometry = await submit.evaluate(node => {
+      const box = node.getBoundingClientRect(), surface = node.closest('[data-dialog-layout]')!.getBoundingClientRect();
+      return { fits: node.scrollWidth <= node.clientWidth + 1, top: box.top - surface.top, bottom: surface.bottom - box.bottom };
+    });
+    expect(geometry.fits).toBe(true);
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeGreaterThanOrEqual(scale === 2 ? 20 : 0);
+  }
+});
+
 test('Feedback validates length and preserves edits made during submission', async ({ page }) => {
   await open(page, 'feedback');
   let finish: (() => Promise<void>) | undefined;

@@ -10,6 +10,7 @@ import QuantitySelector from '@/components/quantity-selector';
 import { MintShareModal } from '@/components/mint-share-modal';
 import { AssetMultiSelect } from '@/components/ui/asset-multi-select';
 import { LowFoundationFixtures } from './low-foundation-fixtures';
+import { AuditDialogFixtures } from './audit-dialog-fixtures';
 
 export function FoundationFixtures() {
   const [ready, setReady] = useState(false);
@@ -29,6 +30,7 @@ export function FoundationFixtures() {
       {['bg-card', 'surface-lifted', 'surface-subpanel'].map(surface => <div key={surface} data-surface={surface} className={`${surface} flex flex-wrap items-start gap-3 rounded-xl p-4`}>
         <Badge variant="info" data-contrast="info">Route information</Badge>
         <Badge variant="chain" data-contrast="chain">Base network</Badge>
+        <span data-contrast="warning" className="text-xs text-[hsl(var(--warning-strong))]">Loot bag expired; reset required</span>
         <Button variant="link" data-contrast="link">Inspect details</Button>
         <button type="button" data-contrast="success" className="rounded-lg bg-[hsl(var(--success))] bg-[image:var(--gradient-success)] px-4 py-3 text-sm text-[hsl(var(--success-foreground))]">Approved</button>
         <button type="button" data-contrast="following" className="profile-follow-button follow-button follow-button-following rounded-lg px-4 py-3 text-sm">Following</button>
@@ -61,5 +63,6 @@ export function FoundationFixtures() {
     <Button onClick={() => setShareOpen(true)}>Open mint share</Button>
     <MintShareModal open={shareOpen} onOpenChange={setShareOpen} data={{ address: '0x1111111111111111111111111111111111111111', strainId: 1, strainName: 'Flora', mintedAt: '2025-06-15T15:06:40Z' }} />
     <LowFoundationFixtures />
+    <AuditDialogFixtures />
   </main>;
 }

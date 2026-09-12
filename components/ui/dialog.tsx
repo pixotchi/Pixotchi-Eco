@@ -355,7 +355,7 @@ const DialogContent = React.forwardRef<
               <ScrollArea
                 data-dialog-scroll-content=""
                 className={scrollTogether
-                  ? "-m-[var(--dialog-padding)] min-h-0 flex-1 overflow-y-auto overscroll-contain p-[var(--dialog-padding)]"
+                  ? "-m-[var(--dialog-padding)] min-h-0 flex-1 scroll-py-[max(1.5rem,var(--dialog-padding))] overflow-y-auto overscroll-contain p-[var(--dialog-padding)]"
                   : "contents"}
               >
                 {children}

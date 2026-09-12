@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import {
 Dialog,
 DialogContent,
+DialogBody,
+DialogFooter,
 DialogDescription,
 DialogHeader,
 DialogTitle,
@@ -215,7 +217,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md" surface="soft" hideCloseButton>
+      <DialogContent layout="form" adaptiveScroll className="max-w-md" surface="soft" hideCloseButton>
         <DialogHeader className="pr-5 sm:pr-6">
           <DialogTitle>Share your mint</DialogTitle>
           <DialogDescription>
@@ -223,6 +225,7 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {data ? (
           <div className="space-y-6">
             {/* Plant Image and Name with celebration animation */}
@@ -273,25 +276,27 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
                 <Button
                   variant="special"
                   fullWidth
+                  className="h-auto min-h-11 whitespace-normal px-[min(1rem,4vw)] leading-snug"
                   onClick={handleMiniAppShare}
                   disabled={isSharing || isGeneratingUrl || !shareUrl}
                   aria-busy={isSharing || isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on Farcaster`}
                 >
-                  <Share2 className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}
+                  <Share2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}</span>
                 </Button>
               ) : (
                 <Button
                   variant="special"
                   fullWidth
+                  className="h-auto min-h-11 whitespace-normal px-[min(1rem,4vw)] leading-snug"
                   onClick={handleTwitterShare}
                   disabled={isGeneratingUrl || !shareUrl}
                   aria-busy={isGeneratingUrl}
                   aria-label={`Share your ${data.strainName} mint on X`}
                 >
-                  <Share2 className="w-4 h-4 mr-2" />
-                  {isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}
+                  <Share2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{isGeneratingUrl ? "Generating link..." : canUseFallbackShareUrl ? "Share app link" : "Share"}</span>
                 </Button>
               )}
             </div>
@@ -321,15 +326,18 @@ export function MintShareModal({ open, onOpenChange, data }: MintShareModalProps
               </div>
             )}
 
-            <Button variant="ghost" fullWidth onClick={() => handleOpenChange(false)}>
-              Not now
-            </Button>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground text-center">
             Your plant’s share details are unavailable. Close this window and find your existing plant in the Plants tab.
           </p>
         )}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" fullWidth className="h-auto min-h-11 whitespace-normal leading-snug" onClick={() => handleOpenChange(false)}>
+            {data ? 'Not now' : 'Close'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

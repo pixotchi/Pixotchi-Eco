@@ -89,7 +89,7 @@ export function AdminChatSection({ adminKey, isActive, showConfirmDialog }: Pick
     {chatStats && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Messages</p>
@@ -101,7 +101,7 @@ export function AdminChatSection({ adminKey, isActive, showConfirmDialog }: Pick
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Users</p>
@@ -113,7 +113,7 @@ export function AdminChatSection({ adminKey, isActive, showConfirmDialog }: Pick
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Last 24h</p>

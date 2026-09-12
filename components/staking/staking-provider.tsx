@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import dynamic from 'next/dynamic';
+import { createRetryableDialog } from '@/components/retryable-dialog';
 import { onStakingDialogOpen } from '@/lib/app-events';
 
-const StakingDialog = dynamic(() => import('./staking-dialog'), { ssr: false });
+const StakingDialog = createRetryableDialog(() => import('./staking-dialog'), 'Stake SEED');
 const StakingContext = createContext<{ open: boolean; openDialog: () => void } | null>(null);
 
 /** One owner survives header placement, navigation and viewport changes. */

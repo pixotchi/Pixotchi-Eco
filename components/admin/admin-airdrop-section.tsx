@@ -7,60 +7,71 @@ import { Textarea } from '@/components/ui/textarea';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertTriangle, CheckCircle, FileText, Gift, RefreshCw, Shield, Trash2, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAdminRead } from '@/hooks/useAdminRead';
 import { parseAdminAirdrop, parseAdminOperation } from '@/lib/admin-api-data';
 import { toast } from 'react-hot-toast';
 import { type AdminSectionProps, AdminReadError } from './admin-section-shared';
 
-export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionProps, 'adminKey' | 'isActive'>) {
+const AIRDROP_ACTION_CLASS = 'h-auto min-h-11 max-w-full whitespace-normal px-[min(1rem,4vw)] leading-snug [&>svg]:shrink-0';
+
+export function AdminAirdropSection({ adminKey, isActive, showConfirmDialog }: AdminSectionProps) {
   const { data: airdropData, loading: readLoading, error: readError, reload } = useAdminRead({ adminKey, isActive, endpoint: '/api/airdrop/manage', parse: parseAdminAirdrop, label: 'Airdrop' });
   const [mutationLoading, setAirdropLoading] = useState(false);
   const airdropLoading = readLoading || mutationLoading;
   const [airdropCsv, setAirdropCsv] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isActive) return null;
   return (<div className="space-y-6">
     <AdminReadError message={readError} onRetry={reload} busy={readLoading} />
-    <div className="flex items-center justify-between">
-      <h2 className="text-2xl font-bold">Airdrop Management</h2>
-      <div className="flex gap-2">
+    <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <h2 className="min-w-0 text-2xl font-bold [overflow-wrap:anywhere]">Airdrop Management</h2>
+      <div className="flex max-w-full flex-wrap gap-2">
         <Button
           variant="outline"
+          className={AIRDROP_ACTION_CLASS}
           onClick={reload}
           disabled={airdropLoading}
         >
-          <RefreshCw className={`w-4 h-4 mr-2 ${airdropLoading ? 'animate-spin' : ''}`} />
-          Refresh
+          <RefreshCw className={`w-4 h-4 ${airdropLoading ? 'animate-spin' : ''}`} />
+          <span className="min-w-0 [overflow-wrap:anywhere]">Refresh</span>
         </Button>
         {airdropData?.recipients && airdropData.recipients.length > 0 && (
           <Button
             variant="destructive"
-            onClick={async () => {
-              if (!confirm('Remove unclaimed allocations that have never been attempted? Claim history will be preserved.')) return;
-              setAirdropLoading(true);
-              try {
-                const res = await fetch('/api/airdrop/manage', {
-                  method: 'DELETE',
-                  headers: { 'Authorization': `Bearer ${adminKey}` }
-                });
-                const data = parseAdminOperation(await res.json());
-                if (res.ok && data?.success) {
-                  toast.success(`Removed ${data.deletedCount ?? 0}; preserved ${data.protectedCount ?? 0} claim records; ${data.conflictCount ?? 0} concurrent changes skipped`);
-                  await reload();
-                } else {
+            className={AIRDROP_ACTION_CLASS}
+            onClick={() => showConfirmDialog({
+              title: 'Clear unattempted allocations?',
+              description: 'Remove unclaimed allocations that have never been attempted? Claim history will be preserved.',
+              confirmText: 'Clear Unattempted',
+              isDangerous: true,
+              onConfirm: async () => {
+                if (airdropLoading) return;
+                setAirdropLoading(true);
+                try {
+                  const res = await fetch('/api/airdrop/manage', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${adminKey}` }
+                  });
+                  const data = parseAdminOperation(await res.json());
+                  if (res.ok && data?.success) {
+                    toast.success(`Removed ${data.deletedCount ?? 0}; preserved ${data.protectedCount ?? 0} claim records; ${data.conflictCount ?? 0} concurrent changes skipped`);
+                    await reload();
+                  } else {
+                    toast.error('Failed to clear airdrop data');
+                  }
+                } catch {
                   toast.error('Failed to clear airdrop data');
+                } finally {
+                  setAirdropLoading(false);
                 }
-              } catch {
-                toast.error('Failed to clear airdrop data');
-              } finally {
-                setAirdropLoading(false);
-              }
-            }}
+              },
+            })}
             disabled={airdropLoading}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Clear Unattempted
+            <Trash2 className="w-4 h-4" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">Clear Unattempted</span>
           </Button>
         )}
       </div>
@@ -89,8 +100,9 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
           rows={6}
           className="font-mono text-sm"
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
+            className={AIRDROP_ACTION_CLASS}
             onClick={async () => {
               if (!airdropCsv.trim()) {
                 toast.error('Please enter CSV data');
@@ -127,32 +139,33 @@ export function AdminAirdropSection({ adminKey, isActive }: Pick<AdminSectionPro
             }}
             disabled={airdropLoading || !airdropCsv.trim()}
           >
-            <Upload className="w-4 h-4 mr-2" />
-            Upload CSV
+            <Upload className="w-4 h-4" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">Upload CSV</span>
           </Button>
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    setAirdropCsv(typeof ev.target?.result === 'string' ? ev.target.result : '');
-                  };
-                  reader.readAsText(file);
-                }
-              }}
-            />
-            <Button variant="outline" asChild>
-              <span>
-                <FileText className="w-4 h-4 mr-2" />
-                Load File
-              </span>
-            </Button>
-          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            aria-label="Eligibility CSV file"
+            disabled={airdropLoading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  setAirdropCsv(typeof ev.target?.result === 'string' ? ev.target.result : '');
+                };
+                reader.onerror = () => toast.error('Could not read this file. Please choose it again.');
+                reader.readAsText(file);
+              }
+            }}
+          />
+          <Button type="button" variant="outline" className={AIRDROP_ACTION_CLASS} disabled={airdropLoading} onClick={() => fileInputRef.current?.click()}>
+            <FileText className="w-4 h-4" aria-hidden="true" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">Load File</span>
+          </Button>
         </div>
       </CardContent>
     </Card>

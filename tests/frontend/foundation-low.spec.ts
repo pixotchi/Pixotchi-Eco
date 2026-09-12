@@ -2,6 +2,58 @@ import { test, expect, type Page } from '@playwright/test';
 import { openQaFixture } from './helpers/bootstrap';
 const brokenAvatarLoads = new WeakMap<Page, number>();
 
+test('audit lazy dialog recovers a failed load and retains focus and draft through handoff', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Open retryable audit dialog', exact: true });
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const loading = page.getByRole('dialog', { name: 'Audit dialog', exact: true });
+  await expect(loading.getByRole('status')).toHaveText('Loading…');
+  await loading.getByRole('button', { name: 'Retry loading Audit dialog' }).click();
+  const loaded = page.getByRole('dialog', { name: 'Loaded audit dialog', exact: true });
+  await loaded.getByRole('textbox').fill('Keep this draft');
+  await loaded.getByRole('button', { name: 'Finish audit dialog' }).click();
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(loaded.getByRole('textbox')).toHaveValue('Keep this draft');
+});
+
+test('audit lazy dialog stays closed when its pending load settles', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Open retryable audit dialog', exact: true });
+  await opener.click();
+  await expect(page.getByRole('dialog', { name: 'Audit dialog', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(800); // The fixture import settles after 600 ms.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test('audit production share and announcement actions remain readable and reachable on short screens and enlarged text', async ({ page }) => {
+  await page.route('**/api/share/create', route => route.fulfill({ json: { success: true, shortUrl: 'https://mini.pixotchi.tech/share/fixture' } }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [width, height, scale] of [[390, 360, 1], [320, 568, 2], [1440, 900, 2]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(value => { document.documentElement.style.fontSize = `${value * 100}%`; }, scale);
+    for (const [trigger, title, dismiss] of [['Open mint share', 'Share your mint', 'Not now'], ['Open long announcement', 'Long announcement', 'Got it']]) {
+      await page.getByRole('button', { name: trigger, exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: title, exact: true });
+      await expect(dialog).toBeVisible();
+      const actions = dialog.getByRole('button');
+      for (const action of await actions.all()) {
+        await action.scrollIntoViewIfNeeded();
+        await action.focus();
+        const geometry = await action.evaluate(node => {
+          const box = node.getBoundingClientRect(), surface = node.closest('[data-dialog-layout]')!.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return { fits: node.scrollWidth <= node.clientWidth + 1, inside: box.left >= surface.left - 1 && box.right <= surface.right + 1 && box.top >= surface.top - 1 && box.bottom <= surface.bottom + 1, clickable: hit === node || node.contains(hit) };
+        });
+        expect(geometry, `${title}, ${width} px, ${scale}x: ${await action.textContent()}`).toEqual({ fits: true, inside: true, clickable: true });
+      }
+      await dialog.getByRole('button', { name: dismiss, exact: true }).click();
+      await expect(dialog).toBeHidden();
+    }
+  }
+});
+
 test.beforeEach(async ({ page }, testInfo) => {
   await page.route('**/api/ens/avatars**', route => route.fulfill({ json: { avatars: { '0x9999999999999999999999999999999999999999': '/missing-fixture-avatar.png' } } }));
   brokenAvatarLoads.set(page, 0);
