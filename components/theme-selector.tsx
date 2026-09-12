@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { Settings } from "lucide-react";
+import { Check, Settings } from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -24,23 +24,21 @@ import toast from "react-hot-toast";
 const SECRET_EVENT_NAME = "pixotchi:secret-garden-unlock";
 const PERFORMANCE_MODE_BLOCKED_MESSAGE = "Performance Mode is on. Disable Performance Mode first to use this effect.";
 
-const themePresentation: Record<Theme, { label: string; color: string }> = {
-  light: { label: "Light", color: "bg-slate-300" },
-  dark: { label: "Dark", color: "bg-[#2D3C53]" },
-  green: { label: "Green", color: "bg-green-500" },
-  yellow: { label: "Yellow", color: "bg-yellow-500" },
-  red: { label: "Red", color: "bg-red-500" },
-  pink: { label: "Pink", color: "bg-pink-500" },
-  blue: { label: "Blue", color: "bg-blue-500" },
-  violet: { label: "Violet", color: "bg-fuchsia-500" },
+const themePresentation: Record<Theme, { label: string; color: string; ink: string }> = {
+  light: { label: "Light", color: "#CBD5E1", ink: "#0F172A" },
+  dark: { label: "Dark", color: "#2D3C53", ink: "#FFFFFF" },
+  green: { label: "Green", color: "#22C55E", ink: "#0F172A" },
+  yellow: { label: "Yellow", color: "#EAB308", ink: "#0F172A" },
+  red: { label: "Red", color: "#EF4444", ink: "#FFFFFF" },
+  pink: { label: "Pink", color: "#EC4899", ink: "#FFFFFF" },
+  blue: { label: "Blue", color: "#3B82F6", ink: "#FFFFFF" },
+  violet: { label: "Violet", color: "#D946EF", ink: "#FFFFFF" },
 };
 const themes = THEME_NAMES.map(name => ({ name, ...themePresentation[name] }));
 
-const themeMenuButtonClass = "h-[44px] min-h-[44px] w-[44px] min-w-[44px] !rounded-[6px] border border-input bg-background bg-none p-0 shadow-none backdrop-blur-none hover:border-input hover:bg-accent hover:bg-none hover:text-accent-foreground active:translate-y-0 active:scale-100";
-/* The hairline border keeps the swatch legible when its colour matches the
-   surface behind it (the Light swatch on the light header button, and the Dark
-   swatch in dark theme, both used to read as a blank/broken button). */
-const themeSwatchClass = "h-4 w-4 rounded-[2px] border border-[hsl(var(--border-strong)/0.45)]";
+// The whole touch target is the swatch. Selection uses a check; keyboard focus
+// uses a separate outline so both states remain clear on every palette.
+const themeMenuButtonClass = "h-[44px] min-h-[44px] w-[44px] min-w-[44px] cursor-pointer justify-center rounded-full border border-black/10 p-0 shadow-none transition-[filter,box-shadow] duration-[var(--motion-quick)] hover:brightness-105 active:brightness-95 focus:shadow-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-[3px] focus-visible:outline-ring";
 const themeTriggerSwatchClass = "absolute bottom-[6px] right-[6px] h-[10px] w-[10px] rounded-full border-2 border-background shadow-[0_0_0_1px_hsl(var(--border-strong)/0.55)]";
 
 /*
@@ -214,7 +212,7 @@ export function ThemeSelector({
           className="relative"
         >
           <Settings className="h-5 w-5 text-foreground/85" aria-hidden="true" />
-          <span className={`${themeTriggerSwatchClass} ${currentTheme.color}`} aria-hidden="true" />
+          <span className={themeTriggerSwatchClass} style={{ backgroundColor: currentTheme.color }} aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       {/* No aria-label here: Radix already points aria-labelledby at the trigger. */}
@@ -224,9 +222,8 @@ export function ThemeSelector({
         className={cn("w-[calc(176px+2.5rem+2px)] p-2", children && "[--menu-max-height:48rem]")}
         onCloseAutoFocus={onCloseAutoFocus}
       >
-        <div className="px-2 pb-2 pt-1 text-xs font-medium text-muted-foreground">Appearance</div>
         <DropdownMenuRadioGroup
-          className="grid grid-cols-[repeat(4,44px)] justify-center gap-2"
+          className="grid grid-cols-[repeat(4,44px)] justify-center gap-2 py-1"
           aria-label="Theme"
           value={theme ?? ""}
           onValueChange={handleThemeChange}
@@ -239,18 +236,15 @@ export function ThemeSelector({
               /* Keep the menu open: choosing several themes in sequence is a real
                  flow here, and a menu that closes on every pick makes it unusable. */
               onSelect={(event) => event.preventDefault()}
+              style={{ backgroundColor: themeOption.color, color: themeOption.ink }}
               className={cn(
-                buttonVariants({ variant: "outline", size: "icon" }),
                 themeMenuButtonClass,
                 // Radix's check indicator is absolutely positioned in the left gutter
                 // this control does not have; the swatch itself carries the state.
                 "[&>span:first-child]:hidden",
-                // Deliberately not a ring: buttonVariants already spends the ring on
-                // focus-visible, so selection and focus must stay distinguishable.
-                "data-[state=checked]:border-primary data-[state=checked]:shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]",
               )}
             >
-              <div className={`${themeSwatchClass} ${themeOption.color}`} />
+              {theme === themeOption.name && <Check className="h-5 w-5" strokeWidth={2.5} aria-hidden="true" />}
               <span className="sr-only">{themeOption.label}</span>
             </DropdownMenuRadioItem>
           ))}
@@ -259,9 +253,7 @@ export function ThemeSelector({
         {isSnowFeatureEnabled && (
           <>
             {/* The shared separator's my-1 is tuned for text rows, which carry
-                their own padding. Here it divides a dense grid of hard-edged
-                swatches, so 4px left the line closer to the squares than the
-                squares are to each other (gap-2). Match the grid's own rhythm. */}
+                their own padding. Match the swatch grid's spacing here. */}
             <DropdownMenuSeparator className="my-2" />
             <MenuSwitchItem
               label="Winter Mode"

@@ -102,6 +102,10 @@ export function GameSettingsMenu({ onAbout }: { onAbout: () => void }) {
           <Radio className="h-4 w-4 shrink-0" aria-hidden="true" />
           Service status
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onAbout} className={actionClassName}>
+          <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
+          About
+        </DropdownMenuItem>
         <DropdownMenuSeparator className="my-2" />
         <div role="group" aria-label="Community" className="grid grid-cols-3 gap-1">
           <DropdownMenuItem onSelect={() => openExternalUrl("https://x.com/pixotchi")} aria-label="Open Pixotchi on X" title="X" className="justify-center px-1">
@@ -114,11 +118,6 @@ export function GameSettingsMenu({ onAbout }: { onAbout: () => void }) {
             <FarcasterBrandIcon className="h-5 w-5 shrink-0" />
           </DropdownMenuItem>
         </div>
-        <DropdownMenuSeparator className="my-2" />
-        <DropdownMenuItem onSelect={onAbout} className={actionClassName}>
-          <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
-          About
-        </DropdownMenuItem>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 pb-1 pt-2 text-xs text-muted-foreground">
           <span>Built on Base</span>
           <span>v{packageJson.version}</span>

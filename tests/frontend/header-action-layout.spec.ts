@@ -69,14 +69,15 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
     await choice.click({ trial: true });
   }
   await choices.first().focus();
+  await expect(choices.first()).toHaveCSS('outline-style', 'solid');
   for (const name of ['Light', 'Dark', 'Green', 'Yellow', 'Red', 'Pink', 'Blue', 'Violet']) {
     await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
     await page.keyboard.press('ArrowDown');
   }
   await page.keyboard.press('End');
-  const about = menu.getByRole('menuitem', { name: 'About', exact: true });
-  await expect(about).toBeFocused();
-  await expect(about).toBeInViewport();
+  const lastSocial = menu.getByRole('menuitem', { name: 'Open Pixotchi on Farcaster', exact: true });
+  await expect(lastSocial).toBeFocused();
+  await expect(lastSocial).toBeInViewport();
   await menu.screenshot({ path: test.info().outputPath(`theme-menu${enlarged ? '-200pct' : ''}.png`) });
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
@@ -97,19 +98,24 @@ for (const enlarged of [false, true]) test(`header icon actions stay visible, fo
   await header.screenshot({ path: test.info().outputPath(`header${enlarged ? '-200pct' : ''}.png`) });
 });
 
-test('status actions match main heights and keep labels and balances visible across phone and tablet widths', async ({ page }) => {
+test('status actions stay compact and keep labels and balances visible across phone and desktop widths', async ({ page }) => {
+  await page.evaluate(() => document.fonts.ready);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  for (const width of [320, 390, 820, 864]) {
+  for (const width of [320, 390, 820, 864, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     const balances = page.getByRole('group', { name: 'Token balances', exact: true });
     for (const name of ['SEED', 'LEAF', 'PIXOTCHI']) {
       const item = balances.locator(':scope > div').filter({ hasText: `${name} balance` });
       await expect(item.locator('img')).toBeVisible();
       await expect(item).toBeInViewport();
-      const bounds = (await item.boundingBox())!;
-      const groupBounds = (await balances.boundingBox())!;
-      expect(bounds.x).toBeGreaterThanOrEqual(groupBounds.x);
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(groupBounds.x + groupBounds.width);
+      // Live values can grow while loading. Verify reachability in the strip's
+      // intended horizontal scroll area, allowing subpixel scroll rounding.
+      await expect.poll(() => item.evaluate(element => {
+        element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        const bounds = element.getBoundingClientRect();
+        const groupBounds = element.parentElement!.getBoundingClientRect();
+        return bounds.left >= groupBounds.left - 1 && bounds.right <= groupBounds.right + 1;
+      })).toBe(true);
     }
     const actions = page.locator('[data-status-actions] button');
     await expect(page.getByRole('button', { name: 'Open staking dialog', exact: true })).toBeVisible();
@@ -122,13 +128,13 @@ test('status actions match main heights and keep labels and balances visible acr
     for (const action of await actions.all()) {
       const bounds = (await action.boundingBox())!;
       expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBe(width <= 380 ? 32 : 36);
+      expect(bounds.height).toBe(width <= 380 ? 28 : 32);
       expect(bounds.x).toBeGreaterThanOrEqual(0);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
       await action.click({ trial: true });
     }
     if (width < 640) {
-      expect((await page.locator('[data-viewport-shell="status"]').boundingBox())!.height).toBe(width <= 380 ? 36 : 40);
+      expect((await page.locator('[data-viewport-shell="status"]').boundingBox())!.height).toBe(width <= 380 ? 32 : 36);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
@@ -163,7 +169,8 @@ test('Settings About stays reachable while five primary tabs retain keyboard nav
   const music = page.getByRole('menuitemcheckbox', { name: 'Music', exact: true });
   const musicBounds = (await music.boundingBox())!;
   expect((await about.boundingBox())!.y).toBeGreaterThanOrEqual(musicBounds.y + musicBounds.height);
-  await page.keyboard.press('End');
+  await page.getByRole('menuitem', { name: 'Service status', exact: true }).focus();
+  await page.keyboard.press('ArrowDown');
   await expect(about).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menu')).toHaveCount(0);

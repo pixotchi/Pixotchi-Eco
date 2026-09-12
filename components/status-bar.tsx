@@ -201,7 +201,7 @@ export default function StatusBar({
   const balanceTextClassName = "shrink-0 whitespace-nowrap text-xs font-semibold leading-none tabular-nums sm:text-[0.8125rem]";
   const balanceIconClassName = "h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]";
   // Keep icons and labels side by side at every width, with tighter phone padding.
-  const statusActionButtonClassName = "min-w-[44px] max-[380px]:h-8 max-[380px]:min-h-8 max-sm:!gap-1 max-sm:px-1";
+  const statusActionButtonClassName = "h-8 min-h-8 min-w-[44px] py-1 max-[380px]:h-7 max-[380px]:min-h-7 max-sm:!gap-1 max-sm:px-1";
   // SOL balance for Solana users (9 decimals)
   const solText = isSolana
     ? solanaLoading ? <Skeleton className={balanceSkeletonClassName} /> : solanaError ? 'Unavailable' : formatTokenShort(solBalance, 9)
